@@ -96,7 +96,8 @@
   transition: background-color 250ms linear;
 }
 .i3-head { top: 0; grid-template-columns: 1fr auto 1fr; gap: 12px; }
-.i3-foot { bottom: 0; grid-template-columns: 96px 1fr 96px; gap: 16px; }
+/* minmax(0, …): the dots follow the bar's width instead of holding it open. */
+.i3-foot { bottom: 0; grid-template-columns: 96px minmax(0, 1fr) 96px; gap: 16px; }
 .i3-side {
   padding: 9px 10px;
   border-radius: 8px;
@@ -149,6 +150,13 @@
 .i3-foot.is-on .i3-dot { transform: scale(1.2); }
 .i3-foot .i3-dot.is-hover { transform: scale(1.6); }
 .i3-dot.is-hover.is-next { background: var(--r-mu); }
+
+/* Phones: the readouts and the back button take less room, so the chapter and the dots get it. */
+@media (max-width: 520px) {
+  .i3-foot { grid-template-columns: 60px minmax(0, 1fr) 60px; gap: 10px; }
+  .i3-back-word { display: none; }
+  .i3-mid { max-width: min(560px, calc(var(--pw) - 100px)); }
+}
 .i3-tip { position: absolute; bottom: calc(100% + 6px); transform: translateX(-50%); pointer-events: none; text-transform: none; letter-spacing: 0; }
 .i3-scrim { position: absolute; inset: 0; z-index: 7; }
 .i3-drop {

@@ -25,7 +25,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   return (
     <>
       <div className={`i3-head${head || panel ? ' is-on' : ''}`} onPointerEnter={() => setHead(true)} onPointerLeave={() => setHead(false)}>
-        <button type="button" className="i3-side" onClick={onBack} aria-label="Back to library">‹ Library</button>
+        <button type="button" className="i3-side" onClick={onBack} aria-label="Back to library">‹<span className="i3-back-word"> Library</span></button>
         <button type="button" className={`i3-mid${panel === 'toc' ? ' is-open' : ''}`} onClick={() => toggle('toc')} aria-label={`Contents. ${label}`} aria-expanded={panel === 'toc'}>
           <Typed text={label} />
           <span className="i3-caret" aria-hidden="true">▾</span>
@@ -81,8 +81,12 @@ function Dots({ chapters, progress, onPick }: { chapters: Chapter[]; progress: n
     return () => ro.disconnect();
   }, []);
 
-  const grouped = chapters.length >= 3 && chapters.length <= 40;
-  const n = Math.max(12, Math.min(120, Math.floor((w - (grouped ? (chapters.length - 1) * SPLIT : 0)) / PITCH)));
+  // The row always fits the width it's given (the column can shrink below it), so it follows the
+  // bar when it narrows: switching to scroll, leaving a two-page spread, a smaller window.
+  // Chapter gaps only when they leave room for a dozen dots.
+  const splits = chapters.length - 1;
+  const grouped = chapters.length >= 3 && chapters.length <= 40 && w - splits * SPLIT >= 12 * PITCH;
+  const n = Math.max(1, Math.min(120, Math.floor((w - (grouped ? splits * SPLIT : 0)) / PITCH)));
   const dots = Array.from({ length: n }, (_, i) => {
     const f0 = i / n;
     const f1 = (i + 1) / n;

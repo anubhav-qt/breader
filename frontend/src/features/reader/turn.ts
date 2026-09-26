@@ -42,7 +42,7 @@ if (typeof document !== 'undefined') {
 /** Styles that swap snapshots. Today's and the Rail's slide move the strip of pages instead. */
 export const swaps = (style: TurnStyle) => style !== 'today' && style !== 'slide';
 
-type VT = { finished: Promise<void>; skipTransition: () => void };
+type VT = { ready: Promise<void>; finished: Promise<void>; skipTransition: () => void };
 type DocVT = Document & { startViewTransition?: (update: () => void | Promise<void>) => VT };
 
 let running: VT | null = null;
@@ -64,6 +64,8 @@ export function runTurn(style: TurnStyle, dir: 1 | -1, kind: TurnKind, update: (
   root.dataset.kind = kind;
   const t = doc.startViewTransition(update);
   running = t;
+  // The browser aborts a turn when the window resizes mid-way (a phone rotating); that's fine.
+  t.ready.catch(() => {});
   t.finished.catch(() => {}).finally(() => {
     if (running !== t) return;
     running = null;
