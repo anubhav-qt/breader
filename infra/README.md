@@ -92,6 +92,24 @@ The laptop and Render need the same `KEY_PEPPER`, `SESSION_SECRET` and `ADMIN_TO
 `KEY_PEPPER` stops every library key from working, and changing `SESSION_SECRET` signs every
 reader out.
 
+**Logins.** Readers can log in with Google or with an email and a password; a key still works
+without either. Without the settings below the server offers email only, and logs its emails
+instead of sending them.
+
+- Google: console.cloud.google.com › a new project › Google Auth Platform. Branding: app name
+  Breader, your support email, authorised domain `breader.example`. Audience: External, then
+  **Publish app** (email and profile need no review). Clients › Create client › Web application:
+  JavaScript origin `https://breader.example`, redirect URIs
+  `https://api.breader.example/v1/auth/callback/google` and
+  `https://fb.breader.example/v1/auth/callback/google`. Its ID and secret → `GOOGLE_CLIENT_ID`
+  and `GOOGLE_CLIENT_SECRET` (laptop and Render).
+- Email: Resend (free, 100 a day, 3,000 a month) › Domains › add `breader.example` and put the
+  records it shows into Cloudflare DNS (DNS only), then wait for Verified. API keys › create one
+  with sending access → `RESEND_API_KEY` (laptop and Render). Mail comes from
+  `hello@breader.site` unless `MAIL_FROM` says otherwise.
+- `PUBLIC_URL` is each server's own address, where Google sends readers back:
+  `https://api.breader.example` on the laptop, `https://fb.breader.example` on Render.
+
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
 **Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged
 by `component`), then copy Project settings › Client keys › DSN → `SENTRY_DSN` (laptop and
@@ -161,7 +179,8 @@ COOKIE_SECURE=true       S3_ENDPOINT=<same>       S3_BUCKET=breader-files
 S3_REGION=auto           S3_FORCE_PATH_STYLE=true
 S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY = the render token (files bucket only)
 CLIENT_IP_HEADER=cf-connecting-ip                 ADMIN_TOKEN=<same>
-SENTRY_DSN=<the DSN>
+SENTRY_DSN=<the DSN>     PUBLIC_URL=https://fb.breader.example
+GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / RESEND_API_KEY = <same>
 ```
 
 Leave out `MIRROR_URL`, `S3_BACKUP_BUCKET`, `BACKUP_RECIPIENT` and `TUNNEL_TOKEN`; the fallback

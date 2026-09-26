@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../lib/springs';
 import { IconKey, IconPlus } from './icons';
@@ -15,6 +15,8 @@ interface Props {
   onTab: (t: Tab) => void;
   onAdd: () => void;
   onKey: () => void;
+  /** Log in, or the account's menu. */
+  account: ReactNode;
 }
 
 const TABS: Array<{ id: Tab; label: string }> = [
@@ -22,7 +24,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'shelf', label: 'Shared Library' },
 ];
 
-export function Header({ tab, counts, canAdd, onTab, onAdd, onKey }: Props) {
+export function Header({ tab, counts, canAdd, onTab, onAdd, onKey, account }: Props) {
   // One Tab stop for both tabs; the arrow keys switch between them.
   const onArrow = (e: KeyboardEvent) => {
     const i = TABS.findIndex((t) => t.id === tab);
@@ -70,14 +72,16 @@ export function Header({ tab, counts, canAdd, onTab, onAdd, onKey }: Props) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.14 } }}
               transition={springs.snappy}
+              aria-label="Add book"
             >
-              <IconPlus /> Add book
+              <IconPlus /> <span className="hdr-label">Add book</span>
             </motion.button>
           )}
         </AnimatePresence>
-        <button type="button" className="btn btn-ghost" onClick={onKey} title="Library key">
-          <IconKey /> Key
+        <button type="button" className="btn btn-ghost" onClick={onKey} title="Library key" aria-label="Library key">
+          <IconKey /> <span className="hdr-label">Key</span>
         </button>
+        {account}
       </div>
     </header>
   );

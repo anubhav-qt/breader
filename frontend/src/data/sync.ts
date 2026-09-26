@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { normalizeKey } from '@breader/shared/key';
 import { SYNC } from '@breader/shared/limits';
-import type { Book, LibraryResponse, Mutation, NewMutation, PullResponse, PushResponse, SyncedBook, UploadResponse } from '@breader/shared/protocol';
+import type { AccountResponse, Book, LibraryResponse, Mutation, NewMutation, PullResponse, PushResponse, SyncedBook, UploadResponse } from '@breader/shared/protocol';
 import type { BookEdit, BookRecord, Format, ReadState } from '../books/types';
 import { api, ApiError, OfflineError, type ApiBase } from '../lib/api';
 import { report } from '../lib/report';
@@ -65,8 +65,8 @@ export interface SyncHost {
   settleLocked(): Promise<LibraryData>;
   /** Merges a pull into the stored library. `pending` are changes the server hasn't seen yet; they win. */
   applyLocked(pull: PullResponse, pending: Mutation[]): Promise<void>;
-  /** Replaces the library with the one a key opened. */
-  replaceLocked(pull: PullResponse, key: string): Promise<void>;
+  /** Replaces the library with the one a key or a login opened. */
+  replaceLocked(pull: PullResponse, key: string | null): Promise<void>;
   /** A book's file (and cover) reached the server: note their ids, and tell the server. */
   linked(bookId: string, ids: { fileId: string; coverId?: string }): Promise<void>;
   cover(bookId: string, blob: Blob): Promise<void>;
@@ -107,6 +107,11 @@ let timer = 0;
 let firstQueued = 0;
 /** The state as last read or written, for the status line only. */
 let seen: SyncState = fresh();
+/**
+ * This browser's library was moved into an account from another browser: the server takes no
+ * more changes for it, so what is still waiting here can't be sent, and needn't hold up a login.
+ */
+let movedAway = false;
 
 let status: SyncStatus = { state: 'off', pending: 0, lastSynced: null, via: api.via };
 const watchers = new Set<(s: SyncStatus) => void>();
@@ -500,6 +505,7 @@ export function flush(): Promise<void> {
       }
       setStatus({ state: 'synced', lastSynced: Date.now(), message: undefined });
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'library_moved') movedAway = true;
       if (e instanceof OfflineError) setStatus({ state: 'offline', message: e.message });
       else {
         console.warn('Sync failed:', e);
@@ -535,21 +541,56 @@ export async function openWithKey(input: string) {
   // No tab may sync while the session moves to the other library, or it would push this one's
   // changes there.
   const all = await withSync(async () => {
-    const s = await read();
-    if (s.libraryId && (!s.registered || s.needsSnapshot || s.outbox.length || s.uploads.length)) {
-      throw new Error('Breader couldn’t save this browser’s books to their own library first. Try again when you’re online.');
-    }
-    const opened = await api.post<LibraryResponse>('/v1/session/key', { key });
-    const pull = await api.get<PullResponse>('/v1/sync/pull?since=0');
-    await withData(async () => {
-      await host!.replaceLocked(pull, key);
-      await save({ ...fresh(opened.library.id), registered: true, rev: pull.rev, timeline: pull.timeline });
-    });
-    return pull;
+    if (!(await saved())) throw new Error('Breader couldn’t save this browser’s books to their own library first. Try again when you’re online.');
+    const r = await api.post<LibraryResponse>('/v1/session/key', { key });
+    return swapLocked(r.library.id, key);
   });
-  if (all.settings) applySettings(all.settings);
-  setStatus({ state: 'synced', lastSynced: Date.now() });
-  void fetchCovers(all.books);
+  opened(all);
+}
+
+/** This browser's library is all on the server, or has nowhere left to go. Call holding the sync lock. */
+async function saved() {
+  const s = await read();
+  return !s.libraryId || movedAway || (s.registered && !s.needsSnapshot && !s.outbox.length && !s.uploads.length);
+}
+
+/** Replaces this browser's library with the one the session is now open on. Call holding the sync lock. */
+async function swapLocked(libraryId: string, key: string | null) {
+  const pull = await api.get<PullResponse>('/v1/sync/pull?since=0');
+  await withData(async () => {
+    await host!.replaceLocked(pull, key);
+    await save({ ...fresh(libraryId), registered: true, rev: pull.rev, timeline: pull.timeline });
+  });
+  movedAway = false;
+  return pull;
+}
+
+function opened(pull: PullResponse) {
+  if (pull.settings) applySettings(pull.settings);
+  setStatus({ state: 'synced', lastSynced: Date.now(), message: undefined });
+  void fetchCovers(pull.books);
+}
+
+/**
+ * After a login (lib/account.ts), this browser moves to the account's library (routes/account.ts).
+ * Its own library is saved to the server first, so the server sees what it holds. If that is books
+ * the account doesn't have, nothing changes yet: the answer is 'choose', and the caller asks the
+ * reader, then calls again with claim set.
+ */
+export async function enterAccount(claim?: boolean): Promise<AccountResponse> {
+  if (!host) throw new Error('Breader is still starting. Try again in a moment.');
+  if ((await read()).libraryId) await flush();
+  const out = await withSync(async () => {
+    if (!(await saved())) throw new Error('Breader couldn’t save the books in this browser first. Try again when you’re online.');
+    const key = host!.snapshot().key;
+    const res = await api.post<AccountResponse>('/v1/session/account', { key: key ?? undefined, claim }, 30_000);
+    // Adopted and same: this browser already holds the account's library.
+    if (res.outcome === 'choose' || res.outcome === 'adopted' || res.outcome === 'same') return { res };
+    return { res, pull: await swapLocked(res.library!.id, res.key ?? null) };
+  });
+  if (out.pull) opened(out.pull);
+  else if (out.res.outcome !== 'choose') void flush();
+  return out.res;
 }
 
 /** Starts syncing once the local library has loaded. */

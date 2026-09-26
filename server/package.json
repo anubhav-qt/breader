@@ -21,6 +21,7 @@
     "@breader/shared": "*",
     "@hono/node-server": "^2.1.1",
     "age-encryption": "^0.3.1",
+    "better-auth": "^1.7.6",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.9",
     "pg": "^8.23.0",

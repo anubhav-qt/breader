@@ -146,6 +146,45 @@ export const OpenRequest = z.object({ key: z.string().max(64) });
 export const LibraryResponse = z.object({ library: LibraryInfo });
 export type LibraryResponse = z.infer<typeof LibraryResponse>;
 
+/* ---- Accounts ---- */
+
+/** Turns a login into a session for the account's library (POST /v1/session/account). */
+export const AccountRequest = z.object({
+  /** This browser's key: an account that takes over this browser's key library keeps it. */
+  key: z.string().max(64).optional(),
+  /**
+   * This browser holds another library's books: true moves them into the account's library,
+   * false leaves them in their own (their key still opens them). Unset asks first ("choose").
+   */
+  claim: z.boolean().optional(),
+});
+export type AccountRequest = z.infer<typeof AccountRequest>;
+
+export const Account = z.object({ email: z.string(), name: z.string(), emailVerified: z.boolean() });
+export type Account = z.infer<typeof Account>;
+
+/**
+ *   adopted   this browser's key library became the account's (a first login)
+ *   created   the account got a new, empty library
+ *   opened    the account's library, which this browser didn't have
+ *   claimed   this browser's books moved into the account's library
+ *   switched  the account's library; this browser's books stayed behind in theirs
+ *   same      this browser already had the account's library
+ *   choose    nothing yet: this browser holds `books` books of another library; ask, then send claim
+ */
+export const AccountOutcome = z.enum(['adopted', 'created', 'opened', 'claimed', 'switched', 'same', 'choose']);
+export type AccountOutcome = z.infer<typeof AccountOutcome>;
+
+export const AccountResponse = z.object({
+  outcome: AccountOutcome,
+  account: Account,
+  library: LibraryInfo.optional(),
+  /** The account library's key, for this browser to keep. */
+  key: z.string().nullable().optional(),
+  books: z.number().optional(),
+});
+export type AccountResponse = z.infer<typeof AccountResponse>;
+
 /* ---- Files ---- */
 
 export const UploadRequest = z.object({

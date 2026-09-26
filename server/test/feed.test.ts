@@ -15,7 +15,9 @@ async function drain() {
 async function snapshot(pool: typeof primary.pool) {
   const out: Record<string, unknown[]> = {};
   for (const [t, pk] of Object.entries(FED_TABLES)) {
-    out[t] = (await pool.query(`SELECT to_jsonb(x) AS r FROM ${t} x ORDER BY ${pk.join(', ')}`)).rows.map((r) => r.r);
+    // Byte order: the two servers' default collations sort mixed-case ids (accounts) differently.
+    const order = pk.map((c) => `${c} COLLATE "C"`).join(', ');
+    out[t] = (await pool.query(`SELECT to_jsonb(x) AS r FROM ${t} x ORDER BY ${order}`)).rows.map((r) => r.r);
   }
   return out;
 }

@@ -3,6 +3,7 @@ import { Modal } from '../../components/Modal';
 import { IconCheck } from '../../components/icons';
 import { useSyncStatus, type SyncStatus } from '../../data/sync';
 import { normalizeKey } from '../../lib/key';
+import { FreshKey } from './FreshKey';
 import './add.css';
 
 interface Props {
@@ -12,6 +13,9 @@ interface Props {
   onClose: () => void;
   /** Opens the library behind another key, replacing the books in this browser. */
   onOpen?: (key: string) => Promise<void>;
+  /** Logged out: offers to log in instead of keeping the key. */
+  onLogin?: () => void;
+  loggedIn?: boolean;
 }
 
 function syncLine(s: SyncStatus): string | null {
@@ -25,7 +29,7 @@ function syncLine(s: SyncStatus): string | null {
   }
 }
 
-export function KeyDialog({ libraryKey, fresh, onClose, onOpen }: Props) {
+export function KeyDialog({ libraryKey, fresh, onClose, onOpen, onLogin, loggedIn }: Props) {
   const [copied, setCopied] = useState(false);
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
@@ -62,20 +66,17 @@ export function KeyDialog({ libraryKey, fresh, onClose, onOpen }: Props) {
   const status = libraryKey && !fresh ? syncLine(sync) : null;
 
   return (
-    <Modal title={fresh ? 'Your library key' : 'Library key'} onClose={onClose} width={480}>
+    <Modal title={fresh ? 'Your personal key' : 'Library key'} onClose={onClose} width={480}>
       <div className="add">
         {fresh && libraryKey ? (
-          <>
-            <p className="add-keynote">This key opens your private books in any browser. Keep it somewhere safe: Breader can’t recover it.</p>
-            <div className="key-box">{libraryKey}</div>
-            <div className="add-actions">
-              <button type="button" className="btn btn-quiet" onClick={() => void copy()}>{copied ? <><IconCheck /> Copied</> : 'Copy key'}</button>
-              <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
-            </div>
-          </>
+          <FreshKey libraryKey={libraryKey} onLogin={onLogin} onDone={onClose} />
         ) : libraryKey ? (
           <>
-            <p className="add-keynote">This key opens your private books in any browser. Keep it somewhere safe.</p>
+            <p className="add-keynote">
+              {loggedIn
+                ? 'Your account keeps this key. It opens your private books in any browser, without logging in.'
+                : 'This key opens your private books in any browser. Keep it somewhere safe: Breader can’t recover it.'}
+            </p>
             <div className="key-box">{libraryKey}</div>
             {status && <p className="add-local" role="status">{status}</p>}
             <div className="add-actions">

@@ -7,7 +7,8 @@ import { onNews, tell, withData } from '../lib/tabs';
 import type { BookEdit, BookRecord, ReadState } from '../books/types';
 import { normColor } from './colors';
 import { sampleRecords } from './library';
-import { adopt, editFromWire, fromWire, queueLocked, startSync, toWire, type LibraryData, type SyncHost } from './sync';
+import { newLibraryKey } from '../lib/key';
+import { adopt, editFromWire, enterAccount, fromWire, queueLocked, startSync, toWire, type LibraryData, type SyncHost } from './sync';
 
 export interface ShelfItem extends BookRecord {
   coverUrl?: string;
@@ -409,6 +410,15 @@ async function setKey(key: string) {
   await adopt();
 }
 
+/**
+ * After a login: books this browser holds without a key get one first, so the account can take
+ * them over instead of their being replaced (data/sync.ts enterAccount).
+ */
+async function joinAccount(claim?: boolean) {
+  if (!view.key && view.records.some((r) => r.source === 'file' || r.source === 'sample')) await setKey(newLibraryKey());
+  return enterAccount(claim);
+}
+
 async function reset() {
   await store.clear();
   try { localStorage.clear(); } catch { /* storage blocked */ }
@@ -428,7 +438,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, addBook, setCover, removeBook, restoreBook, saveRead, editBook, setKey, reset };
+  return { ...state, addBook, setCover, removeBook, restoreBook, saveRead, editBook, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

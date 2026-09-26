@@ -38,7 +38,13 @@ export const libraries = pgTable(
     keyEnabled: boolean('key_enabled').notNull().default(true),
     /** Bumped when the key is replaced, which ends every session opened with the old one. */
     keyEpoch: integer('key_epoch').notNull().default(1),
+    /**
+     * The account that owns it. A key library claimed into an account keeps a retired row owned by
+     * that account, so its old key can say where the books went instead of starting over.
+     */
     ownerAccountId: text('owner_account_id'),
+    /** An account library's key, sealed with a key derived from KEY_PEPPER (lib/seal.ts), so the owner can see it in any browser. Key-only libraries keep only the hash. */
+    keySealed: text('key_sealed'),
     /** Rises by one on every push; rows changed by that push carry the new value. */
     rev: big('rev').notNull().default(0),
     quotaBytes: big('quota_bytes').notNull(),
@@ -51,7 +57,11 @@ export const libraries = pgTable(
     purgedRev: big('purged_rev').notNull().default(0),
     version: version(),
   },
-  (t) => [uniqueIndex('libraries_key_hash_idx').on(t.keyHash)],
+  (t) => [
+    uniqueIndex('libraries_key_hash_idx').on(t.keyHash),
+    // An account owns one live library.
+    uniqueIndex('libraries_owner_idx').on(t.ownerAccountId).where(sql`${t.ownerAccountId} IS NOT NULL AND ${t.retiredAt} IS NULL`),
+  ],
 );
 
 /** Makes pushes safe to retry: each browser's highest applied mutation id. */
@@ -177,6 +187,77 @@ export const syncMeta = pgTable('sync_meta', {
   timeline: text('timeline').notNull(),
 });
 
+/*
+ * Accounts, through Better Auth (src/auth.ts), which reads and writes these four tables. Accounts
+ * and their logins are fed, so the laptop's copy and its backups keep them; login sessions and
+ * email links are short-lived and stay in Supabase only.
+ */
+
+/** A person who has logged in. Fed. */
+export const users = pgTable('users', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  image: text('image'),
+  createdAt: at('created_at').notNull().defaultNow(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+  version: version(),
+});
+
+/** One way to log in: a password (provider "credential") or Google. Fed. */
+export const accounts = pgTable(
+  'accounts',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessTokenExpiresAt: at('access_token_expires_at'),
+    refreshTokenExpiresAt: at('refresh_token_expires_at'),
+    scope: text('scope'),
+    /** The password hash, for provider "credential". */
+    password: text('password'),
+    createdAt: at('created_at').notNull().defaultNow(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+    version: version(),
+  },
+  (t) => [index('accounts_user_idx').on(t.userId)],
+);
+
+/** A logged-in browser. Separate from key sessions (lib/session.ts), which name a library. */
+export const authSessions = pgTable(
+  'auth_sessions',
+  {
+    id: text('id').primaryKey(),
+    expiresAt: at('expires_at').notNull(),
+    token: text('token').notNull().unique(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  },
+  (t) => [index('auth_sessions_user_idx').on(t.userId)],
+);
+
+/** Email confirmation and password reset tokens. */
+export const verifications = pgTable(
+  'verifications',
+  {
+    id: text('id').primaryKey(),
+    identifier: text('identifier').notNull(),
+    value: text('value').notNull(),
+    expiresAt: at('expires_at').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('verifications_identifier_idx').on(t.identifier)],
+);
+
 /** The worker's jobs: when each last worked, and the last failure. Shown on the status page. */
 export const jobRuns = pgTable('job_runs', {
   name: text('name').primaryKey(),
@@ -241,6 +322,8 @@ export const mirrorTombstones = pgTable(
 
 /** Fed tables and their primary keys, in the order a full reload copies them. */
 export const FED_TABLES = {
+  users: ['id'],
+  accounts: ['id'],
   libraries: ['id'],
   blobs: ['id'],
   library_items: ['library_id', 'book_id'],

@@ -9,12 +9,17 @@ import { recordFromBook } from './books/record';
 import type { BookRecord, LoadedBook, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, placeholderRecords, sampleRecords, shelfRecords, type PreviewMode } from './data/library';
-import { openWithKey } from './data/sync';
+import type { AccountResponse } from '@breader/shared/protocol';
+import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
 import { AddBook } from './features/add/AddBook';
 import { KeyDialog } from './features/add/KeyDialog';
+import { AccountMenu } from './features/account/AccountMenu';
+import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
 import { Reader } from './features/reader/Reader';
+import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
+import { api } from './lib/api';
 import { newLibraryKey } from './lib/key';
 import { springs } from './lib/springs';
 import { readLocal } from './lib/store';
@@ -46,6 +51,19 @@ function writeParam(name: string, value: string, fallback: string) {
 }
 
 const byRecent = (a: ShelfItem, b: ShelfItem) => b.lastOpened - a.lastOpened;
+
+/** Links that bring the reader back to the app: from Google, and from Breader's emails. */
+const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
+
+const WELCOME: Record<AccountResponse['outcome'], string> = {
+  adopted: 'Logged in. Your books are saved to your account.',
+  created: 'Logged in. Books you add are saved to your account.',
+  opened: 'Logged in. Here are your account’s books.',
+  claimed: 'Logged in. This browser’s books are in your account now.',
+  switched: 'Logged in. The other books stay under their own key.',
+  same: 'Logged in.',
+  choose: 'Logged in.',
+};
 const inset = (r: DOMRect) =>
   `inset(${r.top}px ${window.innerWidth - r.right}px ${window.innerHeight - r.bottom}px ${r.left}px round 20px)`;
 const FULL = 'inset(0px 0px 0px 0px round 0px)';
@@ -87,6 +105,8 @@ export default function App() {
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
+  const [login, setLogin] = useState<LoginStart | null>(null);
+  const account = useAccount();
   const [dragOver, setDragOver] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   /* Books removed this session, kept out of every view (previews show copies of stored books). */
@@ -112,6 +132,32 @@ export default function App() {
     writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
+
+  // Back from Google, or from a link in one of Breader's emails.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const q = Object.fromEntries(RETURN_PARAMS.map((k) => [k, url.searchParams.get(k)]));
+    if (!q.login && !q.verify && !q.reset) return;
+    RETURN_PARAMS.forEach((k) => url.searchParams.delete(k));
+    window.history.replaceState(null, '', url);
+    if (q.reset) setLogin({ mode: 'reset', token: q.reset });
+    else if (q.login === 'google') setLogin({ mode: 'entering' });
+    else if (q.login === 'failed') say('Logging in with Google didn’t work. Try again, or use your email and a password.');
+    else if (q.verify) {
+      const token = q.verify;
+      void (async () => {
+        try {
+          const before = await refreshAccount();
+          const after = await verifyEmail(token);
+          say('Your email is confirmed.');
+          // The link logs in a browser that wasn't: that browser moves to the account's library too.
+          if (before.status !== 'in' && after.status === 'in') setLogin({ mode: 'entering' });
+        } catch (e) {
+          say(loginError(e));
+        }
+      })();
+    }
+  }, [say]);
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -321,6 +367,30 @@ export default function App() {
     say('Opened the library for that key');
   }, [say]);
 
+  const loggedIn = account.status === 'in';
+  const onLoggedIn = useCallback((res: AccountResponse) => {
+    setLogin(null);
+    setPreview('live');
+    setTab('mine');
+    say(WELCOME[res.outcome]);
+  }, [say]);
+
+  /** Logs out and clears this browser: the books stay in the account, not here. */
+  const logOutAll = useCallback(async () => {
+    await flush();
+    await logOut();
+    await api.del('/v1/session').catch(() => {});
+    await lib.reset();
+  }, [lib]);
+
+  /** From a new key's dialog: log in instead. */
+  const loginInstead = useCallback(() => {
+    setFreshKey(null);
+    setAdding(null);
+    setKeyOpen(false);
+    setLogin({ mode: 'login' });
+  }, []);
+
   const reading = route.name === 'read' && loaded?.id === route.id ? loaded : null;
   // A reader on its way back into its card stays on screen until it gets there.
   const leaving = !reading && closing && loaded?.id === closing.id ? loaded : null;
@@ -339,6 +409,7 @@ export default function App() {
             onTab={setTab}
             onAdd={() => setAdding({ mode: 'file' })}
             onKey={() => setKeyOpen(true)}
+            account={<AccountMenu account={account} onLogin={() => setLogin({ mode: 'login' })} onLogOut={logOutAll} />}
           />
           {lib.ready && (
             <Gallery
@@ -411,10 +482,23 @@ export default function App() {
             onClose={() => setAdding(null)}
             onAdded={onAdded}
             onKey={lib.setKey}
+            onLogin={loggedIn ? undefined : loginInstead}
           />
         )}
-        {keyOpen && <KeyDialog key="key" libraryKey={lib.key} onClose={() => setKeyOpen(false)} onOpen={openKey} />}
-        {freshKey && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onClose={() => setFreshKey(null)} />}
+        {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onOpen={openKey} />}
+        {freshKey && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
+        {login && (
+          <LoginDialog
+            key="login"
+            start={login}
+            google={account.google}
+            ready={lib.ready}
+            localKey={lib.key}
+            enter={lib.joinAccount}
+            onDone={onLoggedIn}
+            onClose={() => setLogin(null)}
+          />
+        )}
       </AnimatePresence>
 
       <Toast toast={toast} onDone={dismissToast} />

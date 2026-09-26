@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { makeApp } from './app.ts';
+import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
 import { loadEnv } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
@@ -14,7 +15,8 @@ if (env.NODE_ENV === 'production' && env.CLIENT_IP_HEADER === 'none') {
 }
 const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env) };
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db) };
+if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.0.0.0' }, (info) =>
   log.info({ port: info.port, role: env.ROLE, release: env.RELEASE }, 'api listening'),

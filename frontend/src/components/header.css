@@ -34,3 +34,16 @@
   background: var(--ink);
 }
 .hdr-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+.tab { white-space: nowrap; }
+
+/* Phones: the tabs get their own row under the logo and buttons. */
+@media (max-width: 720px) {
+  .hdr { flex-wrap: wrap; height: auto; padding: 14px 16px 0; column-gap: 12px; row-gap: 4px; }
+  .tabs { order: 3; flex: 1 0 100%; gap: 24px; }
+}
+@media (max-width: 480px) {
+  .hdr-label { display: none; }
+  .hdr-actions { gap: 4px; }
+  .hdr-actions .btn { padding: 0 12px; }
+}

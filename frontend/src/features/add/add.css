@@ -76,3 +76,4 @@
 .add-error { margin: 0; font-size: 23px; line-height: 1.15; }
 .add-sep { height: 1px; background: var(--line); margin: 8px 0 2px; }
 .key-error { color: var(--ink); }
+.key-actions { flex-wrap: wrap; }

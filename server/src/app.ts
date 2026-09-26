@@ -5,6 +5,7 @@ import type { AppEnv, Deps } from './context.ts';
 import { ApiError, onError } from './lib/errors.ts';
 import { clientIp, sameOriginWrites } from './lib/http.ts';
 import { log } from './log.ts';
+import { accountRoutes } from './routes/account.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
@@ -44,6 +45,9 @@ export function makeApp(deps: Deps) {
 
   app.route('/', healthRoutes(deps));
   app.route('/', adminRoutes(deps));
+  // Accounts: Better Auth answers everything under /v1/auth (auth.ts).
+  app.on(['GET', 'POST'], '/v1/auth/*', (c) => deps.auth.handler(c.req.raw));
+  app.route('/v1', accountRoutes(deps));
   app.route('/v1', libraryRoutes(deps));
   app.route('/v1', syncRoutes(deps));
   app.route('/v1', fileRoutes(deps));

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Modal } from '../../components/Modal';
-import { IconCheck, IconLock, IconPaste, IconPeople, IconUpload } from '../../components/icons';
+import { IconLock, IconPaste, IconPeople, IconUpload } from '../../components/icons';
 import { ACCEPT, detectFormat, parseSource, titleFromName } from '../../books/load';
 import type { BookRecord, Format, LoadedBook } from '../../books/types';
 import { colorKeyFor, colorVars } from '../../data/colors';
 import { recordFromBook } from '../../books/record';
 import { newLibraryKey } from '../../lib/key';
 import { springs } from '../../lib/springs';
+import { FreshKey } from './FreshKey';
 import './add.css';
 
 type Step =
@@ -27,18 +28,19 @@ interface Props {
   onClose: () => void;
   onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob) => Promise<void>;
   onKey: (key: string) => Promise<void>;
+  /** Logged out: the new key's step offers to log in instead. */
+  onLogin?: () => void;
 }
 
 const MB = 1024 * 1024;
 const sizeText = (b: number) => (b >= MB ? `${(b / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function AddBook({ initialFile, initialMode, hasKey, defaultShared = false, onClose, onAdded, onKey }: Props) {
+export function AddBook({ initialFile, initialMode, hasKey, defaultShared = false, onClose, onAdded, onKey, onLogin }: Props) {
   const [step, setStep] = useState<Step>(initialMode === 'paste' ? { kind: 'paste' } : { kind: 'choose' });
   const [shared, setShared] = useState(defaultShared);
   const [dragging, setDragging] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteText, setPasteText] = useState('');
-  const [copied, setCopied] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const read = async (file: File) => {
@@ -94,17 +96,7 @@ export function AddBook({ initialFile, initialMode, hasKey, defaultShared = fals
     if (f) void read(f);
   };
 
-  const copy = async (key: string) => {
-    try {
-      await navigator.clipboard.writeText(key);
-      setCopied(true);
-    } catch {
-      const el = document.querySelector('.key-box');
-      if (el) window.getSelection()?.selectAllChildren(el);
-    }
-  };
-
-  const title = step.kind === 'key' ? 'Your library key' : 'Add a book';
+  const title = step.kind === 'key' ? 'Your personal key' : 'Add a book';
 
   return (
     <Modal title={title} onClose={onClose} width={480}>
@@ -180,7 +172,7 @@ export function AddBook({ initialFile, initialMode, hasKey, defaultShared = fals
                   <i className="add-radio" />
                 </button>
               </div>
-              <p className="add-local">For now everything is saved in this browser. Syncing with your key needs the backend.</p>
+              <p className="add-local">Saved in this browser first, then synced, so your key or account opens it anywhere.</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep({ kind: 'choose' })}>Choose another</button>
                 <button type="button" className="btn btn-primary" onClick={() => void add()}>Add book</button>
@@ -189,16 +181,7 @@ export function AddBook({ initialFile, initialMode, hasKey, defaultShared = fals
           )}
 
           {step.kind === 'key' && (
-            <>
-              <p className="add-keynote">“{step.title}” is in My books. This key opens your private books in any browser. Keep it somewhere safe: Breader can’t recover it.</p>
-              <div className="key-box">{step.key}</div>
-              <div className="add-actions">
-                <button type="button" className="btn btn-quiet" onClick={() => void copy(step.key)}>
-                  {copied ? <><IconCheck /> Copied</> : 'Copy key'}
-                </button>
-                <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
-              </div>
-            </>
+            <FreshKey libraryKey={step.key} title={step.title} onLogin={onLogin} onDone={onClose} />
           )}
 
           {step.kind === 'error' && (

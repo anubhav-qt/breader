@@ -3,8 +3,10 @@
   inset: 0;
   z-index: 70;
   display: grid;
+  /* One column the width of the screen, so a dialog wider than a phone shrinks to fit it. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
-  padding: 24px;
+  padding: 24px 16px;
 }
 .modal-scrim { position: absolute; inset: 0; background: var(--scrim); }
 .modal {

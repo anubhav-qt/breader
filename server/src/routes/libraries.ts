@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { LIMITS, normalizeKey, OpenRequest, RegisterRequest } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
@@ -9,6 +9,8 @@ import { libraryInfo, requireLibrary } from '../lib/library.ts';
 import { endSession, hashKey, startSession } from '../lib/session.ts';
 
 const badKey = () => new ApiError(400, 'bad_key', 'That isn’t a Breader key. Keys look like BRDR-XXXX-XXXX-XXXX-XXXX-XXXX.');
+/** The key library's books moved into an account (routes/account.ts); its old key says where. */
+const moved = () => new ApiError(410, 'library_moved', 'These books moved into a Breader account. Log in to that account to open them.');
 
 export function libraryRoutes(deps: Deps) {
   const { db, env } = deps;
@@ -41,6 +43,7 @@ export function libraryRoutes(deps: Deps) {
       });
     if (!lib) {
       [lib] = await db.select().from(libraries).where(eq(libraries.id, body.libraryId));
+      if (lib.retiredAt && lib.ownerAccountId && lib.keyHash?.equals(keyHash)) throw moved();
       if (!lib.keyHash || !lib.keyHash.equals(keyHash) || lib.retiredAt) {
         throw new ApiError(409, 'library_exists', 'A different library already uses this id. Reload Breader and try again.');
       }
@@ -54,11 +57,9 @@ export function libraryRoutes(deps: Deps) {
     const body = parse(OpenRequest, await readJson(c));
     const key = normalizeKey(body.key);
     if (!key) throw badKey();
-    const [lib] = await db
-      .select()
-      .from(libraries)
-      .where(and(eq(libraries.keyHash, hashKey(key, env.KEY_PEPPER)), eq(libraries.keyEnabled, true), isNull(libraries.retiredAt)));
-    if (!lib) {
+    const [lib] = await db.select().from(libraries).where(eq(libraries.keyHash, hashKey(key, env.KEY_PEPPER)));
+    if (lib?.retiredAt && lib.ownerAccountId) throw moved();
+    if (!lib || lib.retiredAt || !lib.keyEnabled) {
       throw new ApiError(401, 'unknown_key', 'That key doesn’t open a library. Check it and try again.');
     }
     startSession(c, env, lib.id, lib.keyEpoch);

@@ -1,5 +1,7 @@
 import { newLibraryKey, type Book } from '@breader/shared';
 import { makeApp } from '../src/app.ts';
+import { makeAuth } from '../src/auth.ts';
+import { COOKIE } from '../src/lib/session.ts';
 import { connectMirror, connectPrimary } from '../src/db/client.ts';
 import { loadEnv } from '../src/env.ts';
 import { makeStorage } from '../src/lib/storage.ts';
@@ -9,20 +11,25 @@ const rand = () => Math.floor(Math.random() * 256);
 export const env = loadEnv();
 export const primary = connectPrimary(env);
 export const mirror = connectMirror(env)!;
-export const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env) };
+export const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db) };
 export const app = makeApp(deps);
 
-/** A browser: remembers its session cookie between requests, like fetch with credentials. */
+/** A browser: keeps its cookies between requests, like fetch with credentials. */
 export function browser(ip = `10.${rand()}.${rand()}.${rand()}`) {
-  let cookie = '';
+  const jar = new Map<string, string>();
   const call = async (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) => {
+    const cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
     const res = await app.request(path, {
       method,
       headers: { origin: ORIGIN, 'x-forwarded-for': ip, ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}), ...headers },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    const set = res.headers.get('set-cookie');
-    if (set) cookie = /Max-Age=0/i.test(set) ? '' : set.split(';')[0];
+    for (const set of res.headers.getSetCookie()) {
+      const [pair] = set.split(';');
+      const name = pair.slice(0, pair.indexOf('='));
+      if (/Max-Age=0/i.test(set) || /=;|=$/.test(pair)) jar.delete(name);
+      else jar.set(name, pair.slice(pair.indexOf('=') + 1));
+    }
     const text = await res.text();
     let json: any = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = text; }
@@ -32,8 +39,12 @@ export function browser(ip = `10.${rand()}.${rand()}.${rand()}`) {
     get: (path: string) => call('GET', path),
     post: (path: string, body?: unknown, headers?: Record<string, string>) => call('POST', path, body ?? {}, headers),
     del: (path: string) => call('DELETE', path),
-    get cookie() { return cookie; },
-    forget() { cookie = ''; },
+    /** The key session cookie, as the other tests knew it. */
+    get cookie() { return jar.has(COOKIE) ? `${COOKIE}=${jar.get(COOKIE)}` : ''; },
+    has: (name: string) => jar.has(name),
+    /** Drops the key session only; a login stays. */
+    forget() { jar.delete(COOKIE); },
+    forgetAll() { jar.clear(); },
   };
 }
 

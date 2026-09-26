@@ -10,6 +10,7 @@ import { log } from '../log.ts';
  *   files       files no book points at (tombstones count), after 7 days; upload links never
  *               finished, after a day; rows of deleted files, after 30 days
  *   libraries   key libraries unused for a year, with their files
+ *   logins      expired login sessions and email links
  *
  * Each step takes a bounded bite per run, so a backlog clears over a few hours rather than in one
  * long transaction. Locks are taken in the same order a push takes them (the library, then its
@@ -152,11 +153,19 @@ export async function expireLibraries(pool: pg.Pool, storage: Storage): Promise<
   return done;
 }
 
+/** Logins and email links a day past their expiry. Better Auth only removes one when it's next used. */
+export async function purgeLogins(pool: pg.Pool): Promise<number> {
+  const sessions = await pool.query(`DELETE FROM auth_sessions WHERE expires_at < now() - interval '1 day'`);
+  const links = await pool.query(`DELETE FROM verifications WHERE expires_at < now() - interval '1 day'`);
+  return (sessions.rowCount ?? 0) + (links.rowCount ?? 0);
+}
+
 export async function cleanUp(pool: pg.Pool, storage: Storage) {
   const tombstones = await purgeTombstones(pool);
   const files = await cleanFiles(pool, storage);
   const libraries = await expireLibraries(pool, storage);
-  const detail = { tombstones, ...files, libraries };
-  if (tombstones || files.files || files.rows || libraries) log.info(detail, 'cleaned up');
+  const logins = await purgeLogins(pool);
+  const detail = { tombstones, ...files, libraries, logins };
+  if (tombstones || files.files || files.rows || libraries || logins) log.info(detail, 'cleaned up');
   return detail;
 }

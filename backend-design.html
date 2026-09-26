@@ -546,8 +546,8 @@ svg text { font-family: var(--body); }
     <thead><tr><th>Table</th><th>Main columns</th><th>Notes</th></tr></thead>
     <tbody>
       <tr class="group"><td colspan="3">Identity</td></tr>
-      <tr><td><code>libraries</code></td><td class="plain"><code>id, key_hash, key_enabled, key_epoch, owner_account_id, rev, quota_bytes, file_bytes, used_bytes, last_active_at, retired_at</code></td><td class="plain">What a key opens. <code>rev</code> goes up by one on every change. <code>key_epoch</code> ends old sessions when the key changes.</td></tr>
-      <tr><td><code>user, account, session, verification</code></td><td class="plain">Better Auth’s own tables</td><td class="plain">Email, password hash, Google link. Sessions also record the library.</td></tr>
+      <tr><td><code>libraries</code></td><td class="plain"><code>id, key_hash, key_sealed, key_enabled, key_epoch, owner_account_id, rev, quota_bytes, file_bytes, used_bytes, last_active_at, retired_at</code></td><td class="plain">What a key opens. <code>rev</code> goes up by one on every change. <code>key_epoch</code> ends old sessions when the key changes. An account owns one live library; its key is kept sealed (AES-GCM under a key derived from <code>KEY_PEPPER</code>) so every browser the owner logs in to gets it. A key library whose books were moved into an account stays, retired and owned, so its key can say where they went.</td></tr>
+      <tr><td><code>users, accounts, auth_sessions, verifications</code></td><td class="plain">Better Auth’s own tables</td><td class="plain">Email, password hash, Google link, logins, email links. A login becomes a key session for the account’s library (<code>POST /v1/session/account</code>), and sync carries on as for a key.</td></tr>
       <tr><td><code>sync_clients</code></td><td class="plain"><code>client_id, library_id, last_mutation_id, last_seen_at</code></td><td class="plain">Makes pushes safe to retry.</td></tr>
 
       <tr class="group"><td colspan="3">Books &amp; files</td></tr>
@@ -774,7 +774,7 @@ svg text { font-family: var(--body); }
   infra/            compose.yml (laptop), compose.dev.yml (local stand-ins),
                     update.sh, README.md (the runbook)
   .github/          CI: tests, the image, migrations, the Render deploy</code></pre>
-  <p class="prose">The stack is Node 24, Hono, Drizzle ORM with its migrations, zod, the AWS S3 client for R2, pino and Vitest. esbuild bundles each command into one file, so the image carries no <code>node_modules</code>. Better Auth, pg-boss, Yjs and <code>packages/ai</code> arrive with the phases that need them. Locally, plain Postgres stands in for Supabase and RustFS for R2 (MinIO no longer publishes images). Your laptop’s Node 18.19 still runs the frontend’s dev server; the server tooling uses Node 24 through nvm.</p>
+  <p class="prose">The stack is Node 24, Hono, Drizzle ORM with its migrations, zod, the AWS S3 client for R2, pino and Vitest. esbuild bundles each command into one file, so the image carries no <code>node_modules</code>. Better Auth came with logins; pg-boss, Yjs and <code>packages/ai</code> arrive with the phases that need them. Locally, plain Postgres stands in for Supabase and RustFS for R2 (MinIO no longer publishes images). Your laptop’s Node 18.19 still runs the frontend’s dev server; the server tooling uses Node 24 through nvm.</p>
 </section>
 
 <!-- 12 -->
@@ -932,9 +932,9 @@ svg text { font-family: var(--body); }
     </ul>
   </div>
   <div class="phase">
-    <div class="p-name">Accounts &amp; shelf<small>Log in, share publicly</small></div>
+    <div class="p-name">Accounts &amp; shelf<small>Log in, share publicly · logins built</small></div>
     <ul>
-      <li>Email and password, and Google, through Better Auth. Email through Resend. Claiming a key.</li>
+      <li>Email and password, and Google, through Better Auth. Email through Resend. Claiming a key. <em>Built:</em> a first login takes over the browser’s key library; a browser holding other books asks whether to move them into the account.</li>
       <li>The public shelf with categories, tags, search, reports, takedowns and a small admin page.</li>
       <li>Frontend: sharing asks for a login, and the Shared Library tab reads from the server.</li>
     </ul>

@@ -41,6 +41,20 @@ const Env = z.object({
   /** Sentry project DSN. Errors are only logged without it. */
   SENTRY_DSN: z.string().url().optional(),
 
+  /**
+   * Accounts (src/auth.ts). PUBLIC_URL is this server's own address (https://api.… on the laptop,
+   * https://fb.… on Render): Google sends readers back to it after they log in. APP_URL is the
+   * app, for links in emails; it defaults to the first ALLOWED_ORIGINS entry.
+   */
+  PUBLIC_URL: z.string().url().optional(),
+  APP_URL: z.string().url().optional(),
+  /** Log in with Google. Off without both. */
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** Account emails through Resend. Without it the links are logged instead of sent. */
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().default('Breader <hello@breader.site>'),
+
   S3_ENDPOINT: z.string().url(),
   /** The endpoint browsers use for signed links, when it differs (Docker: http://localhost:9000). */
   S3_PUBLIC_ENDPOINT: z.string().url().optional(),

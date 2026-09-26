@@ -52,6 +52,8 @@ services:
       ROLE: laptop
       MIRROR_URL: "postgres://breader:breader@mirror:5432/breader"
       S3_PUBLIC_ENDPOINT: "http://localhost:9000"
+      # Where Google sends readers back after logging in; account emails print their links in the logs.
+      PUBLIC_URL: "http://localhost:8787"
     ports: ["8787:8787"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
@@ -61,6 +63,7 @@ services:
     environment:
       ROLE: fallback
       S3_PUBLIC_ENDPOINT: "http://localhost:9000"
+      PUBLIC_URL: "http://localhost:8788"
     ports: ["8788:8787"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
