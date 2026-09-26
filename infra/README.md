@@ -91,7 +91,7 @@ every library key from working, and changing `SESSION_SECRET` signs every reader
 
 ### 6. GitHub
 
-1. Push the repository. The first push to `main` builds `ghcr.io/OWNER/breader-server`.
+1. Push the repository. The first push to `dev` builds `ghcr.io/OWNER/breader-server`.
 2. Your profile › Packages › breader-server › Package settings: make it **public**, so the laptop and
    Render can pull without credentials. It holds code only, no settings.
 3. Settings › Secrets and variables › Actions: `SUPABASE_SESSION_URL`, then `RENDER_DEPLOY_HOOK`
@@ -138,7 +138,7 @@ Settings › Custom Domains: add `fb.breader.example`, then in Cloudflare DNS ad
 
 ### 9. Cloudflare Pages
 
-Workers & Pages › Create › Pages › connect the repository:
+Workers & Pages › Create › Pages › connect the repository, production branch `dev`:
 
 - Build command `npm ci && npm run build -w frontend`, output directory `frontend/dist`, root `/`
 - Environment variables `VITE_API_URL=https://api.breader.example`,
@@ -162,7 +162,7 @@ paid plan at the time of writing; Healthchecks.io's free plan has them.
 
 ## Day to day
 
-**Shipping.** Push to `main`. CI tests, publishes the image, migrates Supabase and redeploys
+**Shipping.** Push to `dev`. CI tests, publishes the image, migrates Supabase and redeploys
 Render. The laptop picks the image up within 5 minutes, and Pages rebuilds the app. For those
 minutes the laptop and Render can run different versions. So a migration only ever adds: a new
 table, or a nullable column. Removals ship in a later release, once no running version reads them.

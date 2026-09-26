@@ -1,5 +1,5 @@
 # Every push and pull request: type checks, lint, the server tests against the local stand-ins.
-# Pushes to main then publish the server image (arm64 for the Mac, amd64 for Render), migrate
+# Pushes to dev then publish the server image (arm64 for the Mac, amd64 for Render), migrate
 # Supabase, and redeploy Render. The laptop picks the image up itself (infra/update.sh), and
 # Cloudflare Pages builds the app from the same commit.
 #
@@ -8,7 +8,7 @@
 name: ci
 
 on:
-  push: { branches: [main] }
+  push: { branches: [dev] }
   pull_request:
 
 concurrency:
