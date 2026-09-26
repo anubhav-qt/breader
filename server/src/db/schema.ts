@@ -1,0 +1,216 @@
+import { sql } from 'drizzle-orm';
+import {
+  bigint,
+  bigserial,
+  boolean,
+  char,
+  customType,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+
+/*
+ * The same schema runs in Supabase (the ledger) and in the laptop's copy. Tables marked "fed"
+ * have change-log triggers (see drizzle/0001_change_feed.sql): every write to them is recorded,
+ * and the worker replays the records into the copy. `version` is stamped by a trigger from one
+ * sequence, so the copy can always tell which of two writes to a row is newer.
+ */
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
+const big = (name: string) => bigint(name, { mode: 'number' });
+const version = () => big('version').notNull().default(0);
+
+/** What a key opens, and what an account owns. Fed. */
+export const libraries = pgTable(
+  'libraries',
+  {
+    id: text('id').primaryKey(),
+    /** HMAC-SHA256(key, pepper). Null once key access is switched off. */
+    keyHash: bytea('key_hash'),
+    keyEnabled: boolean('key_enabled').notNull().default(true),
+    /** Bumped when the key is replaced, which ends every session opened with the old one. */
+    keyEpoch: integer('key_epoch').notNull().default(1),
+    ownerAccountId: text('owner_account_id'),
+    /** Rises by one on every push; rows changed by that push carry the new value. */
+    rev: big('rev').notNull().default(0),
+    quotaBytes: big('quota_bytes').notNull(),
+    fileBytes: big('file_bytes').notNull(),
+    usedBytes: big('used_bytes').notNull().default(0),
+    createdAt: at('created_at').notNull().defaultNow(),
+    lastActiveAt: at('last_active_at').notNull().defaultNow(),
+    retiredAt: at('retired_at'),
+    version: version(),
+  },
+  (t) => [uniqueIndex('libraries_key_hash_idx').on(t.keyHash)],
+);
+
+/** Makes pushes safe to retry: each browser's highest applied mutation id. */
+export const syncClients = pgTable(
+  'sync_clients',
+  {
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    clientId: text('client_id').notNull(),
+    lastMutationId: big('last_mutation_id').notNull().default(0),
+    lastSeenAt: at('last_seen_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.libraryId, t.clientId] })],
+);
+
+/**
+ * A stored file in R2. Private files belong to one library and are only deduplicated inside it,
+ * so nobody can probe whether someone else holds a file. Fed.
+ */
+export const blobs = pgTable(
+  'blobs',
+  {
+    id: text('id').primaryKey(),
+    sha256: text('sha256').notNull(),
+    size: big('size').notNull(),
+    mime: text('mime').notNull(),
+    /** book | cover */
+    kind: text('kind').notNull(),
+    r2Key: text('r2_key').notNull(),
+    ownerLibraryId: text('owner_library_id').references(() => libraries.id, { onDelete: 'set null' }),
+    isPublic: boolean('is_public').notNull().default(false),
+    /** pending (upload link issued) | ready | deleted */
+    status: text('status').notNull().default('pending'),
+    createdAt: at('created_at').notNull().defaultNow(),
+    readyAt: at('ready_at'),
+    version: version(),
+  },
+  (t) => [
+    uniqueIndex('blobs_owner_sha_idx').on(t.ownerLibraryId, t.sha256),
+    index('blobs_sha_idx').on(t.sha256),
+  ],
+);
+
+/**
+ * A book in a library: what the app's BookRecord holds, plus the reader's card edits kept as
+ * separate fields so each one merges on its own. Removing a book leaves a tombstone. Fed.
+ */
+export const libraryItems = pgTable(
+  'library_items',
+  {
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    bookId: text('book_id').notNull(),
+    title: text('title').notNull(),
+    author: text('author').notNull(),
+    format: text('format').notNull(),
+    /** file | sample */
+    source: text('source').notNull(),
+    url: text('url'),
+    shared: boolean('shared').notNull().default(false),
+    addedAt: at('added_at').notNull(),
+    words: integer('words').notNull().default(0),
+    color: text('color').notNull(),
+    hasCover: boolean('has_cover').notNull().default(false),
+    progress: doublePrecision('progress').notNull().default(0),
+    line: text('line').notNull().default(''),
+    lastOpened: at('last_opened').notNull(),
+    fileId: text('file_id').references(() => blobs.id),
+    coverId: text('cover_id').references(() => blobs.id),
+    editTitle: text('edit_title'),
+    editColor: text('edit_color'),
+    favorite: boolean('favorite').notNull().default(false),
+    removedAt: at('removed_at'),
+    rev: big('rev').notNull(),
+    version: version(),
+  },
+  (t) => [primaryKey({ columns: [t.libraryId, t.bookId] }), index('library_items_rev_idx').on(t.libraryId, t.rev)],
+);
+
+/** Where the reader is in each book. The most recent reading session wins. Fed. */
+export const readingStates = pgTable(
+  'reading_states',
+  {
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    bookId: text('book_id').notNull(),
+    /** The app's {section, block, offset}. */
+    position: jsonb('position'),
+    progress: doublePrecision('progress').notNull().default(0),
+    line: text('line').notNull().default(''),
+    words: integer('words'),
+    readAt: at('read_at').notNull(),
+    rev: big('rev').notNull(),
+    version: version(),
+  },
+  (t) => [primaryKey({ columns: [t.libraryId, t.bookId] }), index('reading_states_rev_idx').on(t.libraryId, t.rev)],
+);
+
+/** Reading style, typeface, size and theme, so they follow the reader between browsers. Fed. */
+export const librarySettings = pgTable('library_settings', {
+  libraryId: text('library_id').primaryKey().references(() => libraries.id, { onDelete: 'cascade' }),
+  prefs: jsonb('prefs').notNull().default(sql`'{}'::jsonb`),
+  rev: big('rev').notNull(),
+  version: version(),
+});
+
+/** Every write to a fed table, in the order the worker must read them: (txid, id). */
+export const changeLog = pgTable(
+  'change_log',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    txid: big('txid').notNull(),
+    tbl: text('tbl').notNull(),
+    pk: jsonb('pk').notNull(),
+    /** I, U or D */
+    op: char('op', { length: 1 }).notNull(),
+    /** The whole row after the change; null for deletes. */
+    row: jsonb('row'),
+    version: big('version').notNull(),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [index('change_log_cursor_idx').on(t.txid, t.id), index('change_log_at_idx').on(t.at)],
+);
+
+/**
+ * One row in Supabase describing the feed: how far the laptop has read (so consumed records can
+ * be pruned, and lag measured from anywhere), and the newest txid ever pruned unread (so a laptop
+ * that was away too long knows to reload everything).
+ */
+export const feedState = pgTable('feed_state', {
+  id: integer('id').primaryKey().default(1),
+  ackTxid: big('ack_txid').notNull().default(0),
+  ackId: big('ack_id').notNull().default(0),
+  ackAt: at('ack_at'),
+  lostTxid: big('lost_txid').notNull().default(0),
+});
+
+/** Laptop copy only: its read position in the feed. */
+export const mirrorState = pgTable('mirror_state', {
+  id: integer('id').primaryKey().default(1),
+  cursorTxid: big('cursor_txid').notNull().default(0),
+  cursorId: big('cursor_id').notNull().default(0),
+  loadedAt: at('loaded_at'),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});
+
+/** Laptop copy only: deletes it has applied, so an older write that arrives late can't undo them. */
+export const mirrorTombstones = pgTable(
+  'mirror_tombstones',
+  {
+    tbl: text('tbl').notNull(),
+    pk: jsonb('pk').notNull(),
+    version: big('version').notNull(),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tbl, t.pk] })],
+);
+
+/** Fed tables and their primary keys, in the order a full reload copies them. */
+export const FED_TABLES = {
+  libraries: ['id'],
+  blobs: ['id'],
+  library_items: ['library_id', 'book_id'],
+  reading_states: ['library_id', 'book_id'],
+  library_settings: ['library_id'],
+} as const;
+export type FedTable = keyof typeof FED_TABLES;
