@@ -57,4 +57,4 @@ Released under the [MIT License](LICENSE).
 
 ---
 
-<p align="center"><sub>Fill your life with colours, one book at a time.</sub></p>
+<p align="center"><sub>Fill your life with colours by reading books!</sub></p>
