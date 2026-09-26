@@ -53,7 +53,7 @@ const Env = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   /** Account emails through Resend. Without it the links are logged instead of sent. */
   RESEND_API_KEY: z.string().optional(),
-  MAIL_FROM: z.string().default('Breader <hello@breader.site>'),
+  MAIL_FROM: z.string().default('breader <hello@breader.site>'),
 
   S3_ENDPOINT: z.string().url(),
   /** The endpoint browsers use for signed links, when it differs (Docker: http://localhost:9000). */
