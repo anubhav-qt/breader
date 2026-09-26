@@ -109,9 +109,31 @@ Render) and `VITE_SENTRY_DSN` (Pages). Without them, errors are only logged.
 
 ### 7. The laptop
 
+Only one laptop runs the stack at a time (see *Moving the laptop* below).
+
+On a Mac:
+
 1. Docker Desktop › Settings › General: **Start Docker Desktop when you sign in**.
 2. System Settings › Battery › Options: **Prevent automatic sleeping on power adapter when the
    display is off**. A closed lid still sleeps the Mac; Render answers until it wakes.
+
+On Linux (Arch shown; other distributions name the packages differently):
+
+1. Docker, started at boot, usable without sudo (log out and in after `usermod`):
+   ```sh
+   sudo pacman -S --needed docker docker-compose git
+   sudo systemctl enable --now docker
+   sudo usermod -aG docker "$USER"
+   ```
+   The containers come back after a reboot by themselves (`restart: unless-stopped`).
+2. Don't sleep with the lid closed on power. In `/etc/systemd/logind.conf` (or a file in
+   `/etc/systemd/logind.conf.d/`) set `HandleLidSwitchExternalPower=ignore`, then reboot. Turn
+   off automatic suspend on AC in your desktop's power settings too; GNOME and KDE have their own.
+   On a machine that only serves Breader, `sudo systemctl mask sleep.target suspend.target
+   hibernate.target hybrid-sleep.target` rules out sleep entirely.
+
+Then, on either:
+
 3. Cloudflare Zero Trust › Networks › Tunnels › Create a tunnel › Cloudflared, named
    `breader-laptop`. Choose Docker and copy the token after `--token` → `TUNNEL_TOKEN`. Under
    Public Hostname add `api` · `breader.example` → service **HTTP**, URL **`api:8787`**.
@@ -122,6 +144,8 @@ Render) and `VITE_SENTRY_DSN` (Pages). Without them, errors are only logged.
    docker compose -f infra/compose.yml logs -f worker   # "copy reloaded", then "worker running"
    infra/update.sh --install                            # pull new releases every 5 minutes
    ```
+   `--install` adds a LaunchAgent on a Mac, or a systemd user timer on Linux, with lingering on so
+   it runs before you log in. If it asks, run the `sudo loginctl enable-linger` line it prints.
 5. `curl https://api.breader.example/ready` shows `"role":"laptop"` and the copy's lag.
 
 ### 8. Render
@@ -136,24 +160,26 @@ ALLOWED_ORIGINS=https://breader.example           COOKIE_DOMAIN=breader.example
 COOKIE_SECURE=true       S3_ENDPOINT=<same>       S3_BUCKET=breader-files
 S3_REGION=auto           S3_FORCE_PATH_STYLE=true
 S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY = the render token (files bucket only)
-CLIENT_IP_HEADER=x-forwarded-for                  ADMIN_TOKEN=<same>
+CLIENT_IP_HEADER=cf-connecting-ip                 ADMIN_TOKEN=<same>
 SENTRY_DSN=<the DSN>
 ```
 
 Leave out `MIRROR_URL`, `S3_BACKUP_BUCKET`, `BACKUP_RECIPIENT` and `TUNNEL_TOKEN`; the fallback
 has no copy and makes no backups. Render sets `PORT` itself.
 
-`CLIENT_IP_HEADER` tells the server where the reader's address is, for its rate limits. The laptop
-reads `cf-connecting-ip` (set in `compose.yml`); Render reads the last `x-forwarded-for` entry,
-the one Render's proxy adds. Once `fb.` answers, check that a request can't choose its own address:
+`CLIENT_IP_HEADER` tells the server where the reader's address is, for its rate limits. Both
+servers read `cf-connecting-ip`: the laptop sits behind the tunnel (set in `compose.yml`), and
+Render sits behind Cloudflare's edge too. Cloudflare sets that header itself and refuses a request
+that brings its own (error 1000). Don't use `x-forwarded-for` on Render: its last entry is
+Render's internal proxy, which would put every reader under one limit. Once `fb.` answers, check:
 
 ```sh
-curl -s -H "authorization: Bearer $ADMIN_TOKEN" -H 'x-forwarded-for: 6.6.6.6' -H 'cf-connecting-ip: 6.6.6.6' \
+curl -s -H "authorization: Bearer $ADMIN_TOKEN" -H 'x-forwarded-for: 6.6.6.6' \
   https://fb.breader.example/admin/status | grep -o '"request":{[^}]*}'
 ```
 
-`ip` must be your own address (`curl -s ifconfig.me`), not 6.6.6.6. If it shows an address of
-Render's own instead, try `CLIENT_IP_HEADER=cf-connecting-ip`; `headers` lists what arrived.
+`ip` must be your own address (`curl -s ifconfig.me`), not 6.6.6.6 and not a `10.…` address;
+`headers` lists what arrived.
 
 Settings › Custom Domains: add `fb.breader.example`, then in Cloudflare DNS add the CNAME it shows,
 **DNS only** (grey cloud). Settings › Deploy Hook → GitHub secret `RENDER_DEPLOY_HOOK`.
@@ -228,6 +254,20 @@ Sentry, until someone looks.
 **The laptop is off or broken.** Nothing to do: the app is on Render. For a new laptop, run step 7
 with the saved `infra/.env`. The worker rebuilds the copy from Supabase and downloads every file
 from R2.
+
+**Moving the laptop.** Stop the old one before starting the new one. Two stacks at once would
+both answer `api.` through the same tunnel, both run the nightly jobs, and each tell Supabase to
+prune change records the other hasn't read yet, forcing reloads. On the old laptop:
+
+```sh
+docker compose -f infra/compose.yml down     # the volumes stay, in case you need to go back
+infra/update.sh --uninstall
+```
+
+Then run step 7 on the new one with the same `infra/.env`: the tunnel token, heartbeat URL and
+every secret come with it. Copy the file over something private (`scp`, or your password
+manager), never chat or email. Render answers in between; expect one "down" email from the `api.`
+monitor and one from the heartbeat, then two "up" emails.
 
 **Supabase is lost or corrupted.** If the laptop is running, its copy is seconds behind, so
 you lose almost nothing. Otherwise you lose what changed since the last backup, up to a day.

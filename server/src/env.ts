@@ -30,9 +30,10 @@ const Env = z.object({
   ALLOWED_ORIGINS: list.default([]),
   /**
    * Where the reader's address comes from, for rate limits. Only a header the proxy in front sets
-   * itself can be trusted: cf-connecting-ip behind Cloudflare (the tunnel), the right-most
-   * x-forwarded-for entry behind one proxy that appends it (Render). none: the connection's own
-   * address, for local development. Anything else lets a script pick its own address.
+   * itself can be trusted: cf-connecting-ip behind Cloudflare (the tunnel, and Render's edge), the
+   * right-most x-forwarded-for entry behind one proxy that appends it. Not x-forwarded-for on Render:
+   * its last entry is Render's internal proxy. none: the connection's own address, for local
+   * development. Anything else lets a script pick its own address.
    */
   CLIENT_IP_HEADER: z.enum(['none', 'cf-connecting-ip', 'x-forwarded-for']).default('none'),
   /** Opens /admin, the status page. The page is off without it. */
