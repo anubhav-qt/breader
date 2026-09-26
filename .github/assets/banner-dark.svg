@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" width="880" height="200">
+<defs><clipPath id="c0"><rect x="220" y="36" width="104" height="128" rx="16"/></clipPath><clipPath id="c1"><rect x="348" y="36" width="104" height="128" rx="16"/></clipPath><clipPath id="c2"><rect x="476" y="36" width="104" height="128" rx="16"/></clipPath><clipPath id="c3"><rect x="604" y="36" width="104" height="128" rx="16"/></clipPath><clipPath id="c4"><rect x="732" y="36" width="104" height="128" rx="16"/></clipPath></defs>
+<rect x="48" y="37" width="14" height="14" fill="#FFFFFF"/>
+<rect x="48" y="55" width="14" height="14" fill="#FFFFFF"/>
+<rect x="48" y="73" width="14" height="14" fill="#FFFFFF"/>
+<rect x="66" y="73" width="14" height="14" fill="#FFFFFF"/>
+<rect x="84" y="73" width="14" height="14" fill="#FFFFFF"/>
+<rect x="102" y="73" width="14" height="14" fill="#FFFFFF"/>
+<rect x="48" y="91" width="14" height="14" fill="#FFFFFF"/>
+<rect x="120" y="91" width="14" height="14" fill="#FFFFFF"/>
+<rect x="48" y="109" width="14" height="14" fill="#FFFFFF"/>
+<rect x="120" y="109" width="14" height="14" fill="#FFFFFF"/>
+<rect x="48" y="127" width="14" height="14" fill="#FFFFFF"/>
+<rect x="120" y="127" width="14" height="14" fill="#FFFFFF"/>
+<rect x="48" y="145" width="14" height="14" fill="#FFFFFF"/>
+<rect x="66" y="145" width="14" height="14" fill="#FFFFFF"/>
+<rect x="84" y="145" width="14" height="14" fill="#FFFFFF"/>
+<rect x="102" y="145" width="14" height="14" fill="#FFFFFF"/>
+<g clip-path="url(#c0)">
+<rect x="220" y="36" width="104" height="128" fill="#AE5462"/>
+</g>
+<rect x="220.5" y="36.5" width="103" height="127" rx="15.5" fill="none" stroke="rgba(255,255,255,0.18)"/>
+<g clip-path="url(#c1)">
+<circle cx="388" cy="96" r="46" fill="#D4A23C"/>
+<circle cx="440" cy="154" r="52" fill="#D4A23C"/>
+<circle cx="368" cy="166" r="30" fill="#D4A23C"/>
+</g>
+<rect x="348.5" y="36.5" width="103" height="127" rx="15.5" fill="none" stroke="rgba(255,255,255,0.18)"/>
+<g clip-path="url(#c2)">
+<circle cx="554" cy="84" r="34" fill="#2C6668"/>
+<circle cx="500" cy="148" r="28" fill="#2C6668"/>
+</g>
+<rect x="476.5" y="36.5" width="103" height="127" rx="15.5" fill="none" stroke="rgba(255,255,255,0.18)"/>
+<g clip-path="url(#c3)">
+<circle cx="674" cy="136" r="22" fill="#74659E"/>
+</g>
+<rect x="604.5" y="36.5" width="103" height="127" rx="15.5" fill="none" stroke="rgba(255,255,255,0.18)"/>
+<g clip-path="url(#c4)">
+</g>
+<rect x="732.5" y="36.5" width="103" height="127" rx="15.5" fill="none" stroke="rgba(255,255,255,0.18)"/>
+</svg>
