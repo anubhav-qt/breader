@@ -28,7 +28,7 @@ button:disabled { cursor: not-allowed; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: 40px; padding: 0 16px; border-radius: 10px;
-  font: 700 14px/1 var(--ui); white-space: nowrap;
+  font: var(--ui-w) 14px/1 var(--ui); white-space: nowrap;
   transition: background-color 160ms ease, opacity 160ms ease, transform 160ms ease;
 }
 .btn:active:not(:disabled) { transform: scale(0.97); }
@@ -41,7 +41,7 @@ button:disabled { cursor: not-allowed; }
 .btn:disabled { opacity: 0.4; }
 .btn svg { width: 18px; height: 18px; }
 
-.chip { display: inline-block; font: 700 11px/1 var(--ui); padding: 4px 6px; border-radius: 6px; background: var(--fill); color: var(--ink-2); }
+.chip { display: inline-block; font: var(--ui-w) 11px/1 var(--ui); padding: 4px 6px; border-radius: 6px; background: var(--fill); color: var(--ink-2); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 1ms !important; }

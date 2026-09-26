@@ -29,6 +29,13 @@
       "when": 1790443425630,
       "tag": "0003_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790448065213,
+      "tag": "0004_key_file_limit",
+      "breakpoints": true
     }
   ]
 }

@@ -441,7 +441,11 @@ async function uploadAll() {
       if (!fileId || again) {
         // Asking again costs nothing when the server has the file: it answers "ready".
         const data = await store.get<Blob | string>(`file:${id}`);
-        if (data === undefined) { await drop(); continue; }
+        if (data === undefined) {
+          if (!fileId) host!.notice(`“${rec.title}” couldn’t be kept in this browser, so it didn’t sync. Remove it and add the file again.`);
+          await drop();
+          continue;
+        }
         const mime = MIME[rec.format];
         fileId = await uploadBlob(typeof data === 'string' ? new Blob([data], { type: mime }) : data, mime, 'book');
       }

@@ -73,9 +73,9 @@ describe('files', () => {
 
   it('enforces the per-file limit, the quota and the file types', async () => {
     const { b, libraryId } = await registered();
-    const big = await b.post('/v1/uploads', { sha256: 'a'.repeat(64), size: 26 * 1024 * 1024, mime: 'application/pdf', kind: 'book' });
+    const big = await b.post('/v1/uploads', { sha256: 'a'.repeat(64), size: 101 * 1024 * 1024, mime: 'application/pdf', kind: 'book' });
     expect(big.status).toBe(413);
-    expect(big.body.message).toBe('This file is 26 MB. Key libraries take files up to 25 MB.');
+    expect(big.body.message).toBe('This file is 101 MB. Key libraries take files up to 100 MB.');
     await primary.db.update(libraries).set({ usedBytes: 100 * 1024 * 1024 - 10 }).where(eq(libraries.id, libraryId));
     expect((await b.post('/v1/uploads', { sha256: 'b'.repeat(64), size: 11, mime: 'application/pdf', kind: 'book' })).body.code).toBe('quota_full');
     expect((await b.post('/v1/uploads', { sha256: 'c'.repeat(64), size: 5, mime: 'text/html', kind: 'book' })).body.code).toBe('bad_type');

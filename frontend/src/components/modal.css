@@ -21,7 +21,7 @@
   outline: none;
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.modal-title { margin: 0; font: 800 16px/1.2 var(--ui); }
+.modal-title { margin: 0; font: var(--ui-w-strong) 16px/1.2 var(--ui); }
 .modal-close {
   width: 34px;
   height: 34px;

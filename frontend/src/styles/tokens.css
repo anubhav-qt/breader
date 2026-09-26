@@ -40,6 +40,9 @@
   --bc-graphite: #2B2F35; --bc-graphite-ink: #FFFFFF;
 
   --ui: "Doto", ui-monospace, Menlo, Consolas, monospace;
+  /* Doto's weight is the size of its dots: phones get the heaviest, or small text turns faint. */
+  --ui-w: 700;
+  --ui-w-strong: 800;
   --read: "Dongle", "Atkinson Hyperlegible Next", system-ui, sans-serif;
   --oxanium: "Oxanium", system-ui, sans-serif;
   --serif: "Literata", Georgia, serif;
@@ -97,6 +100,15 @@
   --bc-rose: #A94F5B; --bc-clay: #9C5033; --bc-ochre: #C49434; --bc-sand: #C9BB9C; --bc-sage: #8A9E7E;
   --bc-moss: #51693C; --bc-green: #237459; --bc-teal: #2A6264; --bc-sky: #41749C; --bc-indigo: #3B4C88;
   --bc-lilac: #6E609A; --bc-plum: #774264; --bc-blush: #D49D95; --bc-graphite: #3A3F47;
+}
+
+/* Phones: heavier dots and a stronger grey, so the small interface text stays readable. */
+@media (max-width: 720px) {
+  :root { --ui-w: 900; --ui-w-strong: 900; --ink-2: #555555; }
+  :root[data-theme="dark"] { --ink-2: #B8B8B8; }
+}
+@media (max-width: 720px) and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ink-2: #B8B8B8; }
 }
 
 /* Reading themes. Auto follows the app: pure white in light mode, pure black in dark mode. */

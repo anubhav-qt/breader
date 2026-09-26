@@ -12,24 +12,42 @@ try {
 }
 const memory = new Map<string, unknown>();
 
+/*
+ * Safari on iPhone can refuse to put a Blob in IndexedDB, or keep one it can't read back after a
+ * reload. So files go in as their bytes and come back out as a Blob. (Blobs stored before this
+ * still read as they are.)
+ */
+interface Bytes { __bytes: ArrayBuffer; type: string }
+const isBytes = (v: unknown): v is Bytes => typeof v === 'object' && v !== null && '__bytes' in v;
+
 export const store = {
   async get<T>(key: string): Promise<T | undefined> {
+    // Whatever IndexedDB refused lives here, and is the latest value.
+    if (memory.has(key)) return memory.get(key) as T;
     if (idb) {
-      try { return await get<T>(key, idb); } catch { /* use memory */ }
+      try {
+        const v = await get<unknown>(key, idb);
+        return (isBytes(v) ? new Blob([v.__bytes], { type: v.type }) : v) as T | undefined;
+      } catch { /* nothing readable */ }
     }
-    return memory.get(key) as T | undefined;
+    return undefined;
   },
   async set(key: string, value: unknown): Promise<void> {
     if (idb) {
-      try { await set(key, value, idb); return; } catch { /* use memory */ }
+      try {
+        const stored = value instanceof Blob ? ({ __bytes: await value.arrayBuffer(), type: value.type } satisfies Bytes) : value;
+        await set(key, stored, idb);
+        memory.delete(key);
+        return;
+      } catch { /* use memory */ }
     }
     memory.set(key, value);
   },
   async del(key: string): Promise<void> {
-    if (idb) {
-      try { await del(key, idb); return; } catch { /* use memory */ }
-    }
     memory.delete(key);
+    if (idb) {
+      try { await del(key, idb); } catch { /* nothing to delete */ }
+    }
   },
   async clear(): Promise<void> {
     memory.clear();

@@ -17,13 +17,13 @@
   align-items: baseline;
   gap: 8px;
   padding: 12px 0;
-  font: 700 14px/1 var(--ui);
+  font: var(--ui-w) 14px/1 var(--ui);
   color: var(--ink-2);
   transition: color 160ms ease;
 }
 .tab:hover { color: var(--ink); }
 .tab[aria-selected="true"] { color: var(--ink); }
-.tab-count { font: 700 12px/1 var(--ui); color: var(--ink-2); }
+.tab-count { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); }
 .tab-line {
   position: absolute;
   left: 0;

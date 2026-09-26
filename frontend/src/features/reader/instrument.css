@@ -63,9 +63,9 @@
   background: var(--r-bg);
   box-shadow: 0 0 0 1px var(--r-line), 0 14px 32px -16px var(--r-shadow);
 }
-.lbl b { font: 700 13px/1 var(--ui); color: var(--r-mu); }
+.lbl b { font: var(--ui-w) 13px/1 var(--ui); color: var(--r-mu); }
 .lbl-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--read); font-size: 22px; line-height: 1; color: var(--r-fg); }
-.lbl em { font: 700 13px/1 var(--ui); font-style: normal; color: var(--r-mu); }
+.lbl em { font: var(--ui-w) 13px/1 var(--ui); font-style: normal; color: var(--r-mu); }
 
 .dg { display: inline-flex; }
 .dg-slot { display: inline-block; height: 1em; overflow: hidden; }
@@ -88,7 +88,7 @@
   height: 76px;
   display: grid;
   align-items: center;
-  font: 700 13px/1 var(--ui);
+  font: var(--ui-w) 13px/1 var(--ui);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--r-mu);
@@ -131,8 +131,8 @@
 .i3-caret { font-size: 10px; opacity: 0; transition: opacity 160ms ease, transform var(--dur-snappy) var(--ease-snappy); }
 .i3-head.is-on .i3-caret { opacity: 1; }
 .i3-mid.is-open .i3-caret { transform: rotate(180deg); }
-.i3-read { display: inline-flex; align-items: baseline; gap: 4px; font: 800 15px/1 var(--ui); color: var(--r-fg); }
-.i3-read small { font: 700 13px/1 var(--ui); color: var(--r-mu); }
+.i3-read { display: inline-flex; align-items: baseline; gap: 4px; font: var(--ui-w-strong) 15px/1 var(--ui); color: var(--r-fg); }
+.i3-read small { font: var(--ui-w) 13px/1 var(--ui); color: var(--r-mu); }
 .i3-read.is-right { justify-self: end; }
 .i3-dots { position: relative; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .i3-dot {

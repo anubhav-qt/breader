@@ -79,7 +79,7 @@ export async function loadRecord(rec: BookRecord): Promise<LoadedBook> {
       await store.set(`file:${rec.id}`, data);
     }
     if (data === undefined) {
-      throw new Error('This book hasn’t finished uploading from the browser it was added in. Open Breader there to finish.');
+      throw new Error('This book’s file isn’t on the server. Open it in the browser that added it, or remove it and add the file again.');
     }
     book = await parseSource(data, rec.format, rec.title);
   }
