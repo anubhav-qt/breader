@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { z } from 'zod';
 import { log } from '../log.ts';
+import { report } from './report.ts';
 
 /** An error the reader can act on. The message is shown in the app as written. */
 export class ApiError extends Error {
@@ -37,6 +38,7 @@ export async function readJson(c: Context): Promise<unknown> {
 export function onError(err: Error, c: Context) {
   if (err instanceof ApiError) return c.json({ code: err.code, message: err.message }, err.status);
   log.error({ err, path: c.req.path, method: c.req.method }, 'request failed');
+  report(err, { method: c.req.method, path: c.req.routePath });
   return c.json({ code: 'server_error', message: 'Something went wrong on the server. Try again in a moment.' }, 500);
 }
 

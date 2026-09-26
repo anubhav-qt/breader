@@ -165,7 +165,7 @@ svg text { font-family: var(--body); }
 <header class="mast">
   <div class="wm">breader</div>
   <h1>Backend &amp; infrastructure</h1>
-  <p class="meta">Design v0.2 · 26 September 2026 · Phase 1 built, not yet deployed (<a href="#built">§15</a>)</p>
+  <p class="meta">Design v0.3 · 26 September 2026 · Phase 1 built and its gaps closed, not yet deployed (<a href="#built">§15</a>)</p>
   <p class="lede">Breader keeps working when your laptop is off, and a laptop going down never loses a change. Every write is saved in Supabase first. Your laptop keeps a live copy, answers the app’s requests and does the heavy work. A free server on Render takes over while the laptop sleeps. It all runs on free tiers.</p>
   <div class="tags">
     <span class="tag">$0 a month</span><span class="tag">Laptop-first</span><span class="tag">Offline-first</span><span class="tag">Readers in India</span><span class="tag">TypeScript</span>
@@ -594,6 +594,8 @@ svg text { font-family: var(--body); }
     <li><span><strong>Push.</strong> <code>POST /v1/sync/push</code> sends the outbox with the client id and a mutation id on each change. It runs 3 seconds after the last change (at most 20 seconds after the first), when the tab is hidden, and when the connection returns. The server applies the batch in one transaction, raises the library’s <code>rev</code> and stamps every changed row with it. A retry of the same mutation id does nothing.</span></li>
     <li><span><strong>Pull.</strong> <code>GET /v1/sync/pull?since=&lt;rev&gt;</code> returns every row with a higher <code>rev</code>, tombstones included, and the new <code>rev</code>. It runs when the app opens, on focus, after a push, and every 2 minutes while open.</span></li>
     <li><span><strong>Why pulls never miss a change.</strong> The library row is locked during a push, so revs rise in the same order the changes were saved.</span></li>
+    <li><span><strong>Several tabs.</strong> Every tab of a browser shares one outbox. Tabs change the library and the outbox only under one Web Lock, always on what’s stored rather than on their own earlier copy, and tell each other through a BroadcastChannel so the others reload. One tab at a time talks to the server.</span></li>
+    <li><span><strong>After a restore.</strong> The database carries a sync timeline, and a restore gives it a new one. A browser that sees a new timeline, or a <code>rev</code> lower than one it pulled, sends everything it holds again (books, places, edits, removals, and files the server no longer knows) before it takes anything from the server.</span></li>
     <li><span><strong>Shared data.</strong> Circles have their own <code>rev</code> and pull the same way. The public shelf is fetched page by page and cached at the edge for 60 seconds.</span></li>
   </ol>
 
@@ -603,7 +605,7 @@ svg text { font-family: var(--body); }
     <tbody>
       <tr><td>Reading place</td><td class="plain">The most recent reading session wins, judged by the device’s clock and capped at the server’s. If another device is far ahead, the app can offer to jump there (a UI detail for later).</td></tr>
       <tr><td>Card edits</td><td class="plain">Name, colour and favourite are separate fields. For each one, the change that reaches the server last wins.</td></tr>
-      <tr><td>Remove and Undo</td><td class="plain">Remove writes a tombstone and Undo clears it, so ⌘Z still works across a sync. Tombstones are purged after 30 days.</td></tr>
+      <tr><td>Remove and Undo</td><td class="plain">Remove writes a tombstone and Undo clears it, so ⌘Z still works across a sync. Tombstones are purged after 30 days. A browser that last pulled before a purged tombstone is sent the whole library, marked <code>full</code>, and drops the books it doesn’t list.</td></tr>
       <tr><td>Highlights</td><td class="plain">Each has its own id, so highlights made on two devices both survive. Edits to one highlight: last wins.</td></tr>
       <tr><td>Notebooks</td><td class="plain">Yjs merges edits from every device, including edits made offline, and nothing is overwritten. Drawings merge stroke by stroke.</td></tr>
       <tr><td>Reader settings</td><td class="plain">Merged setting by setting; for each one, last wins.</td></tr>
@@ -630,7 +632,7 @@ svg text { font-family: var(--body); }
     <li><strong>Covers</strong> of shelf books are public and cached at the edge. Private covers use signed links like books.</li>
     <li><strong>Storing each file once</strong> only happens within a library and against public books. A stranger therefore can’t test whether someone else holds a private file.</li>
     <li><strong>Quota</strong> counts every file a library uses, even when the bytes are shared with others.</li>
-    <li><strong>Clean-up:</strong> a file nobody uses any more is deleted after 7 days.</li>
+    <li><strong>Clean-up:</strong> a file no book points at is deleted after 7 days, and its space goes back to the library. Removed books still point at theirs until their tombstone is purged, so Undo brings a book back whole. An upload link never finished is dropped after a day.</li>
   </ul>
 </section>
 
@@ -834,13 +836,13 @@ svg text { font-family: var(--body); }
   <p class="prose">For a few minutes the laptop and Render can run different versions, so migrations only ever add. A column is added in one release and removed in a later one, once no running code uses it.</p>
 
   <h3>Backups and recovery</h3>
-  <p class="prose">Supabase’s free plan keeps no backups, so the laptop copy becomes the backup. Every night at 03:00 IST the worker dumps the laptop copy, which costs no Supabase egress. It encrypts the dump with <code>age</code>, keeps 14 days on the laptop and puts 7 daily and 4 weekly copies in a separate R2 bucket. Once a month, restore the latest dump into a scratch container and compare row counts. For now that is a manual drill in <code>infra/README.md</code>. A restore also runs <code>migrate</code>, which moves the version sequence past the restored rows: the copy never advances it, and new writes would otherwise look older than old ones.</p>
+  <p class="prose">Supabase’s free plan keeps no backups, so the laptop copy becomes the backup. Every night at 03:00 IST the worker dumps the laptop copy, which costs no Supabase egress. It encrypts the dump with <code>age</code>, keeps 14 days on the laptop and puts 7 daily and 4 weekly copies in a separate R2 bucket. Every four weeks, after that night’s backup, the worker restores a dump of the copy into a scratch database, checks every table row for row, and checks that the night’s backup reached R2 whole. It can’t decrypt its own backups, because the key isn’t on the laptop, so opening one with the key stays a manual drill in <code>infra/README.md</code>, a few times a year. A restore also runs <code>migrate</code>, which moves the version sequence past the restored rows (the copy never advances it, and new writes would otherwise look older than old ones) and starts a new sync timeline (§6).</p>
   <div class="tbl"><table>
     <thead><tr><th>If this happens</th><th>What you do</th><th>Lost</th></tr></thead>
     <tbody>
       <tr><td>The laptop dies or is stolen</td><td class="plain">Nothing urgent, because the fallback is serving. On the new laptop, run <code>docker compose up</code>. The database copy reloads from Supabase, and files copy back from R2.</td><td class="plain">Nothing</td></tr>
       <tr><td>The Supabase project is lost</td><td class="plain">Dump the laptop copy, which is seconds behind, into a new project or any Postgres.</td><td class="plain">A few seconds at most</td></tr>
-      <tr><td>A file is lost in R2</td><td class="plain">Copy it back from the laptop’s copy, which uses the bucket’s layout (<code>rclone</code>, in the runbook). The worker doesn’t do this by itself yet.</td><td class="plain">Nothing</td></tr>
+      <tr><td>A file is lost in R2</td><td class="plain">The worker lists R2 once a day and puts back any missing file from the laptop’s copy. For a whole bucket at once, <code>rclone</code> (in the runbook).</td><td class="plain">Nothing</td></tr>
       <tr><td>The laptop and Supabase are both lost</td><td class="plain">Restore last night’s encrypted dump from R2.</td><td class="plain">Up to a day of metadata</td></tr>
     </tbody>
   </table></div>
@@ -849,9 +851,9 @@ svg text { font-family: var(--body); }
   <ul class="prose">
     <li>Uptime checks on <code>api.</code>, <code>fb.</code> (this check also keeps Render awake) and the app. Alerts go to email or Telegram.</li>
     <li>A heartbeat from the worker every 5 minutes, sent only while the copy is under 60 seconds behind, so one silence alert (after 10 minutes) covers a stopped worker, a sleeping laptop and a stuck copy. UptimeRobot’s heartbeats are paid; Healthchecks.io’s free plan has them.</li>
-    <li>Sentry for errors in the app, the API and the worker (not wired up yet).</li>
-    <li>An admin status page that shows which server is answering, the copy’s lag, database size and egress, R2 usage, emails sent today and the AI key pool.</li>
-    <li>The change feed’s constant polling should keep Supabase from counting the project as idle and pausing it. The status page watches for that.</li>
+    <li>Sentry for errors in the app, the API and the worker. A small reporter sends only the error and its stack, each error at most once every 10 minutes, so the free plan lasts.</li>
+    <li>A status page on each server (<code>/admin</code>, behind an admin token) shows which server answered, the copy’s lag, the change feed, Supabase’s size, files in R2, libraries about to expire, and when each worker job last worked or failed. Emails and the AI key pool join it when they exist. Supabase shows egress only in its own dashboard.</li>
+    <li>The change feed’s constant polling should keep Supabase from counting the project as idle and pausing it. The status page shows when the laptop last read the feed.</li>
   </ul>
 
   <h3>Security</h3>
@@ -860,7 +862,7 @@ svg text { font-family: var(--body); }
     <li>Turn off Supabase’s Data API, or keep the tables in a schema it doesn’t expose. Only Breader’s servers talk to the database.</li>
     <li>Keys are 100 random bits. The server stores an HMAC-SHA256 of each key with a secret pepper that the laptop and Render share. Keys travel only in request bodies over HTTPS, never in URLs.</li>
     <li>Sessions use a cookie that’s <code>HttpOnly</code>, <code>Secure</code> and <code>SameSite=Lax</code>, set on the parent domain. Writes also check the <code>Origin</code> header.</li>
-    <li>Rate limits, per address and counted by each server on its own: opening a key 10 times a minute, registering a library 10 times an hour, and asking to upload 60 times an hour. These are looser than first planned, because Indian mobile carriers put many readers behind one address. Cloudflare Turnstile joins sign-up and key registration in Phase 2.</li>
+    <li>Rate limits, per address and counted by each server on its own: opening a key 10 times a minute, registering a library 10 times an hour, and asking to upload 60 times an hour. These are looser than first planned, because Indian mobile carriers put many readers behind one address. Each server reads the address only from the header its own proxy writes (<code>cf-connecting-ip</code> through the tunnel, the last <code>x-forwarded-for</code> entry on Render), so a request can’t choose its own. Cloudflare Turnstile joins sign-up and key registration in Phase 2.</li>
     <li>Upload size is limited in the signed link and checked again afterwards. EPUB HTML is always cleaned in the browser before display, as DOMPurify already does. Files are served from R2 or <code>files.</code>, never from the app’s address.</li>
     <li>Secrets live in <code>.env</code> on the laptop (readable only by you, never committed), in Render’s environment settings and in GitHub secrets.</li>
     <li>Accounts can be deleted and exported, as India’s data protection law (DPDP Act) expects.</li>
@@ -960,17 +962,24 @@ svg text { font-family: var(--body); }
     <li>A book added in one browser registered its library, uploaded straight to storage, and reached Supabase, the laptop’s copy and the laptop’s file store. A second browser opened the library with the key, typed carelessly, and downloaded the book through a signed link. Reading places synced back.</li>
     <li>Stopping the laptop’s API moved the app to the fallback within one request; starting it again moved the app back within a minute.</li>
     <li>A nightly backup decrypted and restored. Restoring the copy into a fresh Postgres, then running <code>migrate</code>, repaired the version sequence.</li>
-    <li>32 server tests cover keys and sessions, the sync rules, uploads and the change feed. CI runs them on every push.</li>
+    <li>Two tabs in Chrome edited one library at once, and every edit reached the server and both tabs. Then the server was put back to an older state with a new timeline, and the browser sent its edits and a lost book again, taking the book’s file back from storage without uploading it. A purged removal and a wholly lost library came back right too.</li>
+    <li>The nightly backup, the restore test and clean-up ran in the worker image and logged themselves to the status page.</li>
+    <li>48 server tests cover keys and sessions, the sync rules, uploads, the change feed, clean-up, restores, the restore test, the R2 check and the status page. CI runs them on every push to <code>dev</code> and on pull requests.</li>
   </ul>
   <h4>Before it’s live</h4>
   <p class="prose">It needs your accounts: the domain, Supabase, R2 (the card question in §16), GitHub, the tunnel, Render, Pages and the monitors. <code>infra/README.md</code> has the steps in order.</p>
+  <h4>Closed since v0.2</h4>
+  <ul class="prose">
+    <li><strong>Two tabs on one library</strong> no longer overwrite each other: one shared outbox under a Web Lock, one tab syncing at a time (§6).</li>
+    <li>Clean-up runs hourly: tombstones after 30 days, unused files after 7 days, key libraries unused for a year (§7).</li>
+    <li>After a restore, browsers send what the server lost instead of taking the older state (§6).</li>
+    <li>The rate limiter reads only the header each server’s own proxy writes (§12).</li>
+    <li>Sentry, the status page, the monthly restore test and the daily R2 check (§12).</li>
+  </ul>
   <h4>Left for later</h4>
   <ul class="prose">
-    <li><strong>Two tabs on one library</strong> share one outbox without coordinating, so a change made in one tab can be overwritten or dropped by the other. Web Locks would let one tab own sync. This is the most important gap.</li>
-    <li>Clean-up jobs: tombstones after 30 days, unused files after 7 days, key libraries unused for 12 months.</li>
-    <li>After Supabase is restored, a browser takes the restored (older) state on its next pull instead of sending its newer changes again.</li>
-    <li>The rate limiter trusts forwarding headers, which a request sent straight to the Render address could fake. Keys are 100 random bits, so this is a second line of defence, not the first.</li>
-    <li>Sentry, the admin status page, the automatic monthly restore test, and re-uploading files missing from R2.</li>
+    <li>Sentry sees the app’s minified code. Uploading source maps from the Pages build would make its stack traces readable.</li>
+    <li>Render’s forwarding header is chosen on trust until it’s checked once on the live server; the runbook has the check.</li>
   </ul>
 </section>
 

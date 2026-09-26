@@ -47,6 +47,8 @@ export const libraries = pgTable(
     createdAt: at('created_at').notNull().defaultNow(),
     lastActiveAt: at('last_active_at').notNull().defaultNow(),
     retiredAt: at('retired_at'),
+    /** The highest rev among tombstones purged so far. A browser that pulled from before it may have missed a removal. */
+    purgedRev: big('purged_rev').notNull().default(0),
     version: version(),
   },
   (t) => [uniqueIndex('libraries_key_hash_idx').on(t.keyHash)],
@@ -84,6 +86,11 @@ export const blobs = pgTable(
     status: text('status').notNull().default('pending'),
     createdAt: at('created_at').notNull().defaultNow(),
     readyAt: at('ready_at'),
+    /**
+     * When nothing needed this file any more: its upload link was issued (pending), no book points
+     * at it (ready), or it was deleted. Clean-up counts from here; null while a book uses it.
+     */
+    unusedSince: at('unused_since'),
     version: version(),
   },
   (t) => [
@@ -124,7 +131,14 @@ export const libraryItems = pgTable(
     rev: big('rev').notNull(),
     version: version(),
   },
-  (t) => [primaryKey({ columns: [t.libraryId, t.bookId] }), index('library_items_rev_idx').on(t.libraryId, t.rev)],
+  (t) => [
+    primaryKey({ columns: [t.libraryId, t.bookId] }),
+    index('library_items_rev_idx').on(t.libraryId, t.rev),
+    // Clean-up: old tombstones, and whether any book still points at a file.
+    index('library_items_removed_idx').on(t.removedAt).where(sql`${t.removedAt} IS NOT NULL`),
+    index('library_items_file_idx').on(t.fileId),
+    index('library_items_cover_idx').on(t.coverId),
+  ],
 );
 
 /** Where the reader is in each book. The most recent reading session wins. Fed. */
@@ -151,6 +165,26 @@ export const librarySettings = pgTable('library_settings', {
   prefs: jsonb('prefs').notNull().default(sql`'{}'::jsonb`),
   rev: big('rev').notNull(),
   version: version(),
+});
+
+/**
+ * One row naming the database's sync timeline. Restoring from a backup gives it a new one (see
+ * migrate.ts), which tells every browser that the server lost changes it had seen, so it sends
+ * what it holds again instead of taking the older state.
+ */
+export const syncMeta = pgTable('sync_meta', {
+  id: integer('id').primaryKey().default(1),
+  timeline: text('timeline').notNull(),
+});
+
+/** The worker's jobs: when each last worked, and the last failure. Shown on the status page. */
+export const jobRuns = pgTable('job_runs', {
+  name: text('name').primaryKey(),
+  lastOkAt: at('last_ok_at'),
+  lastError: text('last_error'),
+  lastErrorAt: at('last_error_at'),
+  /** What the last good run did, e.g. how many files it removed. */
+  detail: jsonb('detail'),
 });
 
 /** Every write to a fed table, in the order the worker must read them: (txid, id). */

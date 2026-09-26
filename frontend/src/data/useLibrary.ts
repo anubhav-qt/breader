@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Edit, Mutation, PullResponse } from '@breader/shared/protocol';
+import { useEffect, useSyncExternalStore } from 'react';
+import type { Edit, Mutation, NewMutation, PullResponse } from '@breader/shared/protocol';
 import { forget } from '../books/load';
+import { report } from '../lib/report';
 import { store } from '../lib/store';
+import { onNews, tell, withData } from '../lib/tabs';
 import type { BookEdit, BookRecord, ReadState } from '../books/types';
 import { normColor } from './colors';
 import { sampleRecords } from './library';
-import { adopt, editFromWire, fromWire, queueUpload, record, startSync, toWire, type SyncHost } from './sync';
+import { adopt, editFromWire, fromWire, queueLocked, startSync, toWire, type LibraryData, type SyncHost } from './sync';
 
 export interface ShelfItem extends BookRecord {
   coverUrl?: string;
@@ -24,19 +26,161 @@ export interface RemovedBook {
   edit?: BookEdit;
 }
 
-interface Data {
-  records: BookRecord[];
-  reads: Record<string, ReadState>;
-  covers: Record<string, string>;
-  edits: Record<string, BookEdit>;
-  key: string | null;
-}
-
-interface State extends Data {
+interface State extends LibraryData {
   ready: boolean;
+  /** Object URLs of the covers this browser holds, by book id. */
+  covers: Record<string, string>;
 }
 
-const EMPTY: Data = { records: [], reads: {}, covers: {}, edits: {}, key: null };
+/*
+ * The reader's own library. This browser is the first place it's saved; once the library has a
+ * key, every change is also queued for the server (data/sync.ts), and changes made in other
+ * browsers are merged in.
+ *
+ * Several tabs can hold the library at once. So a change isn't a new copy of the library but a
+ * function of it: the tab shows it at once, then applies it to the library as stored, under the
+ * data lock, and queues it for the server in the same step. Other tabs hear about it and reload.
+ * No tab ever writes back a copy it loaded earlier.
+ */
+
+interface Change {
+  fn: (d: LibraryData) => Partial<LibraryData>;
+  muts: NewMutation[];
+  uploads: string[];
+  done: () => void;
+}
+
+const EMPTY: LibraryData = { records: [], reads: {}, edits: {}, key: null };
+
+/** The library as last read from or written to IndexedDB. */
+let stored: LibraryData = EMPTY;
+/** This tab's changes not yet saved, in order. */
+let unsaved: Change[] = [];
+let covers: Record<string, string> = {};
+const coverLoads = new Set<string>();
+/** Books marked as having a cover whose image this browser doesn't hold. */
+const noCover = new Set<string>();
+let view: State = { ready: false, ...EMPTY, covers };
+const subscribers = new Set<() => void>();
+let started: Promise<void> | null = null;
+let notice: ((text: string) => void) | undefined;
+let saveTimer = 0;
+let saveAt = 0;
+
+const apply = (d: LibraryData, c: Change): LibraryData => ({ ...d, ...c.fn(d) });
+
+/** Recomputes what this tab shows: the stored library with this tab's unsaved changes on top. */
+function show() {
+  const d = unsaved.reduce(apply, stored);
+  showCovers(d.records);
+  view = { ready: true, ...d, covers };
+  subscribers.forEach((s) => s());
+}
+
+/** Keeps an object URL for every cover this browser holds, and lets go of the rest. */
+function showCovers(records: BookRecord[]) {
+  const want = new Set(records.filter((r) => r.hasCover).map((r) => r.id));
+  const gone = Object.keys(covers).filter((id) => !want.has(id));
+  if (gone.length) {
+    covers = { ...covers };
+    for (const id of gone) {
+      URL.revokeObjectURL(covers[id]);
+      delete covers[id];
+    }
+  }
+  for (const id of want) {
+    if (covers[id] || coverLoads.has(id) || noCover.has(id)) continue;
+    coverLoads.add(id);
+    void store.get<Blob>(`cover:${id}`).then((blob) => {
+      coverLoads.delete(id);
+      if (!blob) { noCover.add(id); return; }
+      if (covers[id] || !view.records.some((r) => r.id === id)) return;
+      covers = { ...covers, [id]: URL.createObjectURL(blob) };
+      show();
+    });
+  }
+}
+
+/** Books in `before` that aren't in `after`: drop what this tab keeps of them. */
+function forgetGone(before: LibraryData, after: LibraryData) {
+  const ids = new Set(after.records.map((r) => r.id));
+  for (const r of before.records) if (!ids.has(r.id)) forget(r.id);
+}
+
+async function loadStored(): Promise<LibraryData> {
+  const [records, reads, edits, key] = await Promise.all([
+    store.get<BookRecord[]>('records'),
+    store.get<Record<string, ReadState>>('reads'),
+    store.get<Record<string, BookEdit>>('edits'),
+    store.get<string>('libraryKey'),
+  ]);
+  return { records: records ?? [], reads: reads ?? {}, edits: edits ?? {}, key: key ?? null };
+}
+
+async function writeStored(next: LibraryData, prev: LibraryData) {
+  await Promise.all([
+    next.records !== prev.records && store.set('records', next.records),
+    next.reads !== prev.reads && store.set('reads', next.reads),
+    next.edits !== prev.edits && store.set('edits', next.edits),
+    next.key !== prev.key && (next.key ? store.set('libraryKey', next.key) : store.del('libraryKey')),
+  ]);
+}
+
+/**
+ * With the data lock held: applies this tab's unsaved changes to the library as stored, saves it,
+ * and queues the changes for the server. Returns the library as now stored.
+ */
+async function settleLocked(): Promise<LibraryData> {
+  const batch = unsaved.slice();
+  const before = await loadStored();
+  const next = batch.reduce(apply, before);
+  if (batch.length) {
+    await writeStored(next, before);
+    await queueLocked(batch.flatMap((c) => c.muts), batch.flatMap((c) => c.uploads));
+    tell('library');
+  }
+  forgetGone(stored, next);
+  stored = next;
+  unsaved = unsaved.slice(batch.length);
+  batch.forEach((c) => c.done());
+  show();
+  return next;
+}
+
+function scheduleSave(wait: number) {
+  const at = Date.now() + wait;
+  // A save already coming sooner takes this change along.
+  if (saveTimer && saveAt <= at) return;
+  window.clearTimeout(saveTimer);
+  saveAt = at;
+  saveTimer = window.setTimeout(() => {
+    saveTimer = 0;
+    withData(settleLocked).catch((err) => {
+      // The changes stay shown and unsaved; try again shortly.
+      console.warn('Couldn’t save the library:', err);
+      report(err, { in: 'library save' });
+      scheduleSave(2000);
+    });
+  }, wait);
+}
+
+/**
+ * Makes a change: shown at once, saved and queued for the server within `wait` ms. Resolves once
+ * it's saved.
+ */
+function change(fn: Change['fn'], muts: NewMutation[] = [], opts: { uploads?: string[]; wait?: number } = {}): Promise<void> {
+  return new Promise((done) => {
+    unsaved.push({ fn, muts, uploads: opts.uploads ?? [], done });
+    show();
+    scheduleSave(opts.wait ?? 0);
+  });
+}
+
+const without = <T>(o: Record<string, T>, id: string) => {
+  const out = { ...o };
+  delete out[id];
+  return out;
+};
 
 const editToWire = (patch: BookEdit): Edit => ({
   ...('title' in patch ? { title: patch.title?.trim() || null } : {}),
@@ -44,246 +188,245 @@ const editToWire = (patch: BookEdit): Edit => ({
   ...('favorite' in patch ? { favorite: !!patch.favorite } : {}),
 });
 
-/**
- * The reader's own library. This browser is the first place it's saved; once the library has a
- * key, every change is also queued for the server (data/sync.ts), and changes made in other
- * browsers are merged in. `data` is the source of truth, updated synchronously by every action,
- * so the sync engine always sees the latest library; React state mirrors it for rendering.
- */
-export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
-  const [state, setState] = useState<State>({ ready: false, ...EMPTY });
-  const data = useRef<Data>(EMPTY);
-  const readTimer = useRef(0);
-  const onNotice = useRef(opts.onNotice);
-  onNotice.current = opts.onNotice;
+/** Merges what other browsers did. Changes the server hasn't seen yet (`pending`) win. */
+function mergePull(d: LibraryData, pull: PullResponse, pending: Mutation[]): { next: LibraryData; gone: string[] } {
+  const pendingIds = (type: Mutation['type']) =>
+    new Set(pending.flatMap((m) => (m.type === type && 'bookId' in m ? [m.bookId] : [])));
+  const removing = pendingIds('book.remove');
+  const restoring = pendingIds('book.restore');
+  const adding = new Set(pending.flatMap((m) => (m.type === 'book.put' ? [m.book.id] : [])));
+  const pendingEdits = new Map(pending.flatMap((m) => (m.type === 'edit.put' ? [[m.bookId, m.edit] as const] : [])));
 
-  const commit = useCallback((next: Partial<Data>) => {
-    data.current = { ...data.current, ...next };
-    setState({ ready: true, ...data.current });
-  }, []);
-
-  /** Books this library holds, as opposed to preview placeholders. */
-  const holds = (id: string) => data.current.records.some((r) => r.id === id);
-
-  const persistRecords = () => store.set('records', data.current.records);
-  const persistEdits = () => store.set('edits', data.current.edits);
-  const persistReads = () => store.set('reads', data.current.reads);
-
-  const storeCover = useCallback(async (id: string, cover: Blob) => {
-    await store.set(`cover:${id}`, cover);
-    const old = data.current.covers[id];
-    if (old) URL.revokeObjectURL(old);
-    commit({
-      records: data.current.records.map((r) => (r.id === id ? { ...r, hasCover: true } : r)),
-      covers: { ...data.current.covers, [id]: URL.createObjectURL(cover) },
-    });
-    await persistRecords();
-  }, [commit]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let records = await store.get<BookRecord[]>('records');
-      if (!records) {
-        records = sampleRecords(Date.now());
-        await store.set('records', records);
-      }
-      const reads = (await store.get<Record<string, ReadState>>('reads')) ?? {};
-      const key = (await store.get<string>('libraryKey')) ?? null;
-      const edits = (await store.get<Record<string, BookEdit>>('edits')) ?? {};
-      const covers: Record<string, string> = {};
-      for (const r of records.filter((r) => r.hasCover)) {
-        const blob = await store.get<Blob>(`cover:${r.id}`);
-        if (blob) covers[r.id] = URL.createObjectURL(blob);
-      }
-      if (cancelled) return;
-      commit({ records, reads, covers, edits, key });
-
-      const host: SyncHost = {
-        snapshot: () => data.current,
-        apply: (pull, pending) => applyPull(pull, pending),
-        replace: (pull, newKey) => replaceWith(pull, newKey),
-        linked: (bookId, ids) => {
-          commit({ records: data.current.records.map((r) => (r.id === bookId ? { ...r, ...ids } : r)) });
-          void persistRecords();
-        },
-        cover: storeCover,
-        notice: (text) => onNotice.current?.(text),
-      };
-      void startSync(host);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /** Merges what other browsers did. Changes still waiting in this browser's outbox win. */
-  const applyPull = (pull: PullResponse, pending: Mutation[]) => {
-    const pendingIds = (type: Mutation['type']) =>
-      new Set(pending.flatMap((m) => (m.type === type && 'bookId' in m ? [m.bookId] : [])));
-    const removing = pendingIds('book.remove');
-    const restoring = pendingIds('book.restore');
-    const pendingEdits = new Map(pending.flatMap((m) => (m.type === 'edit.put' ? [[m.bookId, m.edit] as const] : [])));
-
-    const records = [...data.current.records];
-    const edits = { ...data.current.edits };
-    const reads = { ...data.current.reads };
-    const covers = { ...data.current.covers };
-    const gone: string[] = [];
-
-    for (const b of pull.books) {
-      const i = records.findIndex((r) => r.id === b.id);
-      if (b.removedAt !== null && !restoring.has(b.id)) {
-        if (i >= 0) {
-          records.splice(i, 1);
-          gone.push(b.id);
-          delete edits[b.id];
-          delete reads[b.id];
-          if (covers[b.id]) URL.revokeObjectURL(covers[b.id]);
-          delete covers[b.id];
-        }
-        continue;
-      }
-      if (removing.has(b.id)) continue; // removed here; the server hears about it on the next push
-      const rec = fromWire(b, i >= 0 ? records[i] : undefined);
-      if (i >= 0) records[i] = rec;
-      else records.unshift(rec);
-
-      const edit: BookEdit = { ...editFromWire(b.edit) };
-      const mine = pendingEdits.get(b.id);
-      if (mine?.title !== undefined) edit.title = mine.title ?? undefined;
-      if (mine?.color !== undefined) edit.color = mine.color ?? undefined;
-      if (mine?.favorite !== undefined) edit.favorite = mine.favorite;
-      for (const k of Object.keys(edit) as Array<keyof BookEdit>) if (edit[k] === undefined || edit[k] === false) delete edit[k];
-      if (Object.keys(edit).length) edits[b.id] = edit;
-      else delete edits[b.id];
-    }
-    // The most recent reading session wins. This browser's unsent place is always newer.
-    for (const { bookId, read } of pull.reads) {
-      const local = reads[bookId];
-      if (!local || local.lastOpened < read.lastOpened) reads[bookId] = read;
-    }
-
-    commit({ records, edits, reads, covers });
-    void persistRecords();
-    void persistEdits();
-    void persistReads();
-    for (const id of gone) {
-      forget(id);
-      void store.del(`file:${id}`);
-      void store.del(`cover:${id}`);
-    }
+  const records = [...d.records];
+  const edits = { ...d.edits };
+  const reads = { ...d.reads };
+  const gone: string[] = [];
+  const drop = (i: number) => {
+    const [r] = records.splice(i, 1);
+    gone.push(r.id);
+    delete edits[r.id];
+    delete reads[r.id];
   };
 
-  /** Swaps this browser's library for the one another key opened. */
-  const replaceWith = async (pull: PullResponse, key: string) => {
-    for (const r of data.current.records) {
+  for (const b of pull.books) {
+    const i = records.findIndex((r) => r.id === b.id);
+    if (b.removedAt !== null && !restoring.has(b.id)) {
+      if (i >= 0) drop(i);
+      continue;
+    }
+    if (removing.has(b.id)) continue; // removed here; the server hears about it on the next push
+    const rec = fromWire(b, i >= 0 ? records[i] : undefined);
+    if (i >= 0) records[i] = rec;
+    else records.unshift(rec);
+
+    const edit: BookEdit = { ...editFromWire(b.edit) };
+    const mine = pendingEdits.get(b.id);
+    if (mine?.title !== undefined) edit.title = mine.title ?? undefined;
+    if (mine?.color !== undefined) edit.color = mine.color ?? undefined;
+    if (mine?.favorite !== undefined) edit.favorite = mine.favorite;
+    for (const k of Object.keys(edit) as Array<keyof BookEdit>) if (edit[k] === undefined || edit[k] === false) delete edit[k];
+    if (Object.keys(edit).length) edits[b.id] = edit;
+    else delete edits[b.id];
+  }
+  // The whole library: a synced book it doesn't list was removed while this browser was away.
+  if (pull.full) {
+    const listed = new Set(pull.books.map((b) => b.id));
+    for (let i = records.length - 1; i >= 0; i--) {
+      const r = records[i];
+      if (r.source !== 'placeholder' && !listed.has(r.id) && !adding.has(r.id)) drop(i);
+    }
+  }
+  // The most recent reading session wins. This browser's unsent place is always newer.
+  for (const { bookId, read } of pull.reads) {
+    const local = reads[bookId];
+    if (!local || local.lastOpened < read.lastOpened) reads[bookId] = read;
+  }
+  return { next: { ...d, records, edits, reads }, gone };
+}
+
+const host: SyncHost = {
+  snapshot: () => view,
+  settleLocked,
+  async applyLocked(pull, pending) {
+    const { next, gone } = mergePull(stored, pull, pending);
+    await writeStored(next, stored);
+    for (const id of gone) {
+      forget(id);
+      await store.del(`file:${id}`);
+      await store.del(`cover:${id}`);
+    }
+    stored = next;
+    tell('library');
+    show();
+  },
+  async replaceLocked(pull, key) {
+    const before = await loadStored();
+    for (const r of before.records) {
       forget(r.id);
       await store.del(`file:${r.id}`);
       await store.del(`cover:${r.id}`);
     }
-    Object.values(data.current.covers).forEach((u) => URL.revokeObjectURL(u));
     const live = pull.books.filter((b) => b.removedAt === null);
-    const records = live.map((b) => fromWire(b)).sort((a, b) => b.addedAt - a.addedAt);
     const edits: Record<string, BookEdit> = {};
     for (const b of live) {
       const e = editFromWire(b.edit);
       if (e) edits[b.id] = e;
     }
-    const reads = Object.fromEntries(pull.reads.map((r) => [r.bookId, r.read]));
-    await store.set('libraryKey', key);
-    commit({ records, edits, reads, covers: {}, key });
-    await Promise.all([persistRecords(), persistEdits(), persistReads()]);
-  };
-
-  const addBook = useCallback(async (rec: BookRecord, blob: Blob | string, cover?: Blob) => {
-    await store.set(`file:${rec.id}`, blob);
-    if (cover) await store.set(`cover:${rec.id}`, cover);
-    commit({
-      records: [rec, ...data.current.records],
-      covers: cover ? { ...data.current.covers, [rec.id]: URL.createObjectURL(cover) } : data.current.covers,
-    });
-    await persistRecords();
-    record({ type: 'book.put', book: toWire(rec) });
-    queueUpload(rec.id);
-  }, [commit]);
-
-  /** A cover found when a book is opened. Uploaded books send it to the server too. */
-  const setCover = useCallback(async (id: string, cover: Blob) => {
-    await storeCover(id, cover);
-    if (data.current.records.find((r) => r.id === id)?.source === 'file') queueUpload(id);
-  }, [storeCover]);
-
-  /** Deletes a book from this browser and returns everything needed to put it back. */
-  const removeBook = useCallback(async (id: string): Promise<RemovedBook | null> => {
-    const s = data.current;
-    const index = s.records.findIndex((r) => r.id === id);
-    if (index < 0) return null;
-    const removed: RemovedBook = {
-      rec: s.records[index],
-      index,
-      data: await store.get<Blob | string>(`file:${id}`),
-      cover: await store.get<Blob>(`cover:${id}`),
-      read: s.reads[id],
-      edit: s.edits[id],
+    const next: LibraryData = {
+      records: live.map((b) => fromWire(b)).sort((a, b) => b.addedAt - a.addedAt),
+      edits,
+      reads: Object.fromEntries(pull.reads.map((r) => [r.bookId, r.read])),
+      key,
     };
-    await store.del(`file:${id}`);
-    await store.del(`cover:${id}`);
-    const { [id]: _read, ...reads } = data.current.reads;
-    const { [id]: _edit, ...edits } = data.current.edits;
-    void _read;
-    void _edit;
-    commit({ records: data.current.records.filter((r) => r.id !== id), reads, edits });
-    await Promise.all([persistRecords(), persistReads(), persistEdits()]);
-    record({ type: 'book.remove', bookId: id });
-    return removed;
-  }, [commit]);
+    await writeStored(next, before);
+    // Changes this tab hadn't saved belonged to the library being replaced.
+    unsaved.forEach((c) => c.done());
+    unsaved = [];
+    stored = next;
+    tell('library');
+    show();
+  },
+  linked: (bookId, ids) =>
+    change(
+      (d) => ({ records: d.records.map((r) => (r.id === bookId ? { ...r, ...ids } : r)) }),
+      [{ type: 'book.files', bookId, fileId: ids.fileId, coverId: ids.coverId ?? null }],
+    ),
+  cover: (bookId, blob) => storeCover(bookId, blob, false),
+  notice: (text) => notice?.(text),
+};
 
-  /** Puts a removed book back where it was, with its place, name and colour. */
-  const restoreBook = useCallback(async (r: RemovedBook) => {
-    const id = r.rec.id;
-    if (holds(id)) return;
-    if (r.data !== undefined) await store.set(`file:${id}`, r.data);
-    if (r.cover) await store.set(`cover:${id}`, r.cover);
-    const records = [...data.current.records];
-    records.splice(Math.min(r.index, records.length), 0, r.rec);
-    commit({
-      records,
-      reads: r.read ? { ...data.current.reads, [id]: r.read } : data.current.reads,
-      edits: r.edit ? { ...data.current.edits, [id]: r.edit } : data.current.edits,
+async function start() {
+  await withData(async () => {
+    if (!(await store.get('records'))) await store.set('records', sampleRecords(Date.now()));
+    stored = await loadStored();
+  });
+  show();
+  onNews((news) => {
+    if (news === 'reset') window.location.reload();
+    if (news !== 'library') return;
+    void withData(async () => {
+      const next = await loadStored();
+      forgetGone(stored, next);
+      stored = next;
+      show();
     });
-    await Promise.all([persistRecords(), persistReads(), persistEdits()]);
-    record({ type: 'book.restore', bookId: id });
-  }, [commit]);
+  });
+  // Leaving the page: save what's waiting rather than wait for the timer.
+  window.addEventListener('pagehide', () => { if (unsaved.length) void withData(settleLocked); });
+  void startSync(host);
+}
 
-  /** Reading positions are written often, so they're batched to one store write per pause. */
-  const saveRead = useCallback((id: string, read: ReadState) => {
-    commit({ reads: { ...data.current.reads, [id]: read } });
-    window.clearTimeout(readTimer.current);
-    readTimer.current = window.setTimeout(() => { void persistReads(); }, 400);
-    if (holds(id)) record({ type: 'read.put', bookId: id, read });
-  }, [commit]);
+/** Books this library holds, as opposed to preview placeholders. */
+const holds = (id: string) => view.records.some((r) => r.id === id);
 
-  /** Rename, recolour or favourite a book. Works for placeholders too, so previews can be styled. */
-  const editBook = useCallback((id: string, patch: BookEdit) => {
-    commit({ edits: { ...data.current.edits, [id]: { ...data.current.edits[id], ...patch } } });
-    void persistEdits();
-    if (holds(id)) record({ type: 'edit.put', bookId: id, edit: editToWire(patch) });
-  }, [commit]);
+async function storeCover(id: string, cover: Blob, upload: boolean) {
+  await store.set(`cover:${id}`, cover);
+  noCover.delete(id);
+  if (covers[id]) {
+    URL.revokeObjectURL(covers[id]);
+    covers = without(covers, id);
+  }
+  await change((d) => ({ records: d.records.map((r) => (r.id === id ? { ...r, hasCover: true } : r)) }), [], { uploads: upload ? [id] : [] });
+}
 
-  /** The library's first key: from here on it syncs. */
-  const setKey = useCallback(async (key: string) => {
-    await store.set('libraryKey', key);
-    commit({ key });
-    await adopt();
-  }, [commit]);
+async function addBook(rec: BookRecord, blob: Blob | string, cover?: Blob) {
+  await store.set(`file:${rec.id}`, blob);
+  if (cover) {
+    await store.set(`cover:${rec.id}`, cover);
+    noCover.delete(rec.id);
+  }
+  await change(
+    (d) => ({ records: [rec, ...d.records.filter((r) => r.id !== rec.id)] }),
+    [{ type: 'book.put', book: toWire(rec) }],
+    { uploads: rec.source === 'file' ? [rec.id] : [] },
+  );
+}
 
-  const reset = useCallback(async () => {
-    await store.clear();
-    try { localStorage.clear(); } catch { /* storage blocked */ }
-    window.location.hash = '';
-    window.location.reload();
-  }, []);
+/** A cover found when a book is opened. Uploaded books send it to the server too. */
+async function setCover(id: string, cover: Blob) {
+  await storeCover(id, cover, view.records.find((r) => r.id === id)?.source === 'file');
+}
 
+/** Deletes a book from this browser and returns everything needed to put it back. */
+async function removeBook(id: string): Promise<RemovedBook | null> {
+  const index = view.records.findIndex((r) => r.id === id);
+  if (index < 0) return null;
+  const removed: RemovedBook = {
+    rec: view.records[index],
+    index,
+    data: await store.get<Blob | string>(`file:${id}`),
+    cover: await store.get<Blob>(`cover:${id}`),
+    read: view.reads[id],
+    edit: view.edits[id],
+  };
+  await store.del(`file:${id}`);
+  await store.del(`cover:${id}`);
+  await change(
+    (d) => ({ records: d.records.filter((r) => r.id !== id), reads: without(d.reads, id), edits: without(d.edits, id) }),
+    [{ type: 'book.remove', bookId: id }],
+  );
+  return removed;
+}
+
+/** Puts a removed book back where it was, with its place, name and colour. */
+async function restoreBook(r: RemovedBook) {
+  const id = r.rec.id;
+  if (holds(id)) return;
+  if (r.data !== undefined) await store.set(`file:${id}`, r.data);
+  if (r.cover) await store.set(`cover:${id}`, r.cover);
+  await change(
+    (d) => {
+      if (d.records.some((x) => x.id === id)) return {};
+      const records = [...d.records];
+      records.splice(Math.min(r.index, records.length), 0, r.rec);
+      return {
+        records,
+        reads: r.read ? { ...d.reads, [id]: r.read } : d.reads,
+        edits: r.edit ? { ...d.edits, [id]: r.edit } : d.edits,
+      };
+    },
+    [{ type: 'book.restore', bookId: id }],
+  );
+}
+
+/** Reading positions change often, so they're saved at most every 400 ms. */
+function saveRead(id: string, read: ReadState) {
+  void change((d) => ({ reads: { ...d.reads, [id]: read } }), holds(id) ? [{ type: 'read.put', bookId: id, read }] : [], { wait: 400 });
+}
+
+/** Rename, recolour or favourite a book. Works for placeholders too, so previews can be styled. */
+function editBook(id: string, patch: BookEdit) {
+  void change(
+    (d) => ({ edits: { ...d.edits, [id]: { ...d.edits[id], ...patch } } }),
+    holds(id) ? [{ type: 'edit.put', bookId: id, edit: editToWire(patch) }] : [],
+  );
+}
+
+/** The library's first key: from here on it syncs. */
+async function setKey(key: string) {
+  await change(() => ({ key }));
+  await adopt();
+}
+
+async function reset() {
+  await store.clear();
+  try { localStorage.clear(); } catch { /* storage blocked */ }
+  tell('reset');
+  window.location.hash = '';
+  window.location.reload();
+}
+
+const subscribe = (fn: () => void) => {
+  subscribers.add(fn);
+  return () => { subscribers.delete(fn); };
+};
+const getView = () => view;
+
+export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
+  const { onNotice } = opts;
+  useEffect(() => { notice = onNotice; }, [onNotice]);
+  useEffect(() => { started ??= start(); }, []);
+  const state = useSyncExternalStore(subscribe, getView);
   return { ...state, addBook, setCover, removeBook, restoreBook, saveRead, editBook, setKey, reset };
 }
 

@@ -25,7 +25,7 @@ describe('sync', () => {
     expect(p.body.reads[0]).toMatchObject({ bookId: a.id, read: { pos: { section: 3, block: 12, offset: 40 }, progress: 0.31 } });
     expect(p.body.settings).toEqual({ theme: 'night', style: 'book' });
 
-    expect((await b.get('/v1/sync/pull?since=1')).body).toEqual({ rev: 1, books: [], reads: [], settings: null });
+    expect((await b.get('/v1/sync/pull?since=1')).body).toEqual({ rev: 1, books: [], reads: [], settings: null, timeline: expect.any(String) });
   });
 
   it('ignores a retried push', async () => {
@@ -33,7 +33,7 @@ describe('sync', () => {
     const body = push('client-retry', { type: 'book.put', book: book() });
     const first = await b.post('/v1/sync/push', body);
     const again = await b.post('/v1/sync/push', body);
-    expect(again.body).toEqual({ rev: first.body.rev, lastMutationId: first.body.lastMutationId, rejected: [] });
+    expect(again.body).toEqual({ rev: first.body.rev, lastMutationId: first.body.lastMutationId, rejected: [], timeline: first.body.timeline });
     expect((await b.get('/v1/me')).body.library.rev).toBe(1);
   });
 

@@ -38,6 +38,8 @@ services:
     environment:
       ROLE: laptop
       MIRROR_URL: *mirror-url
+      # Every request arrives through the tunnel, and Cloudflare sets this header itself.
+      CLIENT_IP_HEADER: cf-connecting-ip
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
   worker:

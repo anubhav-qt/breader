@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
@@ -65,9 +66,9 @@ export function makeStorage(env: Env) {
     },
 
     /** Size and SHA-256 (hex) of a stored object, or null when it isn't there. */
-    async head(key: string): Promise<{ size: number; sha256: string | null } | null> {
+    async head(key: string, bucket = Bucket): Promise<{ size: number; sha256: string | null } | null> {
       try {
-        const r = await s3.send(new HeadObjectCommand({ Bucket, Key: key, ChecksumMode: 'ENABLED' }));
+        const r = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key, ChecksumMode: 'ENABLED' }));
         return {
           size: r.ContentLength ?? 0,
           sha256: r.ChecksumSHA256 ? Buffer.from(r.ChecksumSHA256, 'base64').toString('hex') : null,
@@ -84,8 +85,20 @@ export function makeStorage(env: Env) {
       return r.Body as Readable;
     },
 
-    async put(key: string, body: Buffer | Readable, size: number, bucket = Bucket) {
-      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentLength: size }));
+    /** With a SHA-256 (hex), storage refuses the object unless it arrives intact. */
+    async put(key: string, body: Buffer | Readable, size: number, bucket = Bucket, sha256Hex?: string) {
+      const checksum = sha256Hex ? { ChecksumSHA256: Buffer.from(sha256Hex, 'hex').toString('base64') } : {};
+      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentLength: size, ...checksum }));
+    },
+
+    /** Every object under a prefix, with its size, a page (1,000) per request. */
+    async *list(prefix: string): AsyncGenerator<{ key: string; size: number }> {
+      let token: string | undefined;
+      do {
+        const r = await s3.send(new ListObjectsV2Command({ Bucket, Prefix: prefix, ContinuationToken: token }));
+        for (const o of r.Contents ?? []) if (o.Key) yield { key: o.Key, size: o.Size ?? 0 };
+        token = r.IsTruncated ? r.NextContinuationToken : undefined;
+      } while (token);
     },
 
     async remove(key: string) {

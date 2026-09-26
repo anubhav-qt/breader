@@ -13,3 +13,13 @@ export const SYNC = {
   /** Tombstones (removed books) are purged after this long. */
   tombstoneDays: 30,
 } as const;
+
+/** What the worker's clean-up removes, and after how long (backend design §7). */
+export const CLEANUP = {
+  /** A stored file no book points at, removed tombstones included. */
+  unusedFileDays: 7,
+  /** An upload link that was issued and never finished. */
+  pendingUploadDays: 1,
+  /** Rows of deleted files are kept this long, so the laptop's copy hears about the deletion. */
+  deletedRowDays: 30,
+} as const;

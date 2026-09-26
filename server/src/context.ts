@@ -15,4 +15,10 @@ export interface Deps {
 
 export type LibraryRow = typeof libraries.$inferSelect;
 
-export type AppEnv = { Variables: { library: LibraryRow } };
+export type AppEnv = {
+  Variables: {
+    library: LibraryRow;
+    /** The reader's address (lib/http.ts clientIp). */
+    ip: string;
+  };
+};

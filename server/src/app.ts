@@ -3,8 +3,9 @@ import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import type { AppEnv, Deps } from './context.ts';
 import { ApiError, onError } from './lib/errors.ts';
-import { sameOriginWrites } from './lib/http.ts';
+import { clientIp, sameOriginWrites } from './lib/http.ts';
 import { log } from './log.ts';
+import { adminRoutes } from './routes/admin.ts';
 import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
 import { libraryRoutes } from './routes/libraries.ts';
@@ -15,6 +16,7 @@ export function makeApp(deps: Deps) {
   const app = new Hono<AppEnv>();
 
   app.use('*', async (c, next) => {
+    c.set('ip', clientIp(c, deps.env.CLIENT_IP_HEADER));
     const start = performance.now();
     await next();
     const ms = Math.round(performance.now() - start);
@@ -41,6 +43,7 @@ export function makeApp(deps: Deps) {
   );
 
   app.route('/', healthRoutes(deps));
+  app.route('/', adminRoutes(deps));
   app.route('/v1', libraryRoutes(deps));
   app.route('/v1', syncRoutes(deps));
   app.route('/v1', fileRoutes(deps));

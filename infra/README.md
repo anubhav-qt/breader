@@ -31,6 +31,7 @@ npm run stack:down
 sync and "Open library". To watch failover, run `docker compose -f infra/compose.dev.yml stop api`;
 the app moves to :8788 within one request. Start it again and the app moves back within a minute.
 `infra/dev.env` and `infra/dev-backup.agekey` are throwaway local values, safe to commit.
+The status page is at http://localhost:8787/admin, with the `ADMIN_TOKEN` from `infra/dev.env`.
 
 ## Setting up production
 
@@ -84,10 +85,17 @@ it from the laptop**. Backups are encrypted to it, so the laptop can write them 
 openssl rand -base64 48   # KEY_PEPPER
 openssl rand -base64 48   # SESSION_SECRET
 openssl rand -hex 24      # MIRROR_PASSWORD
+openssl rand -hex 32      # ADMIN_TOKEN, which opens the status page
 ```
 
-The laptop and Render need the same `KEY_PEPPER` and `SESSION_SECRET`. Changing `KEY_PEPPER` stops
-every library key from working, and changing `SESSION_SECRET` signs every reader out.
+The laptop and Render need the same `KEY_PEPPER`, `SESSION_SECRET` and `ADMIN_TOKEN`. Changing
+`KEY_PEPPER` stops every library key from working, and changing `SESSION_SECRET` signs every
+reader out.
+
+Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
+**Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged
+by `component`), then copy Project settings › Client keys › DSN → `SENTRY_DSN` (laptop and
+Render) and `VITE_SENTRY_DSN` (Pages). Without them, errors are only logged.
 
 ### 6. GitHub
 
@@ -128,10 +136,24 @@ ALLOWED_ORIGINS=https://breader.example           COOKIE_DOMAIN=breader.example
 COOKIE_SECURE=true       S3_ENDPOINT=<same>       S3_BUCKET=breader-files
 S3_REGION=auto           S3_FORCE_PATH_STYLE=true
 S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY = the render token (files bucket only)
+CLIENT_IP_HEADER=x-forwarded-for                  ADMIN_TOKEN=<same>
+SENTRY_DSN=<the DSN>
 ```
 
 Leave out `MIRROR_URL`, `S3_BACKUP_BUCKET`, `BACKUP_RECIPIENT` and `TUNNEL_TOKEN`; the fallback
 has no copy and makes no backups. Render sets `PORT` itself.
+
+`CLIENT_IP_HEADER` tells the server where the reader's address is, for its rate limits. The laptop
+reads `cf-connecting-ip` (set in `compose.yml`); Render reads the last `x-forwarded-for` entry,
+the one Render's proxy adds. Once `fb.` answers, check that a request can't choose its own address:
+
+```sh
+curl -s -H "authorization: Bearer $ADMIN_TOKEN" -H 'x-forwarded-for: 6.6.6.6' -H 'cf-connecting-ip: 6.6.6.6' \
+  https://fb.breader.example/admin/status | grep -o '"request":{[^}]*}'
+```
+
+`ip` must be your own address (`curl -s ifconfig.me`), not 6.6.6.6. If it shows an address of
+Render's own instead, try `CLIENT_IP_HEADER=cf-connecting-ip`; `headers` lists what arrived.
 
 Settings › Custom Domains: add `fb.breader.example`, then in Cloudflare DNS add the CNAME it shows,
 **DNS only** (grey cloud). Settings › Deploy Hook → GitHub secret `RENDER_DEPLOY_HOOK`.
@@ -142,7 +164,7 @@ Workers & Pages › Create › Pages › connect the repository, production bran
 
 - Build command `npm ci && npm run build -w frontend`, output directory `frontend/dist`, root `/`
 - Environment variables `VITE_API_URL=https://api.breader.example`,
-  `VITE_API_FALLBACK_URL=https://fb.breader.example`, `NODE_VERSION=24`
+  `VITE_API_FALLBACK_URL=https://fb.breader.example`, `VITE_SENTRY_DSN=<the DSN>`, `NODE_VERSION=24`
 - Custom domain `breader.example`
 
 ### 10. Monitoring
@@ -160,6 +182,10 @@ Add a heartbeat check with a 5-minute period and 5 minutes' grace, and put its U
 means the worker stopped, the laptop is off, or the copy is stuck. UptimeRobot heartbeats need a
 paid plan at the time of writing; Healthchecks.io's free plan has them.
 
+The status page, `https://api.breader.example/admin` (or `fb.` while the laptop is off), asks for
+`ADMIN_TOKEN` and shows which server answered, how far behind the copy is, how full Supabase and R2
+are, and when each worker job last worked or failed.
+
 ## Day to day
 
 **Shipping.** Push to `dev`. CI tests, publishes the image, migrates Supabase and redeploys
@@ -168,7 +194,8 @@ minutes the laptop and Render can run different versions. So a migration only ev
 table, or a nullable column. Removals ship in a later release, once no running version reads them.
 `/health` shows each server's `release` (the commit).
 
-**Status.**
+**Status.** The status page at `https://api.breader.example/admin` has it all on one page. From
+a terminal:
 
 ```sh
 curl -s https://api.breader.example/ready   # primary up, the copy's lag
@@ -181,6 +208,20 @@ tail infra/update.log
 **Backups.** After 03:00 each night the worker dumps the copy, encrypts it to the backup key, and
 keeps 14 nights in the `backups` volume. It also uploads each dump to `breader-backups/daily/`,
 and Sunday's to `weekly/`.
+
+**Restore test.** Every four weeks, after that night's backup, the worker restores a dump of the
+copy into a scratch database, checks that every table came back row for row, and checks that the
+night's backup in R2 matches the one on the laptop. It can't decrypt the backup itself (the key
+isn't on the laptop), so that part stays a manual drill, below. A failure shows on the status page
+and in Sentry.
+
+**Clean-up.** Every hour the worker removes books removed more than 30 days ago, files no book has
+used for 7 days (their space goes back to the library), upload links never finished after a day,
+and key libraries unused for a year, with their files.
+
+**R2 check.** Once a day the worker lists R2 and puts back any file missing from it, from the
+laptop's copy. A file missing from both makes the job fail every day, on the status page and in
+Sentry, until someone looks.
 
 ## When something breaks
 
@@ -210,20 +251,25 @@ you lose almost nothing. Otherwise you lose what changed since the last backup, 
    docker compose -f infra/compose.yml exec mirror psql -U breader -d breader -c "UPDATE mirror_state SET loaded_at = NULL"
    docker compose -f infra/compose.yml up -d
    ```
-   The migrate step logs "moved the version sequence past restored rows". This is expected: it
-   stops new writes from looking older than restored ones.
+   The migrate step logs "moved the version sequence past restored rows and started a new sync
+   timeline". This is expected. The first part stops new writes from looking older than restored
+   ones. The new timeline tells every browser that the server lost changes, so each one sends
+   everything it holds again: books, places, edits and files that R2 still has, which aren't
+   uploaded again.
 6. Resume Render.
 
-**R2 is lost.** The laptop holds a copy of every file, in the same layout as the bucket:
+**R2 is lost.** The laptop holds a copy of every file, in the same layout as the bucket, and the
+worker's daily R2 check puts back whatever is missing. To do it at once, for a whole bucket:
 
 ```sh
 docker compose -f infra/compose.yml cp worker:/data/files ./files
 rclone copy ./files r2:breader-files   # an rclone remote for R2 with the laptop token
 ```
 
-## Monthly restore drill
+## Restore drill with the key
 
-Prove a backup restores, without touching production:
+The worker tests every month that its dumps restore (see Restore test). A few times a year, prove
+the rest by hand: that the backup key opens a real backup. Without touching production:
 
 ```sh
 age -d -i breader-backup.agekey breader-DATE.dump.age > breader.dump

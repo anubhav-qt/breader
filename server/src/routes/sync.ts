@@ -3,17 +3,23 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { PushRequest, type PullResponse, type PushResponse } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
-import { libraries, libraryItems, librarySettings, readingStates, syncClients } from '../db/schema.ts';
+import { libraries, libraryItems, librarySettings, readingStates, syncClients, syncMeta } from '../db/schema.ts';
 import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { log } from '../log.ts';
-import { applyMutation } from '../sync/apply.ts';
+import { applyMutation, type Tx } from '../sync/apply.ts';
 
 const Since = z.coerce.number().int().min(0).default(0);
 const ms = (d: Date | null) => (d ? d.getTime() : null);
 
 /** Errors that will happen again on every retry: reject the change instead of failing the push. */
 const permanent = (e: unknown) => e instanceof ApiError || /^2[23]/.test(pgCode(e) ?? '');
+
+/** This database's sync timeline (see syncMeta). */
+async function timeline(tx: Tx): Promise<{ timeline?: string }> {
+  const [meta] = await tx.select({ timeline: syncMeta.timeline }).from(syncMeta).where(eq(syncMeta.id, 1));
+  return meta ? { timeline: meta.timeline } : {};
+}
 
 export function syncRoutes(deps: Deps) {
   const { db } = deps;
@@ -38,7 +44,7 @@ export function syncRoutes(deps: Deps) {
         .where(and(eq(syncClients.libraryId, libraryId), eq(syncClients.clientId, body.clientId)));
 
       const fresh = body.mutations.filter((m) => m.id > client.lastMutationId).sort((a, b) => a.id - b.id);
-      if (!fresh.length) return { rev: lib.rev, lastMutationId: client.lastMutationId, rejected: [] };
+      if (!fresh.length) return { rev: lib.rev, lastMutationId: client.lastMutationId, rejected: [], ...(await timeline(tx)) };
 
       const rev = lib.rev + 1;
       const rejected: PushResponse['rejected'] = [];
@@ -60,21 +66,25 @@ export function syncRoutes(deps: Deps) {
         .update(syncClients)
         .set({ lastMutationId, lastSeenAt: new Date() })
         .where(and(eq(syncClients.libraryId, libraryId), eq(syncClients.clientId, body.clientId)));
-      return { rev: applied ? rev : lib.rev, lastMutationId, rejected };
+      return { rev: applied ? rev : lib.rev, lastMutationId, rejected, ...(await timeline(tx)) };
     });
     return c.json(result);
   });
 
-  /** Everything that changed after `since`, tombstones included, read from one snapshot. */
+  /**
+   * Everything that changed after `since`, tombstones included, read from one snapshot. When the
+   * browser is further back than tombstones that have been purged, or ahead of the server (a
+   * restore from backup), it gets the whole library instead, marked `full`.
+   */
   r.get('/sync/pull', async (c) => {
     const since = parse(Since, c.req.query('since'));
     const libraryId = c.var.library.id;
 
     const out = await db.transaction(
       async (tx): Promise<PullResponse> => {
-        const [lib] = await tx.select({ rev: libraries.rev }).from(libraries).where(eq(libraries.id, libraryId));
-        // A browser ahead of the server (after a restore from backup) starts over.
-        const from = since > lib.rev ? 0 : since;
+        const [lib] = await tx.select({ rev: libraries.rev, purgedRev: libraries.purgedRev }).from(libraries).where(eq(libraries.id, libraryId));
+        const full = since > 0 && (since < lib.purgedRev || since > lib.rev);
+        const from = full ? 0 : since;
         const items = await tx.select().from(libraryItems).where(and(eq(libraryItems.libraryId, libraryId), gt(libraryItems.rev, from)));
         const reads = await tx.select().from(readingStates).where(and(eq(readingStates.libraryId, libraryId), gt(readingStates.rev, from)));
         const [settings] = await tx
@@ -114,6 +124,8 @@ export function syncRoutes(deps: Deps) {
             },
           })),
           settings: (settings?.prefs as Record<string, unknown> | undefined) ?? null,
+          ...(await timeline(tx)),
+          ...(full ? { full } : {}),
         };
       },
       { isolationLevel: 'repeatable read', accessMode: 'read only' },

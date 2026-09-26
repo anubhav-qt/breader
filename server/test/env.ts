@@ -18,6 +18,9 @@ export const testEnv: Record<string, string> = {
   SESSION_SECRET: dev.SESSION_SECRET,
   COOKIE_SECURE: 'false',
   ALLOWED_ORIGINS: 'http://localhost:5173',
+  // helpers.ts gives each simulated browser its own address in this header.
+  CLIENT_IP_HEADER: 'x-forwarded-for',
+  ADMIN_TOKEN: 'test-admin-token-0123456789abcdef0123456789',
   S3_ENDPOINT: 'http://localhost:9000',
   S3_BUCKET: 'breader-test',
   S3_BACKUP_BUCKET: 'breader-test-backups',

@@ -15,6 +15,13 @@
       "when": 1790397783839,
       "tag": "0001_change_feed",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790434571256,
+      "tag": "0002_cleanup_and_timeline",
+      "breakpoints": true
     }
   ]
 }

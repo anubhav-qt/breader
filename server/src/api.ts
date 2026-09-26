@@ -3,10 +3,15 @@ import { makeApp } from './app.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
 import { loadEnv } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
+import { startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
 
 const env = loadEnv();
+startReporting(env, 'api');
+if (env.NODE_ENV === 'production' && env.CLIENT_IP_HEADER === 'none') {
+  log.warn('CLIENT_IP_HEADER is not set, so every reader shares one rate limit (the proxy’s address)');
+}
 const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env) };

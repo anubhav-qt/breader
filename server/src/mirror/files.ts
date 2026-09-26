@@ -3,6 +3,7 @@ import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type pg from 'pg';
+import { report } from '../lib/report.ts';
 import type { Storage } from '../lib/storage.ts';
 import { log } from '../log.ts';
 import type { Row } from './feed.ts';
@@ -47,6 +48,7 @@ export function makeFileMirror(storage: Storage, dir: string) {
           await copy(row);
         } catch (err) {
           log.warn({ err, key: row.r2_key }, 'file copy failed; retrying in a minute');
+          report(err, { job: 'file copy' });
           setTimeout(() => enqueue(row), 60_000).unref();
         }
       }

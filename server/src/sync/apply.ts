@@ -8,13 +8,17 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 const notFound = () => new ApiError(404, 'not_found', 'That book isn’t in this library.');
 
-/** A file id a book may point at: ready, and this library's own or public. */
+/**
+ * A file id a book may point at: ready, and this library's own or public. The share lock holds
+ * until the push commits, so clean-up (jobs/cleanup.ts) can't delete the file in between.
+ */
 async function checkFile(tx: Tx, libraryId: string, fileId: string | null | undefined) {
   if (!fileId) return;
   const [b] = await tx
     .select({ id: blobs.id })
     .from(blobs)
-    .where(and(eq(blobs.id, fileId), eq(blobs.status, 'ready'), or(eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true))));
+    .where(and(eq(blobs.id, fileId), eq(blobs.status, 'ready'), or(eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true))))
+    .for('share');
   if (!b) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
 }
 

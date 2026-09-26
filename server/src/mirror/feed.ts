@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import { FED_TABLES, type FedTable } from '../db/schema.ts';
+import { report } from '../lib/report.ts';
 import { log } from '../log.ts';
 
 export type Row = Record<string, unknown>;
@@ -167,6 +168,7 @@ export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: { blob?: (row
         delay = n >= BATCH ? 0 : n > 0 ? 2000 : Math.min(delay * 2, 30_000);
       } catch (err) {
         log.warn({ err }, 'feed step failed; retrying');
+        report(err, { job: 'feed' });
         delay = 10_000;
       }
       if (delay) await new Promise((ok) => { const t = setTimeout(ok, delay); signal.addEventListener('abort', () => { clearTimeout(t); ok(null); }, { once: true }); });

@@ -89,11 +89,19 @@ export const PushRequest = z.object({
 });
 export type PushRequest = z.infer<typeof PushRequest>;
 
+/**
+ * The database's sync timeline. It changes only when the database is restored from a backup, which
+ * loses changes browsers have already seen: a browser that sees a new timeline (or a rev lower
+ * than one it pulled) sends everything it holds again.
+ */
+const Timeline = z.string().max(64);
+
 export const PushResponse = z.object({
   rev: z.number(),
   /** Every mutation up to this id has been applied or rejected; drop them from the outbox. */
   lastMutationId: z.number(),
   rejected: z.array(z.object({ id: z.number(), code: z.string(), message: z.string() })),
+  timeline: Timeline.optional(),
 });
 export type PushResponse = z.infer<typeof PushResponse>;
 
@@ -110,6 +118,12 @@ export const PullResponse = z.object({
   books: z.array(SyncedBook),
   reads: z.array(z.object({ bookId: Id, read: ReadState })),
   settings: Prefs.nullable(),
+  timeline: Timeline.optional(),
+  /**
+   * Everything the library holds, not just what changed: sent when `since` is older than tombstones
+   * the server has since purged. Books the browser holds that aren't listed were removed.
+   */
+  full: z.boolean().optional(),
 });
 export type PullResponse = z.infer<typeof PullResponse>;
 

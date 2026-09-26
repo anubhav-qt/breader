@@ -28,6 +28,17 @@ const Env = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: bool.default(true),
   ALLOWED_ORIGINS: list.default([]),
+  /**
+   * Where the reader's address comes from, for rate limits. Only a header the proxy in front sets
+   * itself can be trusted: cf-connecting-ip behind Cloudflare (the tunnel), the right-most
+   * x-forwarded-for entry behind one proxy that appends it (Render). none: the connection's own
+   * address, for local development. Anything else lets a script pick its own address.
+   */
+  CLIENT_IP_HEADER: z.enum(['none', 'cf-connecting-ip', 'x-forwarded-for']).default('none'),
+  /** Opens /admin, the status page. The page is off without it. */
+  ADMIN_TOKEN: z.string().min(32).optional(),
+  /** Sentry project DSN. Errors are only logged without it. */
+  SENTRY_DSN: z.string().url().optional(),
 
   S3_ENDPOINT: z.string().url(),
   /** The endpoint browsers use for signed links, when it differs (Docker: http://localhost:9000). */

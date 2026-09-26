@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { makePool } from './db/client.ts';
-import { FED_TABLES } from './db/schema.ts';
+import { repairVersions } from './db/restored.ts';
 import { loadEnv } from './env.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
@@ -33,21 +33,6 @@ async function run(url: string, name: string, opts: { ssl?: boolean; replica?: b
     await pool.end();
   }
   log.info(`${name} migrated`);
-}
-
-/**
- * The laptop's copy never advances the version sequence, so after Supabase is restored from a
- * backup of it, new writes would get versions older than the rows they replace and the copy
- * would ignore them. Moves the sequence past every stamped version. In normal running nothing is
- * ahead of the sequence, so this changes nothing.
- */
-async function repairVersions(pool: ReturnType<typeof makePool>) {
-  const tables = [...Object.keys(FED_TABLES), 'change_log', 'mirror_tombstones'];
-  const { rowCount } = await pool.query(
-    `SELECT setval('row_version_seq', m) FROM (SELECT greatest(${tables.map((t) => `(SELECT max(version) FROM ${t})`).join(', ')}) AS m) x
-     WHERE m > (SELECT last_value FROM row_version_seq)`,
-  );
-  if (rowCount) log.warn('moved the version sequence past restored rows');
 }
 
 const { PRIMARY_URL, PRIMARY_SSL, MIRROR_URL, S3_CREATE_BUCKETS } = process.env;

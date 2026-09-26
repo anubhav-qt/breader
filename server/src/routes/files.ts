@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { LIMITS, UploadRequest, type UploadResponse } from '@breader/shared';
 import type { AppEnv, Deps, LibraryRow } from '../context.ts';
 import { blobs, libraries } from '../db/schema.ts';
+import type { Db } from '../db/client.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
@@ -18,6 +19,24 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 const quotaFull = (lib: LibraryRow) =>
   new ApiError(413, 'quota_full', `Your library is full (${mb(lib.quotaBytes)}). Remove books you’ve finished to make room.`);
 
+type BlobRow = typeof blobs.$inferSelect;
+
+/** The file is in storage: mark it ready and count it against the library's quota, once. */
+async function markReady(db: Db, blob: BlobRow) {
+  await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(libraries).where(eq(libraries.id, blob.ownerLibraryId!)).for('update');
+    if (row.usedBytes + blob.size > row.quotaBytes) throw quotaFull(row);
+    const done = await tx
+      .update(blobs)
+      .set({ status: 'ready', readyAt: new Date(), unusedSince: null })
+      .where(and(eq(blobs.id, blob.id), eq(blobs.status, 'pending')))
+      .returning({ id: blobs.id });
+    if (done.length) {
+      await tx.update(libraries).set({ usedBytes: sql`${libraries.usedBytes} + ${blob.size}` }).where(eq(libraries.id, row.id));
+    }
+  });
+}
+
 /*
  * Adding a book (backend design §7): the browser hashes the file, asks here, uploads straight to
  * R2 with the signed link, then confirms. Files are only deduplicated within one library.
@@ -28,6 +47,12 @@ export function fileRoutes(deps: Deps) {
   r.use('/uploads', requireLibrary(deps));
   r.use('/uploads/*', requireLibrary(deps));
   r.use('/files/*', requireLibrary(deps));
+
+  /** Storage holds exactly this file. */
+  const holds = async (blob: BlobRow) => {
+    const stored = await storage.head(blob.r2Key);
+    return !!stored && stored.size === blob.size && stored.sha256 === blob.sha256;
+  };
 
   r.post('/uploads', rateLimit({ name: 'upload', max: 60, windowMs: 3_600_000 }), async (c) => {
     const body = parse(UploadRequest, await readJson(c));
@@ -41,7 +66,11 @@ export function fileRoutes(deps: Deps) {
     }
 
     let [blob] = await db.select().from(blobs).where(and(eq(blobs.ownerLibraryId, lib.id), eq(blobs.sha256, body.sha256)));
-    if (blob?.status === 'ready') return c.json({ fileId: blob.id, status: 'ready' } satisfies UploadResponse);
+    if (blob?.status === 'ready') {
+      // A book is about to point at it again, so clean-up gives it another week.
+      if (blob.unusedSince) await db.update(blobs).set({ unusedSince: null }).where(eq(blobs.id, blob.id));
+      return c.json({ fileId: blob.id, status: 'ready' } satisfies UploadResponse);
+    }
     if (lib.usedBytes + body.size > lib.quotaBytes) throw quotaFull(lib);
 
     if (!blob) {
@@ -55,6 +84,7 @@ export function fileRoutes(deps: Deps) {
           kind: body.kind,
           r2Key: `lib/${lib.id}/${body.sha256}`,
           ownerLibraryId: lib.id,
+          unusedSince: new Date(),
         })
         .onConflictDoNothing()
         .returning();
@@ -63,9 +93,15 @@ export function fileRoutes(deps: Deps) {
     } else {
       [blob] = await db
         .update(blobs)
-        .set({ status: 'pending', size: body.size, mime: body.mime, kind: body.kind })
+        .set({ status: 'pending', size: body.size, mime: body.mime, kind: body.kind, unusedSince: new Date() })
         .where(eq(blobs.id, blob.id))
         .returning();
+    }
+    // The file may be in storage already: uploaded but never confirmed, or its row was lost when
+    // the database was restored from a backup. Then there's nothing to send.
+    if (await holds(blob)) {
+      await markReady(db, blob);
+      return c.json({ fileId: blob.id, status: 'ready' } satisfies UploadResponse);
     }
     const upload = await storage.uploadLink(blob.r2Key, body.size, body.mime, body.sha256);
     return c.json({ fileId: blob.id, status: 'upload', upload } satisfies UploadResponse);
@@ -84,19 +120,7 @@ export function fileRoutes(deps: Deps) {
       await storage.remove(blob.r2Key);
       throw new ApiError(409, 'upload_mismatch', 'The uploaded file didn’t match. Try adding the book again.');
     }
-
-    await db.transaction(async (tx) => {
-      const [row] = await tx.select().from(libraries).where(eq(libraries.id, lib.id)).for('update');
-      if (row.usedBytes + blob.size > row.quotaBytes) throw quotaFull(row);
-      const done = await tx
-        .update(blobs)
-        .set({ status: 'ready', readyAt: new Date() })
-        .where(and(eq(blobs.id, blob.id), eq(blobs.status, 'pending')))
-        .returning({ id: blobs.id });
-      if (done.length) {
-        await tx.update(libraries).set({ usedBytes: sql`${libraries.usedBytes} + ${blob.size}` }).where(eq(libraries.id, lib.id));
-      }
-    });
+    await markReady(db, blob);
     return c.json({ fileId: blob.id, status: 'ready' } satisfies UploadResponse);
   });
 

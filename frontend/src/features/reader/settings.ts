@@ -79,8 +79,14 @@ export function useReaderSettings() {
   const [settings, setSettings] = useState<ReaderSettings>(loadSettings);
   useEffect(() => {
     const pulled = () => setSettings(loadSettings());
+    // Changed in another tab: take them, so a change here doesn't write the old ones back.
+    const elsewhere = (e: StorageEvent) => { if (e.key === KEY) pulled(); };
     window.addEventListener('breader:settings', pulled);
-    return () => window.removeEventListener('breader:settings', pulled);
+    window.addEventListener('storage', elsewhere);
+    return () => {
+      window.removeEventListener('breader:settings', pulled);
+      window.removeEventListener('storage', elsewhere);
+    };
   }, []);
   const changed = useRef(false);
   const update = useCallback((fn: (s: ReaderSettings) => ReaderSettings) => {

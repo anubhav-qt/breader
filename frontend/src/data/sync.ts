@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { normalizeKey } from '@breader/shared/key';
+import { SYNC } from '@breader/shared/limits';
 import type { Book, LibraryResponse, Mutation, NewMutation, PullResponse, PushResponse, SyncedBook, UploadResponse } from '@breader/shared/protocol';
 import type { BookEdit, BookRecord, Format, ReadState } from '../books/types';
 import { api, ApiError, OfflineError, type ApiBase } from '../lib/api';
+import { report } from '../lib/report';
 import { readLocal, store } from '../lib/store';
+import { onNews, tell, withData, withSync } from '../lib/tabs';
 
 /*
  * The browser stays the first place anything is saved (backend design §6). Once a library has a
@@ -13,6 +16,13 @@ import { readLocal, store } from '../lib/store';
  *   push   3 s after a change (at most 20 s while changes keep coming), when the tab is hidden,
  *          and when the connection returns
  *   pull   on start, on focus, after every push, and every 2 minutes while open
+ *
+ * Every tab of this browser shares one outbox, kept in IndexedDB and only changed under the data
+ * lock, and only one tab syncs at a time (lib/tabs.ts).
+ *
+ * If the server loses changes it had already taken (it was restored from a backup), its timeline
+ * changes, or its rev drops below one this browser pulled. The browser then sends everything it
+ * holds again, files included, before it takes anything from the server.
  */
 
 interface SyncState {
@@ -21,21 +31,44 @@ interface SyncState {
   nextId: number;
   /** Highest library revision this browser has pulled. */
   rev: number;
+  /** The server's sync timeline at the last pull. */
+  timeline?: string;
   registered: boolean;
   /** The whole library still has to be queued: set when a library first gets its key. */
   needsSnapshot: boolean;
+  /** The snapshot is a resend to a server that lost changes: every file is checked again too. */
+  resend?: boolean;
   outbox: Mutation[];
   /** Book ids whose file or cover hasn't reached the server yet. */
   uploads: string[];
+  /** Of those, books to ask about again although they have a file id: the server may have lost it. */
+  recheck?: string[];
+  /** Books removed here recently, so a resend can remove them again. */
+  removed?: Array<{ id: string; at: number }>;
 }
 
+export interface LibraryData {
+  records: BookRecord[];
+  reads: Record<string, ReadState>;
+  edits: Record<string, BookEdit>;
+  key: string | null;
+}
+
+/**
+ * The library's side of sync (data/useLibrary.ts). Methods ending in Locked are called with the
+ * data lock held and must not take it again.
+ */
 export interface SyncHost {
-  snapshot(): { records: BookRecord[]; reads: Record<string, ReadState>; edits: Record<string, BookEdit>; key: string | null };
-  /** Merge a pull. `pending` are this browser's changes the server hasn't seen yet; they win. */
-  apply(pull: PullResponse, pending: Mutation[]): void;
-  /** Replace this browser's library with the one a key opened. */
-  replace(pull: PullResponse, key: string): Promise<void>;
-  linked(bookId: string, ids: { fileId: string; coverId?: string }): void;
+  /** The library as this tab shows it. */
+  snapshot(): LibraryData;
+  /** Saves this tab's unsaved changes, queueing them here, and returns the library as stored. */
+  settleLocked(): Promise<LibraryData>;
+  /** Merges a pull into the stored library. `pending` are changes the server hasn't seen yet; they win. */
+  applyLocked(pull: PullResponse, pending: Mutation[]): Promise<void>;
+  /** Replaces the library with the one a key opened. */
+  replaceLocked(pull: PullResponse, key: string): Promise<void>;
+  /** A book's file (and cover) reached the server: note their ids, and tell the server. */
+  linked(bookId: string, ids: { fileId: string; coverId?: string }): Promise<void>;
   cover(bookId: string, blob: Blob): Promise<void>;
   notice(text: string): void;
 }
@@ -52,6 +85,7 @@ const KEY = 'sync';
 const SETTINGS = 'breader.reader.v1';
 const MIME: Record<Format, string> = { EPUB: 'application/epub+zip', PDF: 'application/pdf', TXT: 'text/plain', Text: 'text/plain', MD: 'text/markdown' };
 const COVER_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const DAY = 86_400_000;
 
 const fresh = (libraryId: string | null = null): SyncState => ({
   libraryId,
@@ -64,21 +98,46 @@ const fresh = (libraryId: string | null = null): SyncState => ({
   uploads: [],
 });
 
+/** The server lost changes this browser sent: start again from a resend. */
+class Resend extends Error {}
+
 let host: SyncHost | null = null;
-let state: SyncState = fresh();
 let flushing: Promise<void> | null = null;
 let timer = 0;
 let firstQueued = 0;
+/** The state as last read or written, for the status line only. */
+let seen: SyncState = fresh();
 
 let status: SyncStatus = { state: 'off', pending: 0, lastSynced: null, via: api.via };
 const watchers = new Set<(s: SyncStatus) => void>();
 function setStatus(next: Partial<SyncStatus>) {
-  status = { ...status, ...next, pending: state.outbox.length + state.uploads.length, via: api.via };
+  status = { ...status, ...next, pending: seen.outbox.length + seen.uploads.length, via: api.via };
   watchers.forEach((w) => w(status));
 }
 api.onVia(() => setStatus({}));
 
-const save = () => store.set(KEY, state);
+async function load(): Promise<SyncState> {
+  return { ...fresh(), ...(await store.get<SyncState>(KEY)) };
+}
+
+async function save(s: SyncState) {
+  await store.set(KEY, s);
+  seen = s;
+  setStatus({});
+  tell('sync');
+}
+
+/** Reads the sync state as stored. */
+const read = () => withData(load);
+
+/** Changes the sync state as stored. */
+const update = <T>(fn: (s: SyncState) => T) =>
+  withData(async () => {
+    const s = await load();
+    const out = fn(s);
+    await save(s);
+    return out;
+  });
 
 /* ---- Wire format ---- */
 
@@ -139,61 +198,102 @@ const readToWire = (r: ReadState): ReadState => ({ ...r, line: clip(r.line ?? ''
 
 /* ---- Recording changes ---- */
 
-/** Queue a change for the server. Does nothing until this browser's library has a key. */
-export function record(m: NewMutation) {
-  if (!state.libraryId || state.needsSnapshot) return;
+/** Adds one change to the outbox, dropping ones it supersedes. */
+function enqueue(s: SyncState, m: NewMutation) {
   // Only the latest reading place, card edit and settings matter; drop superseded ones.
   if (m.type === 'read.put') {
     const { bookId } = m;
-    state.outbox = state.outbox.filter((x) => !(x.type === 'read.put' && x.bookId === bookId));
+    s.outbox = s.outbox.filter((x) => !(x.type === 'read.put' && x.bookId === bookId));
     m = { ...m, read: readToWire(m.read) };
   } else if (m.type === 'edit.put') {
     const { bookId } = m;
-    const prev = state.outbox.find((x) => x.type === 'edit.put' && x.bookId === bookId);
+    const prev = s.outbox.find((x) => x.type === 'edit.put' && x.bookId === bookId);
     if (prev && prev.type === 'edit.put') {
       m = { ...m, edit: { ...prev.edit, ...m.edit } };
-      state.outbox = state.outbox.filter((x) => x !== prev);
+      s.outbox = s.outbox.filter((x) => x !== prev);
     }
   } else if (m.type === 'settings.put') {
-    state.outbox = state.outbox.filter((x) => x.type !== 'settings.put');
+    s.outbox = s.outbox.filter((x) => x.type !== 'settings.put');
   }
-  state.outbox.push({ ...m, id: state.nextId++ } as Mutation);
-  void save();
-  setStatus({});
+  if (m.type === 'book.remove' || m.type === 'book.restore') {
+    const { bookId } = m;
+    const now = Date.now();
+    s.removed = (s.removed ?? []).filter((r) => r.id !== bookId && now - r.at < SYNC.tombstoneDays * DAY);
+    if (m.type === 'book.remove') s.removed.push({ id: bookId, at: now });
+  }
+  s.outbox.push({ ...m, id: s.nextId++ } as Mutation);
+}
+
+/**
+ * Queues changes for the server, and books whose file should be stored there. Call with the data
+ * lock held: the library saves a change and queues it in one step, so no tab sees one without the
+ * other. Does nothing until this browser's library has a key.
+ */
+export async function queueLocked(muts: NewMutation[], uploads: string[] = []) {
+  if (!muts.length && !uploads.length) return;
+  const s = await load();
+  // A snapshot still to come carries these changes with it.
+  if (!s.libraryId || s.needsSnapshot) return;
+  for (const m of muts) enqueue(s, m);
+  for (const id of uploads) if (!s.uploads.includes(id)) s.uploads.push(id);
+  await save(s);
   schedule();
 }
 
-/** A book's file (or a newly found cover) should be stored on the server. */
-export function queueUpload(bookId: string) {
-  if (!state.libraryId || state.needsSnapshot) return;
-  if (!state.uploads.includes(bookId)) state.uploads.push(bookId);
-  void save();
-  schedule();
+/** Queue one change for the server. */
+export function record(m: NewMutation) {
+  void withData(() => queueLocked([m]));
 }
 
 /** This browser's library just got its key: from now on everything it holds syncs. */
 export async function adopt() {
-  state = { ...fresh(crypto.randomUUID()), needsSnapshot: true };
-  await save();
+  await withData(() => save({ ...fresh(crypto.randomUUID()), needsSnapshot: true }));
   schedule(0);
 }
 
-/** Queue the whole library: every book, reading place, card edit and the reader settings. */
-function queueSnapshot() {
-  const { records, reads, edits } = host!.snapshot();
+/**
+ * Queue the whole library: every book, reading place, card edit and the reader settings. On a
+ * resend, books go without their file ids (the server keeps the ones it has), removals go again,
+ * and every file is checked: the server may have lost the rows but not the files, or both.
+ */
+async function queueSnapshotLocked() {
+  if (!(await load()).needsSnapshot) return;
+  const { records, reads, edits } = await host!.settleLocked();
+  const s = await load();
+  const resend = !!s.resend;
   const mine = records.filter((r) => r.source === 'file' || r.source === 'sample');
   const ids = new Set(mine.map((r) => r.id));
-  const muts: NewMutation[] = mine.map((r) => ({ type: 'book.put', book: toWire(r) }));
+  const muts: NewMutation[] = mine.map((r) => ({ type: 'book.put', book: resend ? { ...toWire(r), fileId: null, coverId: null } : toWire(r) }));
   for (const [bookId, read] of Object.entries(reads)) if (ids.has(bookId)) muts.push({ type: 'read.put', bookId, read: readToWire(read) });
   for (const [bookId, e] of Object.entries(edits)) {
     if (ids.has(bookId)) muts.push({ type: 'edit.put', bookId, edit: { title: e.title?.trim() || null, color: e.color ?? null, favorite: !!e.favorite } });
   }
   const prefs = readLocal<Record<string, unknown> | null>(SETTINGS, null);
   if (prefs) muts.push({ type: 'settings.put', prefs });
-  state.outbox = muts.map((m) => ({ ...m, id: state.nextId++ }) as Mutation);
-  state.uploads = mine.filter((r) => r.source === 'file' && (!r.fileId || (r.hasCover && !r.coverId))).map((r) => r.id);
-  state.needsSnapshot = false;
+  if (resend) for (const r of s.removed ?? []) if (!ids.has(r.id)) muts.push({ type: 'book.remove', bookId: r.id });
+  s.outbox = muts.map((m) => ({ ...m, id: s.nextId++ }) as Mutation);
+  const files = mine.filter((r) => r.source === 'file');
+  s.uploads = (resend ? files : files.filter((r) => !r.fileId || (r.hasCover && !r.coverId))).map((r) => r.id);
+  s.recheck = resend ? files.map((r) => r.id) : [];
+  s.needsSnapshot = false;
+  s.resend = false;
+  await save(s);
 }
+
+/** Sends everything this browser holds again, before taking anything from the server. */
+async function startResend(timeline?: string) {
+  console.warn('The server lost changes this browser had sent, so Breader is sending everything again.');
+  await update((s) => {
+    s.needsSnapshot = true;
+    s.resend = true;
+    s.rev = 0;
+    s.timeline = timeline;
+  });
+}
+
+/** The server has lost changes this browser already had from it. */
+const lost = (s: SyncState, res: { rev: number; timeline?: string }) =>
+  (!!s.timeline && !!res.timeline && res.timeline !== s.timeline) || res.rev < s.rev;
 
 function schedule(delay = 3000) {
   const now = Date.now();
@@ -210,22 +310,26 @@ function schedule(delay = 3000) {
 
 async function register() {
   const key = host!.snapshot().key;
-  if (!key || !state.libraryId) throw new Error('This library has no key yet.');
+  const { libraryId } = await read();
+  if (!key || !libraryId) throw new Error('This library has no key yet.');
+  let id = libraryId;
   try {
-    await api.post<LibraryResponse>('/v1/libraries', { libraryId: state.libraryId, key });
+    await api.post<LibraryResponse>('/v1/libraries', { libraryId, key });
   } catch (e) {
     if (!(e instanceof ApiError)) throw e;
     if (e.code === 'key_taken') {
       // This key was registered before (this browser lost its sync state): carry on with that library.
       const r = await api.post<LibraryResponse>('/v1/session/key', { key });
-      state.libraryId = r.library.id;
+      id = r.library.id;
     } else if (e.code === 'library_exists') {
-      state.libraryId = crypto.randomUUID();
+      await update((s) => { s.libraryId = crypto.randomUUID(); });
       return register();
     } else throw e;
   }
-  state.registered = true;
-  await save();
+  await update((s) => {
+    s.libraryId = id;
+    s.registered = true;
+  });
 }
 
 /** Runs a request, reopening the session with the stored key if the cookie was lost. */
@@ -241,32 +345,64 @@ async function signedIn<T>(fn: () => Promise<T>): Promise<T> {
     } catch (again) {
       if (!(again instanceof ApiError) || again.code !== 'unknown_key') throw again;
       // The server no longer knows this library: register it again and send everything.
-      state = { ...state, registered: false, rev: 0, needsSnapshot: true, outbox: [], uploads: [] };
-      await save();
-      schedule(0);
-      throw new Error('The server lost this library, so Breader is sending it again.');
+      await update((s) => {
+        s.registered = false;
+        s.rev = 0;
+        s.timeline = undefined;
+        s.needsSnapshot = true;
+        s.resend = true;
+      });
+      throw new Resend();
     }
     return fn();
   }
 }
 
 async function pushAll() {
-  while (state.outbox.length) {
-    const batch = state.outbox.slice(0, 200);
-    const res = await signedIn(() => api.post<PushResponse>('/v1/sync/push', { clientId: state.clientId, mutations: batch }, 15_000));
-    state.outbox = state.outbox.filter((m) => m.id > res.lastMutationId);
+  for (;;) {
+    const s = await read();
+    const batch = s.outbox.slice(0, SYNC.maxMutations);
+    if (!batch.length) return;
+    const res = await signedIn(() => api.post<PushResponse>('/v1/sync/push', { clientId: s.clientId, mutations: batch }, 15_000));
+    if (lost(s, res)) {
+      await startResend(res.timeline);
+      throw new Resend();
+    }
+    await update((cur) => {
+      cur.outbox = cur.outbox.filter((m) => m.id > res.lastMutationId);
+      for (const r of res.rejected) {
+        const m = batch.find((x) => x.id === r.id);
+        // The server no longer has the file this book points at: store it again, and meanwhile
+        // send the book without it.
+        if (r.code !== 'file_missing' || !m || (m.type !== 'book.put' && m.type !== 'book.files')) continue;
+        const bookId = m.type === 'book.put' ? m.book.id : m.bookId;
+        if (m.type === 'book.put') enqueue(cur, { type: 'book.put', book: { ...m.book, fileId: null, coverId: null } });
+        if (!cur.uploads.includes(bookId)) cur.uploads.push(bookId);
+        cur.recheck = [...new Set([...(cur.recheck ?? []), bookId])];
+      }
+    });
     for (const r of res.rejected) console.warn('The server didn’t take a change:', r);
-    await save();
-    setStatus({});
   }
 }
 
 async function pullNow() {
-  const res = await signedIn(() => api.get<PullResponse>(`/v1/sync/pull?since=${state.rev}`));
-  if (res.books.length || res.reads.length || res.settings) host!.apply(res, state.outbox);
-  if (res.settings && !state.outbox.some((m) => m.type === 'settings.put')) applySettings(res.settings);
-  state.rev = res.rev;
-  await save();
+  const s = await read();
+  const res = await signedIn(() => api.get<PullResponse>(`/v1/sync/pull?since=${s.rev}`));
+  if (lost(s, res)) {
+    await startResend(res.timeline);
+    throw new Resend();
+  }
+  let settings = false;
+  await withData(async () => {
+    await host!.settleLocked();
+    const cur = await load();
+    if (res.books.length || res.reads.length || res.settings || res.full) await host!.applyLocked(res, cur.outbox);
+    settings = !!res.settings && !cur.outbox.some((m) => m.type === 'settings.put');
+    cur.rev = res.rev;
+    if (res.timeline) cur.timeline = res.timeline;
+    await save(cur);
+  });
+  if (settings) applySettings(res.settings!);
   void fetchCovers(res.books);
 }
 
@@ -285,29 +421,31 @@ async function uploadBlob(blob: Blob, mime: string, kind: 'book' | 'cover'): Pro
 }
 
 async function uploadAll() {
-  for (const id of [...state.uploads]) {
+  const s = await read();
+  const recheck = new Set(s.recheck ?? []);
+  for (const id of s.uploads) {
     const rec = host!.snapshot().records.find((r) => r.id === id);
-    const drop = async () => {
-      state.uploads = state.uploads.filter((x) => x !== id);
-      await save();
-      setStatus({});
-    };
+    const drop = () => update((cur) => {
+      cur.uploads = cur.uploads.filter((x) => x !== id);
+      cur.recheck = (cur.recheck ?? []).filter((x) => x !== id);
+    });
     if (!rec || rec.source !== 'file') { await drop(); continue; }
+    const again = recheck.has(id);
     try {
       let fileId = rec.fileId;
-      if (!fileId) {
+      if (!fileId || again) {
+        // Asking again costs nothing when the server has the file: it answers "ready".
         const data = await store.get<Blob | string>(`file:${id}`);
         if (data === undefined) { await drop(); continue; }
         const mime = MIME[rec.format];
         fileId = await uploadBlob(typeof data === 'string' ? new Blob([data], { type: mime }) : data, mime, 'book');
       }
       let coverId = rec.coverId;
-      if (!coverId && rec.hasCover) {
+      if ((!coverId || again) && rec.hasCover) {
         const cover = await store.get<Blob>(`cover:${id}`);
         if (cover && COVER_TYPES.has(cover.type)) coverId = await uploadBlob(cover, cover.type, 'cover');
       }
-      host!.linked(id, { fileId, coverId });
-      record({ type: 'book.files', bookId: id, fileId, coverId: coverId ?? null });
+      await host!.linked(id, { fileId, coverId });
       await drop();
     } catch (e) {
       if (e instanceof ApiError && e.status < 500 && e.code !== 'signed_out') {
@@ -335,32 +473,41 @@ function applySettings(prefs: Record<string, unknown>) {
   window.dispatchEvent(new Event('breader:settings'));
 }
 
-/** Push everything queued, upload waiting files, then pull. Safe to call any time. */
+/** Push everything queued, upload waiting files, then pull. Safe to call any time, from any tab. */
 export function flush(): Promise<void> {
-  flushing ??= (async () => {
-    if (!host || !state.libraryId) return setStatus({ state: 'off' });
+  flushing ??= withSync(async () => {
+    if (!host) return;
+    // This tab's latest changes join the outbox first.
+    await withData(() => host!.settleLocked());
+    if (!(await read()).libraryId) return setStatus({ state: 'off' });
     setStatus({ state: 'syncing' });
     try {
-      if (state.needsSnapshot) {
-        queueSnapshot();
-        await save();
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await withData(queueSnapshotLocked);
+          if (!(await read()).registered) await register();
+          await pushAll();
+          if ((await read()).uploads.length) {
+            await uploadAll();
+            await pushAll();
+          }
+          await pullNow();
+          break;
+        } catch (e) {
+          // A resend starts over from the snapshot, once or twice at most.
+          if (!(e instanceof Resend) || attempt >= 2) throw e;
+        }
       }
-      if (!state.registered) await register();
-      await pushAll();
-      if (state.uploads.length) {
-        await uploadAll();
-        await pushAll();
-      }
-      await pullNow();
       setStatus({ state: 'synced', lastSynced: Date.now(), message: undefined });
     } catch (e) {
       if (e instanceof OfflineError) setStatus({ state: 'offline', message: e.message });
       else {
         console.warn('Sync failed:', e);
+        if (!(e instanceof ApiError && e.status < 500)) report(e, { in: 'sync' });
         setStatus({ state: 'error', message: e instanceof Error ? e.message : String(e) });
       }
     }
-  })().finally(() => { flushing = null; });
+  }).finally(() => { flushing = null; });
   return flushing;
 }
 
@@ -384,18 +531,23 @@ export async function openWithKey(input: string) {
     await flush();
     return;
   }
-  if (state.libraryId) {
-    await flush();
-    if (!state.registered || state.needsSnapshot || state.outbox.length || state.uploads.length) {
+  if ((await read()).libraryId) await flush();
+  // No tab may sync while the session moves to the other library, or it would push this one's
+  // changes there.
+  const all = await withSync(async () => {
+    const s = await read();
+    if (s.libraryId && (!s.registered || s.needsSnapshot || s.outbox.length || s.uploads.length)) {
       throw new Error('Breader couldn’t save this browser’s books to their own library first. Try again when you’re online.');
     }
-  }
-  const opened = await api.post<LibraryResponse>('/v1/session/key', { key });
-  const all = await api.get<PullResponse>('/v1/sync/pull?since=0');
-  await host.replace(all, key);
+    const opened = await api.post<LibraryResponse>('/v1/session/key', { key });
+    const pull = await api.get<PullResponse>('/v1/sync/pull?since=0');
+    await withData(async () => {
+      await host!.replaceLocked(pull, key);
+      await save({ ...fresh(opened.library.id), registered: true, rev: pull.rev, timeline: pull.timeline });
+    });
+    return pull;
+  });
   if (all.settings) applySettings(all.settings);
-  state = { ...fresh(opened.library.id), registered: true, rev: all.rev };
-  await save();
   setStatus({ state: 'synced', lastSynced: Date.now() });
   void fetchCovers(all.books);
 }
@@ -403,18 +555,21 @@ export async function openWithKey(input: string) {
 /** Starts syncing once the local library has loaded. */
 export async function startSync(h: SyncHost) {
   host = h;
-  state = { ...fresh(), ...(await store.get<SyncState>(KEY)) };
-  const snap = h.snapshot();
+  seen = await read();
   // A library keyed before the backend existed: register it and send everything once.
-  if (snap.key && !state.libraryId) await adopt();
+  if (h.snapshot().key && !seen.libraryId) await adopt();
 
   window.addEventListener('online', () => void flush());
   window.addEventListener('focus', () => void flush());
   document.addEventListener('visibilitychange', () => void flush());
   window.setInterval(() => { if (document.visibilityState === 'visible') void flush(); }, 120_000);
+  // Another tab changed the outbox: keep this tab's sync line current.
+  onNews((news) => {
+    if (news === 'sync') void read().then((s) => { seen = s; setStatus({}); });
+  });
 
   await flush();
-  void fetchCovers(snap.records.filter((r) => r.coverId).map((r) => ({ id: r.id, coverId: r.coverId!, removedAt: null })));
+  void fetchCovers(h.snapshot().records.filter((r) => r.coverId).map((r) => ({ id: r.id, coverId: r.coverId!, removedAt: null })));
 }
 
 export function useSyncStatus() {
