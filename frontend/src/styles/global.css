@@ -1,0 +1,48 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Every face is normalised to one x-height, so Dongle (x-height 0.28) sits level with Doto (0.5)
+   and a text size means the same thing in every typeface. !important because `font` resets it. */
+* { font-size-adjust: 0.5 !important; }
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--read);
+  font-size: 20px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* Rounds the ring on elements that have no corners of their own, without squaring the round ones. */
+:where(:focus-visible) { border-radius: 8px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 16px; border-radius: 10px;
+  font: 700 14px/1 var(--ui); white-space: nowrap;
+  transition: background-color 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn-primary { background: var(--ink); color: var(--canvas); }
+.btn-primary:hover:not(:disabled) { opacity: 0.86; }
+.btn-quiet { background: var(--fill); color: var(--ink); }
+.btn-quiet:hover:not(:disabled) { background: var(--line); }
+.btn-ghost { color: var(--ink-2); }
+.btn-ghost:hover:not(:disabled) { color: var(--ink); background: var(--fill); }
+.btn:disabled { opacity: 0.4; }
+.btn svg { width: 18px; height: 18px; }
+
+.chip { display: inline-block; font: 700 11px/1 var(--ui); padding: 4px 6px; border-radius: 6px; background: var(--fill); color: var(--ink-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 1ms !important; }
+}

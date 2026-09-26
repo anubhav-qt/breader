@@ -1,0 +1,36 @@
+.hdr {
+  position: relative;
+  z-index: 10;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 44px;
+  padding: 0 36px;
+}
+.logo { width: 38px; height: 38px; flex: none; display: block; }
+.logo-bg { fill: var(--canvas); stroke: var(--tile-border); stroke-width: 1; }
+.logo-b { fill: var(--ink); }
+.tabs { display: flex; gap: 28px; }
+.tab {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 0;
+  font: 700 14px/1 var(--ui);
+  color: var(--ink-2);
+  transition: color 160ms ease;
+}
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); }
+.tab-count { font: 700 12px/1 var(--ui); color: var(--ink-2); }
+.tab-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+.hdr-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
