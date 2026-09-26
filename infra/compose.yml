@@ -1,0 +1,66 @@
+# The laptop in production: the API behind a Cloudflare Tunnel, the worker, and the copy.
+# Settings come from infra/.env (copy .env.example; never commit it). See README.md.
+#   docker compose -f infra/compose.yml up -d
+# Nothing listens on the home network: the tunnel dials out to Cloudflare.
+name: breader
+
+x-server: &server
+  image: ${IMAGE:?set IMAGE in infra/.env}
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+
+x-mirror-url: &mirror-url "postgres://breader:${MIRROR_PASSWORD:?set MIRROR_PASSWORD in infra/.env}@mirror:5432/breader"
+
+services:
+  # The laptop's copy of Supabase: answers reads, and is what the nightly backup dumps.
+  mirror:
+    image: pgvector/pgvector:pg17
+    environment: { POSTGRES_USER: breader, POSTGRES_PASSWORD: "${MIRROR_PASSWORD}", POSTGRES_DB: breader }
+    volumes: ["mirror:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "breader", "-d", "breader"], interval: 5s, retries: 30 }
+    restart: unless-stopped
+
+  # Brings Supabase and the copy to the image's schema before the new version starts, then exits.
+  migrate:
+    <<: *server
+    command: ["node", "dist/migrate.js"]
+    restart: "no"
+    environment:
+      PRIMARY_URL: "${PRIMARY_SESSION_URL:?set PRIMARY_SESSION_URL in infra/.env}"
+      MIRROR_URL: *mirror-url
+    depends_on:
+      mirror: { condition: service_healthy }
+
+  api:
+    <<: *server
+    environment:
+      ROLE: laptop
+      MIRROR_URL: *mirror-url
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
+
+  worker:
+    <<: *server
+    command: ["node", "--enable-source-maps", "dist/worker.js"]
+    environment:
+      # Long transactions and cursors (the change feed, reloads) need a real session.
+      PRIMARY_URL: "${PRIMARY_SESSION_URL}"
+      MIRROR_URL: *mirror-url
+      # Backups run after 03:00 here.
+      TZ: Asia/Kolkata
+    volumes: ["files:/data/files", "backups:/data/backups"]
+
+  # api.breader.example → http://api:8787, set on the tunnel's Public Hostname page in Cloudflare.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment: { TUNNEL_TOKEN: "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in infra/.env}" }
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  mirror: {}
+  files: {}
+  backups: {}

@@ -1,0 +1,82 @@
+# Local stack: the same server image as production, with local stand-ins for Supabase and R2.
+#   npm run stack          build and start everything
+#   npm run stack:down     stop it (data is kept in volumes)
+# The app then talks to http://localhost:8787 (laptop role) and :8788 (fallback role).
+name: breader-dev
+
+x-server: &server
+  build: { context: .., dockerfile: server/Dockerfile }
+  image: breader-server:dev
+  env_file: dev.env
+  restart: unless-stopped
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+
+services:
+  primary:
+    image: postgres:17-alpine
+    environment: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: breader }
+    ports: ["54322:5432"]
+    volumes: ["primary:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "postgres", "-d", "breader"], interval: 2s, retries: 30 }
+
+  mirror:
+    image: pgvector/pgvector:pg17
+    environment: { POSTGRES_USER: breader, POSTGRES_PASSWORD: breader, POSTGRES_DB: breader }
+    ports: ["54333:5432"]
+    volumes: ["mirror:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "breader", "-d", "breader"], interval: 2s, retries: 30 }
+
+  s3:
+    image: rustfs/rustfs:latest
+    env_file: dev.env
+    environment: { RUSTFS_ADDRESS: ":9000" }
+    ports: ["9000:9000"]
+    volumes: ["s3:/data"]
+
+  # Brings both databases to the latest schema (and makes the buckets), then exits.
+  migrate:
+    <<: *server
+    command: ["node", "dist/migrate.js"]
+    restart: "no"
+    environment: { MIRROR_URL: "postgres://breader:breader@mirror:5432/breader" }
+    depends_on:
+      primary: { condition: service_healthy }
+      mirror: { condition: service_healthy }
+      s3: { condition: service_started }
+
+  # The laptop's API: Supabase for writes and the reader's own library, the copy for the rest.
+  api:
+    <<: *server
+    environment:
+      ROLE: laptop
+      MIRROR_URL: "postgres://breader:breader@mirror:5432/breader"
+      S3_PUBLIC_ENDPOINT: "http://localhost:9000"
+    ports: ["8787:8787"]
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
+
+  # The Render copy: same image, no mirror. Stop "api" to watch the app fail over to it.
+  fallback:
+    <<: *server
+    environment:
+      ROLE: fallback
+      S3_PUBLIC_ENDPOINT: "http://localhost:9000"
+    ports: ["8788:8787"]
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
+
+  worker:
+    <<: *server
+    command: ["node", "--enable-source-maps", "dist/worker.js"]
+    environment:
+      MIRROR_URL: "postgres://breader:breader@mirror:5432/breader"
+      TZ: Asia/Kolkata
+      # Public half of infra/dev-backup.agekey (a throwaway key for local backups).
+      BACKUP_RECIPIENT: "age1kfm3c08tag4t3z8hrpfp8sd2rqd0qm08sl4mpw2sudayay7h4ffqgwwud5"
+    volumes: ["files:/data/files", "backups:/data/backups"]
+
+volumes:
+  primary: {}
+  mirror: {}
+  s3: {}
+  files: {}
+  backups: {}

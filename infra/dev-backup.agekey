@@ -1,0 +1,3 @@
+# Local development only: decrypts backups made by the Docker stack in compose.dev.yml.
+# public key: age1kfm3c08tag4t3z8hrpfp8sd2rqd0qm08sl4mpw2sudayay7h4ffqgwwud5
+AGE-SECRET-KEY-13T579G4MPYEEKKK4CH7HNLYGJ70LLH2D8ERWRW05CVZ0STJ4NKTSFPP6RE
