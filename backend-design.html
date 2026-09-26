@@ -1,0 +1,1009 @@
+<title>Breader Backend</title>
+<meta name="description" content="System and infrastructure design for Breader's backend, v0.2, with Phase 1 built.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Doto:wght@400..900&family=Atkinson+Hyperlegible+Next:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --canvas: #FFFFFF; --ink: #000000; --ink-2: #6B6B6B; --line: #E6E6E6; --fill: #F3F3F3;
+  /* Hosts take their colours from the book palette: the interface itself stays black and white. */
+  --laptop: #2C6668; --laptop-ink: #FFFFFF;
+  --cloud: #D4A23C; --cloud-ink: #2A2210;
+  --fallback: #AE5462; --fallback-ink: #FFFFFF;
+  --edge: #33437A; --edge-ink: #FFFFFF;
+  --ui: "Doto", ui-monospace, Menlo, Consolas, monospace;
+  --body: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #000000; --ink: #FFFFFF; --ink-2: #999999; --line: #262626; --fill: #141414;
+    --laptop: #2A6264; --cloud: #C49434; --fallback: #A94F5B; --edge: #3B4C88;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #000000; --ink: #FFFFFF; --ink-2: #999999; --line: #262626; --fill: #141414;
+  --laptop: #2A6264; --cloud: #C49434; --fallback: #A94F5B; --edge: #3B4C88;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { background: var(--canvas); color: var(--ink); font: 400 17px/1.62 var(--body); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 6px; }
+
+.doc { max-width: 1240px; margin: 0 auto; padding-inline: 20px; padding-block: 0 120px; display: grid; grid-template-columns: minmax(0, 1fr); }
+.toc { display: none; }
+@media (min-width: 1100px) {
+  .doc { grid-template-columns: 196px minmax(0, 1fr); column-gap: 56px; }
+  .toc { display: block; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; padding-top: 58px; max-height: calc(100vh - 48px); overflow-y: auto; }
+}
+.toc .toc-name { font: 800 22px/1 var(--ui); margin: 0 0 20px 10px; }
+.toc a { display: grid; grid-template-columns: 24px minmax(0, 1fr); padding: 5px 10px; border-radius: 8px; color: var(--ink-2); text-decoration: none; font: 700 13px/1.3 var(--ui); }
+.toc a span { color: var(--ink-2); opacity: .7; }
+.toc a:hover, .toc a.on { color: var(--ink); background: var(--fill); }
+main { min-width: 0; }
+
+/* Masthead */
+.mast { padding-block: 56px 0; }
+.wm { font: 800 22px/1 var(--ui); }
+h1 { font: 800 clamp(44px, 8vw, 88px)/1 var(--ui); margin: 26px 0 0; text-wrap: balance; }
+.meta { font-size: 15px; color: var(--ink-2); margin: 16px 0 0; }
+.lede { font-size: clamp(20px, 2.2vw, 24px); line-height: 1.42; max-width: 36em; margin: 22px 0 0; text-wrap: pretty; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.tag { font: 600 13px/1 var(--body); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; }
+.key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 26px; font-size: 14px; color: var(--ink-2); }
+.decided { margin: 40px 0 0; border-top: 1px solid var(--ink); display: grid; grid-template-columns: minmax(0, 1fr); }
+.decided > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 32px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+@media (min-width: 760px) { .decided > div { grid-template-columns: 170px minmax(0, 1fr); } }
+.decided dt { font: 700 14px/1.5 var(--ui); padding-top: 2px; }
+.decided dd { margin: 0; max-width: 68ch; }
+
+/* Sections */
+.sec { padding-top: 96px; scroll-margin-top: 8px; }
+.num { display: block; font: 700 14px var(--ui); color: var(--ink-2); margin-bottom: 10px; }
+h2 { font: 800 clamp(30px, 4vw, 42px)/1.05 var(--ui); margin: 0 0 20px; text-wrap: balance; }
+h3 { font: 600 19px/1.3 var(--body); margin: 38px 0 10px; text-wrap: balance; }
+h4 { font: 600 16px/1.3 var(--body); margin: 0; }
+.prose { max-width: 70ch; }
+p { margin: 0 0 14px; }
+ul, ol { padding-left: 1.25em; margin: 0 0 16px; }
+li { margin: 5px 0; }
+li::marker { color: var(--ink-2); }
+strong { font-weight: 600; }
+.muted { color: var(--ink-2); }
+code { font: 500 .84em var(--mono); background: var(--fill); padding: .12em .38em; border-radius: 5px; overflow-wrap: anywhere; }
+pre { font: 400 13px/1.6 var(--mono); background: var(--fill); border-radius: 12px; padding: 16px 18px; overflow-x: auto; margin: 4px 0 20px; max-width: 100%; }
+pre code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+
+.rule-box { border: 1.5px solid var(--ink); border-radius: 18px; padding: 22px 24px 10px; margin: 28px 0; max-width: 74ch; }
+.rule-box .label { font: 800 18px/1.2 var(--ui); margin: 0 0 10px; }
+.rule-box p { font-size: 18px; line-height: 1.55; }
+
+.steps { counter-reset: s; list-style: none; padding: 0; max-width: 72ch; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); margin: 0 0 12px; }
+.steps > li::before { content: counter(s); font: 800 18px/1.45 var(--ui); }
+
+.tbl { overflow-x: auto; margin: 8px 0 24px; border-top: 1px solid var(--ink); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.45; }
+th { text-align: left; font: 600 11.5px/1.3 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); padding: 11px 16px 9px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 16px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child { font-weight: 600; }
+td.plain { font-weight: 400; }
+tr.group td { font: 700 14px/1.4 var(--ui); padding-top: 18px; border-bottom-color: var(--ink); }
+.num-col { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.w-api td:nth-child(2) { white-space: nowrap; }
+
+.host { display: inline-block; font: 600 12px/1 var(--body); padding: 5px 8px; border-radius: 6px; white-space: nowrap; vertical-align: 1px; }
+.h-laptop { background: var(--laptop); color: var(--laptop-ink); }
+.h-cloud { background: var(--cloud); color: var(--cloud-ink); }
+.h-fallback { background: var(--fallback); color: var(--fallback-ink); }
+.h-edge { background: var(--edge); color: var(--edge-ink); }
+.h-none { border: 1px solid var(--line); color: var(--ink-2); padding: 4px 7px; }
+
+figure { margin: 28px 0 32px; }
+.fig { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.fig svg { display: block; width: 100%; height: auto; min-width: 700px; }
+figcaption { font-size: 14.5px; color: var(--ink-2); max-width: 74ch; margin-top: 12px; }
+svg { color: var(--ink); }
+svg text { font-family: var(--body); }
+.d-laptop { fill: var(--laptop); } .t-laptop { fill: var(--laptop-ink); }
+.d-cloud { fill: var(--cloud); } .t-cloud { fill: var(--cloud-ink); }
+.d-fallback { fill: var(--fallback); } .t-fallback { fill: var(--fallback-ink); }
+.d-edge { fill: var(--edge); } .t-edge { fill: var(--edge-ink); }
+.d-chip { fill: var(--canvas); }
+.t-ink { fill: var(--ink); } .t-mute { fill: var(--ink-2); }
+.off { opacity: .2; }
+
+.states { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; margin: 24px 0 8px; }
+.state { border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px 6px; }
+.state svg { width: 100%; height: auto; display: block; margin: 10px 0 12px; }
+.state p { font-size: 15px; color: var(--ink-2); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 8px 40px; max-width: 980px; }
+.cols h3 { margin-top: 24px; }
+
+.phase { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 28px; padding: 16px 0; border-bottom: 1px solid var(--line); max-width: 980px; }
+.phase:first-of-type { border-top: 1px solid var(--ink); }
+@media (min-width: 760px) { .phase { grid-template-columns: 200px minmax(0, 1fr); } }
+.phase .p-name { font: 800 17px/1.35 var(--ui); }
+.phase .p-name small { display: block; font: 600 13px/1.4 var(--body); color: var(--ink-2); margin-top: 4px; }
+.phase ul { margin: 0; }
+
+.qs { counter-reset: q; list-style: none; padding: 0; max-width: 74ch; }
+.qs > li { counter-increment: q; display: grid; grid-template-columns: 34px minmax(0, 1fr); margin: 0 0 14px; }
+.qs > li::before { content: counter(q); font: 800 18px/1.45 var(--ui); }
+.foot { margin-top: 80px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-2); max-width: 74ch; }
+</style>
+
+<div class="doc">
+<nav class="toc" aria-label="Contents">
+  <div class="toc-name">b</div>
+  <a href="#requirements"><span>1</span>Requirements</a>
+  <a href="#architecture"><span>2</span>Architecture</a>
+  <a href="#failover"><span>3</span>Failover</a>
+  <a href="#identity"><span>4</span>Identity &amp; keys</a>
+  <a href="#data"><span>5</span>Data model</a>
+  <a href="#sync"><span>6</span>Sync</a>
+  <a href="#files"><span>7</span>Files</a>
+  <a href="#sharing"><span>8</span>Shelf &amp; circles</a>
+  <a href="#study"><span>9</span>Study notes</a>
+  <a href="#ai"><span>10</span>AI</a>
+  <a href="#api"><span>11</span>API</a>
+  <a href="#infra"><span>12</span>Infrastructure</a>
+  <a href="#capacity"><span>13</span>Capacity</a>
+  <a href="#decisions"><span>14</span>Decisions</a>
+  <a href="#phases"><span>15</span>Build phases</a>
+  <a href="#questions"><span>16</span>Open questions</a>
+</nav>
+
+<main>
+<header class="mast">
+  <div class="wm">breader</div>
+  <h1>Backend &amp; infrastructure</h1>
+  <p class="meta">Design v0.2 · 26 September 2026 · Phase 1 built, not yet deployed (<a href="#built">§15</a>)</p>
+  <p class="lede">Breader keeps working when your laptop is off, and a laptop going down never loses a change. Every write is saved in Supabase first. Your laptop keeps a live copy, answers the app’s requests and does the heavy work. A free server on Render takes over while the laptop sleeps. It all runs on free tiers.</p>
+  <div class="tags">
+    <span class="tag">$0 a month</span><span class="tag">Laptop-first</span><span class="tag">Offline-first</span><span class="tag">Readers in India</span><span class="tag">TypeScript</span>
+  </div>
+  <div class="key" aria-label="Colour key">
+    <span>Colours mark where things run:</span>
+    <span class="host h-laptop">Your laptop</span><span class="host h-cloud">Supabase &amp; R2</span><span class="host h-fallback">Fallback server</span><span class="host h-edge">Cloudflare edge</span>
+  </div>
+  <dl class="decided">
+    <div><dt>Audience</dt><dd>Public and growing slowly: hundreds of readers, then a few thousand.</dd></div>
+    <div><dt>Identity</dt><dd>Log in with email and password or Google, or use a key. Key-only libraries sync to the server, with limits.</dd></div>
+    <div><dt>Privacy</dt><dd>Only a library’s key or login opens its private books, and the server can read them.</dd></div>
+    <div><dt>Sharing</dt><dd>A public shelf with categories and free tags. Sharing on it needs a login. Circles are joined by invite link, and every member can add books.</dd></div>
+    <div><dt>Roadmap</dt><dd>Highlights and notes. A study mode with a page on one side and a scratchpad on the other (text, drawings, images and page snips, linked quotes). AI with a small free quota and bring-your-own-key.</dd></div>
+    <div><dt>Hosting</dt><dd>Containers on your laptop, a free fallback server, data on the laptop and in Supabase, $0 a month.</dd></div>
+  </dl>
+</header>
+
+<!-- 1 -->
+<section class="sec" id="requirements">
+  <span class="num">1</span>
+  <h2>Requirements</h2>
+  <div class="cols">
+    <div>
+      <h3>What it does</h3>
+      <ul>
+        <li>Opens a library with a key or a login, on any browser.</li>
+        <li>Works offline: add books, read, take notes. Changes sync when the connection returns.</li>
+        <li>Stores book files, covers and note images.</li>
+        <li>Syncs reading places, card edits (name, colour, favourite), reader settings, highlights and notebooks.</li>
+        <li>Lets a logged-in reader claim a key library into their account.</li>
+        <li>Runs a public shelf with categories, tags, search, reports and takedowns.</li>
+        <li>Runs circles: invite links, shared books, per-reader progress.</li>
+        <li>Answers AI requests from a free daily quota. Readers with their own key call the provider from the browser.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>How well it does it</h3>
+      <ul>
+        <li><strong>Cost:</strong> $0 a month. The one unavoidable cost is a domain name (about $10 a year).</li>
+        <li><strong>No lost changes:</strong> a laptop that loses power, sleeps or is closed mid-write loses nothing.</li>
+        <li><strong>Availability:</strong> the app keeps working while the laptop is off, with a switch-over of a few seconds.</li>
+        <li><strong>Speed:</strong> most requests under 150 ms from India. Reading never waits on the network, because the book is in the browser.</li>
+        <li><strong>Scale:</strong> comfortable to about 3,000 libraries and 300 readers a day on free tiers. §13 shows what runs out first.</li>
+        <li><strong>Portability:</strong> the same container image runs on the laptop, on Render, or anywhere else later.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Assumptions to confirm</h3>
+  <p class="prose">I filled these in so the design is complete. Each one is a single setting or rule and easy to change.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Topic</th><th>Assumed</th></tr></thead>
+    <tbody>
+      <tr><td>Key-only limits</td><td class="plain">100 MB in total and 25 MB per file. The library is deleted after 12 months unused. It can’t share on the public shelf. AI works only with the reader’s own API key.</td></tr>
+      <tr><td>Account limits</td><td class="plain">500 MB in total and 100 MB per file (textbook PDFs are large). 25 free AI requests a day. Never deleted for inactivity.</td></tr>
+      <tr><td>Claiming a key</td><td class="plain">The key library’s books move into the account, and the old key stops working.</td></tr>
+      <tr><td>An account’s key</td><td class="plain">Every account library also has a key, shown in the Key dialog. The owner can replace it or switch key access off.</td></tr>
+      <tr><td>Reading place</td><td class="plain">Across devices, the most recent reading session wins.</td></tr>
+      <tr><td>Circle books</td><td class="plain">The member who added a book, or the circle owner, can remove it. Any member can share the invite link; the owner can revoke it.</td></tr>
+      <tr><td>First categories</td><td class="plain">Fiction, Classics, Poetry, Philosophy, History, Science, Technology, Textbooks. Admins can edit the list.</td></tr>
+      <tr><td>Admins</td><td class="plain">You and your friends, marked with an admin role on your accounts.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 2 -->
+<section class="sec" id="architecture">
+  <span class="num">2</span>
+  <h2>Architecture</h2>
+  <div class="rule-box">
+    <p class="label">Where data lives</p>
+    <p>You asked for the data on your laptop and in Supabase, with both updated on every change. This design does that, and fixes the order. A write counts as saved only once Supabase has it. Your laptop copies it a few seconds later.</p>
+    <p>The order matters because a laptop can shut down in the middle of a write. Anything saved only on the laptop would be lost with it, or would have to be merged by hand later. With Supabase first, the fallback server always has everything, and a returning laptop simply catches up.</p>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 1000 530" role="img" aria-label="Architecture: the browser loads the app from Cloudflare Pages and calls the API through a Cloudflare Tunnel to the laptop. The laptop writes to Supabase and keeps a copy fed by a change feed. Files go directly between the browser and Cloudflare R2. The fallback server on Render is used only while the laptop is off.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M100,200 V26 H925 V68" marker-start="url(#a1)" marker-end="url(#a1)"/>
+          <path d="M180,225 L268,110" marker-end="url(#a1)"/>
+          <path d="M180,262 L268,212" marker-end="url(#a1)"/>
+          <path d="M180,300 L268,418" stroke-dasharray="5 5" marker-end="url(#a1)"/>
+          <path d="M460,210 L538,166" marker-end="url(#a1)"/>
+          <path d="M460,420 L538,438" stroke-dasharray="5 5" marker-end="url(#a1)"/>
+          <path d="M780,166 L858,238" marker-end="url(#a1)"/>
+          <path d="M858,276 L782,246" marker-end="url(#a1)"/>
+          <path d="M858,126 L782,126" marker-end="url(#a1)"/>
+          <path d="M780,440 H925 V314" stroke-dasharray="5 5" marker-end="url(#a1)"/>
+        </g>
+
+        <text x="512" y="17" text-anchor="middle" font-size="12" class="t-mute">book files go straight between the browser and R2 (signed links)</text>
+
+        <rect x="20" y="200" width="160" height="150" rx="12" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="100" y="232" text-anchor="middle" font-size="14" font-weight="600" class="t-ink">Reader’s browser</text>
+        <text x="100" y="260" text-anchor="middle" font-size="13" class="t-ink">the app</text>
+        <text x="100" y="280" text-anchor="middle" font-size="13" class="t-ink">books kept offline</text>
+        <text x="100" y="300" text-anchor="middle" font-size="13" class="t-ink">outbox of changes</text>
+        <text x="100" y="326" text-anchor="middle" font-size="12" class="t-mute">IndexedDB</text>
+
+        <text x="214" y="152" text-anchor="end" font-size="11" class="t-mute">loads app</text>
+        <text x="222" y="226" text-anchor="middle" font-size="11" class="t-mute">API</text>
+        <text x="222" y="392" text-anchor="end" font-size="11" class="t-mute">if api. fails</text>
+
+        <text x="365" y="74" text-anchor="middle" font-size="13" font-weight="600" class="t-mute">Cloudflare edge</text>
+        <rect x="270" y="88" width="190" height="40" rx="20" class="d-edge"/>
+        <text x="365" y="113" text-anchor="middle" font-size="13" class="t-edge">app · Pages</text>
+        <rect x="270" y="190" width="190" height="40" rx="20" class="d-edge"/>
+        <text x="365" y="215" text-anchor="middle" font-size="13" class="t-edge">api. · Tunnel</text>
+        <rect x="270" y="400" width="190" height="40" rx="20" class="d-edge"/>
+        <text x="365" y="425" text-anchor="middle" font-size="13" class="t-edge">fb. · DNS</text>
+
+        <text x="498" y="180" text-anchor="middle" font-size="11" class="t-mute">tunnel</text>
+
+        <rect x="540" y="70" width="240" height="248" rx="14" class="d-laptop"/>
+        <text x="556" y="96" font-size="13" font-weight="600" class="t-laptop">Your laptop · Docker</text>
+        <rect x="556" y="110" width="208" height="32" rx="8" class="d-chip"/>
+        <text x="572" y="131" font-size="13" class="t-ink">file mirror</text>
+        <rect x="556" y="150" width="208" height="32" rx="8" class="d-chip"/>
+        <text x="572" y="171" font-size="13" class="t-ink">api · Hono</text>
+        <rect x="556" y="190" width="208" height="32" rx="8" class="d-chip"/>
+        <text x="572" y="211" font-size="13" class="t-ink">worker · jobs</text>
+        <rect x="556" y="230" width="208" height="32" rx="8" class="d-chip"/>
+        <text x="572" y="251" font-size="13" class="t-ink">mirror Postgres</text>
+        <rect x="556" y="270" width="208" height="32" rx="8" class="d-chip"/>
+        <text x="572" y="291" font-size="13" class="t-ink">nightly backups</text>
+
+        <rect x="540" y="390" width="240" height="90" rx="14" class="d-fallback"/>
+        <text x="556" y="416" font-size="13" font-weight="600" class="t-fallback">Fallback · Render, Singapore</text>
+        <rect x="556" y="430" width="208" height="32" rx="8" class="d-chip"/>
+        <text x="572" y="451" font-size="13" class="t-ink">api · same image</text>
+
+        <text x="820" y="118" text-anchor="middle" font-size="11" class="t-mute">copies</text>
+        <text x="819" y="188" text-anchor="middle" font-size="11" class="t-mute">writes, sync</text>
+        <text x="820" y="286" text-anchor="middle" font-size="11" class="t-mute">change feed</text>
+        <text x="852" y="459" text-anchor="middle" font-size="11" class="t-mute">reads, writes</text>
+
+        <rect x="860" y="70" width="130" height="88" rx="14" class="d-cloud"/>
+        <text x="874" y="96" font-size="13" font-weight="600" class="t-cloud">Cloudflare R2</text>
+        <rect x="874" y="110" width="102" height="32" rx="8" class="d-chip"/>
+        <text x="886" y="131" font-size="13" class="t-ink">book files</text>
+
+        <rect x="860" y="200" width="130" height="112" rx="14" class="d-cloud"/>
+        <text x="874" y="226" font-size="13" font-weight="600" class="t-cloud">Supabase</text>
+        <rect x="874" y="240" width="102" height="32" rx="8" class="d-chip"/>
+        <text x="886" y="261" font-size="13" class="t-ink">Postgres</text>
+        <text x="874" y="296" font-size="12" class="t-cloud">Mumbai · ledger</text>
+
+        <line x1="20" y1="512" x2="56" y2="512" stroke="currentColor" stroke-width="1.5"/>
+        <text x="64" y="516" font-size="12" class="t-mute">always</text>
+        <line x1="130" y1="512" x2="166" y2="512" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 5"/>
+        <text x="174" y="516" font-size="12" class="t-mute">only while the laptop is off</text>
+      </svg>
+    </div>
+    <figcaption>The browser loads the app from Cloudflare Pages and calls <code>api.</code>, which Cloudflare Tunnel routes to your laptop. The laptop writes to Supabase and serves shelf browsing and search from its own copy, which a worker keeps current from Supabase’s change feed. Book files never cross your home connection: the browser uploads and downloads them from R2 with signed links. When <code>api.</code> fails, the app switches to <code>fb.</code>, the same server image on Render, which works directly against Supabase.</figcaption>
+  </figure>
+
+  <h3>The pieces</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Piece</th><th>Runs on</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td>App</td><td class="plain"><span class="host h-edge">Cloudflare Pages</span></td><td class="plain">The current React frontend, built and served as static files. It never depends on the laptop.</td></tr>
+      <tr><td>api</td><td class="plain"><span class="host h-laptop">Laptop</span> <span class="host h-fallback">Render</span></td><td class="plain">HTTP API: identity, sync, uploads, shelf, circles, AI gateway, admin. It holds no state of its own, so either copy can serve any request.</td></tr>
+      <tr><td>worker</td><td class="plain"><span class="host h-laptop">Laptop</span></td><td class="plain">Background jobs: the change feed into the mirror, file copies, shelf checks, clean-up, backups. Jobs wait in the queue while the laptop is off.</td></tr>
+      <tr><td>mirror Postgres</td><td class="plain"><span class="host h-laptop">Laptop</span></td><td class="plain">A full copy of the database a few seconds behind. It serves shelf browsing, search and circle listings, and holds data that can be rebuilt (search index, later AI embeddings).</td></tr>
+      <tr><td>Postgres (the ledger)</td><td class="plain"><span class="host h-cloud">Supabase, Mumbai</span></td><td class="plain">The source of truth. Every write lands here first. It also holds the job queue.</td></tr>
+      <tr><td>Files</td><td class="plain"><span class="host h-cloud">Cloudflare R2</span></td><td class="plain">Book files, covers, note images, backups. The laptop keeps a copy of every file.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>How the laptop copy stays current</h3>
+  <p class="prose">Postgres replication would be the obvious tool, but Supabase’s free plan only offers the direct connection it needs over IPv6. A replication slot would also hold back Supabase’s disk while the laptop sleeps. A small change feed avoids both problems:</p>
+  <ol class="steps">
+    <li><span>A trigger on each table writes the changed row into <code>change_log</code> in the same transaction, tagged with the transaction id.</span></li>
+    <li><span>The worker reads changes after its cursor, but only from transactions that have finished. It reads below the oldest transaction still running (<code>pg_snapshot_xmin</code>), so a slow transaction is never skipped.</span></li>
+    <li><span>Every row carries a version number. The mirror applies a change only when it’s newer than what it has, so replays and repeats do no harm.</span></li>
+    <li><span>It polls every 2 seconds while changes are arriving and backs off to 30 seconds when quiet. After more than 14 days away, the laptop reloads the whole database, which is small.</span></li>
+  </ol>
+  <p class="prose">The API reads a reader’s own library from Supabase, so they always see their own writes. Browsing reads come from the mirror. That split also keeps Supabase inside its 5 GB a month of free egress.</p>
+</section>
+
+<!-- 3 -->
+<section class="sec" id="failover">
+  <span class="num">3</span>
+  <h2>Failover</h2>
+  <p class="prose">Only the API moves between hosts. The app, the files and the database stay where they are, so a switch never has to move data.</p>
+
+  <div class="states">
+    <div class="state">
+      <h4>Laptop on</h4>
+      <svg viewBox="0 0 320 150" role="img" aria-label="Laptop on: the browser calls the laptop, which writes to Supabase and copies changes back.">
+        <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M86,66 L122,36" marker-end="url(#a2)"/>
+          <path d="M86,84 L122,114" class="off" marker-end="url(#a2)"/>
+          <path d="M214,34 L240,62" marker-start="url(#a2)" marker-end="url(#a2)"/>
+          <path d="M214,116 L240,88" class="off" marker-end="url(#a2)"/>
+        </g>
+        <rect x="6" y="56" width="80" height="38" rx="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="46" y="80" text-anchor="middle" font-size="13" class="t-ink">Browser</text>
+        <rect x="124" y="10" width="90" height="38" rx="9" class="d-laptop"/>
+        <text x="169" y="34" text-anchor="middle" font-size="13" class="t-laptop">Laptop</text>
+        <g class="off"><rect x="124" y="102" width="90" height="38" rx="9" class="d-fallback"/>
+        <text x="169" y="126" text-anchor="middle" font-size="13" class="t-fallback">Fallback</text></g>
+        <rect x="240" y="56" width="76" height="38" rx="9" class="d-cloud"/>
+        <text x="278" y="80" text-anchor="middle" font-size="12" class="t-cloud">Supabase</text>
+        <text x="246" y="40" font-size="11" class="t-mute">writes, copy</text>
+      </svg>
+      <p>The browser talks to the laptop. Writes go to Supabase, and the laptop copies them back within seconds.</p>
+    </div>
+    <div class="state">
+      <h4>Laptop off</h4>
+      <svg viewBox="0 0 320 150" role="img" aria-label="Laptop off: the browser calls the fallback, which reads and writes Supabase.">
+        <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M86,66 L122,36" class="off" marker-end="url(#a3)"/>
+          <path d="M86,84 L122,114" marker-end="url(#a3)"/>
+          <path d="M214,34 L240,62" class="off" marker-end="url(#a3)"/>
+          <path d="M214,116 L240,88" marker-end="url(#a3)"/>
+        </g>
+        <rect x="6" y="56" width="80" height="38" rx="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="46" y="80" text-anchor="middle" font-size="13" class="t-ink">Browser</text>
+        <g class="off"><rect x="124" y="10" width="90" height="38" rx="9" class="d-laptop"/>
+        <text x="169" y="34" text-anchor="middle" font-size="13" class="t-laptop">Laptop</text></g>
+        <rect x="124" y="102" width="90" height="38" rx="9" class="d-fallback"/>
+        <text x="169" y="126" text-anchor="middle" font-size="13" class="t-fallback">Fallback</text>
+        <rect x="240" y="56" width="76" height="38" rx="9" class="d-cloud"/>
+        <text x="278" y="80" text-anchor="middle" font-size="12" class="t-cloud">Supabase</text>
+        <text x="246" y="122" font-size="11" class="t-mute">reads, writes</text>
+      </svg>
+      <p>Requests to <code>api.</code> fail, so the app moves to <code>fb.</code> in about 4 seconds. The fallback reads and writes Supabase directly.</p>
+    </div>
+    <div class="state">
+      <h4>Laptop back</h4>
+      <svg viewBox="0 0 320 150" role="img" aria-label="Laptop back: the browser returns to the laptop, which catches up from Supabase's change feed.">
+        <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M86,66 L122,36" marker-end="url(#a4)"/>
+          <path d="M86,84 L122,114" class="off" marker-end="url(#a4)"/>
+          <path d="M240,62 L214,34" stroke-width="3" marker-end="url(#a4)"/>
+          <path d="M214,116 L240,88" class="off" marker-end="url(#a4)"/>
+        </g>
+        <rect x="6" y="56" width="80" height="38" rx="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="46" y="80" text-anchor="middle" font-size="13" class="t-ink">Browser</text>
+        <rect x="124" y="10" width="90" height="38" rx="9" class="d-laptop"/>
+        <text x="169" y="34" text-anchor="middle" font-size="13" class="t-laptop">Laptop</text>
+        <g class="off"><rect x="124" y="102" width="90" height="38" rx="9" class="d-fallback"/>
+        <text x="169" y="126" text-anchor="middle" font-size="13" class="t-fallback">Fallback</text></g>
+        <rect x="240" y="56" width="76" height="38" rx="9" class="d-cloud"/>
+        <text x="278" y="80" text-anchor="middle" font-size="12" class="t-cloud">Supabase</text>
+        <text x="246" y="40" font-size="11" class="t-mute">catch-up</text>
+      </svg>
+      <p>The app checks <code>api.</code> every minute and moves back when it answers. The change feed replays whatever the laptop missed.</p>
+    </div>
+    <div class="state">
+      <h4>Supabase down (rare)</h4>
+      <svg viewBox="0 0 320 150" role="img" aria-label="Supabase down: the laptop serves reads from its copy, and browsers hold changes in their outbox.">
+        <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M86,66 L122,36" marker-end="url(#a5)"/>
+          <path d="M86,84 L122,114" class="off" marker-end="url(#a5)"/>
+          <path d="M214,34 L240,62" class="off" marker-end="url(#a5)"/>
+          <path d="M214,116 L240,88" class="off" marker-end="url(#a5)"/>
+        </g>
+        <rect x="6" y="56" width="80" height="38" rx="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="46" y="80" text-anchor="middle" font-size="13" class="t-ink">Browser</text>
+        <text x="46" y="112" text-anchor="middle" font-size="11" class="t-mute">holds changes</text>
+        <rect x="124" y="10" width="90" height="38" rx="9" class="d-laptop"/>
+        <text x="169" y="34" text-anchor="middle" font-size="13" class="t-laptop">Laptop</text>
+        <text x="94" y="42" text-anchor="end" font-size="11" class="t-mute">reads</text>
+        <g class="off"><rect x="124" y="102" width="90" height="38" rx="9" class="d-fallback"/>
+        <text x="169" y="126" text-anchor="middle" font-size="13" class="t-fallback">Fallback</text>
+        <rect x="240" y="56" width="76" height="38" rx="9" class="d-cloud"/>
+        <text x="278" y="80" text-anchor="middle" font-size="12" class="t-cloud">Supabase</text></g>
+      </svg>
+      <p>Nobody can save to the server. The laptop serves the shelf read-only from its copy, and every browser keeps its changes in the outbox until Supabase is back.</p>
+    </div>
+  </div>
+
+  <h3>How the app switches</h3>
+  <ul class="prose">
+    <li>The app knows two API addresses, <code>api.</code> and <code>fb.</code>, and sends each request to whichever is current.</li>
+    <li>A network error, a 4-second timeout, or a 502, 503, 504 or 530 from Cloudflare (530 means the tunnel has no laptop behind it) marks <code>api.</code> as down. The request is retried once on <code>fb.</code>, which is safe because every write carries an id and applies only once.</li>
+    <li>The session cookie is set on the parent domain and signed with a secret both servers share, so either accepts it. A key session names the library and the key’s epoch; replacing a key raises the epoch, which ends every session opened with the old one. Account sessions (Phase 2) live in Postgres, which both servers read.</li>
+    <li>Render’s free tier sleeps after 15 minutes idle and takes about a minute to wake. An uptime check every 5 minutes keeps it awake, so a switch takes seconds. That uses 744 of Render’s 750 free hours a month.</li>
+    <li>While the laptop is off, jobs wait in the queue. Sign-up and password emails are sent within the request itself, so they still work. AI works on both servers.</li>
+  </ul>
+</section>
+
+<!-- 4 -->
+<section class="sec" id="identity">
+  <span class="num">4</span>
+  <h2>Identity &amp; keys</h2>
+  <p class="prose">There are two kinds of identity. A <strong>library</strong> is what a key opens: books, reading places, highlights, notebooks and circle memberships all belong to it. An <strong>account</strong> is a person who has logged in. An account owns exactly one library. Only accounts can share on the public shelf or use the free AI quota, so every public book has a person behind it, and minting new keys can’t get around a limit.</p>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 290" role="img" aria-label="A key opens a library, and an account owns one library. The library holds books, reading places, highlights and notebooks, and joins circles by invite link. Only the account can share to the public shelf.">
+        <defs><marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M180,62 L298,128" marker-end="url(#a6)"/>
+          <path d="M180,220 L298,160" marker-end="url(#a6)"/>
+          <path d="M180,238 L298,256" marker-end="url(#a6)"/>
+          <path d="M480,134 L568,83" marker-end="url(#a6)"/>
+          <path d="M390,174 V214 H568" marker-end="url(#a6)"/>
+        </g>
+        <rect x="10" y="30" width="170" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="95" y="54" text-anchor="middle" font-size="14" font-weight="600" class="t-ink">Library key</text>
+        <text x="95" y="74" text-anchor="middle" font-size="12" class="t-mute" style="font-family: var(--mono)">BRDR-XXXX-…</text>
+
+        <rect x="10" y="200" width="170" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="95" y="224" text-anchor="middle" font-size="14" font-weight="600" class="t-ink">Account</text>
+        <text x="95" y="244" text-anchor="middle" font-size="12" class="t-mute">email + password, Google</text>
+
+        <rect x="300" y="110" width="180" height="64" rx="12" fill="none" stroke="currentColor" stroke-width="2.5"/>
+        <text x="390" y="138" text-anchor="middle" font-size="15" font-weight="600" class="t-ink">Library</text>
+        <text x="390" y="158" text-anchor="middle" font-size="12" class="t-mute">one per reader</text>
+
+        <text x="236" y="84" text-anchor="middle" font-size="11" class="t-mute">opens</text>
+        <text x="236" y="180" text-anchor="middle" font-size="11" class="t-mute">owns one</text>
+        <text x="239" y="274" text-anchor="middle" font-size="11" class="t-mute">shares (login only)</text>
+        <text x="520" y="100" text-anchor="middle" font-size="11" class="t-mute">holds</text>
+        <text x="480" y="207" text-anchor="middle" font-size="11" class="t-mute">joins by invite link</text>
+
+        <g fill="none" stroke="currentColor" stroke-width="1" opacity=".55">
+          <rect x="570" y="14" width="180" height="30" rx="7"/>
+          <rect x="570" y="50" width="180" height="30" rx="7"/>
+          <rect x="570" y="86" width="180" height="30" rx="7"/>
+          <rect x="570" y="122" width="180" height="30" rx="7"/>
+        </g>
+        <text x="660" y="34" text-anchor="middle" font-size="12.5" class="t-ink">Books &amp; card edits</text>
+        <text x="660" y="70" text-anchor="middle" font-size="12.5" class="t-ink">Reading places</text>
+        <text x="660" y="106" text-anchor="middle" font-size="12.5" class="t-ink">Highlights</text>
+        <text x="660" y="142" text-anchor="middle" font-size="12.5" class="t-ink">Notebooks</text>
+
+        <rect x="570" y="196" width="180" height="36" rx="8" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="660" y="219" text-anchor="middle" font-size="13" class="t-ink">Circles</text>
+        <rect x="300" y="236" width="180" height="40" rx="8" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="390" y="261" text-anchor="middle" font-size="13" class="t-ink">Public shelf entries</text>
+      </svg>
+    </div>
+    <figcaption>Everything a reader does belongs to the library, so key-only readers get all of it, circles included. Public sharing belongs to the account.</figcaption>
+  </figure>
+
+  <h3>The flows</h3>
+  <ol class="steps">
+    <li><span><strong>First book, no login.</strong> The browser creates a library id and a key (it does this today: <code>BRDR-</code> plus 20 Crockford characters, 100 bits). It keeps the book in IndexedDB and shows the key once, in your words: “Your personal key. Store it somewhere safe, it can’t be recovered. Log in to keep your books with your account, or use this key.” All of this works offline.</span></li>
+    <li><span><strong>Registering.</strong> When the browser is online, the app registers the library with <code>POST /v1/libraries</code>. The server stores only an HMAC of the key, never the key itself. The book uploads in the background.</span></li>
+    <li><span><strong>Another browser.</strong> The reader types the key into the Key dialog. The server looks up the HMAC, sets a session cookie for that library, and the app pulls everything down.</span></li>
+    <li><span><strong>Logging in later.</strong> If this browser holds a key library, the app offers “Keep these books in your account”. The claim moves books, reading places, highlights and notebooks into the account’s library in one transaction, then retires the old key.</span></li>
+    <li><span><strong>A new account</strong> gets a library and a key of its own. The Key dialog shows that key, with options to replace it or switch key access off.</span></li>
+  </ol>
+
+  <h3>Key-only compared with an account</h3>
+  <div class="tbl"><table>
+    <thead><tr><th></th><th>Key only</th><th>Account</th></tr></thead>
+    <tbody>
+      <tr><td>Storage</td><td class="plain num-col">100 MB, 25 MB a file</td><td class="plain num-col">500 MB, 100 MB a file</td></tr>
+      <tr><td>Lifetime</td><td class="plain">Deleted after 12 months unused. The Key dialog says so.</td><td class="plain">Kept until the owner deletes it</td></tr>
+      <tr><td>Recovery</td><td class="plain">None. A lost key means a lost library.</td><td class="plain">Password reset by email, or Google</td></tr>
+      <tr><td>Circles</td><td class="plain">Yes</td><td class="plain">Yes</td></tr>
+      <tr><td>Public shelf</td><td class="plain">Read only</td><td class="plain">Read and share (email verified)</td></tr>
+      <tr><td>AI</td><td class="plain">Own API key only</td><td class="plain">25 free requests a day, or own key</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 5 -->
+<section class="sec" id="data">
+  <span class="num">5</span>
+  <h2>Data model</h2>
+  <p class="prose">Postgres in Supabase, with the same schema in the laptop’s copy. Ids for libraries, books, highlights and notebooks are created in the browser (UUIDv7), so everything can be made offline. Every synced row carries a <code>rev</code> for browser sync and a <code>version</code> for the laptop copy. Deleting a row leaves a tombstone, so the deletion syncs too.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Table</th><th>Main columns</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr class="group"><td colspan="3">Identity</td></tr>
+      <tr><td><code>libraries</code></td><td class="plain"><code>id, key_hash, key_enabled, key_epoch, owner_account_id, rev, quota_bytes, file_bytes, used_bytes, last_active_at, retired_at</code></td><td class="plain">What a key opens. <code>rev</code> goes up by one on every change. <code>key_epoch</code> ends old sessions when the key changes.</td></tr>
+      <tr><td><code>user, account, session, verification</code></td><td class="plain">Better Auth’s own tables</td><td class="plain">Email, password hash, Google link. Sessions also record the library.</td></tr>
+      <tr><td><code>sync_clients</code></td><td class="plain"><code>client_id, library_id, last_mutation_id, last_seen_at</code></td><td class="plain">Makes pushes safe to retry.</td></tr>
+
+      <tr class="group"><td colspan="3">Books &amp; files</td></tr>
+      <tr><td><code>blobs</code></td><td class="plain"><code>id, owner_library_id, sha256, size, mime, kind, r2_key, status, is_public</code></td><td class="plain">One row per file per library, at <code>lib/&lt;library&gt;/&lt;sha256&gt;</code> in R2. A library stores identical files once.</td></tr>
+      <tr><td><code>books</code></td><td class="plain"><code>id, blob_id, title, author, format, words, pages, cover_blob, language, created_by</code></td><td class="plain">Phase 2, with the shelf, when two readers can hold the same book. Until then <code>library_items</code> carries the book’s details.</td></tr>
+      <tr><td><code>library_items</code></td><td class="plain"><code>library_id, book_id, title, author, format, source, file_id, cover_id, edit_title, edit_color, favorite, added_at, removed_at, rev</code></td><td class="plain">A reader’s card for a book: what the parser found, plus the rename, colour and favourite from the card popover.</td></tr>
+
+      <tr class="group"><td colspan="3">Reading &amp; study</td></tr>
+      <tr><td><code>reading_states</code></td><td class="plain"><code>library_id, book_id, position, progress, line, words, read_at, rev</code></td><td class="plain"><code>position</code> is the reader’s existing <code>{section, block, offset}</code>. Also kept for shelf and circle books.</td></tr>
+      <tr><td><code>library_settings</code></td><td class="plain"><code>library_id, prefs, rev</code></td><td class="plain">Reading style, font, size and theme follow the reader between browsers.</td></tr>
+      <tr><td><code>highlights</code></td><td class="plain"><code>id, library_id, book_id, anchor, color, quote, deleted_at, rev</code></td><td class="plain">See §9 for anchors.</td></tr>
+      <tr><td><code>notebooks</code></td><td class="plain"><code>id, library_id, book_id, snapshot_key, snapshot_seq, rev</code></td><td class="plain">One per reader per book. The content is a Yjs document.</td></tr>
+      <tr><td><code>notebook_updates</code></td><td class="plain"><code>notebook_id, seq, update</code></td><td class="plain">Recent edits, folded into a snapshot in R2 every 50 updates.</td></tr>
+      <tr><td><code>attachments</code></td><td class="plain"><code>id, notebook_id, blob_id, kind</code></td><td class="plain">Images and page snips in notes.</td></tr>
+
+      <tr class="group"><td colspan="3">Sharing</td></tr>
+      <tr><td><code>categories</code></td><td class="plain"><code>id, slug, name, sort</code></td><td class="plain">Curated by admins.</td></tr>
+      <tr><td><code>shelf_entries</code></td><td class="plain"><code>id, book_id, shared_by, category_id, tags[], title, author, color, cover_blob, status, shared_at, search</code></td><td class="plain">Status is live, hidden or removed. <code>search</code> is a generated full-text column.</td></tr>
+      <tr><td><code>reports</code></td><td class="plain"><code>id, shelf_entry_id, reporter, reason, status, created_at</code></td><td class="plain"></td></tr>
+      <tr><td><code>blocked_hashes</code></td><td class="plain"><code>sha256, reason, created_at</code></td><td class="plain">Files taken down once can’t be shared publicly again.</td></tr>
+      <tr><td><code>circles</code></td><td class="plain"><code>id, name, owner_library, rev</code></td><td class="plain"></td></tr>
+      <tr><td><code>circle_members</code></td><td class="plain"><code>circle_id, library_id, role, joined_at</code></td><td class="plain"></td></tr>
+      <tr><td><code>circle_invites</code></td><td class="plain"><code>token_hash, circle_id, created_by, expires_at, revoked_at</code></td><td class="plain"></td></tr>
+      <tr><td><code>circle_books</code></td><td class="plain"><code>circle_id, book_id, added_by, added_at, removed_at, rev</code></td><td class="plain"></td></tr>
+
+      <tr class="group"><td colspan="3">AI &amp; operations</td></tr>
+      <tr><td><code>ai_usage</code></td><td class="plain"><code>account_id, day, requests, tokens_in, tokens_out</code></td><td class="plain">Free quota bookkeeping.</td></tr>
+      <tr><td><code>change_log</code></td><td class="plain"><code>id, txid, tbl, pk, op, row, version</code></td><td class="plain">Feeds the laptop copy. Pruned an hour after the copy reads it, or after 14 days unread.</td></tr>
+      <tr><td><code>feed_state</code></td><td class="plain"><code>ack_txid, ack_id, ack_at, lost_txid</code></td><td class="plain">How far the copy has confirmed, and the newest record ever pruned unread (which tells the copy to reload).</td></tr>
+      <tr><td><code>mirror_state</code></td><td class="plain"><code>cursor_txid, cursor_id, loaded_at, updated_at</code></td><td class="plain">Laptop copy only: how far it has read.</td></tr>
+      <tr><td><code>mirror_tombstones</code></td><td class="plain"><code>tbl, pk, version</code></td><td class="plain">Laptop copy only: deletes it has applied, so a late, older write can’t bring a row back.</td></tr>
+      <tr><td><code>audit_log</code></td><td class="plain"><code>actor, action, target, at</code></td><td class="plain">Admin actions and takedowns.</td></tr>
+      <tr><td><code>pgboss.*</code></td><td class="plain">pg-boss’s tables</td><td class="plain">The job queue, when jobs need one. Phase 1’s worker runs on timers.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 6 -->
+<section class="sec" id="sync">
+  <span class="num">6</span>
+  <h2>Sync</h2>
+  <p class="prose">The browser stays the first place anything is saved, as it is today. The server becomes the place where browsers meet. Every change the app makes (open a book, move the reading place, rename a card, highlight, write a note) is written to an outbox in IndexedDB first, so the app never waits for the network.</p>
+  <ol class="steps">
+    <li><span><strong>Push.</strong> <code>POST /v1/sync/push</code> sends the outbox with the client id and a mutation id on each change. It runs 3 seconds after the last change (at most 20 seconds after the first), when the tab is hidden, and when the connection returns. The server applies the batch in one transaction, raises the library’s <code>rev</code> and stamps every changed row with it. A retry of the same mutation id does nothing.</span></li>
+    <li><span><strong>Pull.</strong> <code>GET /v1/sync/pull?since=&lt;rev&gt;</code> returns every row with a higher <code>rev</code>, tombstones included, and the new <code>rev</code>. It runs when the app opens, on focus, after a push, and every 2 minutes while open.</span></li>
+    <li><span><strong>Why pulls never miss a change.</strong> The library row is locked during a push, so revs rise in the same order the changes were saved.</span></li>
+    <li><span><strong>Shared data.</strong> Circles have their own <code>rev</code> and pull the same way. The public shelf is fetched page by page and cached at the edge for 60 seconds.</span></li>
+  </ol>
+
+  <h3>When two devices disagree</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>What</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td>Reading place</td><td class="plain">The most recent reading session wins, judged by the device’s clock and capped at the server’s. If another device is far ahead, the app can offer to jump there (a UI detail for later).</td></tr>
+      <tr><td>Card edits</td><td class="plain">Name, colour and favourite are separate fields. For each one, the change that reaches the server last wins.</td></tr>
+      <tr><td>Remove and Undo</td><td class="plain">Remove writes a tombstone and Undo clears it, so ⌘Z still works across a sync. Tombstones are purged after 30 days.</td></tr>
+      <tr><td>Highlights</td><td class="plain">Each has its own id, so highlights made on two devices both survive. Edits to one highlight: last wins.</td></tr>
+      <tr><td>Notebooks</td><td class="plain">Yjs merges edits from every device, including edits made offline, and nothing is overwritten. Drawings merge stroke by stroke.</td></tr>
+      <tr><td>Reader settings</td><td class="plain">Merged setting by setting; for each one, last wins.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 7 -->
+<section class="sec" id="files">
+  <span class="num">7</span>
+  <h2>Files</h2>
+  <p class="prose">Book bytes never pass through the API. A home connection uploads slowly, and R2 charges nothing for downloads.</p>
+  <h3>Adding a book</h3>
+  <ol class="steps">
+    <li><span>While the reader chooses private or shared, the browser computes the file’s SHA-256.</span></li>
+    <li><span><code>POST /v1/uploads</code> with the hash, size and type. The server checks the quota and the blocked list. If the same file is already in this library or on the public shelf, it links to that copy and skips the upload.</span></li>
+    <li><span>Otherwise it returns a signed R2 upload link that lasts 15 minutes and accepts only that size.</span></li>
+    <li><span>The browser uploads directly to R2.</span></li>
+    <li><span><code>POST /v1/uploads/{id}/complete</code>. The server checks the stored size and checksum, marks the file ready and counts it against the quota.</span></li>
+    <li><span>The worker copies the file to the laptop. For shelf books, it also checks that the file opens.</span></li>
+  </ol>
+  <ul class="prose">
+    <li><strong>Reading a book:</strong> <code>GET /v1/files/{id}</code> checks access and redirects to a signed R2 link valid for 10 minutes. The browser keeps a copy in IndexedDB.</li>
+    <li><strong>Covers</strong> of shelf books are public and cached at the edge. Private covers use signed links like books.</li>
+    <li><strong>Storing each file once</strong> only happens within a library and against public books. A stranger therefore can’t test whether someone else holds a private file.</li>
+    <li><strong>Quota</strong> counts every file a library uses, even when the bytes are shared with others.</li>
+    <li><strong>Clean-up:</strong> a file nobody uses any more is deleted after 7 days.</li>
+  </ul>
+</section>
+
+<!-- 8 -->
+<section class="sec" id="sharing">
+  <span class="num">8</span>
+  <h2>Shelf &amp; circles</h2>
+  <div class="cols">
+    <div>
+      <h3>The public shelf</h3>
+      <ul>
+        <li>Sharing needs a login with a verified email. The reader picks one category from the curated list, adds up to 5 free tags, and ticks “I have the right to share this book”.</li>
+        <li>The entry keeps a copy of the title, author, colour and cover, so the shelf draws without extra lookups.</li>
+        <li>Browse by category or tag, or search by title, author and tag. Search uses Postgres full-text matching, plus trigram matching for typos. Results come from the laptop’s copy and are cached at the edge.</li>
+        <li>Everyone who opens a shelf book keeps their own reading place, highlights and notes in their own library.</li>
+        <li>The sharer or an admin can take a book off the shelf.</li>
+      </ul>
+      <h3>Moderation</h3>
+      <ul>
+        <li>A Report button sends the book to the admin queue.</li>
+        <li>A takedown hides the entry and blocks the file’s hash from being shared publicly again.</li>
+        <li>A terms page gives a copyright contact address. Once strangers can share, copyrighted books will turn up, and a working takedown process is what keeps the shelf allowed to exist.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Circles</h3>
+      <ul>
+        <li>Anyone with a library, key or login, can create a circle and share an invite link: <code>/c/&lt;token&gt;</code>.</li>
+        <li>Tokens are random and stored hashed. The owner can revoke them or set them to expire.</li>
+        <li>Every member can add books and read every book in the circle. The member who added a book, or the owner, can remove it.</li>
+        <li>A circle has its own <code>rev</code>, so members pull circle changes the same way they pull their library.</li>
+        <li>For later: highlights and notes visible to the circle, for study groups. The notebook model can take a visibility setting without changes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="sec" id="study">
+  <span class="num">9</span>
+  <h2>Study notes</h2>
+  <p class="prose">In study mode the page sits on the right and a scratchpad on the left. The backend sees one notebook per reader per book. The notebook holds a general note and any number of anchored notes: a page note, a topic note tied to a chapter in the table of contents, or a passage note tied to a highlight.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Scratchpad content</th><th>How it’s stored</th></tr></thead>
+    <tbody>
+      <tr><td>Text and markdown</td><td class="plain">Rich text inside the notebook’s Yjs document (TipTap on ProseMirror in the browser).</td></tr>
+      <tr><td>Drawings and sketches</td><td class="plain">Vector strokes (points, pressure, colour) in the same document. Strokes are smoothed before saving to keep them small.</td></tr>
+      <tr><td>Images and page snips</td><td class="plain">The browser crops the rendered page to a WebP image and sends it through the upload flow in §7. The note stores a reference to the attachment.</td></tr>
+      <tr><td>Quotes linked to the book</td><td class="plain">A link to a highlight’s anchor. Clicking it opens the book at that passage.</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="prose">
+    <li><strong>Anchors</strong> use the reader’s existing position (<code>section, block, offset</code>) plus the quoted text and a few words either side. If the book file changes, the passage can still be found by its text, the way the W3C web annotation standard does it. PDF anchors use the page and text offsets.</li>
+    <li><strong>Storage:</strong> recent edits are kept in Postgres and folded into a snapshot in R2 every 50 updates or when the notebook goes quiet. That stops large drawings from filling Supabase’s 500 MB.</li>
+    <li><strong>Offline</strong> editing works like everything else: edits go to the outbox and Yjs merges them.</li>
+  </ul>
+</section>
+
+<!-- 10 -->
+<section class="sec" id="ai">
+  <span class="num">10</span>
+  <h2>AI</h2>
+  <p class="prose">The book is already parsed and in the browser, so the browser builds each prompt’s context: the selection, the pages around it, the reader’s notes, and passages found by searching the book locally. So in v1 the server needs no copy of the text, and AI works on the fallback server too.</p>
+  <div class="cols">
+    <div>
+      <h3>Free quota</h3>
+      <ol class="steps">
+        <li><span>The browser sends the task and its context to <code>POST /v1/ai/{task}</code>.</span></li>
+        <li><span>The gateway checks the login and the day’s quota (25 requests to start).</span></li>
+        <li><span>It picks a key from the pool. Keys that hit a rate limit rest for a while.</span></li>
+        <li><span>It streams the answer back and records the tokens used.</span></li>
+      </ol>
+    </div>
+    <div>
+      <h3>Bring your own key</h3>
+      <ol class="steps">
+        <li><span>The reader pastes their own key into settings. It stays in that browser.</span></li>
+        <li><span>The browser calls the provider directly, with the same prompt code as the gateway.</span></li>
+        <li><span>Neither the key nor the text reaches Breader’s server.</span></li>
+      </ol>
+    </div>
+  </div>
+  <h3>First tasks</h3>
+  <ul class="prose">
+    <li><strong>Explain</strong> or <strong>define</strong> the selected passage.</li>
+    <li><strong>Story so far:</strong> a recap built only from the text before the reader’s place, so it can’t spoil anything ahead.</li>
+    <li><strong>Ask the book</strong> a question.</li>
+    <li><strong>Study:</strong> turn my notes into flashcards, or quiz me on this chapter.</li>
+  </ul>
+  <p class="prose">The free quota runs on a small, fast model (for example Claude Haiku 4.5). Readers who bring a key choose their own model. The key pool is a list in the server’s settings, so moving to a single paid account later changes one setting. Rotating keys from several accounts to stretch free tiers usually breaks the providers’ terms, and a provider can ban every linked account at once, so treat that as a short-term bridge.</p>
+  <p class="prose muted">Later, the laptop can pull out the text of shelf and circle books and build embeddings in its copy of the database (pgvector), for questions across a whole library.</p>
+</section>
+
+<!-- 11 -->
+<section class="sec" id="api">
+  <span class="num">11</span>
+  <h2>API</h2>
+  <p class="prose">REST and JSON under <code>/v1</code>, with request bodies checked by zod schemas shared with the frontend. Every write accepts an idempotency id. Errors come back as <code>{ code, message }</code>, and the message tells the reader what to do.</p>
+  <div class="tbl w-api"><table>
+    <thead><tr><th>Area</th><th>Endpoint</th><th>What it does</th><th>Who</th></tr></thead>
+    <tbody>
+      <tr><td>Identity</td><td class="plain"><code>POST /v1/libraries</code></td><td class="plain">Register a key library made in the browser</td><td class="plain">Anyone, rate-limited</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/session/key</code></td><td class="plain">Open a library with its key</td><td class="plain">Anyone</td></tr>
+      <tr><td></td><td class="plain"><code>/v1/auth/*</code></td><td class="plain">Sign up, log in, Google, log out, verify email, reset password</td><td class="plain">Anyone</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/libraries/claim</code></td><td class="plain">Move a key library into my account</td><td class="plain">Account</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/libraries/me/key</code></td><td class="plain">Replace my key or switch key access off</td><td class="plain">Owner</td></tr>
+      <tr><td></td><td class="plain"><code>GET · DELETE /v1/me</code></td><td class="plain">Who I am, limits and usage; delete my account</td><td class="plain">Session</td></tr>
+      <tr><td>Sync</td><td class="plain"><code>POST /v1/sync/push</code></td><td class="plain">Send queued changes</td><td class="plain">Library</td></tr>
+      <tr><td></td><td class="plain"><code>GET /v1/sync/pull</code></td><td class="plain">Changes since a rev</td><td class="plain">Library</td></tr>
+      <tr><td></td><td class="plain"><code>GET · POST /v1/notebooks/{id}/updates</code></td><td class="plain">Notebook edits in and out</td><td class="plain">Library</td></tr>
+      <tr><td>Files</td><td class="plain"><code>POST /v1/uploads</code></td><td class="plain">Ask to upload: dedupe, quota, signed link</td><td class="plain">Library</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/uploads/{id}/complete</code></td><td class="plain">Confirm an upload</td><td class="plain">Library</td></tr>
+      <tr><td></td><td class="plain"><code>GET /v1/files/{id}</code></td><td class="plain">Redirect to a signed download</td><td class="plain">Anyone who can see the book</td></tr>
+      <tr><td>Shelf</td><td class="plain"><code>GET /v1/shelf</code></td><td class="plain">Browse by category, tag or search</td><td class="plain">Anyone, cached</td></tr>
+      <tr><td></td><td class="plain"><code>GET /v1/shelf/categories</code></td><td class="plain">List categories</td><td class="plain">Anyone</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/shelf</code></td><td class="plain">Share a book</td><td class="plain">Account, verified</td></tr>
+      <tr><td></td><td class="plain"><code>DELETE /v1/shelf/{id}</code></td><td class="plain">Take a book off the shelf</td><td class="plain">Sharer, admin</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/shelf/{id}/report</code></td><td class="plain">Report a book</td><td class="plain">Session</td></tr>
+      <tr><td>Circles</td><td class="plain"><code>POST /v1/circles</code></td><td class="plain">Create a circle</td><td class="plain">Library</td></tr>
+      <tr><td></td><td class="plain"><code>GET /v1/circles/{id}/pull</code></td><td class="plain">Circle changes since a rev</td><td class="plain">Member</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/circles/{id}/invites</code></td><td class="plain">Make an invite link</td><td class="plain">Member</td></tr>
+      <tr><td></td><td class="plain"><code>DELETE /v1/invites/{token}</code></td><td class="plain">Revoke a link</td><td class="plain">Owner</td></tr>
+      <tr><td></td><td class="plain"><code>POST /v1/invites/{token}/join</code></td><td class="plain">Join a circle</td><td class="plain">Library</td></tr>
+      <tr><td></td><td class="plain"><code>POST · DELETE /v1/circles/{id}/books</code></td><td class="plain">Add or remove a book</td><td class="plain">Member; adder or owner</td></tr>
+      <tr><td></td><td class="plain"><code>DELETE /v1/circles/{id}/members/me</code></td><td class="plain">Leave a circle</td><td class="plain">Member</td></tr>
+      <tr><td>AI</td><td class="plain"><code>POST /v1/ai/{task}</code></td><td class="plain">Streamed answer (server-sent events)</td><td class="plain">Account with quota</td></tr>
+      <tr><td></td><td class="plain"><code>GET /v1/ai/quota</code></td><td class="plain">Requests left today</td><td class="plain">Account</td></tr>
+      <tr><td>Admin</td><td class="plain"><code>/v1/admin/*</code></td><td class="plain">Reports, takedowns, categories, status</td><td class="plain">Admin</td></tr>
+      <tr><td>Health</td><td class="plain"><code>GET /health · /ready</code></td><td class="plain">Liveness; database reachable and copy lag</td><td class="plain">Monitors</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Code layout</h3>
+<pre><code>breader/            npm workspaces
+  frontend/         the app
+  shared/           @breader/shared: zod schemas, the sync protocol, key rules, limits
+  server/           @breader/server: api.ts, worker.ts, migrate.ts, one image;
+                    drizzle/ migrations, test/ against the local stack
+  infra/            compose.yml (laptop), compose.dev.yml (local stand-ins),
+                    update.sh, README.md (the runbook)
+  .github/          CI: tests, the image, migrations, the Render deploy</code></pre>
+  <p class="prose">The stack is Node 24, Hono, Drizzle ORM with its migrations, zod, the AWS S3 client for R2, pino and Vitest. esbuild bundles each command into one file, so the image carries no <code>node_modules</code>. Better Auth, pg-boss, Yjs and <code>packages/ai</code> arrive with the phases that need them. Locally, plain Postgres stands in for Supabase and RustFS for R2 (MinIO no longer publishes images). Your laptop’s Node 18.19 still runs the frontend’s dev server; the server tooling uses Node 24 through nvm.</p>
+</section>
+
+<!-- 12 -->
+<section class="sec" id="infra">
+  <span class="num">12</span>
+  <h2>Infrastructure</h2>
+  <h3>Hosts and free allowances</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Piece</th><th>Where</th><th>Free allowance</th><th>Card needed</th></tr></thead>
+    <tbody>
+      <tr><td>App</td><td class="plain"><span class="host h-edge">Cloudflare Pages</span></td><td class="plain">Static hosting with no request limit; 500 builds a month</td><td class="plain">No</td></tr>
+      <tr><td>API, worker, database copy</td><td class="plain"><span class="host h-laptop">Your laptop</span></td><td class="plain">Your hardware and power</td><td class="plain">–</td></tr>
+      <tr><td>Way in to the laptop</td><td class="plain"><span class="host h-edge">Cloudflare Tunnel</span></td><td class="plain">Free. The laptop dials out, and no ports are opened at home.</td><td class="plain">No</td></tr>
+      <tr><td>Fallback API</td><td class="plain"><span class="host h-fallback">Render, Singapore</span></td><td class="plain">750 hours a month, 512 MB of memory, sleeps after 15 minutes idle</td><td class="plain">No</td></tr>
+      <tr><td>Database</td><td class="plain"><span class="host h-cloud">Supabase, Mumbai</span></td><td class="plain">500 MB, 5 GB egress a month, 50,000 monthly users. Pauses after 7 days idle, and has no backups.</td><td class="plain">No</td></tr>
+      <tr><td>Files</td><td class="plain"><span class="host h-cloud">Cloudflare R2</span></td><td class="plain">10 GB, 1 million writes and 10 million reads a month, free downloads</td><td class="plain">Yes, with no charge inside the free tier</td></tr>
+      <tr><td>Email</td><td class="plain"><span class="host h-none">Resend</span></td><td class="plain">100 a day, 3,000 a month</td><td class="plain">No</td></tr>
+      <tr><td>Uptime checks</td><td class="plain"><span class="host h-none">UptimeRobot or Better Stack</span></td><td class="plain">Checks every 5 minutes, with alerts</td><td class="plain">No</td></tr>
+      <tr><td>Error tracking</td><td class="plain"><span class="host h-none">Sentry</span></td><td class="plain">5,000 errors a month</td><td class="plain">No</td></tr>
+      <tr><td>Container images</td><td class="plain"><span class="host h-none">GitHub Container Registry</span></td><td class="plain">Free for public images; 500 MB private</td><td class="plain">No</td></tr>
+      <tr><td>Domain</td><td class="plain"><span class="host h-edge">Cloudflare Registrar</span></td><td class="plain">About $10 a year, sold at cost. This is the one real cost.</td><td class="plain">Yes</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Addresses</h3>
+  <p class="prose">The domain isn’t chosen yet, so <code>breader.example</code> stands in for it.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Address</th><th>Goes to</th></tr></thead>
+    <tbody>
+      <tr><td><code>breader.example</code></td><td class="plain">The app on Cloudflare Pages</td></tr>
+      <tr><td><code>api.breader.example</code></td><td class="plain">Cloudflare Tunnel, then the laptop’s <code>api</code> container</td></tr>
+      <tr><td><code>fb.breader.example</code></td><td class="plain">The Render service, on a custom domain</td></tr>
+      <tr><td><code>files.breader.example</code></td><td class="plain">The public R2 bucket for shelf covers, cached at the edge</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The laptop</h3>
+  <p class="prose">Docker Compose runs on Docker Desktop (installed now), OrbStack or Colima. Every container restarts on its own after a reboot or crash. The full file is <code>infra/compose.yml</code>, and <code>infra/README.md</code> walks through setting up every account. In short:</p>
+<pre><code>services:
+  mirror:   pgvector/pgvector:pg17          the copy; no ports published
+  migrate:  node dist/migrate.js            Supabase and the copy, then exits
+  api:      node dist/api.js   ROLE=laptop  after migrate; transaction pooler
+  worker:   node dist/worker.js             after migrate; session pooler, TZ=Asia/Kolkata
+  tunnel:   cloudflared tunnel run          api.breader.example → http://api:8787</code></pre>
+  <ul class="prose">
+    <li><strong>Database connections:</strong> the API uses Supabase’s transaction pooler and the worker uses the session pooler. Both work over IPv4.</li>
+    <li><strong>Staying awake:</strong> in System Settings › Battery › Options, turn on “Prevent automatic sleeping on power adapter when the display is off”. With the lid closed, a Mac sleeps unless an external display is attached. Sleep is harmless anyway, because the fallback takes over.</li>
+    <li><strong>FileVault must be on.</strong> The laptop holds a copy of everyone’s private books.</li>
+  </ul>
+
+  <h3>Shipping a change</h3>
+  <ol class="steps">
+    <li><span>Push to <code>main</code>. GitHub Actions runs type checks, lint and tests.</span></li>
+    <li><span>It builds one image for both <code>arm64</code> (the Mac) and <code>amd64</code> (Render) and pushes it to GHCR.</span></li>
+    <li><span>A CI job applies new migrations to Supabase. On the laptop, a one-shot <code>migrate</code> container brings Supabase and the copy up to date before the new <code>api</code> and <code>worker</code> start. A database lock makes the two migrators take turns.</span></li>
+    <li><span>Render deploys the new image from a deploy hook. The laptop pulls it with <code>infra/update.sh</code>, which launchd runs every 5 minutes. It restarts the stack only when the running API is on an older image, so a stack you stopped stays stopped.</span></li>
+    <li><span>Cloudflare Pages builds the app from the same commit.</span></li>
+  </ol>
+  <p class="prose">For a few minutes the laptop and Render can run different versions, so migrations only ever add. A column is added in one release and removed in a later one, once no running code uses it.</p>
+
+  <h3>Backups and recovery</h3>
+  <p class="prose">Supabase’s free plan keeps no backups, so the laptop copy becomes the backup. Every night at 03:00 IST the worker dumps the laptop copy, which costs no Supabase egress. It encrypts the dump with <code>age</code>, keeps 14 days on the laptop and puts 7 daily and 4 weekly copies in a separate R2 bucket. Once a month, restore the latest dump into a scratch container and compare row counts. For now that is a manual drill in <code>infra/README.md</code>. A restore also runs <code>migrate</code>, which moves the version sequence past the restored rows: the copy never advances it, and new writes would otherwise look older than old ones.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>If this happens</th><th>What you do</th><th>Lost</th></tr></thead>
+    <tbody>
+      <tr><td>The laptop dies or is stolen</td><td class="plain">Nothing urgent, because the fallback is serving. On the new laptop, run <code>docker compose up</code>. The database copy reloads from Supabase, and files copy back from R2.</td><td class="plain">Nothing</td></tr>
+      <tr><td>The Supabase project is lost</td><td class="plain">Dump the laptop copy, which is seconds behind, into a new project or any Postgres.</td><td class="plain">A few seconds at most</td></tr>
+      <tr><td>A file is lost in R2</td><td class="plain">Copy it back from the laptop’s copy, which uses the bucket’s layout (<code>rclone</code>, in the runbook). The worker doesn’t do this by itself yet.</td><td class="plain">Nothing</td></tr>
+      <tr><td>The laptop and Supabase are both lost</td><td class="plain">Restore last night’s encrypted dump from R2.</td><td class="plain">Up to a day of metadata</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Watching it</h3>
+  <ul class="prose">
+    <li>Uptime checks on <code>api.</code>, <code>fb.</code> (this check also keeps Render awake) and the app. Alerts go to email or Telegram.</li>
+    <li>A heartbeat from the worker every 5 minutes, sent only while the copy is under 60 seconds behind, so one silence alert (after 10 minutes) covers a stopped worker, a sleeping laptop and a stuck copy. UptimeRobot’s heartbeats are paid; Healthchecks.io’s free plan has them.</li>
+    <li>Sentry for errors in the app, the API and the worker (not wired up yet).</li>
+    <li>An admin status page that shows which server is answering, the copy’s lag, database size and egress, R2 usage, emails sent today and the AI key pool.</li>
+    <li>The change feed’s constant polling should keep Supabase from counting the project as idle and pausing it. The status page watches for that.</li>
+  </ul>
+
+  <h3>Security</h3>
+  <ul class="prose">
+    <li>No ports are open on the laptop. The database copy is reachable only inside Docker’s network.</li>
+    <li>Turn off Supabase’s Data API, or keep the tables in a schema it doesn’t expose. Only Breader’s servers talk to the database.</li>
+    <li>Keys are 100 random bits. The server stores an HMAC-SHA256 of each key with a secret pepper that the laptop and Render share. Keys travel only in request bodies over HTTPS, never in URLs.</li>
+    <li>Sessions use a cookie that’s <code>HttpOnly</code>, <code>Secure</code> and <code>SameSite=Lax</code>, set on the parent domain. Writes also check the <code>Origin</code> header.</li>
+    <li>Rate limits, per address and counted by each server on its own: opening a key 10 times a minute, registering a library 10 times an hour, and asking to upload 60 times an hour. These are looser than first planned, because Indian mobile carriers put many readers behind one address. Cloudflare Turnstile joins sign-up and key registration in Phase 2.</li>
+    <li>Upload size is limited in the signed link and checked again afterwards. EPUB HTML is always cleaned in the browser before display, as DOMPurify already does. Files are served from R2 or <code>files.</code>, never from the app’s address.</li>
+    <li>Secrets live in <code>.env</code> on the laptop (readable only by you, never committed), in Render’s environment settings and in GitHub secrets.</li>
+    <li>Accounts can be deleted and exported, as India’s data protection law (DPDP Act) expects.</li>
+  </ul>
+</section>
+
+<!-- 13 -->
+<section class="sec" id="capacity">
+  <span class="num">13</span>
+  <h2>Capacity</h2>
+  <p class="prose">These are estimates for month 12: 3,000 libraries (1,000 of them accounts), 300 readers a day reading about 40 minutes each, and 30 new books a day at about 4 MB each.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Resource</th><th>Estimate</th><th>Free limit</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>API requests</td><td class="plain num-col">~60,000 a day (under 1 a second, peaks near 5)</td><td class="plain">Laptop: none that matters</td><td class="plain">Plenty of room</td></tr>
+      <tr><td>Supabase database</td><td class="plain num-col">~120 MB</td><td class="plain num-col">500 MB</td><td class="plain">Fine, because notebook snapshots live in R2</td></tr>
+      <tr><td>Supabase egress</td><td class="plain num-col">~2 GB a month</td><td class="plain num-col">5 GB</td><td class="plain">Fine while the laptop serves browsing. Long laptop outages use more.</td></tr>
+      <tr><td>R2 storage</td><td class="plain num-col">~3.6 GB added a month, before dedupe</td><td class="plain num-col">10 GB</td><td class="plain"><strong>Runs out first</strong>, in about 3 months at this pace</td></tr>
+      <tr><td>R2 operations</td><td class="plain num-col">~0.3 M writes, 3 M reads a month</td><td class="plain num-col">1 M / 10 M</td><td class="plain">Fine</td></tr>
+      <tr><td>Email</td><td class="plain num-col">20–60 a day</td><td class="plain num-col">100 a day</td><td class="plain">Fine</td></tr>
+      <tr><td>Render</td><td class="plain num-col">744 hours kept awake</td><td class="plain num-col">750 hours</td><td class="plain">Fine if it’s your only free Render service</td></tr>
+    </tbody>
+  </table></div>
+  <h3>What to do as limits approach</h3>
+  <ul class="prose">
+    <li><strong>R2 at 10 GB:</strong> R2 charges $0.015 per GB a month beyond that, so 50 GB costs about $0.60 a month. This will be the first bill. The free alternatives are tighter quotas, or adding Backblaze B2’s 10 GB free tier as a second bucket.</li>
+    <li><strong>Supabase database or egress:</strong> move more reads to the laptop, trim the change log sooner, or move to Supabase Pro ($25 a month) or another Postgres. The schema is plain Postgres, so moving is a dump and a restore.</li>
+    <li><strong>A laptop that’s often off:</strong> add an always-on free VM (Oracle Cloud Always Free has Mumbai and Hyderabad regions) that runs the worker as well as the API.</li>
+    <li><strong>AI spending:</strong> switch the key pool to a single paid account.</li>
+  </ul>
+</section>
+
+<!-- 14 -->
+<section class="sec" id="decisions">
+  <span class="num">14</span>
+  <h2>Decisions</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Decision</th><th>Chosen</th><th>Instead of</th><th>Why</th><th>Revisit when</th></tr></thead>
+    <tbody>
+      <tr><td>Where writes land</td><td class="plain">Supabase first, laptop copies</td><td class="plain">Laptop first, Supabase copies</td><td class="plain">A laptop can shut down mid-write. With Supabase first, a failover never loses or merges data.</td><td class="plain">If Supabase’s limits bite; then an always-on VM could become the primary</td></tr>
+      <tr><td>Laptop copy</td><td class="plain">Change feed and worker</td><td class="plain">Postgres logical replication</td><td class="plain">Supabase’s free direct connection is IPv6-only, and its IPv4 add-on needs the Pro plan. A replication slot also holds disk while the laptop sleeps.</td><td class="plain">On Supabase Pro, or with IPv6 at home</td></tr>
+      <tr><td>Failover routing</td><td class="plain">The app retries on <code>fb.</code></td><td class="plain">Cloudflare Load Balancer ($5 a month) or a Worker proxy (100,000 requests a day)</td><td class="plain">Free, with no request cap.</td><td class="plain">When native apps need a single address</td></tr>
+      <tr><td>Login</td><td class="plain">Better Auth inside the API</td><td class="plain">Supabase Auth</td><td class="plain">The same code runs on both servers, users sit in our own tables, and the data can leave Supabase.</td><td class="plain"></td></tr>
+      <tr><td>Files</td><td class="plain">Cloudflare R2</td><td class="plain">Supabase Storage (1 GB), laptop only</td><td class="plain">10 GB free, free downloads, signed links. The laptop keeps a copy.</td><td class="plain">At 10 GB</td></tr>
+      <tr><td>Notes sync</td><td class="plain">Yjs, one document per notebook</td><td class="plain">Last write wins per note</td><td class="plain">Study notes get edited offline on two devices. Merging keeps both.</td><td class="plain"></td></tr>
+      <tr><td>Private books</td><td class="plain">Readable by the server (your choice)</td><td class="plain">End-to-end encryption</td><td class="plain">Allows AI, search and moderation. Access control and FileVault protect the books.</td><td class="plain">If readers ask for it; files are stored by id, so encryption can be added per book</td></tr>
+      <tr><td>API style</td><td class="plain">REST, JSON, zod</td><td class="plain">GraphQL, tRPC</td><td class="plain">Easy to cache at the edge and works for native apps later. Types are shared through <code>packages/shared</code>.</td><td class="plain"></td></tr>
+      <tr><td>Language</td><td class="plain">TypeScript everywhere</td><td class="plain">Go, Python</td><td class="plain">One language with the React app and one sync protocol definition.</td><td class="plain"></td></tr>
+      <tr><td>Jobs</td><td class="plain">pg-boss in Supabase</td><td class="plain">Redis and BullMQ</td><td class="plain">No extra service, and both servers see the same queue.</td><td class="plain"></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 15 -->
+<section class="sec" id="phases">
+  <span class="num">15</span>
+  <h2>Build phases</h2>
+  <p class="prose">Each phase ships something readers can use, and each one builds on the one before.</p>
+  <div class="phase">
+    <div class="p-name">Foundation<small>Sync what exists today · built</small></div>
+    <ul>
+      <li>Monorepo, the server image, the Supabase schema and migrations.</li>
+      <li>Libraries and keys: registering, opening a library with a key (the Key dialog’s “Open library” starts working), limits.</li>
+      <li>Uploads to R2. Sync for books, card edits, reading places and settings.</li>
+      <li>The laptop stack, the tunnel, the Render fallback and failover in the app. The change feed, backups and monitoring.</li>
+      <li>Frontend: <code>lib/store.ts</code> becomes a synced store with an outbox, behind an API client that knows about failover.</li>
+    </ul>
+  </div>
+  <div class="phase">
+    <div class="p-name">Accounts &amp; shelf<small>Log in, share publicly</small></div>
+    <ul>
+      <li>Email and password, and Google, through Better Auth. Email through Resend. Claiming a key.</li>
+      <li>The public shelf with categories, tags, search, reports, takedowns and a small admin page.</li>
+      <li>Frontend: sharing asks for a login, and the Shared Library tab reads from the server.</li>
+    </ul>
+  </div>
+  <div class="phase">
+    <div class="p-name">Circles<small>Read with friends</small></div>
+    <ul><li>Create, invite, join, add and remove books, leave. Circle sync.</li></ul>
+  </div>
+  <div class="phase">
+    <div class="p-name">Study mode<small>Highlights &amp; notebooks</small></div>
+    <ul><li>Highlights with text anchors. Yjs notebooks with text, drawings, images and page snips, and quote links. R2 snapshots.</li></ul>
+  </div>
+  <div class="phase">
+    <div class="p-name">AI<small>Quota &amp; own key</small></div>
+    <ul><li>The gateway with its key pool and quotas. Bring-your-own-key in the browser. The first tasks from §10.</li></ul>
+  </div>
+  <div class="phase">
+    <div class="p-name">Laptop intelligence<small>Later</small></div>
+    <ul><li>Text extraction on the server, embeddings in the laptop copy, search across whole libraries, AI over a whole book.</li></ul>
+  </div>
+
+  <h3 id="built">Phase 1 as built</h3>
+  <p class="prose">Foundation runs locally on the image production will use, with Postgres and RustFS standing in for Supabase and R2. It was tried end to end with two browsers:</p>
+  <ul class="prose">
+    <li>A book added in one browser registered its library, uploaded straight to storage, and reached Supabase, the laptop’s copy and the laptop’s file store. A second browser opened the library with the key, typed carelessly, and downloaded the book through a signed link. Reading places synced back.</li>
+    <li>Stopping the laptop’s API moved the app to the fallback within one request; starting it again moved the app back within a minute.</li>
+    <li>A nightly backup decrypted and restored. Restoring the copy into a fresh Postgres, then running <code>migrate</code>, repaired the version sequence.</li>
+    <li>32 server tests cover keys and sessions, the sync rules, uploads and the change feed. CI runs them on every push.</li>
+  </ul>
+  <h4>Before it’s live</h4>
+  <p class="prose">It needs your accounts: the domain, Supabase, R2 (the card question in §16), GitHub, the tunnel, Render, Pages and the monitors. <code>infra/README.md</code> has the steps in order.</p>
+  <h4>Left for later</h4>
+  <ul class="prose">
+    <li><strong>Two tabs on one library</strong> share one outbox without coordinating, so a change made in one tab can be overwritten or dropped by the other. Web Locks would let one tab own sync. This is the most important gap.</li>
+    <li>Clean-up jobs: tombstones after 30 days, unused files after 7 days, key libraries unused for 12 months.</li>
+    <li>After Supabase is restored, a browser takes the restored (older) state on its next pull instead of sending its newer changes again.</li>
+    <li>The rate limiter trusts forwarding headers, which a request sent straight to the Render address could fake. Keys are 100 random bits, so this is a second line of defence, not the first.</li>
+    <li>Sentry, the admin status page, the automatic monthly restore test, and re-uploading files missing from R2.</li>
+  </ul>
+</section>
+
+<!-- 16 -->
+<section class="sec" id="questions">
+  <span class="num">16</span>
+  <h2>Open questions</h2>
+  <ol class="qs">
+    <li><span><strong>Domain.</strong> Which name? Tunnel, email and cookies all need it before Phase 1 ends.</span></li>
+    <li><span><strong>Removing a book someone else shared</strong> (from <code>TODO.md</code>): should Remove hide it from my Shared Library view only?</span></li>
+    <li><span><strong>The limits and rules in §1:</strong> do the storage numbers, the 12-month expiry and the 25 AI requests a day feel right?</span></li>
+    <li><span><strong>Circle notes:</strong> should members eventually see each other’s highlights and notes (study groups), or should notes always stay private?</span></li>
+    <li><span><strong>A card for R2:</strong> are you fine adding one? It isn’t charged inside the free tier. If not, files go to Supabase Storage (1 GB) or Backblaze B2 until then.</span></li>
+    <li><span><strong>Admins:</strong> who, besides you?</span></li>
+  </ol>
+  <p class="foot">Free-tier numbers were checked on 26 September 2026 against Supabase, Cloudflare, Render and Resend’s published limits. Providers change these, so check again before building.</p>
+</section>
+</main>
+</div>
+
+<script>
+(() => {
+  try {
+    const links = [...document.querySelectorAll('.toc a')];
+    const byId = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        links.forEach((a) => a.classList.remove('on'));
+        byId.get(e.target.id)?.classList.add('on');
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('section.sec').forEach((s) => io.observe(s));
+  } catch { /* the contents list still works as plain links */ }
+})();
+</script>
