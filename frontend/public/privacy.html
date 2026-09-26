@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Privacy · Breader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..700;1,7..72,400..700&display=swap"
+    />
+    <style>
+      :root { --canvas: #fff; --ink: #000; --ink-2: #6b6b6b; }
+      @media (prefers-color-scheme: dark) {
+        :root { --canvas: #000; --ink: #fff; --ink-2: #999; }
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font: 400 17px/1.6 "Literata", Georgia, serif;
+      }
+      main { max-width: 640px; margin: 0 auto; padding: 48px 16px 80px; }
+      h1 { font-size: 32px; line-height: 1.2; margin: 0 0 4px; }
+      h2 { font-size: 20px; margin: 36px 0 8px; }
+      .updated { color: var(--ink-2); margin: 0 0 32px; }
+      ul { padding-left: 20px; }
+      li { margin: 6px 0; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">← Breader</a></p>
+      <h1>Privacy</h1>
+      <p class="updated">Last updated 26 September 2026</p>
+
+      <p>Breader is a free e-reader run by one person. This page says what it keeps about you, where, and why. It has no ads and no analytics, and it never sells or shares your data for marketing.</p>
+
+      <h2>Your books</h2>
+      <p>The books you add, where you are in each one, and your reading settings are kept in your browser. When you add your first book, Breader makes a personal key for your library and copies your books to its server, so the key (or your account) can open them in any browser.</p>
+      <p>Books on the server are not end-to-end encrypted: the server can read them. They are only shown to someone holding your key or logged in to your account.</p>
+
+      <h2>Your account</h2>
+      <p>You don’t need an account. If you make one, Breader keeps:</p>
+      <ul>
+        <li>your email address and name, and a scrambled (hashed) password if you log in with email;</li>
+        <li>if you continue with Google, the name, email address and profile picture Google shares with us;</li>
+        <li>for each login, the date, your IP address and your browser’s name, so you stay logged in and abuse can be stopped.</li>
+      </ul>
+      <p>Your email address is used only to confirm it, to reset your password, and for messages about your account.</p>
+
+      <h2>Where it is kept</h2>
+      <ul>
+        <li>Supabase (a database in Mumbai) and Cloudflare R2 (file storage) hold your account and books.</li>
+        <li>A copy is kept on the server’s own computer, with encrypted backups in Cloudflare R2.</li>
+        <li>Render runs a standby copy of the server. Cloudflare delivers the website.</li>
+        <li>Resend sends account emails.</li>
+        <li>Sentry receives error reports: the error and where in the code it happened, never book text, cookies or passwords.</li>
+        <li>Fonts are loaded from Google Fonts, which sees your IP address.</li>
+      </ul>
+
+      <h2>How long</h2>
+      <ul>
+        <li>A book you remove is deleted after 30 days.</li>
+        <li>A library opened only by a key, and not used for a year, is deleted with its books.</li>
+        <li>Backups are kept for up to 28 days.</li>
+      </ul>
+
+      <h2>Cookies</h2>
+      <p>Breader uses cookies only to keep your library open and you logged in, and your browser’s storage to keep your books and key. Nothing tracks you across sites.</p>
+
+      <h2>Deleting your data</h2>
+      <p>Remove books from My books at any time. To delete your account or a library and everything in it, email <a href="mailto:magicalfizz@gmail.com">magicalfizz@gmail.com</a> from the address on the account (or with the key) and it will be done within 30 days.</p>
+
+      <h2>Changes</h2>
+      <p>If this page changes, the date at the top changes with it.</p>
+
+      <p>Questions: <a href="mailto:magicalfizz@gmail.com">magicalfizz@gmail.com</a></p>
+    </main>
+  </body>
+</html>
