@@ -1,0 +1,12 @@
+{
+  "name": "breader-workspace",
+  "private": true,
+  "workspaces": ["frontend", "shared", "server"],
+  "scripts": {
+    "web": "npm run dev -w frontend",
+    "stack": "docker compose -f infra/compose.dev.yml up -d --build",
+    "stack:down": "docker compose -f infra/compose.dev.yml down",
+    "test": "npm test -w server",
+    "typecheck": "npm run typecheck -w shared -w server && npm run build -w frontend"
+  }
+}

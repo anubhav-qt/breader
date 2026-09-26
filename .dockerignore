@@ -1,0 +1,10 @@
+# The server image only needs the workspace manifests, shared/ and server/.
+*
+!package.json
+!package-lock.json
+!frontend/package.json
+!shared/
+!server/
+**/node_modules
+server/dist
+server/.env
