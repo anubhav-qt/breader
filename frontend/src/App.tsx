@@ -27,6 +27,12 @@ function parseHash(): Route {
   return m ? { name: 'read', id: decodeURIComponent(m[1]) } : { name: 'library' };
 }
 
+/**
+ * Development only: the preview bar, the ?preview= and ?theme= links it writes, and the placeholder
+ * books on the shared shelf. Production shows only real books.
+ */
+const devTools = import.meta.env.DEV;
+
 function readParam<T extends string>(name: string, allowed: readonly T[], fallback: T): T {
   const v = new URLSearchParams(window.location.search).get(name) as T | null;
   return v && allowed.includes(v) ? v : fallback;
@@ -76,8 +82,8 @@ export default function App() {
   const [now] = useState(() => Date.now());
   const [route, setRoute] = useState<Route>(parseHash);
   const [tab, setTab] = useState<Tab>('mine');
-  const [preview, setPreview] = useState<PreviewMode>(() => readParam('preview', ['live', 'empty', 'one', 'few', 'many'] as const, 'live'));
-  const [theme, setTheme] = useState<AppTheme>(() => readParam('theme', ['auto', 'light', 'dark'] as const, 'auto'));
+  const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', ['live', 'empty', 'one', 'few', 'many'] as const, 'live') : 'live'));
+  const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
@@ -114,7 +120,10 @@ export default function App() {
   }, []);
 
   /* Data for the current view */
-  const previewSets = useMemo(() => ({ all: [...sampleRecords(now), ...placeholderRecords(now)], shelf: shelfRecords(now) }), [now]);
+  const previewSets = useMemo(
+    () => (devTools ? { all: [...sampleRecords(now), ...placeholderRecords(now)], shelf: shelfRecords(now) } : { all: [], shelf: [] }),
+    [now],
+  );
   const recordById = useMemo(() => {
     const m = new Map<string, BookRecord>();
     for (const r of [...previewSets.all, ...previewSets.shelf, ...lib.records]) m.set(r.id, r);
@@ -409,7 +418,7 @@ export default function App() {
       </AnimatePresence>
 
       <Toast toast={toast} onDone={dismissToast} />
-      {route.name === 'library' && (
+      {devTools && route.name === 'library' && (
         <PreviewBar mode={preview} onMode={setPreview} theme={theme} onTheme={setTheme} onReset={() => void lib.reset()} />
       )}
     </MotionConfig>

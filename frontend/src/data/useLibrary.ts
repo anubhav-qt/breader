@@ -297,7 +297,8 @@ const host: SyncHost = {
 
 async function start() {
   await withData(async () => {
-    if (!(await store.get('records'))) await store.set('records', sampleRecords(Date.now()));
+    // A new browser starts with the bundled samples in development, and empty on the live site.
+    if (!(await store.get('records'))) await store.set('records', import.meta.env.DEV ? sampleRecords(Date.now()) : []);
     stored = await loadStored();
   });
   show();
