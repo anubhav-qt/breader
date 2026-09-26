@@ -1,0 +1,220 @@
+.rd {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--r-bg);
+  color: var(--r-fg);
+  overflow: hidden;
+  transition: background-color 250ms linear, color 250ms linear;
+}
+/* Everything but the design switch: the page, and the controls layered over it. */
+.rd-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.rd-chrome { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.rd-chrome > * { pointer-events: auto; }
+.rd ::selection { background: var(--r-acc-soft); }
+
+/* Panel */
+.pnl { padding: 22px 20px 28px; }
+.pnl-h { font: 800 13.5px/1 var(--ui); color: var(--r-mu); margin-bottom: 18px; }
+.p-title { font-family: var(--read); font-weight: 700; font-size: 32px; line-height: 0.98; text-wrap: balance; }
+.p-auth { font: 700 13px/1.3 var(--ui); color: var(--r-mu); margin-top: 8px; }
+.p-bar { height: 3px; border-radius: 2px; background: var(--r-line); margin-top: 16px; overflow: hidden; }
+.p-bar i { display: block; height: 100%; background: var(--r-acc); border-radius: inherit; transition: width 400ms ease; }
+.p-meta { display: flex; justify-content: space-between; margin-top: 8px; font: 700 12.5px/1 var(--ui); color: var(--r-mu); }
+.p-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin-top: 18px; }
+.p-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border-radius: 9px;
+  text-align: left;
+  transition: background-color 140ms ease;
+}
+.p-item:hover { background: var(--r-fill); }
+.p-item-t { font-family: var(--read); font-size: 22px; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.p-item-s { flex: none; font: 700 11.5px/1 var(--ui); color: var(--r-mu); display: flex; }
+.p-item-s svg { width: 15px; height: 15px; color: var(--r-acc); }
+.p-item.is-done .p-item-t { color: var(--r-mu); }
+.p-item.is-now { background: var(--r-acc-soft); }
+.p-item.is-now .p-item-s { color: var(--r-acc); }
+.p-empty, .p-note { margin: 6px 0 0; font: 700 12.5px/1.5 var(--ui); color: var(--r-mu); }
+.p-remove { margin-top: 20px; color: var(--r-mu); }
+
+.ctl { margin-bottom: 18px; }
+.clbl { font: 700 12px/1 var(--ui); color: var(--r-mu); margin-bottom: 9px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border-radius: 11px; background: var(--r-fill); }
+.seg button {
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font: 700 13px/1 var(--ui);
+  color: var(--r-mu);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.seg button:hover:not(:disabled) { color: var(--r-fg); }
+.seg button.is-on { background: var(--r-bg); color: var(--r-fg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--r-line); }
+.seg button:disabled { opacity: 0.4; }
+.seg svg { width: 22px; height: 16px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sws { display: flex; gap: 10px; }
+.sw {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--r-bg);
+  color: var(--r-fg);
+  font-family: var(--read);
+  font-weight: 700;
+  font-size: 21px;
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.4);
+  transition: box-shadow 160ms ease;
+}
+.sw.t-auto { background: linear-gradient(135deg, #FFFFFF 50%, #000000 50%); }
+.sw.is-on { box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.4), 0 0 0 2px var(--r-bg), 0 0 0 4px var(--r-acc); }
+.tfs { display: grid; gap: 2px; padding: 3px; border-radius: 11px; background: var(--r-fill); }
+.tfs button {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 21px;
+  line-height: 1;
+  color: var(--r-fg);
+  transition: background-color 140ms ease;
+}
+.tfs button:hover { background: var(--r-bg); }
+.tfs button small { font: 700 11px/1 var(--ui); color: var(--r-mu); }
+.tfs button.is-on { background: var(--r-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--r-line); }
+.tfs button.is-on::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--r-acc); }
+.tfs button.is-on small { display: none; }
+.stp { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; padding: 3px; border-radius: 11px; background: var(--r-fill); }
+.stp button { height: 32px; border-radius: 8px; font: 800 14px/1 var(--ui); transition: background-color 140ms ease; }
+.stp button:hover:not(:disabled) { background: var(--r-bg); }
+.stp button:disabled { opacity: 0.3; }
+.stp-v { text-align: center; font: 800 15px/1 var(--ui); }
+.tgrow { display: flex; align-items: center; justify-content: space-between; }
+.tgrow .clbl { margin: 0; }
+.tg { position: relative; width: 44px; height: 26px; border-radius: 13px; background: var(--r-line); transition: background-color 160ms ease; }
+.tg::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 300ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.tg[aria-checked="true"] { background: var(--r-acc); }
+.tg[aria-checked="true"]::after { transform: translateX(18px); background: var(--r-bg); }
+
+/* Stage */
+.rd-stage { position: absolute; inset: 0; }
+
+/* Flow view */
+.fv { position: absolute; inset: 0; }
+.fv-rh, .fv-folio {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 700 12.5px/1 var(--ui);
+  color: var(--r-mu);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 80px;
+  pointer-events: none;
+}
+.fv-rh { top: 32px; }
+.fv-folio { bottom: 30px; font-variant-numeric: tabular-nums; }
+.fv.is-pages .fv-view {
+  position: absolute;
+  top: 76px;
+  bottom: 76px;
+  left: 50%;
+  width: var(--vw);
+  margin-left: calc(var(--vw) / -2);
+  overflow: hidden;
+}
+.fv.is-scroll .fv-view { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: thin; }
+.fv-flow {
+  font-family: var(--rf);
+  font-size: var(--rs);
+  line-height: var(--rl);
+  overflow-wrap: break-word;
+}
+.fv.is-pages .fv-flow { height: 100%; column-width: var(--cw); column-gap: var(--gap); column-fill: auto; }
+.fv.is-scroll .fv-flow { width: var(--cw); max-width: calc(100% - 48px); margin: 0 auto; padding: 88px 0 24px; }
+.fv.is-justified .fv-flow { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
+.fv-flow p { margin: 0; text-wrap: pretty; }
+.fv-flow img, .fv-flow svg { max-width: 100%; height: auto; display: block; margin: 0.8em auto; break-inside: avoid; }
+.fv.is-pages .fv-flow img, .fv.is-pages .fv-flow svg { max-height: calc(100dvh - 190px); object-fit: contain; }
+.fv-flow h1, .fv-flow h2, .fv-flow h3, .fv-flow h4 { font-weight: 700; line-height: 1.05; margin: 1.4em 0 0.6em; break-after: avoid; text-wrap: balance; }
+.fv-flow h1 { font-size: 1.9em; }
+.fv-flow h2 { font-size: 1.6em; }
+.fv-flow h3 { font-size: 1.3em; }
+.fv-flow h4 { font-size: 1.1em; }
+.fv-flow > :first-child { margin-top: 0; }
+.fv-flow a { color: var(--r-acc); text-decoration: none; border-bottom: 1px solid var(--r-acc-soft); }
+.fv-flow blockquote { margin: 1em 0 1em 1.4em; color: var(--r-mu); }
+.fv-flow pre, .fv-flow code { font-family: ui-monospace, Menlo, monospace; font-size: 0.8em; }
+.fv-flow pre { white-space: pre-wrap; background: var(--r-fill); padding: 0.8em 1em; border-radius: 8px; }
+.fv-flow hr { border: 0; border-top: 1px solid var(--r-line); margin: 1.5em 25%; }
+.fv-flow table { border-collapse: collapse; font-size: 0.9em; }
+.fv-flow td, .fv-flow th { border: 1px solid var(--r-line); padding: 0.2em 0.5em; }
+.fv-flow ul, .fv-flow ol { padding-left: 1.4em; }
+.fv-flow .ph-author { font: 700 13px/1.4 var(--ui); color: var(--r-mu); margin: -0.2em 0 1.4em; }
+.fv-flow .ph-note { font: 700 12.5px/1.6 var(--ui); color: var(--r-mu); margin-top: 2em; text-indent: 0 !important; }
+
+/* Book style: indents, centred chapter heads, a drop cap. Modern: spaced paragraphs, left heads. */
+.st-book .fv-flow p + p { text-indent: 1.5em; }
+.st-book .fv-flow h1, .st-book .fv-flow h2, .st-book .fv-flow h3 { text-align: center; }
+/* A placeholder's author line isn't prose, so it never takes the drop cap. */
+.st-book .fv-flow :is(h1, h2) + p:not(.ph-author)::first-letter { -webkit-initial-letter: 2; initial-letter: 2; font-weight: 700; margin-right: 0.08em; }
+.st-modern .fv-flow p { margin-bottom: 0.8em; }
+.st-modern .fv-flow h1, .st-modern .fv-flow h2 { font-size: 2em; }
+
+.fv-prev { width: var(--cw); max-width: calc(100% - 48px); margin: 0 auto; padding-top: 28px; }
+.fv-prev + .fv-flow { padding-top: 32px; }
+.fv-next { display: flex; justify-content: center; padding: 16px 24px 96px; font: 700 13px/1 var(--ui); color: var(--r-mu); }
+.rd .btn-quiet { background: var(--r-fill); color: var(--r-fg); }
+.rd .btn-ghost { color: var(--r-mu); }
+.rd .btn-ghost:hover { background: var(--r-fill); color: var(--r-fg); }
+
+/* Page-turn zones: the outer fifth of the page, and the margin beyond it. */
+.fv-zone {
+  position: absolute;
+  top: 76px;
+  bottom: 76px;
+  width: calc(50% - var(--vw) / 2 + var(--vw) * 0.2);
+  display: flex;
+  align-items: center;
+  z-index: 2;
+  cursor: pointer;
+}
+.fv-zone.is-prev { left: 0; justify-content: flex-start; padding-left: 18px; }
+.fv-zone.is-next { right: 0; justify-content: flex-end; padding-right: 18px; }
+.fv-zone span { font: 800 30px/1 var(--ui); color: var(--r-mu); opacity: 0; transition: opacity 160ms ease, transform 200ms cubic-bezier(0.2, 0.9, 0.25, 1); }
+.fv-zone.is-prev span { transform: translateX(6px); }
+.fv-zone.is-next span { transform: translateX(-6px); }
+.fv-zone:hover span { opacity: 0.8; transform: none; }
+
+/* PDF */
+.pdfv { position: absolute; inset: 0; }
+.pdf-page { position: absolute; inset: 48px; display: grid; place-items: center; }
+.pdf-page canvas, .pdf-slot canvas { filter: var(--r-pdf); box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); border-radius: 2px; background: #fff; }
+.pdf-scroll { position: absolute; inset: 0; overflow-y: auto; padding: 48px 0; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+.pdf-slot { flex: none; display: grid; place-items: center; }
+.pdfv .fv-zone { width: calc(50% - var(--vw, 600px) / 2 + 60px); }

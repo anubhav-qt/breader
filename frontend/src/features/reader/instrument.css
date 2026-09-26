@@ -1,0 +1,176 @@
+/*
+ * The reader's controls live in the page's margins: the line above the text names the chapter
+ * and turns into controls under the pointer, the line below is a dot-matrix of the whole book.
+ * Colour inside the reader comes only from the book: progress, the current chapter and selection.
+ */
+
+/* Book colour */
+.rd {
+  --book-mark: var(--book);
+  --book-soft: color-mix(in srgb, var(--book) 16%, transparent);
+}
+/* A colour too close to the page (graphite on Night, sand on Day) leans toward the ink for thin marks. */
+.rd.bk-low { --book-mark: color-mix(in oklab, var(--book) 45%, var(--r-fg)); }
+.rd ::selection { background: color-mix(in srgb, var(--book) 34%, transparent); }
+.rd .p-bar i { background: var(--book-mark); }
+.rd .p-item.is-now { background: var(--book-soft); }
+.rd .p-item.is-now .p-item-s { color: var(--r-fg); }
+.rd .p-item-s svg { color: var(--book-mark); }
+
+/* The margins carry their own readouts instead of the running head and page number. */
+.rd .fv-rh, .rd .fv-folio { display: none; }
+
+/* ------------------------------------------------------------------ */
+/* Page transitions (turn.ts). The page is snapshotted on its own; the controls sit above it, live. */
+
+.rd .rd-chrome { view-transition-name: chrome; }
+.rd :is(.fv-view, .pdf-page) { view-transition-name: page; background: var(--r-bg); }
+
+::view-transition { pointer-events: none; }
+:root[data-turn]::view-transition-old(root) { display: none; }
+:root[data-turn]::view-transition-new(root) { animation: none; }
+:root[data-turn]::view-transition-old(chrome) { display: none; }
+:root[data-turn]::view-transition-group(chrome),
+:root[data-turn]::view-transition-new(chrome) { animation: none; }
+:root[data-turn]::view-transition-group(page) { animation: none; }
+:root[data-turn]::view-transition-old(page),
+:root[data-turn]::view-transition-new(page) { mix-blend-mode: normal; animation: none; }
+
+/* A hard wipe in the direction of travel. */
+:root[data-turn="wipe"]::view-transition-new(page) { animation: vt-wipe-next var(--dur-snappy) var(--ease-snappy) both; }
+:root[data-turn="wipe"][data-dir="prev"]::view-transition-new(page) { animation-name: vt-wipe-prev; }
+
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-in { from { opacity: 0; } }
+@keyframes vt-wipe-next { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0); } }
+@keyframes vt-wipe-prev { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-turn]::view-transition-old(page) { z-index: 0; animation: vt-out 150ms ease both; }
+  :root[data-turn]::view-transition-new(page) { animation: vt-in 150ms ease both; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared parts */
+
+.lbl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 440px;
+  padding: 9px 12px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  background: var(--r-bg);
+  box-shadow: 0 0 0 1px var(--r-line), 0 14px 32px -16px var(--r-shadow);
+}
+.lbl b { font: 700 13px/1 var(--ui); color: var(--r-mu); }
+.lbl-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--read); font-size: 22px; line-height: 1; color: var(--r-fg); }
+.lbl em { font: 700 13px/1 var(--ui); font-style: normal; color: var(--r-mu); }
+
+.dg { display: inline-flex; }
+.dg-slot { display: inline-block; height: 1em; overflow: hidden; }
+.dg-strip { display: flex; flex-direction: column; }
+.dg-strip span { height: 1em; line-height: 1; }
+
+.typed { display: inline-block; animation: typed calc(var(--n) * 14ms + 80ms) steps(var(--n), end) both; }
+@keyframes typed { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+
+
+/* ------------------------------------------------------------------ */
+/* Controls in the margins */
+
+.i3-head, .i3-foot {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 9;
+  width: min(calc(var(--pw) + 48px), calc(100% - 32px));
+  height: 76px;
+  display: grid;
+  align-items: center;
+  font: 700 13px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-mu);
+  background: var(--r-bg);
+  transition: background-color 250ms linear;
+}
+.i3-head { top: 0; grid-template-columns: 1fr auto 1fr; gap: 12px; }
+.i3-foot { bottom: 0; grid-template-columns: 96px 1fr 96px; gap: 16px; }
+.i3-side {
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--r-fg);
+  text-transform: inherit;
+  letter-spacing: inherit;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 160ms ease, transform var(--dur-snappy) var(--ease-snappy), background-color 140ms ease;
+}
+.i3-head .i3-side:first-child { justify-self: start; }
+.i3-head .i3-side:last-child { justify-self: end; }
+.i3-head.is-on .i3-side { opacity: 1; transform: none; }
+.i3-side:hover, .i3-side.is-open { background: var(--r-fill); }
+.i3-mid {
+  min-width: 0;
+  max-width: min(560px, calc(var(--pw) - 220px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--r-mu);
+  text-transform: inherit;
+  letter-spacing: inherit;
+  transition: color 160ms ease, background-color 140ms ease;
+}
+.i3-mid .typed { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.i3-head.is-on .i3-mid { color: var(--r-fg); }
+.i3-mid:hover, .i3-mid.is-open { background: var(--r-fill); }
+.i3-caret { font-size: 10px; opacity: 0; transition: opacity 160ms ease, transform var(--dur-snappy) var(--ease-snappy); }
+.i3-head.is-on .i3-caret { opacity: 1; }
+.i3-mid.is-open .i3-caret { transform: rotate(180deg); }
+.i3-read { display: inline-flex; align-items: baseline; gap: 4px; font: 800 15px/1 var(--ui); color: var(--r-fg); }
+.i3-read small { font: 700 13px/1 var(--ui); color: var(--r-mu); }
+.i3-read.is-right { justify-self: end; }
+.i3-dots { position: relative; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.i3-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin: 0 1.5px;
+  border-radius: 1px;
+  background: var(--r-line);
+  transition: background-color 240ms ease, transform var(--dur-snappy) var(--ease-snappy);
+}
+.i3-dot.is-split { margin-left: 6.5px; }
+.i3-dot.is-read { background: var(--book-mark); }
+.i3-dot.is-now { background: var(--r-fg); }
+.i3-foot.is-on .i3-dot { transform: scale(1.2); }
+.i3-foot .i3-dot.is-hover { transform: scale(1.6); }
+.i3-dot.is-hover.is-next { background: var(--r-mu); }
+.i3-tip { position: absolute; bottom: calc(100% + 6px); transform: translateX(-50%); pointer-events: none; text-transform: none; letter-spacing: 0; }
+.i3-scrim { position: absolute; inset: 0; z-index: 7; }
+.i3-drop {
+  position: absolute;
+  top: 66px;
+  z-index: 8;
+  width: 380px;
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: var(--r-bg);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
+}
+.i3-drop.is-toc { left: 50%; margin-left: -190px; }
+.i3-drop.is-look { right: max(16px, calc(50% - var(--pw) / 2 - 24px)); width: 320px; }
+.rd .pnl-h { text-transform: uppercase; letter-spacing: 0.06em; }
+/* Contents status as squares: filled when read, half when you're in it, open when not yet. */
+.rd .p-item { justify-content: flex-start; gap: 12px; }
+.rd .p-item::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 1.5px; box-shadow: inset 0 0 0 1.5px var(--r-line); }
+.rd .p-item.is-done::before { background: var(--book-mark); box-shadow: none; }
+.rd .p-item.is-now::before { background: linear-gradient(to top, var(--book-mark) 50%, transparent 50%); box-shadow: inset 0 0 0 1.5px var(--book-mark); }
+.rd .p-item-s { margin-left: auto; }
+.rd .p-item-s svg { display: none; }
+
