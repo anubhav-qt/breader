@@ -1,5 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import { springs } from '../lib/springs';
 import { IconKey, IconPlus } from './icons';
 import { Logo } from './Logo';
@@ -61,23 +61,13 @@ export function Header({ tab, counts, canAdd, onTab, onAdd, onKey, account }: Pr
         ))}
       </nav>
       <div className="hdr-actions">
-        <AnimatePresence initial={false}>
-          {canAdd && (
-            <motion.button
-              key="add"
-              type="button"
-              className="btn btn-primary"
-              onClick={onAdd}
-              initial={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.14 } }}
-              transition={springs.snappy}
-              aria-label="Add book"
-            >
-              <IconPlus /> <span className="hdr-label">Add book</span>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        {/* Not animated: a fading copy would sit beside the empty library's own Add button,
+            and on phones that fade can stall and leave both on screen. */}
+        {canAdd && (
+          <button type="button" className="btn btn-primary" onClick={onAdd} aria-label="Add book">
+            <IconPlus /> <span className="hdr-label">Add book</span>
+          </button>
+        )}
         <button type="button" className="btn btn-ghost" onClick={onKey} title="Library key" aria-label="Library key">
           <IconKey /> <span className="hdr-label">Key</span>
         </button>

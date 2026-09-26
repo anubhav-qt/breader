@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import type { BookEdit } from '../../books/types';
 import { canRemove } from '../../data/library';
 import type { ShelfItem } from '../../data/useLibrary';
-import { springs } from '../../lib/springs';
 import { IconPlus } from '../../components/icons';
 import { EditPopover } from './EditPopover';
 import { Bento } from './layouts/Bento';
@@ -50,16 +49,9 @@ export function Gallery({ books, now, labelledBy, onOpen, onAdd, onEdit, onRemov
   if (!books.length) {
     return (
       <div {...panel} className="gallery is-empty">
-        <motion.button
-          type="button"
-          className="btn btn-primary gallery-add"
-          onClick={onAdd}
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={springs.smooth}
-        >
+        <button type="button" className="btn btn-primary gallery-add" onClick={onAdd}>
           <IconPlus /> Add a book
-        </motion.button>
+        </button>
       </div>
     );
   }
