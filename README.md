@@ -51,7 +51,7 @@ The design spec lives in [`design-spec.html`](design-spec.html) and the backend 
 
 ## Free, always
 
-Breader is and will stay free, with no ads and nothing locked away. If it earns a place in your reading, a way to buy us a coffee may appear here one day.
+Breader is and will stay free, with no ads and nothing locked away. If it earns a place in your reading, a way to buy me a white monster may appear here one day.
 
 Released under the [MIT License](LICENSE).
 
