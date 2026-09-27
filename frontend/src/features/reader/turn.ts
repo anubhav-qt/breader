@@ -47,11 +47,18 @@ type DocVT = Document & { startViewTransition?: (update: () => void | Promise<vo
 
 let running: VT | null = null;
 
+const WIPE = ['--wipe-l', '--wipe-r', '--wipe-lr', '--wipe-rr'];
+
 /**
  * Runs `update` (which must leave the DOM showing the new page) inside a view transition.
  * A new turn skips whatever is still moving, so turning quickly never waits.
+ *
+ * The whole screen is snapshotted and wiped, with the page's edges (`page`) as the wipe's start
+ * and end; the margins around it are plain page colour. Snapshotting the page on its own looked
+ * the same, but Safari captures its strip of columns, moved sideways to the current page, as
+ * blank, so on iPhones every turn flashed an empty page.
  */
-export function runTurn(style: TurnStyle, dir: 1 | -1, kind: TurnKind, update: () => void | Promise<void>) {
+export function runTurn(style: TurnStyle, dir: 1 | -1, kind: TurnKind, update: () => void | Promise<void>, page?: DOMRect) {
   const doc = document as DocVT;
   if (!swaps(style) || !doc.startViewTransition) {
     void update();
@@ -62,6 +69,10 @@ export function runTurn(style: TurnStyle, dir: 1 | -1, kind: TurnKind, update: (
   root.dataset.turn = style;
   root.dataset.dir = dir > 0 ? 'next' : 'prev';
   root.dataset.kind = kind;
+  const l = page ? Math.max(0, page.left) : 0;
+  const r = page ? Math.min(window.innerWidth, page.right) : window.innerWidth;
+  const w = window.innerWidth;
+  [l, r, w - l, w - r].forEach((v, i) => root.style.setProperty(WIPE[i], `${Math.round(v)}px`));
   const t = doc.startViewTransition(update);
   running = t;
   // The browser aborts a turn when the window resizes mid-way (a phone rotating); that's fine.
@@ -72,5 +83,6 @@ export function runTurn(style: TurnStyle, dir: 1 | -1, kind: TurnKind, update: (
     delete root.dataset.turn;
     delete root.dataset.dir;
     delete root.dataset.kind;
+    WIPE.forEach((k) => root.style.removeProperty(k));
   });
 }

@@ -339,7 +339,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       }
     };
     announce(dir, i !== section);
-    runTurn(turnStyle, dir, 'chapter', move);
+    runTurn(turnStyle, dir, 'chapter', move, viewRef.current?.getBoundingClientRect());
   };
 
   const turn = (dir: 1 | -1) => {
@@ -362,7 +362,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       report();
     };
     announce(dir, false);
-    runTurn(turnStyle, dir, 'page', move);
+    runTurn(turnStyle, dir, 'page', move, viewRef.current?.getBoundingClientRect());
   };
 
   useImperativeHandle(ref, () => ({

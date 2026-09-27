@@ -145,7 +145,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
       drawn.current = resolve;
       flushSync(() => setPage(p));
       window.setTimeout(resolve, 900);
-    }));
+    }), canvasRef.current?.getBoundingClientRect());
   }, [layout, total, page, turnStyle, onTurn]);
 
   useImperativeHandle(ref, () => ({

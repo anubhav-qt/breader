@@ -21,32 +21,32 @@
 .rd .fv-rh, .rd .fv-folio { display: none; }
 
 /* ------------------------------------------------------------------ */
-/* Page transitions (turn.ts). The page is snapshotted on its own; the controls sit above it, live. */
+/* Page transitions (turn.ts). The screen is snapshotted as a whole and wiped between the page's
+   edges; the controls sit above it, live. */
 
 .rd .rd-chrome { view-transition-name: chrome; }
-.rd :is(.fv-view, .pdf-page) { view-transition-name: page; background: var(--r-bg); }
 
 ::view-transition { pointer-events: none; }
-:root[data-turn]::view-transition-old(root) { display: none; }
-:root[data-turn]::view-transition-new(root) { animation: none; }
-:root[data-turn]::view-transition-old(chrome) { display: none; }
-:root[data-turn]::view-transition-group(chrome),
-:root[data-turn]::view-transition-new(chrome) { animation: none; }
-:root[data-turn]::view-transition-group(page) { animation: none; }
-:root[data-turn]::view-transition-old(page),
-:root[data-turn]::view-transition-new(page) { mix-blend-mode: normal; animation: none; }
+:root[data-turn]::view-transition-group(root) { animation: none; }
+:root[data-turn]::view-transition-old(root),
+:root[data-turn]::view-transition-new(root) { mix-blend-mode: normal; animation: none; }
+/* The controls' old picture stays under the new one, so they hold still if a browser can't draw
+   the new one mid-turn rather than blinking out. */
+:root[data-turn]::view-transition-group(chrome) { animation: none; }
+:root[data-turn]::view-transition-old(chrome),
+:root[data-turn]::view-transition-new(chrome) { mix-blend-mode: normal; animation: none; }
 
 /* A hard wipe in the direction of travel. */
-:root[data-turn="wipe"]::view-transition-new(page) { animation: vt-wipe-next var(--dur-snappy) var(--ease-snappy) both; }
-:root[data-turn="wipe"][data-dir="prev"]::view-transition-new(page) { animation-name: vt-wipe-prev; }
+:root[data-turn="wipe"]::view-transition-new(root) { animation: vt-wipe-next var(--dur-snappy) var(--ease-snappy) both; }
+:root[data-turn="wipe"][data-dir="prev"]::view-transition-new(root) { animation-name: vt-wipe-prev; }
 
 @keyframes vt-out { to { opacity: 0; } }
 @keyframes vt-in { from { opacity: 0; } }
-@keyframes vt-wipe-next { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0); } }
-@keyframes vt-wipe-prev { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+@keyframes vt-wipe-next { from { clip-path: inset(0 0 0 var(--wipe-r, 100%)); } to { clip-path: inset(0 0 0 var(--wipe-l, 0)); } }
+@keyframes vt-wipe-prev { from { clip-path: inset(0 var(--wipe-lr, 100%) 0 0); } to { clip-path: inset(0 var(--wipe-rr, 0) 0 0); } }
 @media (prefers-reduced-motion: reduce) {
-  :root[data-turn]::view-transition-old(page) { z-index: 0; animation: vt-out 150ms ease both; }
-  :root[data-turn]::view-transition-new(page) { animation: vt-in 150ms ease both; }
+  :root[data-turn]::view-transition-old(root) { animation: vt-out 150ms ease both; }
+  :root[data-turn]::view-transition-new(root) { animation: vt-in 150ms ease both; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -56,7 +56,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: 10px;
-  max-width: 440px;
+  max-width: min(440px, calc(100vw - 32px));
   padding: 9px 12px 8px;
   border-radius: 10px;
   white-space: nowrap;
@@ -111,7 +111,7 @@
 .i3-head .i3-side:first-child { justify-self: start; }
 .i3-head .i3-side:last-child { justify-self: end; }
 .i3-head.is-on .i3-side { opacity: 1; transform: none; }
-.i3-side:hover, .i3-side.is-open { background: var(--r-fill); }
+.i3-side.is-open { background: var(--r-fill); }
 .i3-mid {
   min-width: 0;
   max-width: min(560px, calc(var(--pw) - 220px));
@@ -127,7 +127,15 @@
 }
 .i3-mid .typed { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .i3-head.is-on .i3-mid { color: var(--r-fg); }
-.i3-mid:hover, .i3-mid.is-open { background: var(--r-fill); }
+.i3-mid.is-open { background: var(--r-fill); }
+@media (hover: hover) {
+  .i3-side:hover, .i3-mid:hover { background: var(--r-fill); }
+}
+/* Touch screens have no pointer to reveal the controls with, so they stay, quietly. */
+@media (hover: none) {
+  .i3-head .i3-side { opacity: 1; transform: none; color: var(--r-mu); }
+  .i3-head .i3-caret { opacity: 0.6; }
+}
 .i3-caret { font-size: 10px; opacity: 0; transition: opacity 160ms ease, transform var(--dur-snappy) var(--ease-snappy); }
 .i3-head.is-on .i3-caret { opacity: 1; }
 .i3-mid.is-open .i3-caret { transform: rotate(180deg); }
@@ -163,7 +171,7 @@
   position: absolute;
   top: 66px;
   z-index: 8;
-  width: 380px;
+  width: min(380px, calc(100% - 24px));
   max-height: calc(100% - 140px);
   overflow-y: auto;
   scrollbar-width: thin;
@@ -171,8 +179,8 @@
   border-radius: 14px;
   box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
 }
-.i3-drop.is-toc { left: 50%; margin-left: -190px; }
-.i3-drop.is-look { right: max(16px, calc(50% - var(--pw) / 2 - 24px)); width: 320px; }
+.i3-drop.is-toc { left: max(12px, calc(50% - 190px)); }
+.i3-drop.is-look { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(320px, calc(100% - 24px)); }
 .rd .pnl-h { text-transform: uppercase; letter-spacing: 0.06em; }
 /* Contents status as squares: filled when read, half when you're in it, open when not yet. */
 .rd .p-item { justify-content: flex-start; gap: 12px; }
