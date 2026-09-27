@@ -1,11 +1,14 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, type Chapter } from '../chapters';
 import { canFullscreen, useFullscreen } from '../fullscreen';
 import { AppearancePanel, ContentsPanel } from '../Panels';
-import { ChapterLabel, Digits, Typed } from './parts';
+import { useLoadState } from '../voice/speaker';
+import { FOCUS, GROW, PAUSE, PLAY, SHRINK } from './icons';
+import { ChapterLabel, Digits, DotIcon, Typed } from './parts';
+import { VoiceSheet } from './VoiceSheet';
 import type { ChromeProps, PanelName } from './types';
 
 const DROP_CLOSED = 'inset(-12% -24% 100% -24%)';
@@ -24,6 +27,27 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   const label = chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
   const toggle = (k: PanelName) => openPanel(panel === k ? null : k);
 
+  // Play reads aloud; held down (or right-clicked) it opens the voice sheet instead.
+  const load = useLoadState();
+  const loading = !!narration?.playing && load.key !== null;
+  const hold = useRef(0);
+  const held = useRef(false);
+  const press = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    held.current = false;
+    window.clearTimeout(hold.current);
+    hold.current = window.setTimeout(() => {
+      held.current = true;
+      navigator.vibrate?.(8);
+      openPanel('voice');
+    }, 450);
+  };
+  const letGo = () => window.clearTimeout(hold.current);
+  const tapPlay = () => {
+    if (held.current) { held.current = false; return; }
+    narration?.toggle();
+  };
+
   return (
     <>
       <div className={`i3-head${head || panel ? ' is-on' : ''}`} onPointerEnter={() => setHead(true)} onPointerLeave={() => setHead(false)}>
@@ -36,12 +60,18 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           {narration && (
             <button
               type="button"
-              className={`i3-side i3-listen${narration.playing ? ' is-playing' : ''}`}
-              onClick={narration.toggle}
-              aria-label={narration.playing ? 'Stop reading aloud' : 'Read aloud'}
+              className={`i3-side i3-listen${narration.playing ? ' is-playing' : ''}${panel === 'voice' ? ' is-open' : ''}`}
+              onClick={tapPlay}
+              onPointerDown={press}
+              onPointerUp={letGo}
+              onPointerLeave={letGo}
+              onPointerCancel={letGo}
+              onContextMenu={(e) => { e.preventDefault(); letGo(); openPanel('voice'); }}
+              aria-label={narration.playing ? 'Stop reading aloud' : 'Read aloud. Hold for voices'}
               aria-pressed={narration.playing}
+              aria-haspopup="dialog"
             >
-              <DotIcon rows={narration.playing ? PAUSE : PLAY} />
+              <DotIcon rows={narration.playing && !loading ? PAUSE : PLAY} lit={loading ? load.loaded / Math.max(1, load.total) : undefined} />
             </button>
           )}
           <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'}>Aa</button>
@@ -78,6 +108,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           >
             {panel === 'toc' ? (
               <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
+            ) : panel === 'voice' && narration ? (
+              <VoiceSheet playing={narration.playing} onStart={narration.start} onStop={narration.stop} />
             ) : (
               <AppearancePanel settings={settings} isPdf={isPdf} update={update} />
             )}
@@ -85,24 +117,6 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         )}
       </AnimatePresence>
     </>
-  );
-}
-
-/*
- * The head's icons, drawn in square dots on the same 7-row grid as Doto's letters, so they sit
- * with "Aa" as if typed in it.
- */
-const PLAY = ['x....', 'xx...', 'xxx..', 'xxxx.', 'xxx..', 'xx...', 'x....'];
-const PAUSE = ['xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx'];
-const FOCUS = ['..xxx..', '.x...x.', 'x.....x', 'x..x..x', 'x.....x', '.x...x.', '..xxx..'];
-const GROW = ['xx...xx', 'x.....x', '.......', '.......', '.......', 'x.....x', 'xx...xx'];
-const SHRINK = ['.x...x.', 'xx...xx', '.......', '.......', '.......', 'xx...xx', '.x...x.'];
-
-function DotIcon({ rows }: { rows: string[] }) {
-  return (
-    <svg className="i3-dots-icon" viewBox={`0 0 ${rows[0].length} ${rows.length}`} style={{ width: `${(rows[0].length / rows.length) * 0.8}em` }} aria-hidden="true">
-      {rows.flatMap((r, y) => [...r].map((c, x) => (c === 'x' ? <rect key={`${x}.${y}`} x={x + 0.1} y={y + 0.1} width={0.8} height={0.8} rx={0.1} /> : null)))}
-    </svg>
   );
 }
 

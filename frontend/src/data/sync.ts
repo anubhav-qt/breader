@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { normalizeKey } from '@breader/shared/key';
 import { SYNC } from '@breader/shared/limits';
-import type { AccountResponse, Book, LibraryResponse, Mutation, NewMutation, PullResponse, PushResponse, SyncedBook, UploadResponse } from '@breader/shared/protocol';
+import type { AccountResponse, Book, LibraryResponse, Mutation, NewMutation, PullResponse, PushResponse, SyncedBook, UploadRequest, UploadResponse } from '@breader/shared/protocol';
 import type { BookEdit, BookRecord, Format, ReadState } from '../books/types';
 import { api, ApiError, OfflineError, type ApiBase } from '../lib/api';
 import { report } from '../lib/report';
@@ -230,6 +230,12 @@ function enqueue(s: SyncState, m: NewMutation) {
     }
   } else if (m.type === 'settings.put') {
     s.outbox = s.outbox.filter((x) => x.type !== 'settings.put');
+  } else if (m.type === 'voice.put') {
+    const { id } = m.voice;
+    s.outbox = s.outbox.filter((x) => !(x.type === 'voice.put' && x.voice.id === id));
+  } else if (m.type === 'voice.use') {
+    const { voiceId } = m;
+    s.outbox = s.outbox.filter((x) => !(x.type === 'voice.use' && x.voiceId === voiceId));
   } else if (m.type === 'time.put') {
     const { bookId, day, device } = m;
     s.outbox = s.outbox.filter((x) => !(x.type === 'time.put' && x.bookId === bookId && x.day === day && x.device === device));
@@ -431,7 +437,7 @@ async function pullNow() {
 const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
 
 /** Hash, ask, upload straight to storage, confirm. Returns the server's file id. */
-async function uploadBlob(blob: Blob, mime: string, kind: 'book' | 'cover'): Promise<string> {
+async function uploadBlob(blob: Blob, mime: string, kind: UploadRequest['kind']): Promise<string> {
   const sha256 = hex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
   const ask = await signedIn(() => api.post<UploadResponse>('/v1/uploads', { sha256, size: blob.size, mime, kind }));
   if (ask.status === 'upload' && ask.upload) {
@@ -440,6 +446,17 @@ async function uploadBlob(blob: Blob, mime: string, kind: 'book' | 'cover'): Pro
     await signedIn(() => api.post(`/v1/uploads/${ask.fileId}/complete`));
   }
   return ask.fileId;
+}
+
+/** Whether this browser's library has a key, and so a place on the server for files. */
+export const hasKey = () => !!host?.snapshot().key;
+
+/** Stores one of this library's files that isn't a book (a voice, a voice's sample). Returns its id. */
+export async function storeFile(blob: Blob, mime: string, kind: 'voice' | 'sample'): Promise<string> {
+  if (!hasKey()) throw new Error('Uploading needs a library key. Make one in the library first.');
+  // A library that just got its key is registered by its first sync.
+  if (!(await read()).registered) await flush();
+  return uploadBlob(blob, mime, kind);
 }
 
 async function uploadAll() {

@@ -4,7 +4,7 @@ import type { Chapter } from '../chapters';
 import type { Loc } from '../FlowView';
 import type { ReaderSettings } from '../settings';
 
-export type PanelName = 'toc' | 'look';
+export type PanelName = 'toc' | 'look' | 'voice';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
@@ -33,8 +33,8 @@ export interface ChromeProps {
   body: RefObject<HTMLDivElement | null>;
   /** Going back to the library: anything that should leave first, leaves now. */
   closing: boolean;
-  /** Reading aloud, where the device has voices. */
-  narration: { playing: boolean; toggle: () => void } | null;
+  /** Reading aloud, where the browser can: a tap on play, and the voice sheet's own button. */
+  narration: { playing: boolean; toggle: () => void; start: () => void; stop: () => void } | null;
   /** Focus mode: everything but the text hides until the mouse moves or a tap mid-page. */
   focus: { on: boolean; toggle: () => void };
 }

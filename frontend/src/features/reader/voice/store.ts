@@ -5,7 +5,8 @@ import manifest from './files.json';
  * files come in parts (scripts/voices.mjs), each cached as it arrives, so a download that stops
  * picks up where it left off. A file is checked against its SHA-256 once, the first time it's whole.
  *
- * Works in the page and in the speech worker alike.
+ * Works in the page and in the speech worker alike. A page opened over plain http (a phone trying
+ * the dev server) has no Cache Storage or hashing: files are then kept in memory and not checked.
  */
 
 export type HostedName = keyof typeof manifest.files;
@@ -26,7 +27,18 @@ const CACHE = 'breader-voices-v1';
 const PART = manifest.partBytes;
 const files = manifest.files as Record<HostedName, { url?: string; path?: string; size: number; sha256: string }>;
 
-const open = () => caches.open(CACHE);
+interface Box {
+  match(key: string): Promise<Response | undefined>;
+  put(key: string, res: Response): Promise<void>;
+  delete(key: string): Promise<boolean>;
+}
+const memory = new Map<string, Response>();
+const inMemory: Box = {
+  match: async (k) => memory.get(k)?.clone(),
+  put: async (k, r) => { memory.set(k, r); },
+  delete: async (k) => memory.delete(k),
+};
+const open = (): Promise<Box> => (typeof caches === 'undefined' ? Promise.resolve(inMemory) : caches.open(CACHE));
 const verifiedKey = (sha: string) => `/voice-cache/verified/${sha}`;
 
 /** One of the files the app hosts (files.json). */
@@ -109,7 +121,7 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
     let at = 0;
     for (const p of parts) { out.set(p, at); at += p.byteLength; }
   }
-  if (w.sha256 && (fresh || !(await c.match(verifiedKey(w.sha256))))) {
+  if (w.sha256 && crypto.subtle && (fresh || !(await c.match(verifiedKey(w.sha256))))) {
     const got = hex(await crypto.subtle.digest('SHA-256', out));
     if (got !== w.sha256) {
       await forget(w);

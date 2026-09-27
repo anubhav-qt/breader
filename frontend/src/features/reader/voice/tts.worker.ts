@@ -127,8 +127,7 @@ async function say(m: Extract<Request, { type: 'say' }>): Promise<{ audio: Float
   return { audio: new Float32Array((out[v.session!.outputNames[0]] as Tensor).data as Float32Array), rate: cfg.audio.sample_rate };
 }
 
-scope.onmessage = async (e: MessageEvent<Request & { id: number }>) => {
-  const m = e.data;
+async function handle(m: Request & { id: number }) {
   try {
     if (m.type === 'start') await start(m.id, m.engine);
     else if (m.type === 'voice') await loadVoice(m.id, m);
@@ -141,4 +140,10 @@ scope.onmessage = async (e: MessageEvent<Request & { id: number }>) => {
   } catch (err) {
     post({ id: m.id, ok: false, error: err instanceof Error ? err.message : String(err), gpu: !!(err as { gpu?: boolean })?.gpu });
   }
+}
+
+// One request at a time: a model can't run twice at once.
+let queue = Promise.resolve();
+scope.onmessage = (e: MessageEvent<Request & { id: number }>) => {
+  queue = queue.then(() => handle(e.data));
 };

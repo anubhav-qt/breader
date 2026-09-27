@@ -53,6 +53,9 @@ export const BUILT_IN: Record<Mode, VoiceInfo[]> = {
   ],
 };
 
+/** What every voice's sample says: the app's name, between the two words it's mistaken for. */
+export const SAMPLE_LINE = 'breeder breader breeder';
+
 export const DEFAULT_VOICE: Record<Mode, string> = { normal: 'piper:kristin', immersive: 'kokoro:af_heart' };
 
 /** US for American English, UK for the rest of the English eSpeak knows. */

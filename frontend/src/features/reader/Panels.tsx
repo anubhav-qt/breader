@@ -3,7 +3,6 @@ import type { LoadedBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import type { Loc } from './FlowView';
-import { canNarrate, RATES, setVoicePrefs, useVoicePrefs, useVoices } from './narration';
 import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -93,7 +92,7 @@ interface LookProps {
   update: (fn: (s: ReaderSettings) => ReaderSettings) => void;
 }
 
-function Segmented<T extends string | number>({ label, value, options, onChange }: {
+export function Segmented<T extends string | number>({ label, value, options, onChange }: {
   label: string;
   value: T;
   options: Array<{ v: T; label: string; content?: React.ReactNode; disabled?: boolean }>;
@@ -216,35 +215,6 @@ export function AppearancePanel({ settings, isPdf, update }: LookProps) {
           </div>
         </>
       )}
-      {canNarrate && <VoiceRows />}
     </div>
-  );
-}
-
-/** The voice that reads aloud and how fast; the device's own voices, the reader's language first. */
-function VoiceRows() {
-  const { voice, rate } = useVoicePrefs();
-  const voices = useVoices();
-  const lang = (navigator.language || 'en').split('-')[0].toLowerCase();
-  const near = voices.filter((v) => v.lang.toLowerCase().startsWith(lang));
-  const far = voices.filter((v) => !v.lang.toLowerCase().startsWith(lang));
-  return (
-    <>
-      <div className="ctl">
-        <label className="clbl" htmlFor="rd-voice">Voice</label>
-        <div className="sel">
-          <select id="rd-voice" value={voice ?? ''} onChange={(e) => setVoicePrefs({ voice: e.target.value || null })}>
-            <option value="">Device default</option>
-            {near.map((v) => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
-            {far.length > 0 && (
-              <optgroup label="Other languages">
-                {far.map((v) => <option key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</option>)}
-              </optgroup>
-            )}
-          </select>
-        </div>
-      </div>
-      <Segmented label="Speed" value={rate} onChange={(v) => setVoicePrefs({ rate: v })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />
-    </>
   );
 }

@@ -9,6 +9,7 @@ import { useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
 import { canNarrate, useNarration } from './narration';
 import { PdfView } from './PdfView';
+import { refreshVoices } from './voice/list';
 import { useReaderSettings, type ThemeName } from './settings';
 import { useReadingClock } from './useReadingClock';
 import './reader.css';
@@ -56,7 +57,14 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const chapters = useMemo(() => chaptersOf(book), [book]);
   const current = chapterAt(chapters, loc);
 
-  const narration = useNarration(view, !closing, loc);
+  const openPanel = useCallback((p: PanelName | null) => {
+    setPanel(p);
+    if (p) setLastPanel(p);
+  }, []);
+
+  const narration = useNarration(view, !closing, loc, () => openPanel('voice'));
+  // Voices readers uploaded, so the one picked last time is known.
+  useEffect(() => { if (canNarrate) void refreshVoices(); }, []);
   useReadingClock(!closing, onReadTime, narration.busy);
   useFullscreenReading(!closing);
   const [focus, toggleFocus] = useFocusMode();
@@ -80,11 +88,6 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (moved > 0 && moved <= 1500) wordsRead.current += Math.round(moved);
     onSave({ pos: { section: l.section, block: l.block, offset: l.offset }, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current });
   }, [onSave, book.words]);
-
-  const openPanel = useCallback((p: PanelName | null) => {
-    setPanel(p);
-    if (p) setLastPanel(p);
-  }, []);
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
   const paged = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'pages';
@@ -171,7 +174,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     book, title, loc, chapters, current, settings, update, isPdf: book.kind === 'pdf',
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
-    narration: canNarrate ? { playing: narration.playing, toggle: narration.toggle } : null,
+    narration: canNarrate ? { playing: narration.playing, toggle: narration.toggle, start: narration.start, stop: narration.stop } : null,
     focus: { on: focus, toggle: toggleFocus },
   };
   const vars = {

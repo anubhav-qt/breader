@@ -115,6 +115,11 @@
 .i3-head .i3-ends { justify-self: end; display: flex; align-items: center; gap: 2px; }
 .i3-listen, .i3-icon { display: grid; place-items: center; padding: 9px; }
 .i3-dots-icon { height: 0.8em; fill: currentColor; }
+/* Play is also held down for the voice sheet: no text selection or callout under a long press. */
+.i3-listen { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* Loading a voice: play fills with the book's colour, dot by dot. */
+.i3-dots-icon.is-filling rect { opacity: 0.3; transition: opacity 200ms ease; }
+.i3-dots-icon rect.is-lit { opacity: 1; fill: var(--book-mark); }
 /* While it reads aloud the button stays in sight, and the sentence being read turns the book's colour. */
 .i3-head .i3-listen.is-playing { opacity: 1; transform: none; color: var(--book-mark); }
 .rd ::highlight(narrate) { color: var(--book-mark); }
@@ -187,6 +192,7 @@
 }
 .i3-drop.is-toc { left: max(12px, calc(50% - 190px)); }
 .i3-drop.is-look { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(320px, calc(100% - 24px)); }
+.i3-drop.is-voice { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(340px, calc(100% - 24px)); }
 .rd .pnl-h { text-transform: uppercase; letter-spacing: 0.06em; }
 /* Contents status as squares: filled when read, half when you're in it, open when not yet. */
 .rd .p-item { justify-content: flex-start; gap: 12px; }
@@ -210,3 +216,51 @@
 .rd.is-focus:not(.is-awake) .i3-foot { opacity: 0; pointer-events: none; }
 .rd.is-focus:not(.is-awake) .fv-zone span { opacity: 0; }
 .rd.is-focus.is-still, .rd.is-focus.is-still * { cursor: none !important; }
+
+
+/* ------------------------------------------------------------------ */
+/* The voice sheet (chrome/VoiceSheet.tsx): rows like the contents' chapters, squares for the pick. */
+
+.vs-about { margin: -6px 0 16px; }
+.vs-lists { margin-bottom: 18px; }
+.vs-sub { margin: 16px 0 6px 10px; }
+.vs-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
+.vs-row { display: flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 3px 0 10px; border-radius: 9px; transition: background-color 140ms ease; }
+.vs-row:hover { background: var(--r-fill); }
+.vs-row.is-on { background: var(--book-soft); }
+.vs-pick { flex: 1; min-width: 0; height: 38px; display: flex; align-items: center; gap: 12px; text-align: left; }
+.vs-pick::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 1.5px; box-shadow: inset 0 0 0 1.5px var(--r-line); }
+.vs-row.is-on .vs-pick::before { background: var(--book-mark); box-shadow: none; }
+.vs-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 22px; line-height: 1; }
+.vs-tag { margin-left: auto; padding-left: 8px; font: var(--ui-w) 11.5px/1 var(--ui); letter-spacing: 0.06em; color: var(--r-mu); }
+.vs-hear, .vs-remove { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; font-size: 12px; color: var(--r-mu); transition: color 140ms ease, background-color 140ms ease; }
+.vs-hear:hover, .vs-remove:hover { color: var(--r-fg); background: var(--r-bg); }
+.vs-hear.is-on { color: var(--book-mark); }
+.vs-remove.is-sure { width: auto; padding: 0 9px; font: var(--ui-w) 11.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-fg); background: var(--r-bg); box-shadow: 0 0 0 1px var(--r-line); }
+.vs-public { flex: none; margin: 0 4px; scale: 0.78; }
+.vs-foot { display: grid; gap: 12px; }
+.vs-err { margin: 0; color: var(--r-fg); }
+.vs-go {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 11px;
+  font: var(--ui-w-strong) 13px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--r-fg);
+  color: var(--r-bg);
+  transition: opacity 140ms ease, transform var(--dur-snappy) var(--ease-snappy);
+}
+.vs-go:hover { opacity: 0.86; }
+.vs-go:active { transform: scale(0.98); }
+.vs-prog { display: flex; align-items: center; gap: 12px; }
+.vs-prog-dots { flex: 1; display: flex; justify-content: space-between; }
+.vs-prog-dots i { width: 5px; height: 5px; border-radius: 1px; background: var(--r-line); transition: background-color 240ms ease; }
+.vs-prog-dots i.is-read { background: var(--book-mark); }
+.vs-prog-dots i.is-now { background: var(--r-fg); animation: vs-blink 1s steps(2, jump-none) infinite; }
+.vs-prog-n { font: var(--ui-w) 12px/1 var(--ui); color: var(--r-mu); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@keyframes vs-blink { 50% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .vs-prog-dots i.is-now { animation: none; } }

@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
-import { readLocal, writeLocal } from '../../lib/store';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Loc, ViewHandle } from './FlowView';
+import { hasGpu, type VoiceInfo } from './voice/catalog';
+import { heardWords } from './voice/list';
+import { askFirst, setVoicePrefs, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import { failed, missing, play, prepare, synth, unlock, type Clip, type Playing } from './voice/speaker';
 
 /*
- * Reading aloud with the device's own voices (the Web Speech API): from the top of the page on
- * screen, a sentence at a time. The sentence being read is lit in the book's colour, and pages and
- * chapters turn as the voice reaches them. Turn the page or jump to a chapter while it reads, and it
- * carries on from there.
+ * Reading aloud with voices that run on this device (voice/): from the top of the page on screen,
+ * a sentence at a time, the next two made while one plays. The sentence being read is lit in the
+ * book's colour, and pages and chapters turn as the voice reaches them. Turn the page or jump to a
+ * chapter while it reads, and it carries on from there.
  *
  * Each view (FlowView, PdfView) says what its text is and keeps the sentence being read on screen
  * (ViewHandle.listen); this file does the speaking.
@@ -27,10 +30,11 @@ export interface Listen {
   /** Its sentences from the top of the page on screen to its end. */
   from: () => Promise<Sentence[]>;
   /**
-   * Keeps a sentence on screen as it's read, `at` characters in: lights it, and turns the page (or
-   * scrolls) when the voice reaches the next one. False when the reader has gone somewhere else.
+   * Keeps a sentence on screen as it's read, `at` characters in: lights it (up to `at` as said),
+   * and turns the page (or scrolls) when the voice reaches the next one. `centre` keeps a scrolled
+   * page's sentence near the middle of the screen. False when the reader has gone somewhere else.
    */
-  show: (s: Sentence, at: number) => boolean;
+  show: (s: Sentence, at: number, centre?: boolean) => boolean;
   /** Whether that spot is on the page on screen. */
   onScreen: (s: Sentence, at: number) => boolean;
   clear: () => void;
@@ -38,11 +42,11 @@ export interface Listen {
   next: () => boolean;
 }
 
-export const canNarrate = typeof window !== 'undefined' && 'speechSynthesis' in window;
+export const canNarrate = typeof window !== 'undefined' && 'AudioContext' in window && typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined';
 
 /* Sentences */
 
-/** Voices stumble on very long utterances, and Chrome cuts some off after about fifteen seconds. */
+/** Long sentences wait longer for their sound, and Kokoro reads at most 510 sounds at once. */
 const LONGEST = 220;
 const ABBREV = /(?:^|\s)(?:mr|mrs|ms|dr|st|jr|sr|vs|etc|e\.g|i\.e|no|p|pp|vol|ch|fig)\.$/i;
 const SAYABLE = /[\p{L}\p{N}]/u;
@@ -76,119 +80,86 @@ export function sentencesIn(text: string, from: number): Array<[number, number]>
   return out;
 }
 
-/* The lit sentence, drawn with the CSS Custom Highlight API so the book's markup isn't touched. */
+/*
+ * The lit sentence, drawn with the CSS Custom Highlight API so the book's markup isn't touched: the
+ * sentence, and the part of it already said (Immersive colours them apart).
+ */
 
 const HIGHLIGHT = 'narrate';
+const SAID = 'narrate-said';
 type Highlights = { set: (name: string, h: unknown) => void; delete: (name: string) => void };
 const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
 
-export function light(range: Range | null) {
+export function light(range: Range | null, said: Range | null = null) {
   if (!highlights) return;
-  if (!range) { highlights.delete(HIGHLIGHT); return; }
-  const H = (globalThis as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+  if (!range) { highlights.delete(HIGHLIGHT); highlights.delete(SAID); return; }
+  const H = (globalThis as unknown as { Highlight: new (...r: Range[]) => { priority: number } }).Highlight;
   highlights.set(HIGHLIGHT, new H(range));
+  if (!said) { highlights.delete(SAID); return; }
+  const h = new H(said);
+  h.priority = 1;
+  highlights.set(SAID, h);
 }
 
-/* Voice and speed, kept on this device: every device has its own voices. */
+/* Timing */
 
-export interface VoicePrefs {
-  /** A voiceURI, or null for the device's default. */
-  voice: string | null;
-  rate: number;
+const WORDY = /[\p{L}\p{N}]/u;
+
+/**
+ * Where each word ends in a sentence, and how far through its sound the voice starts it. The
+ * engines don't say, so it's guessed from the letters: a space is quicker than a letter, and
+ * commas and full stops are pauses.
+ */
+function wordMarks(text: string) {
+  const marks: Array<{ at: number; f: number }> = [];
+  let total = 0;
+  let open: { start: number; f: number } | null = null;
+  for (let i = 0; i <= text.length; i++) {
+    const c = text[i] ?? ' ';
+    const word = WORDY.test(c) || (!!open && /['\u2019-]/.test(c) && WORDY.test(text[i + 1] ?? ''));
+    if (word && !open) open = { start: i, f: total };
+    if (!word && open) { marks.push({ at: i, f: open.f }); open = null; }
+    total += word ? 1 : /\s/.test(c) ? 0.6 : /[,;:]/.test(c) ? 4 : /[.!?\u2026]/.test(c) ? 6 : /[\u2013\u2014]/.test(c) ? 3 : 0.3;
+  }
+  for (const m of marks) m.f /= total || 1;
+  return marks;
 }
 
-const KEY = 'breader.voice.v1';
-export const RATES = [0.8, 1, 1.25, 1.5, 2];
-
-let prefs: VoicePrefs = { voice: null, rate: 1, ...readLocal<Partial<VoicePrefs>>(KEY, {}) };
-const prefSubs = new Set<() => void>();
-const subscribePrefs = (fn: () => void) => {
-  prefSubs.add(fn);
-  return () => { prefSubs.delete(fn); };
-};
-
-export function setVoicePrefs(patch: Partial<VoicePrefs>) {
-  prefs = { ...prefs, ...patch };
-  writeLocal(KEY, prefs);
-  prefSubs.forEach((s) => s());
-}
-
-export const useVoicePrefs = () => useSyncExternalStore(subscribePrefs, () => prefs);
-
-let voices: SpeechSynthesisVoice[] = canNarrate ? speechSynthesis.getVoices() : [];
-const voiceSubs = new Set<() => void>();
-if (canNarrate) {
-  speechSynthesis.addEventListener?.('voiceschanged', () => {
-    voices = speechSynthesis.getVoices();
-    voiceSubs.forEach((s) => s());
-  });
-}
-const subscribeVoices = (fn: () => void) => {
-  voiceSubs.add(fn);
-  return () => { voiceSubs.delete(fn); };
-};
-/** The device's voices; some browsers only list them a moment after the page loads. */
-export const useVoices = () => useSyncExternalStore(subscribeVoices, () => voices);
-
-/* Speaking */
-
-type Said = 'done' | 'cut' | 'failed';
-
-/** Kept here as well as in the queue: Chrome can drop an utterance's events once it's collected. */
-let speaking: SpeechSynthesisUtterance | null = null;
-
-function say(text: string, onWord: (at: number) => void): Promise<Said> {
-  return new Promise((resolve) => {
-    const u = new SpeechSynthesisUtterance(text);
-    const voice = prefs.voice ? voices.find((v) => v.voiceURI === prefs.voice) : undefined;
-    if (voice) { u.voice = voice; u.lang = voice.lang; }
-    u.rate = prefs.rate;
-    let settled = false;
-    const end = (how: Said) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(guard);
-      if (speaking === u) speaking = null;
-      resolve(how);
-    };
-    // Some engines never say they've finished; don't wait on them forever.
-    const guard = window.setTimeout(() => end('done'), 8_000 + (text.length * 150) / prefs.rate);
-    u.onend = () => end('done');
-    u.onerror = (e) => end(e.error === 'interrupted' || e.error === 'canceled' ? 'cut' : 'failed');
-    u.onboundary = (e) => { if (e.name === 'word') onWord(e.charIndex); };
-    speaking = u;
-    speechSynthesis.speak(u);
-  });
-}
+const wordsIn = (text: string) => text.match(/[\p{L}\p{N}]+/gu)?.length ?? 0;
 
 const pause = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 /**
  * Reads the book on screen aloud. `loc` is the reader's place, so a page turned or a chapter picked
- * by hand while it reads moves the voice there too.
+ * by hand while it reads moves the voice there too. `openSheet` shows the voice sheet: for a first
+ * go at Immersive, a download to agree to, or something gone wrong.
  */
-export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null) {
+export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void) {
   const [playing, setPlaying] = useState(false);
   const run = useRef(0);
   /** The sentence being said and how far in, for following the reader's own turns. */
   const spot = useRef<{ s: Sentence; at: number } | null>(null);
   /** The last sentence said, to carry on from after a pause when it's still on screen. */
   const last = useRef<Sentence | null>(null);
-  /** Why speech was cut short: the reader moved, or changed the voice or speed. */
-  const cutFor = useRef<'moved' | 'prefs' | null>(null);
+  const player = useRef<Playing | null>(null);
+  /** Stops the sentence being said or waited for, so the loop looks again. */
+  const cut = useRef<((why: 'moved' | 'prefs') => void) | null>(null);
 
   const listen = () => view.current?.listen;
 
   const stop = useCallback(() => {
     run.current++;
     spot.current = null;
-    if (canNarrate) speechSynthesis.cancel();
+    player.current?.stop();
+    player.current = null;
+    cut.current = null;
     view.current?.listen?.clear();
     setPlaying(false);
   }, [view]);
 
   const loop = async (gen: number) => {
     const live = () => run.current === gen;
+    const centre = () => voicePrefs().mode === 'immersive';
     const fresh = async () => {
       const list = (await listen()?.from()) ?? [];
       // After a pause, pick up at the sentence it stopped in if that's still on the page.
@@ -197,10 +168,48 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       last.current = null;
       return { list, i: Math.max(0, i) };
     };
+
+    // Cast, or TypeScript reads it as always null inside the loop.
+    let voice = null as VoiceInfo | null;
+    let rate = 1;
+    /** Sound for sentences, made ahead, by where they start. */
+    let clips = new Map<string, Promise<Clip>>();
+    const clipOf = (s: Sentence) => {
+      const k = `${s.section}.${s.block}.${s.start}`;
+      let c = clips.get(k);
+      if (!c) {
+        c = synth(voice!, s.text, rate);
+        c.catch(() => {});
+        clips.set(k, c);
+      }
+      return c;
+    };
+
     let { list, i } = await fresh();
     let placed = true;
     let failures = 0;
     while (live()) {
+      // A new voice or speed reads from here on.
+      const p = voicePrefs();
+      const want = voiceFor(p.mode);
+      if (want.key !== voice?.key || p.rate !== rate) {
+        clips = new Map();
+        rate = p.rate;
+        if (want.key !== voice?.key) {
+          const first = !voice;
+          voice = null;
+          if (want.engine === 'kokoro' && !hasGpu()) { openSheet(); break; }
+          if (!first && (await missing(want)).bytes > 0 && askFirst()) { openSheet(); break; }
+          try {
+            await prepare(want);
+          } catch {
+            if (live()) openSheet();
+            break;
+          }
+          if (!live()) return;
+          voice = want;
+        }
+      }
       const l = listen();
       if (!l) break;
       if (i >= list.length) {
@@ -211,57 +220,114 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         while (live() && listen()?.at() === was && waited < 4_000) { await pause(50); waited += 50; }
         if (!live()) return;
         ({ list, i } = await fresh());
+        clips = new Map();
         placed = true;
         continue;
       }
       const s = list[i];
-      if (!l.show(s, 0) && !placed) {
+      if (!l.show(s, 0, centre()) && !placed) {
         ({ list, i } = await fresh());
         placed = true;
         continue;
       }
       placed = false;
       spot.current = { s, at: 0 };
-      cutFor.current = null;
-      const how = await say(s.text, (at) => {
-        spot.current = { s, at };
-        listen()?.show(s, at);
+      for (const n of list.slice(i + 1, i + 3)) clipOf(n);
+
+      let why: 'moved' | 'prefs' | null = null;
+      const interrupted = new Promise<null>((resolve) => {
+        cut.current = (w) => {
+          why = w;
+          player.current?.stop();
+          resolve(null);
+        };
       });
-      spot.current = null;
+      let clip: Clip | null = null;
+      try {
+        clip = await Promise.race([clipOf(s), interrupted]);
+      } catch (e) {
+        console.warn('A sentence couldn’t be read aloud:', e);
+      }
       if (!live()) return;
-      if (how === 'cut') {
+      if (clip) {
+        const marks = wordMarks(s.text);
+        let k = -1;
+        const now = play(clip, (f) => {
+          if (!live()) return;
+          let j = k;
+          while (j + 1 < marks.length && marks[j + 1].f <= f) j++;
+          if (j === k) return;
+          k = j;
+          spot.current = { s, at: marks[j].at };
+          listen()?.show(s, marks[j].at, centre());
+        });
+        player.current = now;
+        await Promise.race([now.done, interrupted]);
+        if (player.current === now) player.current = null;
+      }
+      cut.current = null;
+      if (!live()) return;
+      if (why) {
         await pause(80);
-        if (cutFor.current === 'moved') {
+        if (why === 'moved') {
           ({ list, i } = await fresh());
+          clips = new Map();
           placed = true;
         }
         // Otherwise the voice or speed changed: say this one again with it.
         continue;
       }
-      if (how === 'failed' && ++failures >= 3) break;
-      if (how === 'done') failures = 0;
+      if (!clip) {
+        if (++failures >= 3) {
+          failed('The voice couldn’t read this part of the book.');
+          openSheet();
+          break;
+        }
+      } else {
+        failures = 0;
+        // Past a hundred words in someone else's voice, the reader keeps it.
+        if (voice?.upload && !voice.upload.mine) heardWords(voice.upload.id, wordsIn(s.text));
+      }
       last.current = s;
       i++;
     }
     if (live()) stop();
   };
 
-  const play = () => {
+  /** Starts reading: from the voice sheet's button, or a tap on play that needs nothing first. */
+  const start = () => {
     if (!canNarrate || !listen()) return;
+    unlock();
+    if (voicePrefs().introduce) setVoicePrefs({ introduce: false });
     const gen = ++run.current;
-    if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
-    speechSynthesis.resume();
-    // Safari lets a page speak only from a tap; an empty line inside this one opens the way.
-    speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+    player.current?.stop();
     setPlaying(true);
     void loop(gen);
   };
 
-  const toggle = () => {
-    if (!playing) { play(); return; }
+  /** Stops, to carry on from this sentence next time. */
+  const halt = () => {
     const s = spot.current;
     stop();
     if (s) last.current = s.s;
+  };
+
+  /** The tap on play. */
+  const toggle = () => {
+    if (playing) { halt(); return; }
+    const p = voicePrefs();
+    if (p.mode === 'immersive' && (p.introduce || !hasGpu())) {
+      if (p.introduce) setVoicePrefs({ introduce: false });
+      openSheet();
+      return;
+    }
+    // Sound can only start in the tap itself.
+    unlock();
+    const v = voiceFor(p.mode);
+    void missing(v).then((m) => {
+      if (m.bytes > 0 && askFirst()) openSheet();
+      else start();
+    });
   };
 
   // A page turned or chapter picked by hand: carry on from the top of it.
@@ -269,19 +335,17 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     const sp = spot.current;
     const l = listen();
     if (!playing || !sp || !l || l.onScreen(sp.s, sp.at)) return;
-    cutFor.current = 'moved';
-    speechSynthesis.cancel();
+    cut.current?.('moved');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc]);
 
   // A new voice or speed takes over mid-sentence.
-  const current = useVoicePrefs();
+  const prefs = useVoicePrefs();
+  const picked = prefs.voice[prefs.mode];
   useEffect(() => {
-    if (!playing || !spot.current) return;
-    cutFor.current = 'prefs';
-    speechSynthesis.cancel();
+    if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current]);
+  }, [prefs.mode, picked, prefs.rate]);
 
   useEffect(() => {
     if (!active) stop();
@@ -292,5 +356,5 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   playingRef.current = playing;
   const busy = useCallback(() => playingRef.current, []);
 
-  return { playing, toggle, busy };
+  return { playing, toggle, start, stop: halt, busy };
 }

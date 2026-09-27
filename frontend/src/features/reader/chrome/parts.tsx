@@ -39,3 +39,17 @@ export function ChapterLabel({ chapters, i, f }: { chapters: Chapter[]; i: numbe
     </span>
   );
 }
+
+/** `lit` fills the icon with the book's colour from the left, as far as that fraction: loading. */
+export function DotIcon({ rows, lit }: { rows: string[]; lit?: number }) {
+  const w = rows[0].length;
+  const cells = rows.flatMap((r, y) => [...r].map((c, x) => (c === 'x' ? { x, y } : null))).filter((c) => !!c);
+  // Column by column, so the fill travels left to right.
+  const order = [...cells].sort((a, b) => a.x - b.x || a.y - b.y);
+  const on = lit === undefined ? -1 : Math.round(lit * cells.length);
+  return (
+    <svg className={`i3-dots-icon${lit !== undefined ? ' is-filling' : ''}`} viewBox={`0 0 ${w} ${rows.length}`} style={{ width: `${(w / rows.length) * 0.8}em` }} aria-hidden="true">
+      {cells.map((c) => <rect key={`${c.x}.${c.y}`} className={order.indexOf(c) < on ? 'is-lit' : undefined} x={c.x + 0.1} y={c.y + 0.1} width={0.8} height={0.8} rx={0.1} />)}
+    </svg>
+  );
+}

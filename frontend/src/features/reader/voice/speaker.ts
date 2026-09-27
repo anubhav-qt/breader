@@ -32,6 +32,8 @@ const setLoad = (s: Partial<LoadState>) => {
   loadState = { ...loadState, ...s };
   loadSubs.forEach((f) => f());
 };
+/** Reading aloud stopped over something other than loading: the voice sheet says what. */
+export const failed = (error: string) => setLoad({ key: null, error, gpu: false });
 export const useLoadState = () => useSyncExternalStore(
   (f) => { loadSubs.add(f); return () => { loadSubs.delete(f); }; },
   () => loadState,
@@ -171,6 +173,11 @@ export function unlock() {
   if (session) session.type = 'playback';
   ctx ??= new AudioContext();
   if (ctx.state !== 'running') void ctx.resume();
+  // Older iPhones only open the way for sound actually started in the tap: a silent moment.
+  const src = ctx.createBufferSource();
+  src.buffer = ctx.createBuffer(1, 1, 22_050);
+  src.connect(ctx.destination);
+  src.start();
 }
 
 /** How loud the voice is right now, 0 to 1, for things that move with it. */
@@ -225,6 +232,7 @@ export function play(clip: Clip, onTime: (f: number) => void): Playing {
     stop: () => {
       if (stopped) return;
       stopped = true;
+      cancelAnimationFrame(raf);
       try { src.stop(); } catch { /* not started */ }
     },
   };

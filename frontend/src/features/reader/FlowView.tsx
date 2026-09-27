@@ -396,20 +396,20 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       });
       return out;
     },
-    show: (sn, at) => {
+    show: (sn, at, centre) => {
       if (sn.section !== section) return false;
-      if (at === 0) {
-        const el = blocks.current[sn.block];
-        light(el ? rangeOf(el, sn.start, sn.end) : null);
-      }
+      const el = blocks.current[sn.block];
+      light(el ? rangeOf(el, sn.start, sn.end) : null, el && at > 0 ? rangeOf(el, sn.start, sn.start + at) : null);
       const place = placeOf(sn.block, sn.start + at);
-      if (place === 'next') {
-        if (pagesMode) turn(1);
-        else {
-          const v = viewRef.current!;
-          const r = charRect(blocks.current[sn.block], sn.start + at);
-          if (r) v.scrollBy({ top: r.top - v.getBoundingClientRect().top - 88, behavior: 'smooth' });
-        }
+      if (pagesMode) {
+        if (place === 'next') turn(1);
+      } else if (place === 'next' || (centre && at === 0 && place === 'here')) {
+        // Scrolled: bring the words near the top, or in Immersive, the sentence to the middle.
+        const v = viewRef.current!;
+        const r = charRect(blocks.current[sn.block], sn.start + at);
+        const box = v.getBoundingClientRect();
+        const top = r && r.top - box.top - (centre ? box.height * 0.38 : 88);
+        if (top && Math.abs(top) > (centre ? box.height * 0.12 : 0)) v.scrollBy({ top, behavior: 'smooth' });
       }
       return place !== 'away';
     },
