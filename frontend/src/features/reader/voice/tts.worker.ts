@@ -26,7 +26,9 @@ export type Request =
   | { type: 'start'; engine: 'piper' | 'kokoro' }
   /** Loads a voice's files: Piper's model and settings, or a Kokoro pack (and the model, once). */
   | { type: 'voice'; key: string; model?: Want; config?: Want; pack?: Want; british?: boolean }
-  | { type: 'say'; key: string; text: string; speed: number };
+  | { type: 'say'; key: string; text: string; speed: number }
+  /** Lets go of a voice: one tried out before it was uploaded. */
+  | { type: 'forget'; key: string };
 
 export type Reply =
   | { id: number; ok: true; audio?: Float32Array; rate?: number }
@@ -131,7 +133,10 @@ async function handle(m: Request & { id: number }) {
   try {
     if (m.type === 'start') await start(m.id, m.engine);
     else if (m.type === 'voice') await loadVoice(m.id, m);
-    else {
+    else if (m.type === 'forget') {
+      await voices.get(m.key)?.session?.release();
+      voices.delete(m.key);
+    } else {
       const { audio, rate } = await say(m);
       post({ id: m.id, ok: true, audio, rate }, [audio.buffer]);
       return;

@@ -132,6 +132,12 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
   return out;
 }
 
+/** Keeps a file this device already holds, one it just uploaded, so it needn't come back down. */
+export async function keep(w: Want, bytes: Uint8Array) {
+  const c = await open();
+  await c.put(w.keys[0], new Response(bytes as Uint8Array<ArrayBuffer>, { headers: { 'content-type': 'application/octet-stream' } }));
+}
+
 export async function forget(w: Want) {
   const c = await open();
   await Promise.all(w.keys.map((k) => c.delete(k)));

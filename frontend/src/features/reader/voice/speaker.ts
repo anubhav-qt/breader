@@ -32,8 +32,8 @@ const setLoad = (s: Partial<LoadState>) => {
   loadState = { ...loadState, ...s };
   loadSubs.forEach((f) => f());
 };
-/** Reading aloud stopped over something other than loading: the voice sheet says what. */
-export const failed = (error: string) => setLoad({ key: null, error, gpu: false });
+/** Reading aloud stopped over something other than loading: the voice sheet says what. Null clears it. */
+export const failed = (error: string | null) => setLoad({ key: null, error, gpu: false });
 export const useLoadState = () => useSyncExternalStore(
   (f) => { loadSubs.add(f); return () => { loadSubs.delete(f); }; },
   () => loadState,
@@ -157,6 +157,14 @@ export async function synth(v: VoiceInfo, text: string, speed: number): Promise<
   await prepare(v);
   const res = await runner(v.engine).call({ type: 'say', key: v.key, text, speed });
   return { audio: res.audio!, rate: res.rate! };
+}
+
+/** Unloads a voice from its engine. */
+export async function drop(v: VoiceInfo) {
+  const r = runners[v.engine];
+  if (!r) return;
+  r.voices.delete(v.key);
+  await r.call({ type: 'forget', key: v.key }).catch(() => {});
 }
 
 /* Playing */

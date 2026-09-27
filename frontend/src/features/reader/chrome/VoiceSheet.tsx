@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { hasKey } from '../../../data/sync';
 import { api } from '../../../lib/api';
 import { Segmented } from '../Panels';
 import { BUILT_IN, engineOf, fromListed, hasGpu, type Mode, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
 import { RATES, setVoicePrefs, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
-import { CROSS, PAUSE, PLAY, STOP } from './icons';
+import { AddVoice } from './AddVoice';
+import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
 import { DotIcon } from './parts';
 
 /*
@@ -37,6 +39,7 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   const blocked = mode === 'immersive' && !hasGpu();
   const [bytes, setBytes] = useState<number | null>(null);
   const [hearing, setHearing] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => { void refreshVoices(); }, []);
   useEffect(() => stopSample, []);
@@ -64,6 +67,21 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
     }
   };
 
+  if (adding) {
+    return (
+      <AddVoice
+        mode={mode}
+        onBusy={() => { if (playing) onStop(); }}
+        onDone={(added) => {
+          setAdding(false);
+          if (!added) return;
+          setVoicePrefs({ voice: { ...prefs.voice, [added.mode]: added.key } });
+          if (added.mode !== mode) setMode(added.mode);
+        }}
+      />
+    );
+  }
+
   const others = listed.filter((v) => v.engine === engine && !v.mine).map(fromListed);
   const yours = listed.filter((v) => v.engine === engine && v.mine).map(fromListed);
   const row = (v: VoiceInfo, extra?: React.ReactNode) => (
@@ -86,12 +104,18 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
                 <div className="vs-list">{others.map((v) => row(v))}</div>
               </>
             )}
-            {yours.length > 0 && (
-              <>
-                <div className="clbl vs-sub">Yours</div>
-                <div className="vs-list">{yours.map((v) => row(v, <Own v={v} />))}</div>
-              </>
-            )}
+            <div className="clbl vs-sub">Yours</div>
+            <div className="vs-list">
+              {yours.map((v) => row(v, <Own v={v} />))}
+              {hasKey() ? (
+                <button type="button" className="vs-add" onClick={() => { stopSample(); setAdding(true); }}>
+                  <DotIcon rows={PLUS} />
+                  <span>Add a voice</span>
+                </button>
+              ) : (
+                <p className="p-note vs-sub-note">Once this library has a key, you can add voices of your own.</p>
+              )}
+            </div>
           </div>
           <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />
           <div className="vs-foot">
