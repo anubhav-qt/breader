@@ -7,9 +7,12 @@ import { failed, missing, play, prepare, synth, unlock, type Clip, type Playing 
 
 /*
  * Reading aloud with voices that run on this device (voice/): from the top of the page on screen,
- * a sentence at a time, the next two made while one plays. The sentence being read is lit in the
- * book's colour, and pages and chapters turn as the voice reaches them. Turn the page or jump to a
- * chapter while it reads, and it carries on from there.
+ * a sentence at a time, with sound made up to a minute ahead. The sentence being read is lit in
+ * the book's colour, and pages and chapters turn as the voice reaches them. Turn the page or jump
+ * to a chapter while it reads, and it carries on from there.
+ *
+ * The voice keeps its own place in the book. It reads on in another tab or with the phone locked,
+ * lighting nothing while the page can't be seen, and the page catches up to it when it's back.
  *
  * Each view (FlowView, PdfView) says what its text is and keeps the sentence being read on screen
  * (ViewHandle.listen); this file does the speaking.
@@ -38,11 +41,13 @@ export interface Listen {
   /** Whether that spot is on the page on screen. */
   onScreen: (s: Sentence, at: number) => boolean;
   clear: () => void;
-  /** On to the next chapter (a PDF: page); false at the end of the book. */
-  next: () => boolean;
+  /** All of a chapter's sentences (a PDF: a page's), without showing it; null past the end. */
+  section: (i: number) => Promise<Sentence[] | null>;
+  /** Takes the page to that spot: the voice read on while the page was out of sight. */
+  reach: (s: Sentence, at: number) => void;
 }
 
-export const canNarrate = typeof window !== 'undefined' && 'AudioContext' in window && typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined';
+export const canNarrate = typeof window !== 'undefined' && typeof Audio !== 'undefined' && typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined';
 
 /* Sentences */
 
@@ -129,21 +134,38 @@ const wordsIn = (text: string) => text.match(/[\p{L}\p{N}]+/gu)?.length ?? 0;
 
 const pause = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
+/** About a minute of reading: sound is made this far ahead, as a locked phone may make none. */
+const AHEAD = 900;
+
+/** Immersive keeps a scrolled page's sentence near the middle of the screen. */
+const centred = () => voicePrefs().mode === 'immersive';
+
+const keyOf = (s: Sentence) => `${s.section}.${s.block}.${s.start}`;
+const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && s.block === r.block && s.start <= r.start && r.start < s.end;
+
 /**
  * Reads the book on screen aloud. `loc` is the reader's place, so a page turned or a chapter picked
  * by hand while it reads moves the voice there too. `openSheet` shows the voice sheet: for a first
- * go at Immersive, a download to agree to, or something gone wrong.
+ * go at Immersive, a download to agree to, or something gone wrong. `about` names the book for the
+ * lock screen.
  */
-export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void) {
+export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }) {
   const [playing, setPlaying] = useState(false);
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
   const run = useRef(0);
   /** The sentence being said and how far in, for following the reader's own turns. */
   const spot = useRef<{ s: Sentence; at: number } | null>(null);
-  /** The last sentence said, to carry on from after a pause when it's still on screen. */
+  /** The last sentence said, to carry on from after a pause. */
   const last = useRef<Sentence | null>(null);
   const player = useRef<Playing | null>(null);
   /** Stops the sentence being said or waited for, so the loop looks again. */
   const cut = useRef<((why: 'moved' | 'prefs') => void) | null>(null);
+  /**
+   * The page is behind the voice: it read on while the page was hidden (another tab, a locked
+   * phone), or into the next chapter. The page catches up the next time it's seen.
+   */
+  const behind = useRef(false);
 
   const listen = () => view.current?.listen;
 
@@ -157,25 +179,36 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     setPlaying(false);
   }, [view]);
 
+  /** Brings the page to the voice, and lights where it is. */
+  const catchUp = async (s: Sentence, at: number) => {
+    const l = listen();
+    if (!l) return;
+    if (!l.show(s, at, centred())) {
+      l.reach(s, at);
+      for (let waited = 0; listen()?.at() !== s.section && waited < 4_000; waited += 50) await pause(50);
+      listen()?.show(s, at, centred());
+    }
+    behind.current = false;
+  };
+
   const loop = async (gen: number) => {
     const live = () => run.current === gen;
-    const centre = () => voicePrefs().mode === 'immersive';
     const fresh = async () => {
-      const list = (await listen()?.from()) ?? [];
-      // After a pause, pick up at the sentence it stopped in if that's still on the page.
+      const l = listen()!;
       const r = last.current;
-      const i = r ? list.findIndex((s) => s.section === r.section && s.block === r.block && s.start <= r.start && r.start < s.end) : -1;
       last.current = null;
+      // Behind the voice, the page on screen isn't where to carry on from.
+      const list = (r && behind.current ? await l.section(r.section) : await l.from()) ?? [];
+      const i = r ? list.findIndex(holds(r)) : -1;
       return { list, i: Math.max(0, i) };
     };
 
-    // Cast, or TypeScript reads it as always null inside the loop.
     let voice = null as VoiceInfo | null;
     let rate = 1;
     /** Sound for sentences, made ahead, by where they start. */
     let clips = new Map<string, Promise<Clip>>();
     const clipOf = (s: Sentence) => {
-      const k = `${s.section}.${s.block}.${s.start}`;
+      const k = keyOf(s);
       let c = clips.get(k);
       if (!c) {
         c = synth(voice!, s.text, rate);
@@ -186,7 +219,47 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     };
 
     let { list, i } = await fresh();
-    let placed = true;
+
+    /** Adds the next chapter with anything to say to the end of `target`; false at the end of the book. */
+    const growing = new Map<Sentence[], Promise<boolean>>();
+    const extend = (target: Sentence[]) => {
+      let p = growing.get(target);
+      if (!p) {
+        p = (async () => {
+          for (let sec = (target[target.length - 1]?.section ?? listen()?.at() ?? 0) + 1; ; sec++) {
+            const more = await listen()?.section(sec);
+            if (!more || !live()) return false;
+            if (more.length) { target.push(...more); return true; }
+          }
+        })();
+        growing.set(target, p);
+        void p.finally(() => growing.delete(target));
+      }
+      return p;
+    };
+
+    /** Makes sound for what's coming, two sentences at a time, up to AHEAD characters on. */
+    let making = 0;
+    const ahead = () => {
+      let chars = 0;
+      for (let j = i + 1; chars < AHEAD; j++) {
+        if (j >= list.length) {
+          const target = list;
+          void extend(target).then((more) => { if (more && live() && target === list) ahead(); });
+          return;
+        }
+        chars += list[j].text.length;
+        if (clips.has(keyOf(list[j]))) continue;
+        if (making >= 2) return;
+        making++;
+        const mine = clips;
+        void clipOf(list[j]).catch(() => {}).finally(() => {
+          making--;
+          if (live() && clips === mine) ahead();
+        });
+      }
+    };
+
     let failures = 0;
     while (live()) {
       // A new voice or speed reads from here on.
@@ -213,26 +286,15 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       const l = listen();
       if (!l) break;
       if (i >= list.length) {
-        const was = l.at();
-        if (!l.next()) break;
-        // The next chapter lands after its turn; wait for it.
-        let waited = 0;
-        while (live() && listen()?.at() === was && waited < 4_000) { await pause(50); waited += 50; }
+        if (!(await extend(list))) break;
         if (!live()) return;
-        ({ list, i } = await fresh());
-        clips = new Map();
-        placed = true;
         continue;
       }
       const s = list[i];
-      if (!l.show(s, 0, centre()) && !placed) {
-        ({ list, i } = await fresh());
-        placed = true;
-        continue;
-      }
-      placed = false;
       spot.current = { s, at: 0 };
-      for (const n of list.slice(i + 1, i + 3)) clipOf(n);
+      // Into the next chapter: the page follows as soon as it's seen.
+      if (s.section !== l.at()) behind.current = true;
+      ahead();
 
       let why: 'moved' | 'prefs' | null = null;
       const interrupted = new Promise<null>((resolve) => {
@@ -249,20 +311,38 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         console.warn('A sentence couldn’t be read aloud:', e);
       }
       if (!live()) return;
+      let how: 'ended' | 'stopped' | 'paused' | null = null;
       if (clip) {
         const marks = wordMarks(s.text);
-        let k = -1;
-        const now = play(clip, (f) => {
-          if (!live()) return;
-          let j = k;
-          while (j + 1 < marks.length && marks[j + 1].f <= f) j++;
-          if (j === k) return;
-          k = j;
-          spot.current = { s, at: marks[j].at };
-          listen()?.show(s, marks[j].at, centre());
-        });
+        const now = play(clip);
         player.current = now;
-        await Promise.race([now.done, interrupted]);
+        let shown = -2;
+        let catching = false;
+        let raf = 0;
+        // Frames only come while the page can be seen: nothing is lit in the background, and the
+        // first frame back finds the word the voice is on.
+        const tick = () => {
+          raf = requestAnimationFrame(tick);
+          if (document.hidden) return;
+          let j = Math.max(shown, -1);
+          const f = now.time();
+          while (j + 1 < marks.length && marks[j + 1].f <= f) j++;
+          const at = j >= 0 ? marks[j].at : 0;
+          spot.current = { s, at };
+          if (catching) return;
+          if (behind.current) {
+            catching = true;
+            shown = j;
+            void catchUp(s, at).finally(() => { catching = false; });
+            return;
+          }
+          if (j === shown) return;
+          shown = j;
+          listen()?.show(s, at, centred());
+        };
+        raf = requestAnimationFrame(tick);
+        how = await Promise.race([now.done, interrupted]);
+        cancelAnimationFrame(raf);
         if (player.current === now) player.current = null;
       }
       cut.current = null;
@@ -272,10 +352,15 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         if (why === 'moved') {
           ({ list, i } = await fresh());
           clips = new Map();
-          placed = true;
         }
         // Otherwise the voice or speed changed: say this one again with it.
         continue;
+      }
+      if (how === 'paused') {
+        // Paused from outside (a call, headphones out, the lock screen): carry on from here.
+        last.current = s;
+        stop();
+        return;
       }
       if (!clip) {
         if (++failures >= 3) {
@@ -294,9 +379,9 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (live()) stop();
   };
 
-  /** Starts reading: from the voice sheet's button, or a tap on play that needs nothing first. */
+  /** Starts reading: from the voice sheet's button, the lock screen, or a tap on play that needs nothing first. */
   const start = () => {
-    if (!canNarrate || !listen()) return;
+    if (!canNarrate || !listen() || playingRef.current) return;
     unlock();
     if (voicePrefs().introduce) setVoicePrefs({ introduce: false });
     const gen = ++run.current;
@@ -330,14 +415,33 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     });
   };
 
-  // A page turned or chapter picked by hand: carry on from the top of it.
+  // A page turned or chapter picked by hand: carry on from the top of it. Not while the page is
+  // behind the voice: that's the voice moving on, and the page follows it.
   useEffect(() => {
     const sp = spot.current;
     const l = listen();
-    if (!playing || !sp || !l || l.onScreen(sp.s, sp.at)) return;
+    if (!playing || !sp || !l || behind.current || l.onScreen(sp.s, sp.at)) return;
     cut.current?.('moved');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc]);
+
+  // Out of sight while it reads, the page falls behind. Paused out of sight, it shows where the
+  // voice stopped once it's back.
+  useEffect(() => {
+    const seen = () => {
+      if (document.visibilityState === 'hidden') {
+        if (playingRef.current) behind.current = true;
+        return;
+      }
+      const s = last.current;
+      if (playingRef.current || !behind.current || !s) return;
+      listen()?.reach(s, 0);
+      behind.current = false;
+    };
+    document.addEventListener('visibilitychange', seen);
+    return () => document.removeEventListener('visibilitychange', seen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A new voice or speed takes over mid-sentence.
   const prefs = useVoicePrefs();
@@ -347,13 +451,33 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.mode, picked, prefs.rate]);
 
+  // The lock screen's and headphones' play and pause.
+  const actions = useRef({ start, halt });
+  actions.current = { start, halt };
+  useEffect(() => {
+    const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
+    if (!ms || !active) return;
+    ms.setActionHandler('play', () => actions.current.start());
+    ms.setActionHandler('pause', () => actions.current.halt());
+    ms.setActionHandler('stop', () => actions.current.halt());
+    return () => {
+      for (const a of ['play', 'pause', 'stop'] as const) ms.setActionHandler(a, null);
+      ms.metadata = null;
+      ms.playbackState = 'none';
+    };
+  }, [active]);
+  useEffect(() => {
+    const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
+    if (!ms || !active) return;
+    ms.playbackState = playing ? 'playing' : 'paused';
+    if (playing) ms.metadata = new MediaMetadata({ title: about.title, artist: about.author ?? '', album: 'Breader' });
+  }, [active, playing, about.title, about.author]);
+
   useEffect(() => {
     if (!active) stop();
     return stop;
   }, [active, stop]);
 
-  const playingRef = useRef(playing);
-  playingRef.current = playing;
   const busy = useCallback(() => playingRef.current, []);
 
   return { playing, toggle, start, stop: halt, busy };

@@ -4,7 +4,7 @@ import type { RenderTask } from 'pdfjs-dist';
 import type { PdfBook } from '../../books/types';
 import { WORDS_PER_PDF_PAGE } from '../../books/pdf';
 import type { Loc, Start, TurnEvent, ViewHandle } from './FlowView';
-import { sentencesIn } from './narration';
+import { sentencesIn, type Sentence } from './narration';
 import { findPictures, keepPictures } from './pictures';
 import type { Layout } from './settings';
 import { runTurn, swaps, type TurnStyle } from './turn';
@@ -46,6 +46,16 @@ async function draw(book: PdfBook, index: number, canvas: HTMLCanvasElement, pic
     promise: task.promise.then(() => (found && pics ? keepPictures(found, canvas, pics) : undefined)),
     cancel: () => task.cancel(),
   };
+}
+
+/** A page's text as sentences to read aloud. */
+async function sentencesOn(book: PdfBook, page: number): Promise<Sentence[]> {
+  const content = await (await book.doc.getPage(page + 1)).getTextContent();
+  let text = '';
+  for (const it of content.items) if ('str' in it) text += it.str + (it.hasEOL ? '\n' : '');
+  // Words broken across lines join up again.
+  text = text.replace(/-\n(?=\p{Ll})/gu, '').replace(/\s+/g, ' ');
+  return sentencesIn(text, 0).map(([start, end]) => ({ section: page, block: 0, start, end, text: text.slice(start, end) }));
 }
 
 export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, layout, start, turnStyle, onLocation, onWidth, onTurn }, ref) {
@@ -177,22 +187,12 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
     // Read aloud a page at a time. The text sits in the drawing, so nothing lights up.
     listen: {
       at: () => page,
-      from: async () => {
-        const content = await (await book.doc.getPage(page + 1)).getTextContent();
-        let text = '';
-        for (const it of content.items) if ('str' in it) text += it.str + (it.hasEOL ? '\n' : '');
-        // Words broken across lines join up again.
-        text = text.replace(/-\n(?=\p{Ll})/gu, '').replace(/\s+/g, ' ');
-        return sentencesIn(text, 0).map(([start, end]) => ({ section: page, block: 0, start, end, text: text.slice(start, end) }));
-      },
+      from: () => sentencesOn(book, page),
       show: (sn) => sn.section === page,
       onScreen: (sn) => sn.section === page,
       clear: () => {},
-      next: () => {
-        if (page >= total - 1) return false;
-        goTo(page + 1);
-        return true;
-      },
+      section: async (i) => (i >= 0 && i < total ? sentencesOn(book, i) : null),
+      reach: (sn) => goTo(sn.section),
     },
   }), [book, goTo, layout, page, total]);
 

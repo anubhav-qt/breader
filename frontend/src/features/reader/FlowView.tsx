@@ -415,11 +415,19 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     },
     onScreen: (sn, at) => sn.section === section && placeOf(sn.block, sn.start + at) === 'here',
     clear: () => light(null),
-    next: () => {
-      if (section >= n - 1) return false;
-      goSection(section + 1, { kind: 'start' }, 1);
-      return true;
+    section: async (i) => {
+      const html = book.sections[i]?.html;
+      if (html === undefined) return null;
+      // Parsed apart from the page, so nothing in it loads: the same blocks the page would have.
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const out: Sentence[] = [];
+      collectBlocks(doc.body).forEach((el, b) => {
+        const text = el.textContent ?? '';
+        for (const [start, end] of sentencesIn(text, 0)) out.push({ section: i, block: b, start, end, text: text.slice(start, end) });
+      });
+      return out;
     },
+    reach: (sn, at) => goSection(sn.section, { kind: 'pos', block: sn.block, offset: sn.start + at }),
   };
 
   useImperativeHandle(ref, () => ({

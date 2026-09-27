@@ -62,7 +62,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (p) setLastPanel(p);
   }, []);
 
-  const narration = useNarration(view, !closing, loc, () => openPanel('voice'));
+  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author });
   // Voices readers uploaded, so the one picked last time is known.
   useEffect(() => { if (canNarrate) void refreshVoices(); }, []);
   useReadingClock(!closing, onReadTime, narration.busy);

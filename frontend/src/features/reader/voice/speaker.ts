@@ -6,7 +6,7 @@ import type { Reply, Request } from './tts.worker';
 
 /*
  * The page's side of speech: a worker per engine (tts.worker.ts), what's loading and how far it's
- * got, and playing what comes back through Web Audio.
+ * got, and playing what comes back.
  */
 
 export interface Clip {
@@ -169,79 +169,114 @@ export async function drop(v: VoiceInfo) {
 
 /* Playing */
 
-let ctx: AudioContext | null = null;
-let analyser: AnalyserNode | null = null;
+/*
+ * Through one <audio> element rather than Web Audio: phones keep a media element playing with the
+ * screen locked or the browser in the background, the lock screen's controls work it, and iPhones
+ * don't mute it with the silent switch.
+ */
+
+let element: HTMLAudioElement | null = null;
+const audio = () => {
+  if (!element) {
+    element = new Audio();
+    element.preload = 'auto';
+  }
+  return element;
+};
+
+/** 16-bit mono WAV. */
+export function wav(samples: Float32Array, rate: number): Blob {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const text = (at: number, str: string) => { for (let i = 0; i < str.length; i++) v.setUint8(at + i, str.charCodeAt(i)); };
+  text(0, 'RIFF');
+  v.setUint32(4, 36 + samples.length * 2, true);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  text(36, 'data');
+  v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true);
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+let silence: string | null = null;
 
 /**
- * Call from the tap that starts reading aloud: browsers only let sound start from one. iPhones
- * also mute Web Audio with the silent switch unless the page says it's playing media.
+ * Call from the tap that starts reading aloud: browsers only let sound start from one, and a media
+ * element that has played once may play again later without one.
  */
 export function unlock() {
   const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
   if (session) session.type = 'playback';
-  ctx ??= new AudioContext();
-  if (ctx.state !== 'running') void ctx.resume();
-  // Older iPhones only open the way for sound actually started in the tap: a silent moment.
-  const src = ctx.createBufferSource();
-  src.buffer = ctx.createBuffer(1, 1, 22_050);
-  src.connect(ctx.destination);
-  src.start();
+  const a = audio();
+  if (!a.paused) return;
+  silence ??= URL.createObjectURL(wav(new Float32Array(2400), 24_000));
+  a.src = silence;
+  void a.play().catch(() => {});
 }
 
+let current: { clip: Clip; a: HTMLAudioElement } | null = null;
+
 /** How loud the voice is right now, 0 to 1, for things that move with it. */
-let levelBuf: Float32Array<ArrayBuffer> | null = null;
 export function level() {
-  if (!analyser) return 0;
-  const buf = (levelBuf ??= new Float32Array(analyser.fftSize));
-  analyser.getFloatTimeDomainData(buf);
+  const p = current;
+  if (!p || p.a.paused) return 0;
+  const { audio: x, rate } = p.clip;
+  const mid = Math.floor(p.a.currentTime * rate);
   let sum = 0;
-  for (const x of buf) sum += x * x;
-  return Math.min(1, Math.sqrt(sum / buf.length) * 4);
+  let n = 0;
+  for (let i = Math.max(0, mid - 512); i < Math.min(x.length, mid + 512); i++, n++) sum += x[i] * x[i];
+  return n ? Math.min(1, Math.sqrt(sum / n) * 4) : 0;
 }
 
 export interface Playing {
-  /** Settles when the clip ends (true) or is stopped (false). */
-  done: Promise<boolean>;
+  /** Settles when the clip ends, is stopped, or is paused from outside (a call, the lock screen). */
+  done: Promise<'ended' | 'stopped' | 'paused'>;
+  /** How far through it is, 0 to 1. */
+  time: () => number;
   stop: () => void;
 }
 
-/** Plays a clip, telling `onTime` how far through it is (0 to 1) as it goes. */
-export function play(clip: Clip, onTime: (f: number) => void): Playing {
-  unlock();
-  const ac = ctx!;
-  if (!analyser) {
-    analyser = ac.createAnalyser();
-    analyser.fftSize = 512;
-    analyser.connect(ac.destination);
-  }
-  const buf = ac.createBuffer(1, clip.audio.length, clip.rate);
-  buf.copyToChannel(clip.audio as Float32Array<ArrayBuffer>, 0);
-  const src = ac.createBufferSource();
-  src.buffer = buf;
-  src.connect(analyser);
-  const startAt = ac.currentTime + 0.02;
+export function play(clip: Clip): Playing {
+  const a = audio();
+  const url = URL.createObjectURL(wav(clip.audio, clip.rate));
+  const length = clip.audio.length / clip.rate;
   let stopped = false;
-  let raf = 0;
-  const tick = () => {
-    onTime(Math.max(0, Math.min(1, (ac.currentTime - startAt) / buf.duration)));
-    raf = requestAnimationFrame(tick);
-  };
-  const done = new Promise<boolean>((resolve) => {
-    src.onended = () => {
-      cancelAnimationFrame(raf);
-      src.disconnect();
-      resolve(!stopped);
+  let started = false;
+  a.src = url;
+  current = { clip, a };
+  const done = new Promise<'ended' | 'stopped' | 'paused'>((resolve) => {
+    let settled = false;
+    const finish = (how: 'ended' | 'stopped' | 'paused') => {
+      if (settled) return;
+      settled = true;
+      a.removeEventListener('ended', ended);
+      a.removeEventListener('pause', paused);
+      if (current?.clip === clip) current = null;
+      URL.revokeObjectURL(url);
+      resolve(how);
     };
+    const ended = () => finish('ended');
+    // Ending pauses it too, just before 'ended'; and a pause left over from the last clip isn't this one's.
+    const paused = () => { if (started && !a.ended) finish(stopped ? 'stopped' : 'paused'); };
+    a.addEventListener('ended', ended);
+    a.addEventListener('pause', paused);
+    a.play().then(() => { started = true; }, () => finish(stopped ? 'stopped' : 'paused'));
   });
-  src.start(startAt);
-  raf = requestAnimationFrame(tick);
   return {
     done,
+    time: () => Math.min(1, a.currentTime / length),
     stop: () => {
       if (stopped) return;
       stopped = true;
-      cancelAnimationFrame(raf);
-      try { src.stop(); } catch { /* not started */ }
+      a.pause();
     },
   };
 }

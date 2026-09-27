@@ -3,7 +3,7 @@ import { KOKORO_PACK_BYTES, LIMITS } from '@breader/shared/limits';
 import { storeFile } from '../../../data/sync';
 import { fromListed, hasGpu, SAMPLE_LINE, type Engine } from './catalog';
 import { putVoice } from './list';
-import { drop, failed, missing, synth } from './speaker';
+import { drop, failed, missing, synth, wav } from './speaker';
 import { forget, keep, uploaded } from './store';
 import type { PiperConfig } from './tts.worker';
 
@@ -73,28 +73,6 @@ export async function readVoice(files: File[]): Promise<Draft> {
     return { engine: 'kokoro', model, name: titled(m ? m[2] : f.name.replace(/\.(bin|pt)$/i, '')), accent: m?.[1].toLowerCase() === 'b' ? 'UK' : 'US' };
   }
   throw new Error('Pick a Piper voice (its .onnx and .onnx.json) or one Kokoro pack (.bin or .pt).');
-}
-
-/** 16-bit mono WAV. */
-function wav(audio: Float32Array, rate: number): Blob {
-  const buf = new ArrayBuffer(44 + audio.length * 2);
-  const v = new DataView(buf);
-  const text = (at: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
-  text(0, 'RIFF');
-  v.setUint32(4, 36 + audio.length * 2, true);
-  text(8, 'WAVE');
-  text(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, rate, true);
-  v.setUint32(28, rate * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  text(36, 'data');
-  v.setUint32(40, audio.length * 2, true);
-  for (let i = 0; i < audio.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, audio[i])) * 0x7fff, true);
-  return new Blob([buf], { type: 'audio/wav' });
 }
 
 export type Step = 'trying' | 'uploading';
