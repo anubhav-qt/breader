@@ -255,6 +255,12 @@
   outline: none;
 }
 .ep-label { font: var(--ui-w) 11.5px/1 var(--ui); color: var(--ink-2); margin-top: 2px; }
+/* The name's label shares its row with close, which sits in the corner like the dialogs' one. */
+.ep-head { display: flex; align-items: center; justify-content: space-between; margin: -6px -6px -4px 0; }
+.ep-head .ep-label { margin: 0; }
+.ep-x { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--ink-2); transition: background-color 140ms ease, color 140ms ease; }
+.ep-x:hover { background: var(--fill); color: var(--ink); }
+.ep-x svg { width: 15px; height: 15px; }
 .ep-input {
   width: 100%;
   padding: 8px 10px;

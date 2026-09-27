@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { duration, minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { numbered, pad2, type Chapter } from '../chapters';
+import { CROSS } from './icons';
 
 const DIGITS = '0123456789'.split('');
 
@@ -51,5 +52,14 @@ export function DotIcon({ rows, lit }: { rows: string[]; lit?: number }) {
     <svg className={`i3-dots-icon${lit !== undefined ? ' is-filling' : ''}`} viewBox={`0 0 ${w} ${rows.length}`} style={{ width: `${(w / rows.length) * 0.8}em` }} aria-hidden="true">
       {cells.map((c) => <rect key={`${c.x}.${c.y}`} className={order.indexOf(c) < on ? 'is-lit' : undefined} x={c.x + 0.1} y={c.y + 0.1} width={0.8} height={0.8} rx={0.1} />)}
     </svg>
+  );
+}
+
+/** The drops' and cards' close button: a cross in square dots, top right. */
+export function CloseDots({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="i3-x" onClick={onClick} aria-label="Close">
+      <DotIcon rows={CROSS} />
+    </button>
   );
 }

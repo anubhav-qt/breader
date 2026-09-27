@@ -5,7 +5,7 @@ import type { BookEdit } from '../../books/types';
 import { BOOK_COLORS, colorVars } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
-import { IconCheck, IconStar, IconTrash } from '../../components/icons';
+import { IconCheck, IconClose, IconStar, IconTrash } from '../../components/icons';
 
 interface Props {
   book: ShelfItem;
@@ -135,7 +135,12 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
       exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.12 } }}
       transition={springs.snappy}
     >
-      <label className="ep-label" htmlFor="ep-name">Name</label>
+      <div className="ep-head">
+        <label className="ep-label" htmlFor="ep-name">Name</label>
+        <button type="button" className="ep-x" onClick={onClose} aria-label="Close">
+          <IconClose />
+        </button>
+      </div>
       <input
         id="ep-name"
         className="ep-input"

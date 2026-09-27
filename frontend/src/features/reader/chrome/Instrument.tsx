@@ -7,7 +7,7 @@ import { canFullscreen, useFullscreen } from '../fullscreen';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { level, useLoadState } from '../voice/speaker';
 import { FOCUS, GROW, PAUSE, PLAY, SHRINK } from './icons';
-import { ChapterLabel, Digits, DotIcon, Typed } from './parts';
+import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { SayAs } from './SayAs';
 import { VoiceSheet } from './VoiceSheet';
 import type { ChromeProps, PanelName } from './types';
@@ -129,13 +129,17 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
             exit={{ clipPath: DROP_CLOSED, y: -6 }}
             transition={springs.snappy}
           >
-            {panel === 'toc' ? (
-              <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
-            ) : panel === 'voice' && narration ? (
-              <VoiceSheet playing={narration.playing} onStart={narration.start} onStop={narration.stop} />
-            ) : (
-              <AppearancePanel settings={settings} isPdf={isPdf} update={update} />
-            )}
+            {/* The drop keeps its close button in place; what's in it scrolls. */}
+            <div className="i3-drop-in">
+              {panel === 'toc' ? (
+                <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
+              ) : panel === 'voice' && narration ? (
+                <VoiceSheet playing={narration.playing} onStart={narration.start} onStop={narration.stop} />
+              ) : (
+                <AppearancePanel settings={settings} isPdf={isPdf} update={update} />
+              )}
+            </div>
+            <CloseDots onClick={() => openPanel(null)} />
           </motion.div>
         )}
       </AnimatePresence>

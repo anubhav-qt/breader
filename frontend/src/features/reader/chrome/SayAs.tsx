@@ -6,7 +6,7 @@ import { voiceFor, voicePrefs } from '../voice/prefs';
 import { sayAsFor, setSayAs } from '../voice/sayas';
 import { play, synth, unlock, type Playing } from '../voice/speaker';
 import { PLAY, STOP } from './icons';
-import { DotIcon } from './parts';
+import { CloseDots, DotIcon } from './parts';
 
 /*
  * Saying a word the reader's way. Select some text while a voice reads: it pauses, and a small
@@ -198,6 +198,7 @@ function Card({ at, area, onDone }: { at: Picked; area: RefObject<HTMLDivElement
       exit={{ opacity: 0, y: pos?.above ? 6 : -6 }}
       transition={springs.snappy}
     >
+      <CloseDots onClick={cancel} />
       <p className="sa-q">What should it be pronounced as?</p>
       <p className="sa-word">{at.text}</p>
       <div className="sa-say">
