@@ -87,7 +87,7 @@ export const blobs = pgTable(
     sha256: text('sha256').notNull(),
     size: big('size').notNull(),
     mime: text('mime').notNull(),
-    /** book | cover */
+    /** book | cover | voice | sample */
     kind: text('kind').notNull(),
     r2Key: text('r2_key').notNull(),
     ownerLibraryId: text('owner_library_id').references(() => libraries.id, { onDelete: 'set null' }),
@@ -199,6 +199,53 @@ export const readingTime = pgTable(
     version: version(),
   },
   (t) => [primaryKey({ columns: [t.libraryId, t.bookId, t.day, t.device] }), index('reading_time_rev_idx').on(t.libraryId, t.rev)],
+);
+
+/**
+ * A voice a reader uploaded to read aloud with: Piper (Normal mode) or Kokoro (Immersive). Its
+ * owner can make it public or private any time. Readers who have heard KEEP_WORDS in it keep it
+ * (voice_uses), private, removed, or after its library is gone. Fed.
+ */
+export const voices = pgTable(
+  'voices',
+  {
+    id: text('id').primaryKey(),
+    /** The owner. Null once its key library expired; then only readers who keep it see it. */
+    libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    /** piper | kokoro */
+    engine: text('engine').notNull(),
+    /** The eSpeak voice for its accent: en-us, en… */
+    lang: text('lang').notNull(),
+    fileId: text('file_id').notNull().references(() => blobs.id),
+    /** Piper's settings (.onnx.json). */
+    configId: text('config_id').references(() => blobs.id),
+    sampleId: text('sample_id').references(() => blobs.id),
+    isPublic: boolean('is_public').notNull().default(false),
+    createdAt: at('created_at').notNull().defaultNow(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+    removedAt: at('removed_at'),
+    version: version(),
+  },
+  (t) => [
+    index('voices_library_idx').on(t.libraryId),
+    // The voice list: every library's public voices, newest first.
+    index('voices_public_idx').on(t.createdAt).where(sql`${t.isPublic} AND ${t.removedAt} IS NULL`),
+    index('voices_file_idx').on(t.fileId),
+  ],
+);
+
+/** Words a library has heard in someone's voice; they only grow. Fed. */
+export const voiceUses = pgTable(
+  'voice_uses',
+  {
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    voiceId: text('voice_id').notNull().references(() => voices.id, { onDelete: 'cascade' }),
+    words: integer('words').notNull().default(0),
+    usedAt: at('used_at').notNull().defaultNow(),
+    version: version(),
+  },
+  (t) => [primaryKey({ columns: [t.libraryId, t.voiceId] }), index('voice_uses_voice_idx').on(t.voiceId)],
 );
 
 /** Reading style, typeface, size and theme, so they follow the reader between browsers. Fed. */
@@ -362,5 +409,7 @@ export const FED_TABLES = {
   reading_states: ['library_id', 'book_id'],
   library_settings: ['library_id'],
   reading_time: ['library_id', 'book_id', 'day', 'device'],
+  voices: ['id'],
+  voice_uses: ['library_id', 'voice_id'],
 } as const;
 export type FedTable = keyof typeof FED_TABLES;

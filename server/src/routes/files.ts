@@ -9,10 +9,21 @@ import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { keeps, onShelf } from '../lib/shelf.ts';
+import { voiceFile } from '../lib/voices.ts';
 
 const TYPES = {
   book: new Set(['application/epub+zip', 'application/pdf', 'text/plain', 'text/markdown']),
   cover: new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+  // A voice's model or pack, and Piper's settings.
+  voice: new Set(['application/octet-stream', 'application/json']),
+  sample: new Set(['audio/wav']),
+};
+
+const BAD_TYPE = {
+  book: 'Breader stores EPUB, PDF, text and Markdown files.',
+  cover: 'Covers must be JPEG, PNG, WebP or GIF images.',
+  voice: 'Voices are Piper .onnx and .onnx.json files, or Kokoro .bin packs.',
+  sample: 'Voice samples are WAV files.',
 };
 
 const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
@@ -58,12 +69,12 @@ export function fileRoutes(deps: Deps) {
   r.post('/uploads', rateLimit({ name: 'upload', max: 60, windowMs: 3_600_000 }), async (c) => {
     const body = parse(UploadRequest, await readJson(c));
     const lib = c.var.library;
-    if (!TYPES[body.kind].has(body.mime)) {
-      throw new ApiError(400, 'bad_type', body.kind === 'book' ? 'Breader stores EPUB, PDF, text and Markdown files.' : 'Covers must be JPEG, PNG, WebP or GIF images.');
-    }
-    const limit = body.kind === 'cover' ? LIMITS.coverBytes : lib.fileBytes;
+    if (!TYPES[body.kind].has(body.mime)) throw new ApiError(400, 'bad_type', BAD_TYPE[body.kind]);
+    const side = body.kind === 'sample' || body.mime === 'application/json';
+    const limit = body.kind === 'cover' ? LIMITS.coverBytes : side ? LIMITS.voiceSideBytes : lib.fileBytes;
     if (body.size > limit) {
-      throw new ApiError(413, 'file_too_large', `This file is ${mb(body.size)}. ${lib.ownerAccountId ? 'Files' : 'Key libraries take files'} up to ${mb(limit)}.`);
+      const who = body.kind === 'cover' || side ? 'This kind of file can be' : lib.ownerAccountId ? 'Files can be' : 'Key libraries take files';
+      throw new ApiError(413, 'file_too_large', `This file is ${mb(body.size)}. ${who} up to ${mb(limit)}.`);
     }
 
     let [blob] = await db.select().from(blobs).where(and(eq(blobs.ownerLibraryId, lib.id), eq(blobs.sha256, body.sha256)));
@@ -125,7 +136,10 @@ export function fileRoutes(deps: Deps) {
     return c.json({ fileId: blob.id, status: 'ready' } satisfies UploadResponse);
   });
 
-  /** This library's own files, public ones, shared books' files, and those of shared books it keeps. */
+  /**
+   * This library's own files, public ones, shared books' files, those of shared books it keeps, and
+   * those of voices it may use.
+   */
   const visible = async (id: string, lib: LibraryRow) => {
     const [blob] = await db
       .select()
@@ -133,7 +147,7 @@ export function fileRoutes(deps: Deps) {
       .where(and(
         eq(blobs.id, id),
         eq(blobs.status, 'ready'),
-        or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true), onShelf(blobs.id), keeps(lib.id, blobs.id)),
+        or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true), onShelf(blobs.id), keeps(lib.id, blobs.id), voiceFile(lib.id, blobs.id)),
       ));
     if (!blob) throw new ApiError(404, 'not_found', 'That file isn’t available.');
     return blob;

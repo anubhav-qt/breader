@@ -77,6 +77,31 @@ export type ReadState = z.infer<typeof ReadState>;
 export const Prefs = z.record(z.string(), z.unknown()).refine((p) => JSON.stringify(p).length <= 8192, 'Settings are too large');
 export type Prefs = z.infer<typeof Prefs>;
 
+/* ---- Voices ---- */
+
+/** Piper voices read in Normal mode (on the CPU), Kokoro voices in Immersive (on the GPU). */
+export const VoiceEngine = z.enum(['piper', 'kokoro']);
+export type VoiceEngine = z.infer<typeof VoiceEngine>;
+
+/** The eSpeak voice the text is turned into sounds with: en-us, en (British), en-gb-x-rp… */
+const VoiceLang = z.string().regex(/^en(-[a-z0-9]{1,12}){0,3}$/i, 'Only English voices can be read aloud');
+
+/**
+ * A voice a reader uploaded. `fileId` is the model (Piper's .onnx) or the pack (Kokoro's .bin);
+ * Piper's settings (its .onnx.json) are `configId`. `sampleId` is a short line said in the voice.
+ */
+export const Voice = z.object({
+  id: Id,
+  name: z.string().trim().min(1).max(60),
+  engine: VoiceEngine,
+  lang: VoiceLang,
+  fileId: Id,
+  configId: Id.nullish(),
+  sampleId: Id.nullish(),
+  public: z.boolean(),
+});
+export type Voice = z.infer<typeof Voice>;
+
 /* ---- Push ---- */
 
 const MutationId = z.number().int().positive();
@@ -93,6 +118,11 @@ export const Mutation = z.discriminatedUnion('type', [
   z.object({ id: MutationId, type: z.literal('settings.put'), prefs: Prefs }),
   /** This device's running count of seconds spent reading a book on one day. */
   z.object({ id: MutationId, type: z.literal('time.put'), bookId: Id, day: Day, device: Id, seconds: z.number().int().min(0).max(86_400) }),
+  /** Adds or changes one of this library's voices: its name, accent, sample or public switch. */
+  z.object({ id: MutationId, type: z.literal('voice.put'), voice: Voice }),
+  z.object({ id: MutationId, type: z.literal('voice.remove'), voiceId: Id }),
+  /** Words this library has heard in someone's voice so far: it only grows. */
+  z.object({ id: MutationId, type: z.literal('voice.use'), voiceId: Id, words: z.number().int().min(0).max(1_000_000_000) }),
 ]);
 export type Mutation = z.infer<typeof Mutation>;
 type OmitEach<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -172,6 +202,23 @@ export type ShelfBook = z.infer<typeof ShelfBook>;
 export const ShelfResponse = z.object({ books: z.array(ShelfBook) });
 export type ShelfResponse = z.infer<typeof ShelfResponse>;
 
+/* ---- Voice list ---- */
+
+/** A voice as the voice list shows it. */
+export const ListedVoice = Voice.extend({
+  addedAt: Millis,
+  /** This library's own. */
+  mine: z.boolean(),
+  /** Words this library has heard in it. Past KEEP_WORDS it stays, private or removed. */
+  words: z.number(),
+  /** Its owner removed it; it's listed only for readers who keep it. */
+  removed: z.boolean().optional(),
+});
+export type ListedVoice = z.infer<typeof ListedVoice>;
+
+export const VoicesResponse = z.object({ voices: z.array(ListedVoice) });
+export type VoicesResponse = z.infer<typeof VoicesResponse>;
+
 /* ---- Libraries ---- */
 
 export const LibraryInfo = z.object({
@@ -236,7 +283,8 @@ export const UploadRequest = z.object({
   sha256: Sha256,
   size: z.number().int().positive(),
   mime: z.string().max(100),
-  kind: z.enum(['book', 'cover']),
+  /** voice: a voice's model, pack or settings. sample: a line said in it. */
+  kind: z.enum(['book', 'cover', 'voice', 'sample']),
 });
 export type UploadRequest = z.infer<typeof UploadRequest>;
 

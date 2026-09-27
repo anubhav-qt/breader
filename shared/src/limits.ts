@@ -5,6 +5,8 @@ export const LIMITS = {
   key: { quotaBytes: 100 * MB, fileBytes: 100 * MB, idleDays: 365 },
   account: { quotaBytes: 500 * MB, fileBytes: 100 * MB, idleDays: null },
   coverBytes: 5 * MB,
+  /** A voice's settings (a Piper .onnx.json) or its sample line. */
+  voiceSideBytes: 1 * MB,
 } as const;
 
 /**
@@ -12,6 +14,12 @@ export const LIMITS = {
  * Below it, a copy lasts only while its owner shares the original.
  */
 export const KEEP_WORDS = 100;
+
+/** A Kokoro voice pack: 510 × 256 float32 styles. */
+export const KOKORO_PACK_BYTES = 510 * 256 * 4;
+
+/** The most voices others share that the voice list shows, newest first. */
+export const VOICE_LIST_LIMIT = 300;
 
 /** The most books the Shared Library lists, newest first. */
 export const SHELF_LIMIT = 2000;

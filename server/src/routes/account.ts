@@ -114,7 +114,7 @@ const cols = (t: Parameters<typeof getTableConfig>[0]) =>
   getTableConfig(t).columns.map((c) => c.name).filter((n) => n !== 'version');
 
 /**
- * Moves a key library's books, reading places and files into an account's library, in one
+ * Moves a key library's books, reading places, voices and files into an account's library, in one
  * transaction, then retires the key library. Books and places are deleted and inserted rather than
  * re-keyed in place, so the change feed tells the laptop's copy about both ends of the move. A
  * file the account already stores is shared rather than stored twice; the key library's copy is
@@ -136,10 +136,10 @@ async function claim(pool: pg.Pool, fromId: string, toId: string, userId: string
       throw new ApiError(409, 'try_again', 'Your libraries changed while Breader was moving books. Try again.');
     }
 
-    // Files the account already has: point this library's books at the account's copy.
-    for (const col of ['file_id', 'cover_id']) {
+    // Files the account already has: point this library's books and voices at the account's copy.
+    for (const [table, col] of [['library_items', 'file_id'], ['library_items', 'cover_id'], ['voices', 'file_id'], ['voices', 'config_id'], ['voices', 'sample_id']]) {
       await c.query(
-        `UPDATE library_items i SET ${col} = t.id
+        `UPDATE ${table} i SET ${col} = t.id
          FROM blobs f JOIN blobs t ON t.sha256 = f.sha256 AND t.owner_library_id = $2
          WHERE i.library_id = $1 AND i.${col} = f.id AND f.owner_library_id = $1`,
         [fromId, toId],
@@ -169,6 +169,15 @@ async function claim(pool: pg.Pool, fromId: string, toId: string, userId: string
         [fromId, toId, rev],
       );
     }
+
+    // Voices move over, and so does what this library heard in others' voices.
+    await c.query('UPDATE voices SET library_id = $2 WHERE library_id = $1', [fromId, toId]);
+    await c.query(
+      `INSERT INTO voice_uses (library_id, voice_id, words, used_at) SELECT $2, voice_id, words, used_at FROM voice_uses WHERE library_id = $1
+       ON CONFLICT (library_id, voice_id) DO UPDATE SET words = greatest(voice_uses.words, excluded.words)`,
+      [fromId, toId],
+    );
+    await c.query('DELETE FROM voice_uses WHERE library_id = $1', [fromId]);
 
     await c.query('UPDATE libraries SET rev = $2, used_bytes = used_bytes + $3 WHERE id = $1', [toId, rev, moved]);
     await c.query(

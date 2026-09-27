@@ -1,13 +1,14 @@
 import type pg from 'pg';
-import { CLEANUP, LIMITS, SYNC } from '@breader/shared';
+import { CLEANUP, KEEP_WORDS, LIMITS, SYNC } from '@breader/shared';
 import type { Storage } from '../lib/storage.ts';
 import { log } from '../log.ts';
 
 /*
  * Clean-up (backend design §6 and §7). The worker runs it every hour against Supabase:
  *
- *   tombstones  removed books, 30 days after removal, with their reading places
- *   files       files no book points at (tombstones count), after 7 days; upload links never
+ *   tombstones  removed books, 30 days after removal, with their reading places; removed voices
+ *               nobody keeps, likewise, and those whose library is gone
+ *   files       files no book or voice needs (tombstones count), after 7 days; upload links never
  *               finished, after a day; rows of deleted files, after 30 days
  *   libraries   key libraries unused for a year, with their files
  *   logins      expired login sessions and email links
@@ -17,10 +18,26 @@ import { log } from '../log.ts';
  * books and files), so clean-up and pushes wait for each other instead of deadlocking.
  */
 
-/** Any book, removed or not, still points at file b. */
-const USED = 'EXISTS (SELECT 1 FROM library_items i WHERE i.file_id = b.id OR i.cover_id = b.id)';
-/** A book in another library points at file b: a copy of a book that was on the Shared Library. */
-const COPIED = 'EXISTS (SELECT 1 FROM library_items i WHERE (i.file_id = b.id OR i.cover_id = b.id) AND i.library_id <> b.owner_library_id)';
+/** Voice v's model, settings or sample is file b. */
+const VOICE_OF_B = '(v.file_id = b.id OR v.config_id = b.id OR v.sample_id = b.id)';
+/** Some library heard enough of voice v to keep it (lib/voices.ts). */
+const KEPT = `EXISTS (SELECT 1 FROM voice_uses u WHERE u.voice_id = v.id AND u.words >= ${KEEP_WORDS})`;
+/**
+ * Any book, removed or not, still points at file b, or a voice needs it: one its owner hasn't
+ * removed, or one a reader keeps.
+ */
+const USED = `(EXISTS (SELECT 1 FROM library_items i WHERE i.file_id = b.id OR i.cover_id = b.id)
+  OR EXISTS (SELECT 1 FROM voices v WHERE ${VOICE_OF_B} AND ((v.removed_at IS NULL AND v.library_id IS NOT NULL) OR ${KEPT})))`;
+/** Any book or voice row at all names file b, so its row can't go yet. */
+const NAMED = `(EXISTS (SELECT 1 FROM library_items i WHERE i.file_id = b.id OR i.cover_id = b.id)
+  OR EXISTS (SELECT 1 FROM voices v WHERE ${VOICE_OF_B}))`;
+/**
+ * Another library needs file b: a book there points at it (a copy of a book that was on the Shared
+ * Library), or it keeps a voice made from it.
+ */
+const COPIED = `(EXISTS (SELECT 1 FROM library_items i WHERE (i.file_id = b.id OR i.cover_id = b.id) AND i.library_id <> b.owner_library_id)
+  OR EXISTS (SELECT 1 FROM voices v JOIN voice_uses u ON u.voice_id = v.id
+    WHERE ${VOICE_OF_B} AND u.library_id <> b.owner_library_id AND u.words >= ${KEEP_WORDS}))`;
 /** Another live row stores its file under b's key (a restore can leave two rows for one object). */
 const SHARED = `EXISTS (SELECT 1 FROM blobs o WHERE o.r2_key = b.r2_key AND o.id <> b.id AND o.status <> 'deleted')`;
 
@@ -64,12 +81,22 @@ export async function purgeTombstones(pool: pg.Pool): Promise<number> {
       return gone.rows.length;
     });
   }
+  // Voices nobody keeps, removed a while ago or left behind by a library that's gone. Their files
+  // then fall to cleanFiles.
+  await pool.query(
+    `DELETE FROM voices v WHERE id IN (
+       SELECT id FROM voices v
+       WHERE (v.removed_at < now() - make_interval(days => $1) OR v.library_id IS NULL) AND NOT ${KEPT}
+       LIMIT 500
+     )`,
+    [SYNC.tombstoneDays],
+  );
   return books;
 }
 
 /** Files nothing needs any more: deleted from R2, their quota given back. */
 export async function cleanFiles(pool: pg.Pool, storage: Storage) {
-  // Start the clock on files no book points at, and stop it for ones a book points at again.
+  // Start the clock on files nothing needs, and stop it for ones needed again.
   await pool.query(`UPDATE blobs b SET unused_since = now() WHERE status = 'ready' AND unused_since IS NULL AND NOT ${USED}`);
   await pool.query(`UPDATE blobs b SET unused_since = NULL WHERE status = 'ready' AND unused_since IS NOT NULL AND ${USED}`);
 
@@ -112,7 +139,7 @@ export async function cleanFiles(pool: pg.Pool, storage: Storage) {
   // The laptop's copy has long since removed its own copy of these files.
   const { rowCount } = await pool.query(
     `DELETE FROM blobs b WHERE id IN (
-       SELECT id FROM blobs b WHERE status = 'deleted' AND unused_since < now() - make_interval(days => $1) AND NOT ${USED} LIMIT 1000
+       SELECT id FROM blobs b WHERE status = 'deleted' AND unused_since < now() - make_interval(days => $1) AND NOT ${NAMED} LIMIT 1000
      )`,
     [CLEANUP.deletedRowDays],
   );
@@ -123,7 +150,8 @@ export async function cleanFiles(pool: pg.Pool, storage: Storage) {
  * Key libraries unused for a year (their key's lifetime, §4). The library is retired first, which
  * signs every browser out of it at once; then its files leave R2; then its rows go. A run that
  * stops halfway picks the retired library up again next time. Files that copies of its shared books
- * in other libraries still read stay, owned by no library, until nothing points at them.
+ * in other libraries still read, or voices other readers keep, stay, owned by no library, until
+ * nothing needs them.
  */
 export async function expireLibraries(pool: pg.Pool, storage: Storage): Promise<number> {
   const { rows } = await pool.query<{ id: string }>(

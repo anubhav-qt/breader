@@ -1,9 +1,10 @@
 import { and, eq, or, sql } from 'drizzle-orm';
-import type { Mutation } from '@breader/shared';
+import { KOKORO_PACK_BYTES, type Mutation } from '@breader/shared';
 import type { Db } from '../db/client.ts';
-import { blobs, libraryItems, librarySettings, readingStates, readingTime } from '../db/schema.ts';
+import { blobs, libraryItems, librarySettings, readingStates, readingTime, voices, voiceUses } from '../db/schema.ts';
 import { ApiError } from '../lib/errors.ts';
 import { onShelf, usedBy } from '../lib/shelf.ts';
+import { usable } from '../lib/voices.ts';
 
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -27,6 +28,19 @@ async function checkFile(tx: Tx, libraryId: string, fileId: string | null | unde
     .for('share', { of: blobs });
   if (!b) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
 }
+
+/** One of this library's own uploads, of this kind, for a voice. Share-locked like checkFile. */
+async function checkOwnFile(tx: Tx, libraryId: string, fileId: string, kind: 'voice' | 'sample', size?: number) {
+  const [b] = await tx
+    .select({ size: blobs.size })
+    .from(blobs)
+    .where(and(eq(blobs.id, fileId), eq(blobs.status, 'ready'), eq(blobs.ownerLibraryId, libraryId), eq(blobs.kind, kind)))
+    .for('share', { of: blobs });
+  if (!b) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
+  if (size !== undefined && b.size !== size) throw new ApiError(400, 'bad_voice', 'That isn’t a Kokoro voice pack.');
+}
+
+const voiceGone = () => new ApiError(404, 'not_found', 'That voice isn’t available.');
 
 const item = (libraryId: string, bookId: string) => and(eq(libraryItems.libraryId, libraryId), eq(libraryItems.bookId, bookId));
 
@@ -179,6 +193,68 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           target: [readingTime.libraryId, readingTime.bookId, readingTime.day, readingTime.device],
           set: { seconds: sql`greatest(${readingTime.seconds}, excluded.seconds)`, rev },
           setWhere: sql`${readingTime.seconds} < excluded.seconds`,
+        });
+      return;
+    }
+
+    case 'voice.put': {
+      const v = m.voice;
+      const [cur] = await tx.select({ libraryId: voices.libraryId }).from(voices).where(eq(voices.id, v.id)).for('update');
+      if (cur && cur.libraryId !== libraryId) throw new ApiError(403, 'not_yours', 'That voice belongs to someone else.');
+      // Its model never changes once it's made: readers who keep it keep that one.
+      if (!cur) {
+        await checkOwnFile(tx, libraryId, v.fileId, 'voice', v.engine === 'kokoro' ? KOKORO_PACK_BYTES : undefined);
+        if ((v.engine === 'piper') !== !!v.configId) throw new ApiError(400, 'bad_voice', 'Piper voices need their .onnx.json; Kokoro packs have none.');
+        if (v.configId) await checkOwnFile(tx, libraryId, v.configId, 'voice');
+      }
+      if (v.sampleId) await checkOwnFile(tx, libraryId, v.sampleId, 'sample');
+      await tx
+        .insert(voices)
+        .values({
+          id: v.id,
+          libraryId,
+          name: v.name,
+          engine: v.engine,
+          lang: v.lang.toLowerCase(),
+          fileId: v.fileId,
+          configId: v.configId ?? null,
+          sampleId: v.sampleId ?? null,
+          isPublic: v.public,
+        })
+        .onConflictDoUpdate({
+          target: voices.id,
+          set: {
+            name: sql`excluded.name`,
+            lang: sql`excluded.lang`,
+            sampleId: sql`coalesce(excluded.sample_id, ${voices.sampleId})`,
+            isPublic: sql`excluded.is_public`,
+            updatedAt: sql`now()`,
+          },
+        });
+      return;
+    }
+
+    case 'voice.remove': {
+      const done = await tx
+        .update(voices)
+        .set({ removedAt: sql`coalesce(${voices.removedAt}, now())`, updatedAt: sql`now()` })
+        .where(and(eq(voices.id, m.voiceId), eq(voices.libraryId, libraryId)))
+        .returning({ id: voices.id });
+      if (!done.length) throw voiceGone();
+      return;
+    }
+
+    case 'voice.use': {
+      const open = await tx.execute(sql`SELECT 1 FROM voices v WHERE v.id = ${m.voiceId} AND ${usable(libraryId)}`);
+      if (!open.rows.length) throw voiceGone();
+      // Counts only grow, so a late or repeated count changes nothing.
+      await tx
+        .insert(voiceUses)
+        .values({ libraryId, voiceId: m.voiceId, words: m.words })
+        .onConflictDoUpdate({
+          target: [voiceUses.libraryId, voiceUses.voiceId],
+          set: { words: sql`excluded.words`, usedAt: sql`now()` },
+          setWhere: sql`${voiceUses.words} < excluded.words`,
         });
       return;
     }
