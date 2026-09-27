@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type TouchEvent } from 'react';
 import type { BookRecord, LoadedBook, ReadState, TocItem } from '../../books/types';
+import { paintBars } from '../../lib/bars';
 import { chapterAt, chaptersOf } from './chapters';
 import { InstrumentChrome } from './chrome/Instrument';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
+import { useFullscreenReading } from './fullscreen';
 import { PdfView } from './PdfView';
 import { useReaderSettings, type ThemeName } from './settings';
 import { useReadingClock } from './useReadingClock';
@@ -53,6 +55,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const current = chapterAt(chapters, loc);
 
   useReadingClock(!closing, onReadTime);
+  useFullscreenReading(!closing);
 
   const [start] = useState<Start>(() => {
     if (initial?.pos) return { kind: 'pos', pos: initial.pos };
@@ -122,6 +125,13 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
     setLowContrast((hi + 0.05) / (lo + 0.05) < 1.8);
   }, [color, theme]);
+
+  // The phone's status bar takes the page's colour while the book is open.
+  useEffect(() => {
+    const bg = body.current && getComputedStyle(body.current).getPropertyValue('--r-bg').trim();
+    if (!bg || closing) return;
+    return paintBars(bg);
+  }, [theme, closing]);
 
   const onGo = useCallback((item: TocItem) => view.current?.goTo(item.section, item.anchor), []);
   const onPick = useCallback((f: number) => {

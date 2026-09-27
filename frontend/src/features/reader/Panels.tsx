@@ -3,6 +3,7 @@ import type { LoadedBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import type { Loc } from './FlowView';
+import { canFullscreen, useFullscreen } from './fullscreen';
 import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -215,6 +216,17 @@ export function AppearancePanel({ settings, isPdf, update }: LookProps) {
           </div>
         </>
       )}
+      {canFullscreen() && <FullscreenRow />}
+    </div>
+  );
+}
+
+function FullscreenRow() {
+  const [on, toggle] = useFullscreen();
+  return (
+    <div className="ctl tgrow">
+      <span className="clbl">Full screen</span>
+      <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Full screen" onClick={toggle} />
     </div>
   );
 }
