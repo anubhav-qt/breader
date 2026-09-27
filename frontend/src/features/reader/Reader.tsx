@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type TouchEvent } from 'react';
 import type { BookRecord, LoadedBook, ReadState, TocItem } from '../../books/types';
 import { chapterAt, chaptersOf } from './chapters';
 import { InstrumentChrome } from './chrome/Instrument';
@@ -63,6 +63,32 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (p) setLastPanel(p);
   }, []);
 
+  /* A quick, mostly sideways swipe turns the page in the paged layouts. */
+  const paged = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'pages';
+  const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
+  const swipedAt = useRef(-Infinity);
+  const onTouchStart = (e: TouchEvent) => {
+    const t = e.touches[0];
+    swipe.current = paged && e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: e.timeStamp } : null;
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    const s = swipe.current;
+    swipe.current = null;
+    // A zoomed-in PDF is being moved around, not turned.
+    if (!s || closing || e.touches.length || (window.visualViewport?.scale ?? 1) > 1.01) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.4 || e.timeStamp - s.t > 800) return;
+    if (window.getSelection()?.toString()) return;
+    swipedAt.current = e.timeStamp;
+    view.current?.turn(dx < 0 ? 1 : -1);
+  };
+  // The tap zones under a swipe mustn't turn the page a second time.
+  const onClickCapture = (e: MouseEvent) => {
+    if (e.timeStamp - swipedAt.current < 500) { e.stopPropagation(); e.preventDefault(); }
+  };
+
   useEffect(() => {
     if (closing) return;
     const onKey = (e: KeyboardEvent) => {
@@ -115,7 +141,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   return (
     <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
-        <main className="rd-stage">
+        <main className="rd-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onClickCapture={onClickCapture}>
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           ) : (
