@@ -41,6 +41,8 @@ export const Book = z.object({
   lastOpened: Millis,
   fileId: Id.nullish(),
   coverId: Id.nullish(),
+  /** A copy of a book on the Shared Library, started by this reader: the shared book's id. */
+  origin: Id.nullish(),
 });
 export type Book = z.infer<typeof Book>;
 
@@ -126,6 +128,27 @@ export const PullResponse = z.object({
   full: z.boolean().optional(),
 });
 export type PullResponse = z.infer<typeof PullResponse>;
+
+/* ---- Shared Library ---- */
+
+/** A book someone put on the Shared Library, as everyone sees it. */
+export const ShelfBook = z.object({
+  id: Id,
+  title: z.string(),
+  author: z.string(),
+  format: Format,
+  words: z.number(),
+  color: z.string(),
+  addedAt: Millis,
+  /** Its first sentence. */
+  line: z.string(),
+  fileId: Id,
+  coverId: Id.nullable(),
+});
+export type ShelfBook = z.infer<typeof ShelfBook>;
+
+export const ShelfResponse = z.object({ books: z.array(ShelfBook) });
+export type ShelfResponse = z.infer<typeof ShelfResponse>;
 
 /* ---- Libraries ---- */
 

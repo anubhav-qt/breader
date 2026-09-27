@@ -3,22 +3,28 @@ import type { Mutation } from '@breader/shared';
 import type { Db } from '../db/client.ts';
 import { blobs, libraryItems, librarySettings, readingStates } from '../db/schema.ts';
 import { ApiError } from '../lib/errors.ts';
+import { onShelf, usedBy } from '../lib/shelf.ts';
 
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
 const notFound = () => new ApiError(404, 'not_found', 'That book isn’t in this library.');
 
 /**
- * A file id a book may point at: ready, and this library's own or public. The share lock holds
- * until the push commits, so clean-up (jobs/cleanup.ts) can't delete the file in between.
+ * A file id a book may point at: ready, and this library's own, public, on the Shared Library (a
+ * copy of a shared book), or one a book here points at already. The share lock holds until the
+ * push commits, so clean-up (jobs/cleanup.ts) can't delete the file in between.
  */
 async function checkFile(tx: Tx, libraryId: string, fileId: string | null | undefined) {
   if (!fileId) return;
   const [b] = await tx
     .select({ id: blobs.id })
     .from(blobs)
-    .where(and(eq(blobs.id, fileId), eq(blobs.status, 'ready'), or(eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true))))
-    .for('share');
+    .where(and(
+      eq(blobs.id, fileId),
+      eq(blobs.status, 'ready'),
+      or(eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true), onShelf(blobs.id), usedBy(libraryId, blobs.id)),
+    ))
+    .for('share', { of: blobs });
   if (!b) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
 }
 
@@ -55,6 +61,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           lastOpened: new Date(b.lastOpened),
           fileId: b.fileId ?? null,
           coverId: b.coverId ?? null,
+          origin: b.origin ?? null,
           rev,
         })
         .onConflictDoUpdate({
@@ -73,6 +80,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             line: sql`excluded.line`,
             fileId: sql`coalesce(excluded.file_id, ${libraryItems.fileId})`,
             coverId: sql`coalesce(excluded.cover_id, ${libraryItems.coverId})`,
+            origin: sql`coalesce(excluded.origin, ${libraryItems.origin})`,
             rev,
           },
         });

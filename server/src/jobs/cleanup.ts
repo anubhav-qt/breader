@@ -19,6 +19,8 @@ import { log } from '../log.ts';
 
 /** Any book, removed or not, still points at file b. */
 const USED = 'EXISTS (SELECT 1 FROM library_items i WHERE i.file_id = b.id OR i.cover_id = b.id)';
+/** A book in another library points at file b: a copy of a book that was on the Shared Library. */
+const COPIED = 'EXISTS (SELECT 1 FROM library_items i WHERE (i.file_id = b.id OR i.cover_id = b.id) AND i.library_id <> b.owner_library_id)';
 /** Another live row stores its file under b's key (a restore can leave two rows for one object). */
 const SHARED = `EXISTS (SELECT 1 FROM blobs o WHERE o.r2_key = b.r2_key AND o.id <> b.id AND o.status <> 'deleted')`;
 
@@ -120,7 +122,8 @@ export async function cleanFiles(pool: pg.Pool, storage: Storage) {
 /**
  * Key libraries unused for a year (their key's lifetime, §4). The library is retired first, which
  * signs every browser out of it at once; then its files leave R2; then its rows go. A run that
- * stops halfway picks the retired library up again next time.
+ * stops halfway picks the retired library up again next time. Files that copies of its shared books
+ * in other libraries still read stay, owned by no library, until nothing points at them.
  */
 export async function expireLibraries(pool: pg.Pool, storage: Storage): Promise<number> {
   const { rows } = await pool.query<{ id: string }>(
@@ -137,13 +140,13 @@ export async function expireLibraries(pool: pg.Pool, storage: Storage): Promise<
   let done = 0;
   for (const { id } of retired.rows) {
     const files = await pool.query<{ r2_key: string }>(
-      `SELECT r2_key FROM blobs b WHERE owner_library_id = $1 AND status <> 'deleted' AND NOT ${SHARED}`,
+      `SELECT r2_key FROM blobs b WHERE owner_library_id = $1 AND status <> 'deleted' AND NOT ${SHARED} AND NOT ${COPIED}`,
       [id],
     );
     for (const f of files.rows) await storage.remove(f.r2_key);
     await tx(pool, async (c) => {
       await c.query('SELECT 1 FROM libraries WHERE id = $1 FOR UPDATE', [id]);
-      await c.query(`UPDATE blobs SET status = 'deleted', unused_since = now() WHERE owner_library_id = $1 AND status <> 'deleted'`, [id]);
+      await c.query(`UPDATE blobs b SET status = 'deleted', unused_since = now() WHERE owner_library_id = $1 AND status <> 'deleted' AND NOT ${COPIED}`, [id]);
       // Books, reading places, settings and sync clients go with it (ON DELETE CASCADE).
       await c.query('DELETE FROM libraries WHERE id = $1', [id]);
     });

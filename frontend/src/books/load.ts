@@ -75,7 +75,7 @@ export async function loadRecord(rec: BookRecord): Promise<LoadedBook> {
     let data = await store.get<Blob | string>(`file:${rec.id}`);
     // Added in another browser: fetch it once, then it's kept here too.
     if (data === undefined && rec.fileId) {
-      data = await downloadFile(rec.fileId);
+      data = await downloadFile(rec.fileId, !!rec.origin || rec.source === 'shelf');
       await store.set(`file:${rec.id}`, data);
     }
     if (data === undefined) {

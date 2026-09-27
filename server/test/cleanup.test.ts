@@ -112,4 +112,22 @@ describe('clean-up', () => {
     // The key is free again, so the browser that still holds the library can send it back.
     expect((await idle.b.post('/v1/libraries', { libraryId: idle.libraryId, key: idle.key })).status).toBe(201);
   });
+
+  it('keeps an expired library’s shared file while another reader’s copy uses it', async () => {
+    const idle = await registered();
+    const reader = await registered();
+    const fileId = await upload(idle.b);
+    const key = (await blob(fileId)).r2_key;
+    const shared = book({ fileId, shared: true });
+    await idle.b.post('/v1/sync/push', push('c', { type: 'book.put', book: shared }));
+    const copy = await reader.b.post('/v1/sync/push', push('r', { type: 'book.put', book: book({ fileId, origin: shared.id }) }));
+    expect(copy.body.rejected).toEqual([]);
+    await q(`UPDATE libraries SET last_active_at = now() - interval '366 days' WHERE id = $1`, [idle.libraryId]);
+
+    expect(await expireLibraries(primary.pool, deps.storage)).toBeGreaterThanOrEqual(1);
+    expect((await q('SELECT 1 FROM libraries WHERE id = $1', [idle.libraryId])).rowCount).toBe(0);
+    expect((await blob(fileId)).status).toBe('ready');
+    expect(await deps.storage.head(key)).not.toBeNull();
+    expect((await reader.b.get(`/v1/files/${fileId}/link`)).status).toBe(200);
+  });
 });

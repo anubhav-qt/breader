@@ -34,15 +34,17 @@ export function Gallery({ books, now, labelledBy, onOpen, onAdd, onEdit, onRemov
   }, []);
 
   const { recent, rest } = useMemo(() => {
-    const toItem = (b: ShelfItem): GalleryItem => ({ kind: 'book', key: b.id, book: b });
+    const toItem = (b: ShelfItem): GalleryItem => ({ kind: 'book', key: b.key ?? b.id, book: b });
     return { recent: books.slice(0, RECENT).map(toItem), rest: books.slice(RECENT).map(toItem) };
   }, [books]);
 
+  // Kept by card, so the popover stays open when editing a shared book adds it to the library.
   const openEdit = useCallback((b: ShelfItem, anchor: HTMLElement) => {
-    setEditing((cur) => (cur?.id === b.id ? null : { id: b.id, anchor }));
+    const key = b.key ?? b.id;
+    setEditing((cur) => (cur?.id === key ? null : { id: key, anchor }));
   }, []);
   const closeEdit = useCallback(() => setEditing(null), []);
-  const editingBook = editing ? books.find((b) => b.id === editing.id) : undefined;
+  const editingBook = editing ? books.find((b) => (b.key ?? b.id) === editing.id) : undefined;
 
   const panel = { id: 'library', role: 'tabpanel', 'aria-labelledby': labelledBy } as const;
 

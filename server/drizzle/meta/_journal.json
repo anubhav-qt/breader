@@ -36,6 +36,13 @@
       "when": 1790448065213,
       "tag": "0004_key_file_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790498225783,
+      "tag": "0005_shelf",
+      "breakpoints": true
     }
   ]
 }

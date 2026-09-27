@@ -8,6 +8,7 @@ import type { Db } from '../db/client.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
+import { onShelf, usedBy } from '../lib/shelf.ts';
 
 const TYPES = {
   book: new Set(['application/epub+zip', 'application/pdf', 'text/plain', 'text/markdown']),
@@ -124,11 +125,16 @@ export function fileRoutes(deps: Deps) {
     return c.json({ fileId: blob.id, status: 'ready' } satisfies UploadResponse);
   });
 
+  /** This library's own files, public ones, shared books' files, and those of shared books it started. */
   const visible = async (id: string, lib: LibraryRow) => {
     const [blob] = await db
       .select()
       .from(blobs)
-      .where(and(eq(blobs.id, id), eq(blobs.status, 'ready'), or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true))));
+      .where(and(
+        eq(blobs.id, id),
+        eq(blobs.status, 'ready'),
+        or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true), onShelf(blobs.id), usedBy(lib.id, blobs.id)),
+      ));
     if (!blob) throw new ApiError(404, 'not_found', 'That file isn’t available.');
     return blob;
   };

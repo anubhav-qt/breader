@@ -166,6 +166,7 @@ export function toWire(r: BookRecord): Book {
     lastOpened: Math.round(r.lastOpened),
     fileId: r.fileId ?? null,
     coverId: r.coverId ?? null,
+    ...(r.origin ? { origin: r.origin } : {}),
   };
 }
 
@@ -188,6 +189,7 @@ export function fromWire(b: SyncedBook, local?: BookRecord): BookRecord {
     lastOpened: b.lastOpened,
     fileId: b.fileId ?? local?.fileId,
     coverId: b.coverId ?? local?.coverId,
+    ...(b.origin ?? local?.origin ? { origin: b.origin ?? local?.origin } : {}),
   };
 }
 
@@ -268,7 +270,8 @@ async function queueSnapshotLocked() {
   const resend = !!s.resend;
   const mine = records.filter((r) => r.source === 'file' || r.source === 'sample');
   const ids = new Set(mine.map((r) => r.id));
-  const muts: NewMutation[] = mine.map((r) => ({ type: 'book.put', book: resend ? { ...toWire(r), fileId: null, coverId: null } : toWire(r) }));
+  // Copies of shared books keep pointing at the sharer's file: there's nothing of theirs to send.
+  const muts: NewMutation[] = mine.map((r) => ({ type: 'book.put', book: resend && !r.origin ? { ...toWire(r), fileId: null, coverId: null } : toWire(r) }));
   for (const [bookId, read] of Object.entries(reads)) if (ids.has(bookId)) muts.push({ type: 'read.put', bookId, read: readToWire(read) });
   for (const [bookId, e] of Object.entries(edits)) {
     if (ids.has(bookId)) muts.push({ type: 'edit.put', bookId, edit: { title: e.title?.trim() || null, color: e.color ?? null, favorite: !!e.favorite } });
@@ -277,7 +280,7 @@ async function queueSnapshotLocked() {
   if (prefs) muts.push({ type: 'settings.put', prefs });
   if (resend) for (const r of s.removed ?? []) if (!ids.has(r.id)) muts.push({ type: 'book.remove', bookId: r.id });
   s.outbox = muts.map((m) => ({ ...m, id: s.nextId++ }) as Mutation);
-  const files = mine.filter((r) => r.source === 'file');
+  const files = mine.filter((r) => r.source === 'file' && !r.origin);
   s.uploads = (resend ? files : files.filter((r) => !r.fileId || (r.hasCover && !r.coverId))).map((r) => r.id);
   s.recheck = resend ? files.map((r) => r.id) : [];
   s.needsSnapshot = false;
@@ -434,7 +437,7 @@ async function uploadAll() {
       cur.uploads = cur.uploads.filter((x) => x !== id);
       cur.recheck = (cur.recheck ?? []).filter((x) => x !== id);
     });
-    if (!rec || rec.source !== 'file') { await drop(); continue; }
+    if (!rec || rec.source !== 'file' || rec.origin) { await drop(); continue; }
     const again = recheck.has(id);
     try {
       let fileId = rec.fileId;
@@ -521,9 +524,22 @@ export function flush(): Promise<void> {
   return flushing;
 }
 
-/** A stored file, fetched through a short-lived signed link. */
-export async function downloadFile(fileId: string): Promise<Blob> {
-  const link = await signedIn(() => api.get<{ url: string }>(`/v1/files/${encodeURIComponent(fileId)}/link`));
+/**
+ * A stored file, fetched through a short-lived signed link. A shared book's file (`shelf`) comes
+ * from the Shared Library, which needs no key, and otherwise from this library, whose copies of
+ * shared books keep their file after it leaves the shelf.
+ */
+export async function downloadFile(fileId: string, shelf = false): Promise<Blob> {
+  const id = encodeURIComponent(fileId);
+  let link: { url: string } | null = null;
+  if (shelf) {
+    try {
+      link = await api.get<{ url: string }>(`/v1/shelf/files/${id}/link`);
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 404) || !host?.snapshot().key) throw e;
+    }
+  }
+  link ??= await signedIn(() => api.get<{ url: string }>(`/v1/files/${id}/link`));
   const res = await fetch(link.url);
   if (!res.ok) throw new Error('Breader couldn’t download this book. Try again in a moment.');
   return res.blob();

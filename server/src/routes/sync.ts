@@ -110,6 +110,7 @@ export function syncRoutes(deps: Deps) {
             lastOpened: i.lastOpened.getTime(),
             fileId: i.fileId,
             coverId: i.coverId,
+            ...(i.origin ? { origin: i.origin } : {}),
             edit: { title: i.editTitle, color: i.editColor, favorite: i.favorite },
             removedAt: ms(i.removedAt),
           })),

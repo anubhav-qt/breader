@@ -119,7 +119,7 @@ export function shelfRecords(now: number): BookRecord[] {
 }
 
 /** Books other people put on the shared shelf are theirs to take off, not yours. */
-export const canRemove = (rec: BookRecord) => !(rec.shared && rec.source === 'placeholder');
+export const canRemove = (rec: BookRecord) => rec.source !== 'shelf' && !(rec.shared && rec.source === 'placeholder');
 
 export type PreviewMode = 'live' | 'empty' | 'one' | 'few' | 'many';
 

@@ -7,6 +7,9 @@ export const LIMITS = {
   coverBytes: 5 * MB,
 } as const;
 
+/** The most books the Shared Library lists, newest first. */
+export const SHELF_LIMIT = 2000;
+
 export const SYNC = {
   /** Most changes one push may carry; the client sends the rest in the next push. */
   maxMutations: 200,

@@ -52,8 +52,11 @@ export interface BookRecord {
   title: string;
   author: string;
   format: Format;
-  /** file: stored in this browser. sample: bundled public-domain file. placeholder: preview data only. */
-  source: 'file' | 'sample' | 'placeholder';
+  /**
+   * file: stored in this browser. sample: bundled public-domain file. placeholder: preview data only.
+   * shelf: a book on the Shared Library this reader hasn't started; starting it makes a copy here.
+   */
+  source: 'file' | 'sample' | 'placeholder' | 'shelf';
   url?: string;
   shared: boolean;
   addedAt: number;
@@ -68,6 +71,8 @@ export interface BookRecord {
   /** Server ids of the stored file and cover, once uploaded. */
   fileId?: string;
   coverId?: string;
+  /** A copy of a book on the Shared Library: that book's id. Its file stays the sharer's. */
+  origin?: string;
 }
 
 /** Changes a reader makes to a book's card: name, colour, favourite. */

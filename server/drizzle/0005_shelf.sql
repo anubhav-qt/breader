@@ -1,0 +1,2 @@
+ALTER TABLE "library_items" ADD COLUMN "origin" text;--> statement-breakpoint
+CREATE INDEX "library_items_shelf_idx" ON "library_items" USING btree ("added_at") WHERE "library_items"."shared" AND "library_items"."removed_at" IS NULL;

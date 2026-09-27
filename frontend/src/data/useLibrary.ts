@@ -7,10 +7,13 @@ import { onNews, tell, withData } from '../lib/tabs';
 import type { BookEdit, BookRecord, ReadState } from '../books/types';
 import { normColor, pickColor } from './colors';
 import { sampleRecords } from './library';
-import { newLibraryKey } from '../lib/key';
+import { newId, newLibraryKey } from '../lib/key';
+import { shelfCover } from './shelf';
 import { adopt, editFromWire, enterAccount, fromWire, queueLocked, startSync, toWire, type LibraryData, type SyncHost } from './sync';
 
 export interface ShelfItem extends BookRecord {
+  /** Its card's identity in the gallery, when that isn't its id: a copy stands where its shared book stood. */
+  key?: string;
   coverUrl?: string;
   /** Opened in the reader at least once. */
   opened: boolean;
@@ -344,9 +347,48 @@ async function addBook(rec: BookRecord, blob: Blob | string, cover?: Blob) {
   );
 }
 
-/** A cover found when a book is opened. Uploaded books send it to the server too. */
+/**
+ * A cover found when a book is opened. Uploaded books send it to the server too; copies of shared
+ * books don't, since the file is the sharer's.
+ */
 async function setCover(id: string, cover: Blob) {
-  await storeCover(id, cover, view.records.find((r) => r.id === id)?.source === 'file');
+  const rec = view.records.find((r) => r.id === id);
+  await storeCover(id, cover, rec?.source === 'file' && !rec.origin);
+}
+
+/**
+ * Starting a book on the Shared Library adds a copy of it to this library, pointing at the sharer's
+ * file, with its own place, colour and card. Starting it again finds the same copy.
+ */
+async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
+  const had = view.records.find((r) => r.origin === entry.id);
+  if (had) return had;
+  const now = Date.now();
+  const cover = await shelfCover(entry.id);
+  const copy: BookRecord = {
+    id: newId(),
+    title: entry.title,
+    author: entry.author,
+    format: entry.format,
+    source: 'file',
+    shared: false,
+    addedAt: now,
+    words: entry.words,
+    color: nextColor(),
+    hasCover: !!cover,
+    progress: 0,
+    line: entry.line,
+    lastOpened: now,
+    ...(entry.fileId ? { fileId: entry.fileId } : {}),
+    ...(entry.coverId ? { coverId: entry.coverId } : {}),
+    origin: entry.id,
+  };
+  if (cover) {
+    await store.set(`cover:${copy.id}`, cover);
+    noCover.delete(copy.id);
+  }
+  await change((d) => ({ records: [copy, ...d.records] }), [{ type: 'book.put', book: toWire(copy) }]);
+  return copy;
 }
 
 /** Deletes a book from this browser and returns everything needed to put it back. */
@@ -392,7 +434,9 @@ async function restoreBook(r: RemovedBook) {
 }
 
 /** The colour the next book added gets. Only the colour each book was given counts, not recolours. */
-const nextColor = () => pickColor(view.records.filter((r) => r.source !== 'placeholder').map((r) => normColor(r.color, r.title)));
+function nextColor() {
+  return pickColor(view.records.filter((r) => r.source !== 'placeholder').map((r) => normColor(r.color, r.title)));
+}
 
 /** Reading positions change often, so they're saved at most every 400 ms. */
 function saveRead(id: string, read: ReadState) {
@@ -441,7 +485,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, nextColor, addBook, setCover, removeBook, restoreBook, saveRead, editBook, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, editBook, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

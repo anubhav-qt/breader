@@ -82,7 +82,8 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     const cover = book.kind === 'flow' ? book.cover : undefined;
     book.cleanup?.();
     await onAdded(rec, data, cover);
-    if (!shared && !hasKey) {
+    // Shared books need a key too: it's how they reach the server, and so the Shared Library.
+    if (!hasKey) {
       const key = newLibraryKey();
       await onKey(key);
       setStep({ kind: 'key', key, title: rec.title });

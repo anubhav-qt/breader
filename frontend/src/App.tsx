@@ -6,10 +6,11 @@ import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
-import type { BookRecord, LoadedBook, ReadState } from './books/types';
+import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, placeholderRecords, sampleRecords, shelfRecords, type PreviewMode } from './data/library';
 import type { AccountResponse } from '@breader/shared/protocol';
+import { shelfRecord, useShelf } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
 import { AddBook } from './features/add/AddBook';
@@ -97,6 +98,7 @@ async function closeReader(host: HTMLElement, id: string, reduced: boolean) {
 export default function App() {
   // Notices from sync (a file the server wouldn't take) use the toast below.
   const lib = useLibrary({ onNotice: (text) => say(text) });
+  const shelf = useShelf();
   const [now] = useState(() => Date.now());
   const [route, setRoute] = useState<Route>(parseHash);
   const [tab, setTab] = useState<Tab>('mine');
@@ -170,17 +172,32 @@ export default function App() {
     () => (devTools ? { all: [...sampleRecords(now), ...placeholderRecords(now)], shelf: shelfRecords(now) } : { all: [], shelf: [] }),
     [now],
   );
+  /*
+   * The Shared Library tab: this reader's own shared books, then everyone else's. A shared book they
+   * have started shows as their copy of it, with their place and colour.
+   */
+  const sharedRecords = useMemo(() => {
+    const own = lib.records.filter((r) => r.shared);
+    const ownIds = new Set(own.map((r) => r.id));
+    const copies = new Map<string, BookRecord>();
+    for (const r of lib.records) if (r.origin && !hidden.has(r.id)) copies.set(r.origin, r);
+    const others = shelf.books.filter((b) => !ownIds.has(b.id)).map((b) => copies.get(b.id) ?? shelfRecord(b));
+    return [...own, ...others];
+  }, [lib.records, shelf.books, hidden]);
+
   const recordById = useMemo(() => {
     const m = new Map<string, BookRecord>();
-    for (const r of [...previewSets.all, ...previewSets.shelf, ...lib.records]) m.set(r.id, r);
+    for (const r of [...previewSets.all, ...previewSets.shelf, ...sharedRecords, ...lib.records]) m.set(r.id, r);
     return m;
-  }, [previewSets, lib.records]);
+  }, [previewSets, sharedRecords, lib.records]);
 
   const items = useMemo(() => {
+    const covers = { ...shelf.covers, ...lib.covers };
     const view = (recs: BookRecord[]) =>
-      recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, lib.covers, lib.edits)).sort(byRecent);
-    const liveMine = view(lib.records.filter((r) => !r.shared));
-    const shelf = view([...lib.records.filter((r) => r.shared), ...previewSets.shelf]);
+      recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, covers, lib.edits)).sort(byRecent);
+    const liveMine = view(lib.records);
+    // A copy stands where its shared book stood, so its card stays put when it's started.
+    const onShelf = view([...sharedRecords, ...previewSets.shelf]).map((b) => (b.origin ? { ...b, key: b.origin } : b));
     let mine: ShelfItem[];
     switch (preview) {
       case 'empty': mine = []; break;
@@ -189,8 +206,8 @@ export default function App() {
       case 'many': mine = view(previewSets.all); break;
       default: mine = liveMine;
     }
-    return { mine, shelf };
-  }, [lib.records, lib.reads, lib.covers, lib.edits, previewSets, preview, hidden]);
+    return { mine, shelf: onShelf };
+  }, [lib.records, lib.reads, lib.covers, lib.edits, shelf.covers, sharedRecords, previewSets, preview, hidden]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
   const finishOpen = useCallback((id: string) => {
@@ -198,14 +215,14 @@ export default function App() {
     setOpening(null);
   }, []);
 
-  const startLoad = useCallback(async (id: string) => {
-    const rec = recordById.get(id);
+  const startLoad = useCallback(async (id: string, given?: BookRecord) => {
+    const rec = given ?? recordById.get(id);
     if (!rec) return null;
     try {
       const book = await loadRecord(rec);
       loadedId.current = id;
       setLoaded({ id, book });
-      if (book.kind === 'flow' && book.cover && !rec.hasCover && rec.source !== 'placeholder' && lib.records.some((r) => r.id === id)) {
+      if (book.kind === 'flow' && book.cover && !rec.hasCover && rec.source === 'file') {
         void lib.setCover(id, book.cover);
       }
       return book;
@@ -216,15 +233,25 @@ export default function App() {
     }
   }, [recordById, lib, say]);
 
-  const onOpen = useCallback((book: ShelfItem, rect: DOMRect) => {
+  const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect) => {
     openAnimDone.current = false;
     loadedId.current = null;
-    setOpening({ id: book.id, rect });
-    void startLoad(book.id).then((b) => {
+    // A shared book this reader hasn't started joins their library as they open it.
+    const entry = recordById.get(book.id);
+    const rec = entry?.source === 'shelf' ? await lib.startShelfBook(entry) : entry;
+    if (!rec) return;
+    setOpening({ id: rec.id, rect });
+    void startLoad(rec.id, rec).then((b) => {
       if (!b) setOpening(null);
-      else if (openAnimDone.current) finishOpen(book.id);
+      else if (openAnimDone.current) finishOpen(rec.id);
     });
-  }, [startLoad, finishOpen]);
+  }, [recordById, lib, startLoad, finishOpen]);
+
+  /** Renaming, recolouring or favouring a shared book adds it to the reader's library first. */
+  const editBook = useCallback(async (id: string, patch: BookEdit) => {
+    const rec = recordById.get(id);
+    lib.editBook(rec?.source === 'shelf' ? (await lib.startShelfBook(rec)).id : id, patch);
+  }, [recordById, lib]);
 
   // A reader URL opened directly (or reloaded) loads without the transition.
   useEffect(() => {
@@ -312,7 +339,8 @@ export default function App() {
         await lib.addBook(rec, file, cover);
         setPreview('live');
         say(`Added “${rec.title}”`);
-        if (!shared && needKey) {
+        // A key gives the book somewhere on the server to go: to sync, and to reach the Shared Library.
+        if (needKey) {
           const key = newLibraryKey();
           await lib.setKey(key);
           setFreshKey(key);
@@ -417,9 +445,9 @@ export default function App() {
               books={books}
               now={now}
               labelledBy={`tab-${tab}`}
-              onOpen={onOpen}
+              onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={() => setAdding({ mode: 'file' })}
-              onEdit={lib.editBook}
+              onEdit={(id, patch) => void editBook(id, patch)}
               onRemove={(b, fromKeyboard) => void removeBook(b.id, fromKeyboard)}
             />
           )}

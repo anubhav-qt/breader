@@ -134,6 +134,8 @@ export const libraryItems = pgTable(
     lastOpened: at('last_opened').notNull(),
     fileId: text('file_id').references(() => blobs.id),
     coverId: text('cover_id').references(() => blobs.id),
+    /** A copy of a book on the Shared Library, started by this reader: the shared book's id. Its file stays the sharer's. */
+    origin: text('origin'),
     editTitle: text('edit_title'),
     editColor: text('edit_color'),
     favorite: boolean('favorite').notNull().default(false),
@@ -148,6 +150,8 @@ export const libraryItems = pgTable(
     index('library_items_removed_idx').on(t.removedAt).where(sql`${t.removedAt} IS NOT NULL`),
     index('library_items_file_idx').on(t.fileId),
     index('library_items_cover_idx').on(t.coverId),
+    // The Shared Library: every library's shared books, newest first.
+    index('library_items_shelf_idx').on(t.addedAt).where(sql`${t.shared} AND ${t.removedAt} IS NULL`),
   ],
 );
 
