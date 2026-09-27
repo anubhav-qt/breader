@@ -191,6 +191,8 @@ const editToWire = (patch: BookEdit): Edit => ({
   ...('title' in patch ? { title: patch.title?.trim() || null } : {}),
   ...('color' in patch ? { color: patch.color ?? null } : {}),
   ...('favorite' in patch ? { favorite: !!patch.favorite } : {}),
+  ...('series' in patch ? { series: patch.series === undefined ? null : patch.series.trim() } : {}),
+  ...('seriesIndex' in patch ? { seriesIndex: patch.seriesIndex ?? null } : {}),
 });
 
 /** Merges what other browsers did. Changes the server hasn't seen yet (`pending`) win. */
@@ -229,6 +231,8 @@ function mergePull(d: LibraryData, pull: PullResponse, pending: Mutation[]): { n
     if (mine?.title !== undefined) edit.title = mine.title ?? undefined;
     if (mine?.color !== undefined) edit.color = mine.color ?? undefined;
     if (mine?.favorite !== undefined) edit.favorite = mine.favorite;
+    if (mine?.series !== undefined) edit.series = mine.series ?? undefined;
+    if (mine?.seriesIndex !== undefined) edit.seriesIndex = mine.seriesIndex ?? undefined;
     for (const k of Object.keys(edit) as Array<keyof BookEdit>) if (edit[k] === undefined || edit[k] === false) delete edit[k];
     if (Object.keys(edit).length) edits[b.id] = edit;
     else delete edits[b.id];
@@ -384,6 +388,7 @@ async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
     ...(entry.fileId ? { fileId: entry.fileId } : {}),
     ...(entry.coverId ? { coverId: entry.coverId } : {}),
     origin: entry.id,
+    ...(entry.series ? { series: entry.series, seriesIndex: entry.seriesIndex } : {}),
   };
   if (cover) {
     await store.set(`cover:${copy.id}`, cover);
@@ -512,9 +517,12 @@ export function withReading(
   const r = reads[rec.id];
   const e = edits[rec.id] ?? {};
   const title = e.title?.trim() || rec.title;
+  const series = e.series !== undefined ? e.series.trim() || undefined : rec.series;
   return {
     ...rec,
     title,
+    series,
+    seriesIndex: series ? e.seriesIndex ?? rec.seriesIndex : undefined,
     color: normColor(e.color ?? rec.color, rec.title),
     favorite: !!e.favorite,
     opened: !!r,

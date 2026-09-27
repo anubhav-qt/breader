@@ -24,6 +24,8 @@ export interface FlowBook {
   toc: TocItem[];
   words: number;
   cover?: Blob;
+  /** The series the file says it belongs to. */
+  series?: { name: string; index?: number };
   cleanup?: () => void;
 }
 
@@ -73,6 +75,9 @@ export interface BookRecord {
   coverId?: string;
   /** A copy of a book on the Shared Library: that book's id. Its file stays the sharer's. */
   origin?: string;
+  /** The series its file names, and its number in it. */
+  series?: string;
+  seriesIndex?: number;
 }
 
 /** Changes a reader makes to a book's card: name, colour, favourite. */
@@ -80,6 +85,9 @@ export interface BookEdit {
   title?: string;
   color?: string;
   favorite?: boolean;
+  /** The reader's own series for it; '' takes it out of the one its file names. */
+  series?: string;
+  seriesIndex?: number;
 }
 
 export interface ReadState {

@@ -4,8 +4,10 @@
   bottom: 16px;
   z-index: 60;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 2px;
+  max-width: calc(100vw - 32px);
   padding: 5px;
   border-radius: 12px;
   background: var(--paper);

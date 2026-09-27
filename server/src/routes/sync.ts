@@ -111,7 +111,9 @@ export function syncRoutes(deps: Deps) {
             fileId: i.fileId,
             coverId: i.coverId,
             ...(i.origin ? { origin: i.origin } : {}),
-            edit: { title: i.editTitle, color: i.editColor, favorite: i.favorite },
+            ...(i.series ? { series: i.series } : {}),
+            ...(i.seriesIndex !== null ? { seriesIndex: i.seriesIndex } : {}),
+            edit: { title: i.editTitle, color: i.editColor, favorite: i.favorite, series: i.editSeries, seriesIndex: i.editSeriesIndex },
             removedAt: ms(i.removedAt),
           })),
           reads: reads.map((s) => ({

@@ -9,6 +9,9 @@ interface Seed {
   words: number;
   line: string;
   format?: Format;
+  /** Placed by hand, for the series previews. */
+  hoursAgo?: number;
+  progress?: number;
 }
 
 /*
@@ -71,7 +74,30 @@ const PLACEHOLDERS: Seed[] = [
   { title: 'The Scarlet Letter', author: 'Nathaniel Hawthorne', words: 63000, format: 'MD', line: 'A throng of bearded men, in sad-coloured garments and grey steeple-crowned hats, intermixed with women, some wearing hoods, and others bareheaded, was assembled in front of a wooden edifice, the door of which was heavily timbered with oak, and studded with iron spikes.' },
   { title: 'Anne of Green Gables', author: 'L. M. Montgomery', words: 97000, line: 'Mrs. Rachel Lynde lived just where the Avonlea main road dipped down into a little hollow, fringed with alders and ladies’ eardrops and traversed by a brook that had its source away back in the woods of the old Cuthbert place…' },
   { title: 'Persuasion', author: 'Jane Austen', words: 83000, line: 'Sir Walter Elliot, of Kellynch Hall, in Somersetshire, was a man who, for his own amusement, never took up any book but the Baronetage…' },
+  // Later books in series already above, so previews show series at every library size.
+  { title: 'Ozma of Oz', author: 'L. Frank Baum', words: 41000, hoursAgo: 9, progress: 0.35, line: 'The wind blew hard and joggled the water of the ocean, sending ripples across its surface.' },
+  { title: 'The Marvelous Land of Oz', author: 'L. Frank Baum', words: 42000, hoursAgo: 12, progress: 1, line: 'In the Country of the Gillikins, which is at the North of the Land of Oz, lived a youth called Tip.' },
+  { title: 'The Sign of the Four', author: 'Arthur Conan Doyle', words: 43000, hoursAgo: 20, progress: 0.6, line: 'Sherlock Holmes took his bottle from the corner of the mantel-piece and his hypodermic syringe from its neat morocco case.' },
+  { title: 'A Study in Scarlet', author: 'Arthur Conan Doyle', words: 43000, hoursAgo: 3000, progress: 1, line: 'In the year 1878 I took my degree of Doctor of Medicine of the University of London, and proceeded to Netley to go through the course prescribed for surgeons in the army.' },
+  { title: 'Anne of Avonlea', author: 'L. M. Montgomery', words: 88000, hoursAgo: 60, progress: 0, line: 'A tall, slim girl, “half-past sixteen,” with serious gray eyes and hair which her friends called auburn, had sat down on the broad red sandstone doorstep of a Prince Edward Island farmhouse one ripe afternoon in August, firmly resolved to construe so many lines of Virgil.' },
 ];
+
+/** Placeholder books that belong to a series, by title: [series, number]. */
+const SERIES: Record<string, [string, number]> = {
+  'The Wonderful Wizard of Oz': ['The Land of Oz', 1],
+  'The Marvelous Land of Oz': ['The Land of Oz', 2],
+  'Ozma of Oz': ['The Land of Oz', 3],
+  'A Study in Scarlet': ['Sherlock Holmes', 1],
+  'The Sign of the Four': ['Sherlock Holmes', 2],
+  'The Adventures of Sherlock Holmes': ['Sherlock Holmes', 3],
+  'The Hound of the Baskervilles': ['Sherlock Holmes', 5],
+  'Anne of Green Gables': ['Anne of Green Gables', 1],
+  'Anne of Avonlea': ['Anne of Green Gables', 2],
+};
+const seriesOf = (title: string) => {
+  const s = SERIES[title];
+  return s ? { series: s[0], seriesIndex: s[1] } : {};
+};
 
 function rng(seed: number) {
   return () => {
@@ -100,12 +126,14 @@ export function placeholderRecords(now: number): BookRecord[] {
   const r = rng(7);
   return PLACEHOLDERS.map((p, j) => {
     const roll = r();
-    const progress = roll < 0.2 ? 0 : roll < 0.33 ? 1 : Math.round((0.03 + r() * 0.9) * 100) / 100;
+    const progress = p.progress ?? (roll < 0.2 ? 0 : roll < 0.33 ? 1 : Math.round((0.03 + r() * 0.9) * 100) / 100);
     let hoursAgo = 5 + j * j * 1.9 + j * 9;
     if (j >= 34) hoursAgo *= 3;
+    if (p.hoursAgo !== undefined) hoursAgo = p.hoursAgo;
     return {
       id: `ph-${slug(p.title)}`, title: p.title, author: p.author, format: p.format ?? FORMAT_MIX[j % FORMAT_MIX.length], source: 'placeholder', shared: false,
       addedAt: now - (hoursAgo + 24) * HOUR, words: p.words, color: colorKeyFor(p.title), progress, line: p.line, lastOpened: now - hoursAgo * HOUR,
+      ...seriesOf(p.title),
     };
   });
 }
@@ -115,6 +143,7 @@ export function shelfRecords(now: number): BookRecord[] {
   return PLACEHOLDERS.slice(19, 33).map((p, j) => ({
     id: `shelf-${slug(p.title)}`, title: p.title, author: p.author, format: p.format ?? FORMAT_MIX[(j + 3) % FORMAT_MIX.length], source: 'placeholder', shared: true,
     addedAt: now - (10 + j * j * 14) * HOUR, words: p.words, color: colorKeyFor(p.title), progress: 0, line: p.line, lastOpened: now - (10 + j * j * 14) * HOUR,
+    ...seriesOf(p.title),
   }));
 }
 
@@ -128,5 +157,5 @@ export const PREVIEW_MODES: Array<{ id: PreviewMode; label: string }> = [
   { id: 'empty', label: 'Empty' },
   { id: 'one', label: '1 book' },
   { id: 'few', label: '6 books' },
-  { id: 'many', label: '45 books' },
+  { id: 'many', label: '50 books' },
 ];

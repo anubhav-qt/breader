@@ -9,6 +9,8 @@ import { IconCheck, IconStar, IconTrash } from '../../components/icons';
 
 interface Props {
   book: ShelfItem;
+  /** Series already in the library, offered as the name is typed. */
+  seriesNames: string[];
   anchor: HTMLElement;
   onChange: (patch: BookEdit) => void;
   /** Absent for books someone else shared: only they can take them off the shelf. */
@@ -22,10 +24,12 @@ const MARGIN = 12;
 const COLS = 7;
 const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLS, ArrowUp: -COLS };
 
-/** A small popover beside the card's corner button: rename, recolour, favourite or remove. */
-export function EditPopover({ book, anchor, onChange, onRemove, onClose }: Props) {
+/** A small popover beside the card's corner button: rename, recolour, put in a series, favourite or remove. */
+export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(book.title);
+  const [series, setSeries] = useState(book.series ?? '');
+  const [num, setNum] = useState(book.seriesIndex !== undefined ? String(book.seriesIndex) : '');
   const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
   const removing = useRef(false);
 
@@ -44,9 +48,23 @@ export function EditPopover({ book, anchor, onChange, onRemove, onClose }: Props
     if (t && t !== book.title) onChange({ title: t });
     if (!t) setName(book.title);
   };
+  // An empty name takes the book out of its series; an empty number leaves it unnumbered.
+  const commitSeries = () => {
+    if (removing.current) return;
+    const s = series.trim();
+    const n = num.trim() === '' ? undefined : Number(num.replace(',', '.'));
+    const patch: BookEdit = {};
+    if (s !== (book.series ?? '')) patch.series = s;
+    if (n === undefined || (Number.isFinite(n) && n >= 0 && n <= 10_000)) {
+      if (n !== book.seriesIndex) patch.seriesIndex = n;
+    } else {
+      setNum(book.seriesIndex !== undefined ? String(book.seriesIndex) : '');
+    }
+    if (Object.keys(patch).length) onChange(patch);
+  };
   // A rename in progress is kept however the popover closes.
-  const commitRef = useRef(commitName);
-  commitRef.current = commitName;
+  const commitRef = useRef(() => { commitName(); commitSeries(); });
+  commitRef.current = () => { commitName(); commitSeries(); };
   useEffect(() => () => commitRef.current(), []);
 
   // Focus moves in, so the keyboard carries on here; Escape hands it back to the corner button.
@@ -123,6 +141,35 @@ export function EditPopover({ book, anchor, onChange, onRemove, onClose }: Props
         spellCheck={false}
         autoComplete="off"
       />
+      <label className="ep-label" htmlFor="ep-series">Series</label>
+      <div className="ep-series">
+        <input
+          id="ep-series"
+          className="ep-input"
+          value={series}
+          list="ep-series-names"
+          placeholder="None"
+          onChange={(e) => setSeries(e.target.value)}
+          onBlur={commitSeries}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <input
+          className="ep-input ep-num"
+          value={num}
+          inputMode="decimal"
+          placeholder="#"
+          aria-label="Number in the series"
+          onChange={(e) => setNum(e.target.value)}
+          onBlur={commitSeries}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          autoComplete="off"
+        />
+        <datalist id="ep-series-names">
+          {seriesNames.map((s) => <option key={s} value={s} />)}
+        </datalist>
+      </div>
       <div className="ep-label" id="ep-colour">Colour</div>
       <div className="ep-swatches" role="radiogroup" aria-labelledby="ep-colour" onKeyDown={onSwatchKey}>
         {BOOK_COLORS.map((c, i) => (

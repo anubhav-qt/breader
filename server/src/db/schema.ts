@@ -136,9 +136,15 @@ export const libraryItems = pgTable(
     coverId: text('cover_id').references(() => blobs.id),
     /** A copy of a book on the Shared Library, started by this reader: the shared book's id. Its file stays the sharer's. */
     origin: text('origin'),
+    /** The series the book's file names, and its number in it. */
+    series: text('series'),
+    seriesIndex: doublePrecision('series_index'),
     editTitle: text('edit_title'),
     editColor: text('edit_color'),
     favorite: boolean('favorite').notNull().default(false),
+    /** The reader's own series for it: '' for none, null to go by the file. */
+    editSeries: text('edit_series'),
+    editSeriesIndex: doublePrecision('edit_series_index'),
     removedAt: at('removed_at'),
     rev: big('rev').notNull(),
     version: version(),

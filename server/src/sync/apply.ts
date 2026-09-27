@@ -62,6 +62,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           fileId: b.fileId ?? null,
           coverId: b.coverId ?? null,
           origin: b.origin ?? null,
+          series: b.series?.trim() || null,
+          seriesIndex: b.seriesIndex ?? null,
           rev,
         })
         .onConflictDoUpdate({
@@ -81,6 +83,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             fileId: sql`coalesce(excluded.file_id, ${libraryItems.fileId})`,
             coverId: sql`coalesce(excluded.cover_id, ${libraryItems.coverId})`,
             origin: sql`coalesce(excluded.origin, ${libraryItems.origin})`,
+            series: sql`excluded.series`,
+            seriesIndex: sql`excluded.series_index`,
             rev,
           },
         });
@@ -121,6 +125,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
       if (m.edit.title !== undefined) set.editTitle = m.edit.title?.trim() || null;
       if (m.edit.color !== undefined) set.editColor = m.edit.color;
       if (m.edit.favorite !== undefined) set.favorite = m.edit.favorite;
+      if (m.edit.series !== undefined) set.editSeries = m.edit.series === null ? null : m.edit.series.trim();
+      if (m.edit.seriesIndex !== undefined) set.editSeriesIndex = m.edit.seriesIndex;
       const done = await tx.update(libraryItems).set(set).where(item(libraryId, m.bookId)).returning({ id: libraryItems.bookId });
       if (!done.length) throw notFound();
       return;

@@ -22,6 +22,9 @@ export const Position = z.object({
   offset: z.number().int().nonnegative(),
 });
 
+/** A book's number in its series: 1, 2, sometimes 1.5 for a novella between them. */
+const SeriesIndex = z.number().min(0).max(10_000);
+
 /** A book as the app's BookRecord describes it, plus the ids of its stored file and cover. */
 export const Book = z.object({
   id: Id,
@@ -43,14 +46,19 @@ export const Book = z.object({
   coverId: Id.nullish(),
   /** A copy of a book on the Shared Library, started by this reader: the shared book's id. */
   origin: Id.nullish(),
+  /** The series it belongs to, as its file says, and its number in it. */
+  series: z.string().max(300).nullish(),
+  seriesIndex: SeriesIndex.nullish(),
 });
 export type Book = z.infer<typeof Book>;
 
-/** The reader's changes to a card. null clears a rename or colour. */
+/** The reader's changes to a card. null clears a rename, colour or series; '' takes a book out of its series. */
 export const Edit = z.object({
   title: z.string().max(500).nullable().optional(),
   color: z.string().max(32).nullable().optional(),
   favorite: z.boolean().optional(),
+  series: z.string().max(300).nullable().optional(),
+  seriesIndex: SeriesIndex.nullable().optional(),
 });
 export type Edit = z.infer<typeof Edit>;
 
@@ -148,6 +156,8 @@ export const ShelfBook = z.object({
   line: z.string(),
   fileId: Id,
   coverId: Id.nullable(),
+  series: z.string().nullish(),
+  seriesIndex: z.number().nullish(),
 });
 export type ShelfBook = z.infer<typeof ShelfBook>;
 

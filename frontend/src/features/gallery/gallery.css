@@ -225,9 +225,144 @@
 .bento { position: relative; display: grid; grid-auto-rows: 132px; gap: 14px; }
 
 /* Everything else: the wall */
-.wall { display: grid; gap: 26px; margin-top: 30px; }
+.wall { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; margin-top: 30px; }
 .wall-count { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); }
 .wall-rows { position: relative; display: flex; flex-wrap: wrap; gap: 14px; }
+
+/* ------------------------------------------------------------------ */
+/* Series (series.ts): three designs on trial. */
+
+/* Stack: the series' other books peek out above its card, finished ones in their colour. */
+.tile-behind {
+  position: absolute;
+  top: -6px;
+  left: 12px;
+  right: 12px;
+  height: 40px;
+  border-radius: 12px 12px 0 0;
+  background: var(--canvas);
+  box-shadow: inset 0 0 0 1px var(--tile-border);
+  pointer-events: none;
+}
+.tile-behind.is-1 { z-index: -1; top: -11px; left: 24px; right: 24px; }
+.tile-behind.is-read { background: var(--bc); box-shadow: none; }
+
+/* A stacked series, opened. */
+.ss-sub { margin: -8px 0 14px; font: var(--ui-w) 12.5px/1.2 var(--ui); color: var(--ink-2); }
+.ss-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ss-item { position: relative; display: flex; align-items: center; }
+.ss-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 46px 10px 8px;
+  border-radius: 12px;
+  text-align: left;
+  transition: background-color 140ms ease;
+}
+.ss-row:hover { background: var(--fill); }
+.ss-num { width: 22px; flex: none; text-align: right; font: var(--ui-w-strong) 13px/1 var(--ui); color: var(--ink-2); }
+.ss-item.is-next .ss-num { color: var(--ink); }
+/* The book's colour, filled from the bottom as far as it's read. */
+.ss-swatch {
+  width: 18px;
+  height: 26px;
+  flex: none;
+  border-radius: 4px;
+  background: linear-gradient(to top, var(--bc) calc(var(--p) * 100%), var(--canvas) 0);
+  box-shadow: inset 0 0 0 1px var(--tile-border);
+}
+.ss-text { min-width: 0; display: grid; gap: 5px; }
+.ss-title { font-family: var(--read); font-weight: 700; font-size: 24px; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-top: 0.15em; margin-top: -0.15em; }
+.ss-meta { font: var(--ui-w) 12px/1.2 var(--ui); color: var(--ink-2); }
+.ss-more {
+  position: absolute;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.ss-more:hover { background: var(--fill); color: var(--ink); }
+.ss-more svg { width: 16px; height: 16px; }
+
+/* Spines: one card, a spine per book, each filling with its colour from the bottom. */
+.spines {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  display: flex;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--canvas);
+}
+.spines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--tile-border);
+  pointer-events: none;
+}
+.spine { --pad-y: 20px; --pad-x: 22px; position: relative; flex: 1 1 0; min-width: 26px; container-type: size; }
+.spine.is-lead { flex: 7 1 0; min-width: 0; }
+.spine + .spine::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; z-index: 3; width: 1px; background: var(--tile-border); pointer-events: none; }
+.spine::after { content: ""; position: absolute; inset: 0; z-index: 4; box-shadow: inset 0 0 0 1px transparent; pointer-events: none; transition: box-shadow 220ms ease; }
+.spine:hover::after { box-shadow: inset 0 0 0 1px var(--tile-border-hover); }
+.spine:has(.tile-hit:focus-visible)::after { box-shadow: inset 0 0 0 2px var(--accent); }
+.spine .tile-hit { border-radius: 0; }
+.spine-face {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0 14px;
+  color: var(--ink);
+  pointer-events: none;
+}
+.spine-face.is-ink { z-index: 1; background: var(--bc); color: var(--bc-ink); }
+.spine.is-lead .spine-face { align-items: flex-start; padding: var(--pad-y) var(--pad-x); }
+.spine.is-lead .spine-face > :first-child { padding-right: 36px; }
+.spine.is-lead .t-title { font-size: clamp(22px, 9cqw, 44px); }
+.spine:hover .tile-more { opacity: 1; }
+.sp-num { flex: none; font: var(--ui-w-strong) 13px/1 var(--ui); }
+.sp-title {
+  min-height: 0;
+  margin-top: 12px;
+  writing-mode: vertical-rl;
+  font-family: var(--read);
+  font-weight: 700;
+  font-size: 21px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container (max-height: 259px) {
+  .spine .t-line { display: none; }
+}
+@container (max-height: 150px) {
+  .spine .t-eyebrow { display: none; }
+}
+/* An open spine squeezed by its neighbours keeps just its title. */
+@container (max-width: 150px) {
+  .spine .t-eyebrow, .spine .t-sub { display: none; }
+  .spine.is-lead .spine-face { padding: 16px 12px; }
+  .spine.is-lead .spine-face > :first-child { padding-right: 0; margin-top: 30px; }
+}
+
+/* Rows: each series gets a row of its books, in order, below Recent. */
+.srows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; margin-top: 30px; }
+.srow { position: relative; display: flex; gap: 14px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 6px; }
+.srow-tile { flex: none; }
 
 /* Edit popover: name, colour, favourite, remove */
 .ep {
@@ -255,6 +390,8 @@
   transition: border-color 140ms ease;
 }
 .ep-input:focus { border-color: var(--accent); }
+.ep-series { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 8px; }
+.ep-num { text-align: center; }
 .ep-swatches { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; }
 .ep-sw {
   aspect-ratio: 1;

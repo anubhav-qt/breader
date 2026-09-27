@@ -28,6 +28,28 @@ function parseMarkup(text: string): Document {
 
 interface ManifestItem { href: string; type: string; props: string[] }
 
+const seriesNumber = (s?: string | null) => {
+  const n = parseFloat(s ?? '');
+  return Number.isFinite(n) && n >= 0 && n <= 10_000 ? n : undefined;
+};
+
+/** The series a book says it's part of: EPUB 3's collections, or the tags calibre writes. */
+function seriesOf(opf: Document): FlowBook['series'] {
+  const metas = byTag(opf, 'meta');
+  const refining = (id: string, prop: string) =>
+    metas.find((m) => m.getAttribute('refines') === `#${id}` && m.getAttribute('property') === prop)?.textContent?.trim();
+  for (const m of metas) {
+    if (m.getAttribute('property') !== 'belongs-to-collection') continue;
+    const name = m.textContent?.trim();
+    const id = m.getAttribute('id') ?? '';
+    const type = id ? refining(id, 'collection-type') : undefined;
+    if (name && (!type || type === 'series')) return { name, index: id ? seriesNumber(refining(id, 'group-position')) : undefined };
+  }
+  const named = (n: string) => metas.find((m) => m.getAttribute('name') === n)?.getAttribute('content')?.trim();
+  const name = named('calibre:series');
+  return name ? { name, index: seriesNumber(named('calibre:series_index')) } : undefined;
+}
+
 /** The smallest image that counts as a picture for a cover, in bytes. */
 const MIN_PICTURE = 8 * 1024;
 
@@ -195,6 +217,7 @@ export async function parseEpub(data: Blob | ArrayBuffer, fallbackTitle: string)
     toc,
     words: sections.reduce((n, s) => n + s.words, 0),
     cover,
+    series: seriesOf(opf),
     cleanup: () => urls.forEach((u) => URL.revokeObjectURL(u)),
   };
 }

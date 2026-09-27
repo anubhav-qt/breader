@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useElementWidth } from '../useElementWidth';
-import { Tile, type Variant } from '../Tile';
+import { Card } from '../Card';
+import type { SeriesLook } from '../series';
+import type { Variant } from '../Tile';
 import type { GalleryItem, SectionProps } from '../types';
 
 const GAP = 14;
@@ -16,6 +18,16 @@ function aspectFor(id: string) {
   return ASPECTS[Math.abs(h) % ASPECTS.length];
 }
 
+/** A series of spines is as wide as its books need. */
+const spinesAspect = (books: number) => Math.min(2.15, 0.75 + 0.28 * books);
+
+function aspectOf(item: GalleryItem, look: SeriesLook) {
+  return item.series && look === 'spines' ? spinesAspect(item.series.books.length) : aspectFor(item.key);
+}
+
+/** When a card was last read: a series goes by its latest book. */
+const lastRead = (item: GalleryItem) => (item.series ? Math.max(...item.series.books.map((b) => b.lastOpened)) : item.book.lastOpened);
+
 function variantFor(a: number): Variant {
   if (a < 0.8) return 'cover';
   if (a < 1.8) return 'square';
@@ -24,7 +36,7 @@ function variantFor(a: number): Variant {
 
 /**
  * Justified rows: each row closes where its height lands closest to ROW_H, then scales to fill
- * the width exactly. The last row keeps the target height.
+ * the width exactly. The last row keeps the target height where it fits.
  */
 function justify(aspects: number[], width: number) {
   const out: Array<{ w: number; h: number }> = [];
@@ -58,7 +70,11 @@ function justify(aspects: number[], width: number) {
     row.push(i);
     sum += a;
   });
-  if (row.length) place(row, ROW_H, false);
+  // The last row keeps the target height, unless that would run past the edge (a lone panorama on a phone).
+  if (row.length) {
+    const fit = (width - GAP * (row.length - 1)) / sum;
+    place(row, Math.min(ROW_H, fit), fit < ROW_H);
+  }
   return out;
 }
 
@@ -77,13 +93,13 @@ function wallGroup(t: number, now: number): string {
   return String(d.getFullYear());
 }
 
-export function Wall({ items, now, enter, indexBase = 0, editingId, onOpen, onEdit }: SectionProps) {
+export function Wall({ items, now, enter, indexBase = 0, editingId, look, onOpen, onEdit, onSeries }: SectionProps) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
 
   const groups = useMemo(() => {
     const out: Array<{ label: string; items: Array<{ item: GalleryItem; i: number }> }> = [];
     items.forEach((item, i) => {
-      const label = wallGroup(item.book.lastOpened, now);
+      const label = wallGroup(lastRead(item), now);
       if (!out.length || out[out.length - 1].label !== label) out.push({ label, items: [] });
       out[out.length - 1].items.push({ item, i });
     });
@@ -94,7 +110,7 @@ export function Wall({ items, now, enter, indexBase = 0, editingId, onOpen, onEd
   return (
     <div ref={ref} className="wall">
       {width > 0 && groups.map((g) => {
-        const aspects = g.items.map(({ item }) => aspectFor(item.key));
+        const aspects = g.items.map(({ item }) => aspectOf(item, look));
         const sizes = justify(aspects, width - 1);
         const books = g.items.length;
         return (
@@ -106,8 +122,10 @@ export function Wall({ items, now, enter, indexBase = 0, editingId, onOpen, onEd
             <div className="wall-rows">
               <AnimatePresence mode="popLayout" initial={false}>
                 {g.items.map(({ item, i }, k) => (
-                  <Tile
+                  <Card
                     key={item.key}
+                    look={look}
+                    onSeries={onSeries}
                     item={item}
                     variant={variantFor(aspects[k])}
                     index={indexBase + i}
@@ -116,7 +134,7 @@ export function Wall({ items, now, enter, indexBase = 0, editingId, onOpen, onEd
                     radius={aspects[k] < 0.8 ? '8px 18px 18px 8px' : 20}
                     className="wall-tile"
                     style={{ width: sizes[k].w, height: sizes[k].h }}
-                    open={item.key === editingId}
+                    open={(item.book.key ?? item.book.id) === editingId}
                     layoutKey={layoutKey}
                     onOpen={onOpen}
                     onEdit={onEdit}

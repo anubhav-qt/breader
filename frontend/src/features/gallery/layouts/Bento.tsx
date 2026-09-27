@@ -1,10 +1,10 @@
 import { AnimatePresence } from 'motion/react';
 import { useElementWidth } from '../useElementWidth';
-import { Tile } from '../Tile';
+import { Card } from '../Card';
 import type { SectionProps } from '../types';
 import { slotsFor } from './slots';
 
-export function Bento({ items, now, enter, editingId, onOpen, onEdit }: SectionProps) {
+export function Bento({ items, now, enter, editingId, look, onOpen, onEdit, onSeries }: SectionProps) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const cols = width >= 1000 ? 6 : width >= 640 ? 4 : 2;
   const slots = slotsFor(items.length, cols);
@@ -21,8 +21,10 @@ export function Bento({ items, now, enter, editingId, onOpen, onEdit }: SectionP
             ? { gridColumn: `${col + 1} / span ${spanC}`, gridRow: `${row + 1} / span ${spanR}` }
             : { gridColumn: `span ${Math.min(spanC, cols)}`, gridRow: `span ${spanR}` };
           return (
-            <Tile
+            <Card
               key={item.key}
+              look={look}
+              onSeries={onSeries}
               item={item}
               variant={v}
               index={i}
@@ -31,7 +33,7 @@ export function Bento({ items, now, enter, editingId, onOpen, onEdit }: SectionP
               art={i < 2}
               radius={v === 'small' ? 20 : 26}
               style={place}
-              open={item.key === editingId}
+              open={(item.book.key ?? item.book.id) === editingId}
               layoutKey={layoutKey}
               onOpen={onOpen}
               onEdit={onEdit}
