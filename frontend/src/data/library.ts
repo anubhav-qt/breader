@@ -186,6 +186,9 @@ export function shelfRecords(now: number): BookRecord[] {
   }));
 }
 
+/** Only a reader's own uploads can go on the Shared Library or come off it; a copy's file is the sharer's. */
+export const canShare = (rec: BookRecord) => rec.source === 'file' && !rec.origin;
+
 /** Books other people put on the shared shelf are theirs to take off, not yours. */
 export const canRemove = (rec: BookRecord) => rec.source !== 'shelf' && !(rec.shared && rec.source === 'placeholder');
 

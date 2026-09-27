@@ -144,6 +144,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           progress: m.read.progress,
           line: m.read.line,
           words: m.read.words ?? null,
+          wordsRead: m.read.wordsRead ?? 0,
           readAt,
           rev,
         })
@@ -159,6 +160,13 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           },
           setWhere: sql`${readingStates.readAt} <= excluded.read_at`,
         });
+      // Words read only grow, whichever device's session is newer.
+      if (m.read.wordsRead) {
+        await tx
+          .update(readingStates)
+          .set({ wordsRead: m.read.wordsRead, rev })
+          .where(and(eq(readingStates.libraryId, libraryId), eq(readingStates.bookId, m.bookId), sql`${readingStates.wordsRead} < ${m.read.wordsRead}`));
+      }
       return;
     }
 

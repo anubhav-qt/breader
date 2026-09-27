@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
+import { SHELF_LIMIT } from '@breader/shared/limits';
 import type { ShelfBook, ShelfResponse } from '@breader/shared/protocol';
 import type { BookRecord } from '../books/types';
 import { api } from '../lib/api';
@@ -14,13 +15,15 @@ interface Shelf {
   books: ShelfBook[];
   /** Object URLs of the covers this browser has fetched, by shared book id. */
   covers: Record<string, string>;
+  /** The list came from the server (not last time's) and holds every shared book. */
+  complete: boolean;
 }
 
 const REFRESH_AFTER = 30_000;
 /** Covers are fetched for the newest books only; the library shows only the two most recent. */
 const COVERS = 12;
 
-let shelf: Shelf = { books: [], covers: {} };
+let shelf: Shelf = { books: [], covers: {}, complete: false };
 const subscribers = new Set<() => void>();
 let started = false;
 let lastFetch = 0;
@@ -38,7 +41,7 @@ export function refreshShelf(now = false): Promise<void> {
   fetching = (async () => {
     try {
       const { books } = await api.get<ShelfResponse>('/v1/shelf', 10_000);
-      set({ books });
+      set({ books, complete: books.length < SHELF_LIMIT });
       await store.set('shelf', books);
       void loadCovers(books);
     } catch {

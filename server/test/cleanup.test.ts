@@ -120,8 +120,11 @@ describe('clean-up', () => {
     const key = (await blob(fileId)).r2_key;
     const shared = book({ fileId, shared: true });
     await idle.b.post('/v1/sync/push', push('c', { type: 'book.put', book: shared }));
-    const copy = await reader.b.post('/v1/sync/push', push('r', { type: 'book.put', book: book({ fileId, origin: shared.id }) }));
+    const mine = book({ fileId, origin: shared.id });
+    const copy = await reader.b.post('/v1/sync/push', push('r', { type: 'book.put', book: mine }));
     expect(copy.body.rejected).toEqual([]);
+    // Read far enough into to keep.
+    await reader.b.post('/v1/sync/push', push('r2', { type: 'read.put', bookId: mine.id, read: { progress: 0.1, line: '', lastOpened: Date.now(), wordsRead: 120 } }));
     await q(`UPDATE libraries SET last_active_at = now() - interval '366 days' WHERE id = $1`, [idle.libraryId]);
 
     expect(await expireLibraries(primary.pool, deps.storage)).toBeGreaterThanOrEqual(1);

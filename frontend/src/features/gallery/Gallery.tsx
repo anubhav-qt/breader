@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { BookEdit } from '../../books/types';
-import { canRemove } from '../../data/library';
+import { canRemove, canShare } from '../../data/library';
 import type { ShelfItem } from '../../data/useLibrary';
 import { IconPlus } from '../../components/icons';
 import { EditPopover } from './EditPopover';
@@ -23,13 +23,14 @@ interface Props {
   onAdd: () => void;
   onEdit: (id: string, patch: BookEdit) => void;
   onRemove: (book: ShelfItem, fromKeyboard: boolean) => void;
+  onShare: (book: ShelfItem, shared: boolean) => void;
 }
 
 /**
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, side by side, a row per series and everything else as a wall by time.
  */
-export function Gallery({ books, now, labelledBy, onOpen, onAdd, onEdit, onRemove }: Props) {
+export function Gallery({ books, now, labelledBy, onOpen, onAdd, onEdit, onRemove, onShare }: Props) {
   const first = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -92,6 +93,7 @@ export function Gallery({ books, now, labelledBy, onOpen, onAdd, onEdit, onRemov
             anchor={editing.anchor}
             onChange={(patch) => onEdit(editing.id, patch)}
             onRemove={canRemove(editingBook) ? (fromKeyboard) => { setEditing(null); onRemove(editingBook, fromKeyboard); } : undefined}
+            onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
             onClose={closeEdit}
           />
         )}

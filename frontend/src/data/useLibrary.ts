@@ -35,6 +35,8 @@ interface State extends LibraryData {
   ready: boolean;
   /** Object URLs of the covers this browser holds, by book id. */
   covers: Record<string, string>;
+  /** Copies of shared books this library can't keep any more; they hide until shared again. */
+  lapsed: ReadonlySet<string>;
 }
 
 /*
@@ -65,7 +67,8 @@ let covers: Record<string, string> = {};
 const coverLoads = new Set<string>();
 /** Books marked as having a cover whose image this browser doesn't hold. */
 const noCover = new Set<string>();
-let view: State = { ready: false, ...EMPTY, covers };
+let lapsed: ReadonlySet<string> = new Set();
+let view: State = { ready: false, ...EMPTY, covers, lapsed };
 const subscribers = new Set<() => void>();
 let started: Promise<void> | null = null;
 let notice: ((text: string) => void) | undefined;
@@ -78,7 +81,7 @@ const apply = (d: LibraryData, c: Change): LibraryData => ({ ...d, ...c.fn(d) })
 function show() {
   const d = unsaved.reduce(apply, stored);
   showCovers(d.records);
-  view = { ready: true, ...d, covers };
+  view = { ready: true, ...d, covers, lapsed };
   subscribers.forEach((s) => s());
 }
 
@@ -248,7 +251,9 @@ function mergePull(d: LibraryData, pull: PullResponse, pending: Mutation[]): { n
   // The most recent reading session wins. This browser's unsent place is always newer.
   for (const { bookId, read } of pull.reads) {
     const local = reads[bookId];
-    if (!local || local.lastOpened < read.lastOpened) reads[bookId] = read;
+    const wordsRead = Math.max(local?.wordsRead ?? 0, read.wordsRead ?? 0);
+    if (!local || local.lastOpened < read.lastOpened) reads[bookId] = { ...read, wordsRead };
+    else if (wordsRead > (local.wordsRead ?? 0)) reads[bookId] = { ...local, wordsRead };
   }
   return { next: { ...d, records, edits, reads }, gone };
 }
@@ -301,6 +306,12 @@ const host: SyncHost = {
       [{ type: 'book.files', bookId, fileId: ids.fileId, coverId: ids.coverId ?? null }],
     ),
   cover: (bookId, blob) => storeCover(bookId, blob, false),
+  lapsed(ids) {
+    if (ids.length === lapsed.size && ids.every((id) => lapsed.has(id))) return;
+    lapsed = new Set(ids);
+    void store.set('lapsed', ids);
+    show();
+  },
   notice: (text) => notice?.(text),
 };
 
@@ -309,6 +320,7 @@ async function start() {
     // A new browser starts with the bundled samples in development, and empty on the live site.
     if (!(await store.get('records'))) await store.set('records', import.meta.env.DEV ? sampleRecords(Date.now()) : []);
     stored = await loadStored();
+    lapsed = new Set((await store.get<string[]>('lapsed')) ?? []);
   });
   show();
   onNews((news) => {
@@ -458,6 +470,17 @@ function saveRead(id: string, read: ReadState) {
   void change((d) => ({ reads: { ...d.reads, [id]: read } }), holds(id) ? [{ type: 'read.put', bookId: id, read }] : [], { wait: 400 });
 }
 
+/**
+ * Puts one of the reader's own books on the Shared Library, or takes it off. It stays in My books
+ * either way, and anyone who read far enough into it (KEEP_WORDS) keeps their copy.
+ */
+function setShared(id: string, shared: boolean) {
+  const rec = view.records.find((r) => r.id === id);
+  if (!rec || rec.shared === shared) return;
+  const next = { ...rec, shared };
+  void change((d) => ({ records: d.records.map((r) => (r.id === id ? { ...r, shared } : r)) }), [{ type: 'book.put', book: toWire(next) }]);
+}
+
 /** Rename, recolour or favourite a book. Works for placeholders too, so previews can be styled. */
 function editBook(id: string, patch: BookEdit) {
   void change(
@@ -500,7 +523,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, addReadTime, editBook, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, addReadTime, editBook, setShared, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

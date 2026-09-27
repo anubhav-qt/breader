@@ -96,4 +96,6 @@ export interface ReadState {
   line: string;
   lastOpened: number;
   words?: number;
+  /** Words read so far: pages turned forward, not jumps. Only grows. */
+  wordsRead?: number;
 }

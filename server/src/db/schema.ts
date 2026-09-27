@@ -172,6 +172,8 @@ export const readingStates = pgTable(
     progress: doublePrecision('progress').notNull().default(0),
     line: text('line').notNull().default(''),
     words: integer('words'),
+    /** Words read so far on every device; only grows. Copies of shared books kept past KEEP_WORDS. */
+    wordsRead: integer('words_read').notNull().default(0),
     readAt: at('read_at').notNull(),
     rev: big('rev').notNull(),
     version: version(),

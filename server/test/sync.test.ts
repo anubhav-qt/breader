@@ -25,7 +25,7 @@ describe('sync', () => {
     expect(p.body.reads[0]).toMatchObject({ bookId: a.id, read: { pos: { section: 3, block: 12, offset: 40 }, progress: 0.31 } });
     expect(p.body.settings).toEqual({ theme: 'night', style: 'book' });
 
-    expect((await b.get('/v1/sync/pull?since=1')).body).toEqual({ rev: 1, books: [], reads: [], settings: null, timeline: expect.any(String) });
+    expect((await b.get('/v1/sync/pull?since=1')).body).toEqual({ rev: 1, books: [], reads: [], settings: null, timeline: expect.any(String), lapsed: [] });
   });
 
   it('ignores a retried push', async () => {

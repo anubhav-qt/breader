@@ -7,6 +7,7 @@ import { libraries, libraryItems, librarySettings, readingStates, syncClients, s
 import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { log } from '../log.ts';
+import { lapsedIn } from '../lib/shelf.ts';
 import { applyMutation, type Tx } from '../sync/apply.ts';
 
 const Since = z.coerce.number().int().min(0).default(0);
@@ -87,6 +88,7 @@ export function syncRoutes(deps: Deps) {
         const from = full ? 0 : since;
         const items = await tx.select().from(libraryItems).where(and(eq(libraryItems.libraryId, libraryId), gt(libraryItems.rev, from)));
         const reads = await tx.select().from(readingStates).where(and(eq(readingStates.libraryId, libraryId), gt(readingStates.rev, from)));
+        const lapsed = (await tx.execute<{ id: string }>(lapsedIn(libraryId))).rows.map((r) => r.id);
         const [settings] = await tx
           .select({ prefs: librarySettings.prefs })
           .from(librarySettings)
@@ -124,11 +126,13 @@ export function syncRoutes(deps: Deps) {
               line: s.line,
               lastOpened: s.readAt.getTime(),
               ...(s.words !== null ? { words: s.words } : {}),
+              ...(s.wordsRead ? { wordsRead: s.wordsRead } : {}),
             },
           })),
           settings: (settings?.prefs as Record<string, unknown> | undefined) ?? null,
           ...(await timeline(tx)),
           ...(full ? { full } : {}),
+          lapsed,
         };
       },
       { isolationLevel: 'repeatable read', accessMode: 'read only' },

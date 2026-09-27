@@ -7,6 +7,12 @@ export const LIMITS = {
   coverBytes: 5 * MB,
 } as const;
 
+/**
+ * Words someone must have read of a shared book (or heard in a shared voice) to keep it for good.
+ * Below it, a copy lasts only while its owner shares the original.
+ */
+export const KEEP_WORDS = 100;
+
 /** The most books the Shared Library lists, newest first. */
 export const SHELF_LIMIT = 2000;
 

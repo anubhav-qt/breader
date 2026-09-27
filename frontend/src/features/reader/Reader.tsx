@@ -70,9 +70,15 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     return { kind: 'fraction', value: p >= 1 ? 0 : p, line: initial?.line || record.line };
   });
 
+  // Words read: each page turned or scrolled forward counts; jumps through the contents don't.
+  const wordsRead = useRef(initial?.wordsRead ?? 0);
+  const lastAt = useRef<number | null>(null);
   const onLocation = useCallback((l: Loc) => {
     setLoc(l);
-    onSave({ pos: { section: l.section, block: l.block, offset: l.offset }, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words });
+    const moved = lastAt.current === null ? 0 : (l.progress - lastAt.current) * book.words;
+    lastAt.current = l.progress;
+    if (moved > 0 && moved <= 1500) wordsRead.current += Math.round(moved);
+    onSave({ pos: { section: l.section, block: l.block, offset: l.offset }, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current });
   }, [onSave, book.words]);
 
   const openPanel = useCallback((p: PanelName | null) => {

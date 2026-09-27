@@ -68,6 +68,8 @@ export interface SyncHost {
   applyLocked(pull: PullResponse, pending: Mutation[]): Promise<void>;
   /** Replaces the library with the one a key or a login opened. */
   replaceLocked(pull: PullResponse, key: string | null): Promise<void>;
+  /** Copies of shared books that lapsed: read too little of to keep, and no longer shared (PullResponse). */
+  lapsed(ids: string[]): void;
   /** A book's file (and cover) reached the server: note their ids, and tell the server. */
   linked(bookId: string, ids: { fileId: string; coverId?: string }): Promise<void>;
   cover(bookId: string, blob: Blob): Promise<void>;
@@ -422,6 +424,7 @@ async function pullNow() {
     await save(cur);
   });
   if (settings) applySettings(res.settings!);
+  if (res.lapsed) host!.lapsed(res.lapsed);
   void fetchCovers(res.books);
 }
 
@@ -538,7 +541,7 @@ export function flush(): Promise<void> {
 /**
  * A stored file, fetched through a short-lived signed link. A shared book's file (`shelf`) comes
  * from the Shared Library, which needs no key, and otherwise from this library, whose copies of
- * shared books keep their file after it leaves the shelf.
+ * shared books keep their file after it leaves the shelf once they're read far enough into.
  */
 export async function downloadFile(fileId: string, shelf = false): Promise<Blob> {
   const id = encodeURIComponent(fileId);
@@ -598,6 +601,7 @@ async function swapLocked(libraryId: string, key: string | null) {
 
 function opened(pull: PullResponse) {
   if (pull.settings) applySettings(pull.settings);
+  host?.lapsed(pull.lapsed ?? []);
   setStatus({ state: 'synced', lastSynced: Date.now(), message: undefined });
   void fetchCovers(pull.books);
 }

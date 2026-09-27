@@ -1,0 +1,1 @@
+ALTER TABLE "reading_states" ADD COLUMN "words_read" integer DEFAULT 0 NOT NULL;

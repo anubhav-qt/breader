@@ -68,6 +68,8 @@ export const ReadState = z.object({
   line: z.string().max(1000),
   lastOpened: Millis,
   words: z.number().int().nonnegative().optional(),
+  /** Words read in it so far, on every device: it only grows. */
+  wordsRead: z.number().int().nonnegative().optional(),
 });
 export type ReadState = z.infer<typeof ReadState>;
 
@@ -138,6 +140,12 @@ export const PullResponse = z.object({
    * the server has since purged. Books the browser holds that aren't listed were removed.
    */
   full: z.boolean().optional(),
+  /**
+   * Always the whole list: copies of shared books this library read too little of to keep
+   * (KEEP_WORDS), whose owner has since made them private or removed them. They hide until the
+   * owner shares them again.
+   */
+  lapsed: z.array(Id).optional(),
 });
 export type PullResponse = z.infer<typeof PullResponse>;
 

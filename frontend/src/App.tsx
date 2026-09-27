@@ -9,6 +9,7 @@ import { recordFromBook } from './books/record';
 import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, shelfRecords, type PreviewMode } from './data/library';
+import { KEEP_WORDS } from '@breader/shared/limits';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { shelfRecord, useShelf } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
@@ -185,6 +186,16 @@ export default function App() {
     return [...own, ...others];
   }, [lib.records, shelf.books, hidden]);
 
+  /*
+   * Copies of shared books read too little of to keep (KEEP_WORDS) whose owner made them private.
+   * A library on the server hears which from it; one without a key goes by the Shared Library list.
+   */
+  const lapsed = useMemo(() => {
+    if (lib.key || !shelf.complete) return lib.lapsed;
+    const listed = new Set(shelf.books.map((b) => b.id));
+    return new Set(lib.records.filter((r) => r.origin && !listed.has(r.origin) && (lib.reads[r.id]?.wordsRead ?? 0) < KEEP_WORDS).map((r) => r.id));
+  }, [lib.key, lib.lapsed, lib.records, lib.reads, shelf.books, shelf.complete]);
+
   const recordById = useMemo(() => {
     const m = new Map<string, BookRecord>();
     for (const r of [...previewSets.all, ...previewSets.shelf, ...sharedRecords, ...lib.records]) m.set(r.id, r);
@@ -197,7 +208,7 @@ export default function App() {
     const covers = { ...shelf.covers, ...lib.covers };
     const view = (recs: BookRecord[]) =>
       recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, covers, lib.edits)).sort(byRecent);
-    const liveMine = view(lib.records);
+    const liveMine = view(lib.records.filter((r) => !lapsed.has(r.id)));
     // A copy stands where its shared book stood, so its card stays put when it's started.
     const onShelf = view([...sharedRecords, ...previewSets.shelf]).map((b) => (b.origin ? { ...b, key: b.origin } : b));
     let mine: ShelfItem[];
@@ -210,7 +221,7 @@ export default function App() {
       default: mine = liveMine;
     }
     return { mine, shelf: onShelf };
-  }, [lib.records, lib.reads, lib.covers, lib.edits, shelf.covers, sharedRecords, previewSets, preview, hidden]);
+  }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, shelf.covers, sharedRecords, previewSets, preview, hidden]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
   const finishOpen = useCallback((id: string) => {
@@ -453,6 +464,10 @@ export default function App() {
               onAdd={() => setAdding({ mode: 'file' })}
               onEdit={(id, patch) => void editBook(id, patch)}
               onRemove={(b, fromKeyboard) => void removeBook(b.id, fromKeyboard)}
+              onShare={(b, shared) => {
+                lib.setShared(b.id, shared);
+                say(shared ? `“${b.title}” is on the Shared Library` : `Took “${b.title}” off the Shared Library. Anyone well into it keeps it.`);
+              }}
             />
           )}
         </div>

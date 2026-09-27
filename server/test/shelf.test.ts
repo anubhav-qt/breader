@@ -48,11 +48,12 @@ describe('shared library', () => {
     expect((await anon.get(`/v1/shelf/files/${mine.fileId}/link`)).status).toBe(404);
   });
 
-  it('lets a reader start a copy that keeps working after the book leaves the shelf', async () => {
+  it('lets a reader start a copy that keeps working after the book leaves the shelf, once read into', async () => {
     const { b: owner, shared, mine } = await sharer();
     const { b: reader } = await registered();
     const copy = book({ fileId: shared.fileId, origin: shared.id });
     expect((await reader.post('/v1/sync/push', push('r', { type: 'book.put', book: copy }))).body.rejected).toEqual([]);
+    await reader.post('/v1/sync/push', push('r1', { type: 'read.put', bookId: copy.id, read: { progress: 0.1, line: '', lastOpened: Date.now(), wordsRead: 180 } }));
     const pulled = (await reader.get('/v1/sync/pull?since=0')).body.books[0];
     expect(pulled).toMatchObject({ id: copy.id, origin: shared.id, fileId: shared.fileId });
     expect((await reader.get(`/v1/files/${shared.fileId}/link`)).status).toBe(200);
@@ -68,8 +69,46 @@ describe('shared library', () => {
     expect((await browser().get(`/v1/shelf/files/${shared.fileId}/link`)).status).toBe(404);
     expect((await reader.get(`/v1/files/${shared.fileId}/link`)).status).toBe(200);
     expect((await reader.post('/v1/sync/push', push('r2', { type: 'book.put', book: { ...copy, title: 'Renamed' } }))).body.rejected).toEqual([]);
+    expect((await reader.get('/v1/sync/pull?since=0')).body.lapsed).toEqual([]);
     const { b: late } = await registered();
     const tooLate = book({ fileId: shared.fileId, origin: shared.id });
     expect((await late.post('/v1/sync/push', push('l', { type: 'book.put', book: tooLate }))).body.rejected[0].code).toBe('file_missing');
+  });
+
+  it('takes a book off the shelf and puts it back with its shared switch', async () => {
+    const { b: owner, shared } = await sharer();
+    const listed = async () => (await browser().get('/v1/shelf')).body.books.map((x: { id: string }) => x.id);
+    await owner.post('/v1/sync/push', push('o1', { type: 'book.put', book: { ...shared, shared: false } }));
+    expect(await listed()).not.toContain(shared.id);
+    await owner.post('/v1/sync/push', push('o2', { type: 'book.put', book: { ...shared, shared: true } }));
+    expect(await listed()).toContain(shared.id);
+  });
+
+  it('lets a copy lapse while it’s barely read and its book is private, and keeps it once read into', async () => {
+    const { b: owner, shared } = await sharer();
+    const { b: reader } = await registered();
+    const copy = book({ fileId: shared.fileId, origin: shared.id });
+    await reader.post('/v1/sync/push', push('r', { type: 'book.put', book: copy }));
+    const read = (wordsRead: number, lastOpened: number) => reader.post('/v1/sync/push', push(`w${wordsRead}`, { type: 'read.put', bookId: copy.id, read: { progress: 0.01, line: '', lastOpened, wordsRead } }));
+    await read(60, Date.now());
+    const pull = async () => (await reader.get('/v1/sync/pull?since=0')).body;
+    expect((await pull()).lapsed).toEqual([]);
+
+    // Private again: a copy read only 60 words in lapses, and its file closes to it.
+    await owner.post('/v1/sync/push', push('o1', { type: 'book.put', book: { ...shared, shared: false } }));
+    expect((await pull()).lapsed).toEqual([copy.id]);
+    expect((await reader.get(`/v1/files/${shared.fileId}/link`)).status).toBe(404);
+
+    // Shared again, it's back.
+    await owner.post('/v1/sync/push', push('o2', { type: 'book.put', book: { ...shared, shared: true } }));
+    expect((await pull()).lapsed).toEqual([]);
+
+    // Read past 100 words, even from an older session on another device, and it's kept for good.
+    await read(140, Date.now() - 60_000);
+    const after = await pull();
+    expect(after.reads.find((r: { bookId: string }) => r.bookId === copy.id).read.wordsRead).toBe(140);
+    await owner.post('/v1/sync/push', push('o3', { type: 'book.put', book: { ...shared, shared: false } }));
+    expect((await pull()).lapsed).toEqual([]);
+    expect((await reader.get(`/v1/files/${shared.fileId}/link`)).status).toBe(200);
   });
 });

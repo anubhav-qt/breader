@@ -15,6 +15,8 @@ interface Props {
   onChange: (patch: BookEdit) => void;
   /** Absent for books someone else shared: only they can take them off the shelf. */
   onRemove?: (fromKeyboard: boolean) => void;
+  /** Puts the book on the Shared Library or takes it off. Only for the reader's own uploads. */
+  onShare?: (shared: boolean) => void;
   onClose: () => void;
 }
 
@@ -24,8 +26,11 @@ const MARGIN = 12;
 const COLS = 7;
 const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLS, ArrowUp: -COLS };
 
-/** A small popover beside the card's corner button: rename, recolour, put in a series, favourite or remove. */
-export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onClose }: Props) {
+/**
+ * A small popover beside the card's corner button: rename, put in a series, recolour, share,
+ * favourite or remove.
+ */
+export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onShare, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(book.title);
   const [series, setSeries] = useState(book.series ?? '');
@@ -189,6 +194,12 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onC
           </button>
         ))}
       </div>
+      {onShare && (
+        <div className="ep-share">
+          <span className="ep-label" id="ep-share">On the Shared Library</span>
+          <button type="button" className="ep-tg" role="switch" aria-checked={!!book.shared} aria-labelledby="ep-share" onClick={() => onShare(!book.shared)} />
+        </div>
+      )}
       <div className="ep-actions">
         <button
           type="button"
