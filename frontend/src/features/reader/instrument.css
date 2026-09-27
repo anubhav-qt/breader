@@ -334,3 +334,43 @@
 .vs-input:focus-visible { outline: 2px solid var(--book-mark); outline-offset: 1px; }
 .vs-share { margin-bottom: 8px; }
 .vs-go:disabled { opacity: 0.4; cursor: default; }
+
+
+/* ------------------------------------------------------------------ */
+/* How to say a word (chrome/SayAs.tsx): a small card by the selection, made like the drops. */
+
+.sa {
+  position: absolute;
+  z-index: 8;
+  width: min(320px, calc(100% - 24px));
+  padding: 16px;
+  background: var(--r-bg);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
+}
+.sa-q { margin: 0; font: var(--ui-w) 11.5px/1.3 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.sa-word { margin: 10px 0 12px; overflow-wrap: anywhere; font-family: var(--read); font-size: 28px; line-height: 0.9; color: var(--book-mark); }
+.sa-say { display: flex; gap: 6px; margin-bottom: 12px; }
+.sa-say .vs-input { flex: 1; min-width: 0; }
+.sa-hear {
+  flex: none;
+  height: 40px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 11px;
+  font: var(--ui-w) 12px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-fg);
+  background: var(--r-fill);
+  transition: color 140ms ease, opacity 140ms ease;
+}
+.sa-hear .i3-dots-icon { font-size: 11px; }
+.sa-hear:disabled { opacity: 0.4; cursor: default; }
+.sa-hear.is-playing { color: var(--book-mark); }
+.sa-hear.is-making .i3-dots-icon { animation: vs-blink 1s steps(2, jump-none) infinite; }
+.sa-go { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sa-go .vs-go { height: 40px; }
+.vs-go.is-quiet { background: var(--r-fill); color: var(--r-fg); }

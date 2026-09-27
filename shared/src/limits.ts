@@ -18,6 +18,12 @@ export const KEEP_WORDS = 100;
 /** A Kokoro voice pack: 510 × 256 float32 styles. */
 export const KOKORO_PACK_BYTES = 510 * 256 * 4;
 
+/** Reader settings, pronunciations included, as JSON. */
+export const PREFS_CHARS = 32_768;
+
+/** Words the reader said how to pronounce (the reader's "say as" list). */
+export const SAY_AS = { most: 200, textChars: 48, sayChars: 80 } as const;
+
 /** The most voices others share that the voice list shows, newest first. */
 export const VOICE_LIST_LIMIT = 300;
 

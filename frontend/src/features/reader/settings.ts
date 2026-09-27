@@ -107,4 +107,15 @@ export function useReaderSettings() {
   return [settings, update] as const;
 }
 
+/** Reader settings kept by something other than the reader's controls (voice/sayas.ts). */
+export const readSetting = (name: string): unknown => readLocal<Record<string, unknown>>(KEY, {})[name];
+
+/** Changes one of those, here, in the reader's controls, in other tabs and on the reader's other browsers. */
+export function writeSetting(name: string, value: unknown) {
+  const next = { ...readLocal<Record<string, unknown>>(KEY, {}), [name]: value };
+  writeLocal(KEY, next);
+  window.dispatchEvent(new Event('breader:settings'));
+  record({ type: 'settings.put', prefs: next });
+}
+
 export const fontFamily = (key: FontKey) => FONTS.find((f) => f.key === key)?.family ?? 'var(--read)';

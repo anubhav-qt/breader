@@ -3,6 +3,7 @@ import type { Loc, ViewHandle } from './FlowView';
 import { hasGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, setVoicePrefs, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import { respell, type Swap } from './voice/sayas';
 import { failed, missing, play, prepare, synth, unlock, type Clip, type Playing } from './voice/speaker';
 
 /*
@@ -113,9 +114,9 @@ const WORDY = /[\p{L}\p{N}]/u;
 /**
  * Where each word ends in a sentence, and how far through its sound the voice starts it. The
  * engines don't say, so it's guessed from the letters: a space is quicker than a letter, and
- * commas and full stops are pauses.
+ * commas and full stops are pauses. Words the reader respelled take as long as their new spelling.
  */
-function wordMarks(text: string) {
+function wordMarks(text: string, swaps: Swap[] = []) {
   const marks: Array<{ at: number; f: number }> = [];
   let total = 0;
   let open: { start: number; f: number } | null = null;
@@ -124,7 +125,9 @@ function wordMarks(text: string) {
     const word = WORDY.test(c) || (!!open && /['\u2019-]/.test(c) && WORDY.test(text[i + 1] ?? ''));
     if (word && !open) open = { start: i, f: total };
     if (!word && open) { marks.push({ at: i, f: open.f }); open = null; }
-    total += word ? 1 : /\s/.test(c) ? 0.6 : /[,;:]/.test(c) ? 4 : /[.!?\u2026]/.test(c) ? 6 : /[\u2013\u2014]/.test(c) ? 3 : 0.3;
+    const sw = swaps.find((w) => w.start <= i && i < w.end);
+    const k = sw ? sw.len / (sw.end - sw.start) : 1;
+    total += k * (word ? 1 : /\s/.test(c) ? 0.6 : /[,;:]/.test(c) ? 4 : /[.!?\u2026]/.test(c) ? 6 : /[\u2013\u2014]/.test(c) ? 3 : 0.3);
   }
   for (const m of marks) m.f /= total || 1;
   return marks;
@@ -211,7 +214,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       const k = keyOf(s);
       let c = clips.get(k);
       if (!c) {
-        c = synth(voice!, s.text, rate);
+        c = synth(voice!, respell(s.text).said, rate);
         c.catch(() => {});
         clips.set(k, c);
       }
@@ -313,7 +316,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (!live()) return;
       let how: 'ended' | 'stopped' | 'paused' | null = null;
       if (clip) {
-        const marks = wordMarks(s.text);
+        const marks = wordMarks(s.text, respell(s.text).swaps);
         const now = play(clip);
         player.current = now;
         let shown = -2;

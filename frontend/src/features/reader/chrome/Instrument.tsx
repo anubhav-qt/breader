@@ -8,6 +8,7 @@ import { AppearancePanel, ContentsPanel } from '../Panels';
 import { level, useLoadState } from '../voice/speaker';
 import { FOCUS, GROW, PAUSE, PLAY, SHRINK } from './icons';
 import { ChapterLabel, Digits, DotIcon, Typed } from './parts';
+import { SayAs } from './SayAs';
 import { VoiceSheet } from './VoiceSheet';
 import type { ChromeProps, PanelName } from './types';
 
@@ -19,7 +20,7 @@ const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, narration, focus }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, focus }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
@@ -138,6 +139,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           </motion.div>
         )}
       </AnimatePresence>
+
+      {narration && <SayAs narration={narration} body={body} />}
     </>
   );
 }

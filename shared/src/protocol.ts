@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SYNC } from './limits.ts';
+import { PREFS_CHARS, SYNC } from './limits.ts';
 
 /*
  * The wire format between the app and the server. Both sides validate with these schemas, so a
@@ -74,7 +74,7 @@ export const ReadState = z.object({
 export type ReadState = z.infer<typeof ReadState>;
 
 /** Reader settings are an opaque object to the server; the app owns their shape. */
-export const Prefs = z.record(z.string(), z.unknown()).refine((p) => JSON.stringify(p).length <= 8192, 'Settings are too large');
+export const Prefs = z.record(z.string(), z.unknown()).refine((p) => JSON.stringify(p).length <= PREFS_CHARS, 'Settings are too large');
 export type Prefs = z.infer<typeof Prefs>;
 
 /* ---- Voices ---- */
