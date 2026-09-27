@@ -4,7 +4,6 @@ import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
 import { IconMore, IconStar } from '../../components/icons';
 import { blotsFor, maskFor, radiiFor } from './blots';
-import { numberOf, type Series } from './series';
 import { actionLabel, progressText, shortProgress, when } from './text';
 import type { GalleryItem } from './types';
 import { useSize } from './useSize';
@@ -27,8 +26,6 @@ export interface TileProps {
   open?: boolean;
   /** Changes when books join or leave the section: only then do cards glide to their new places. */
   layoutKey?: string;
-  /** A whole series on one card, its other books peeking out behind (the stack design). */
-  series?: Series;
   /** The book's number in its series, on a card in a series row. */
   number?: number;
   ref?: Ref<HTMLDivElement>;
@@ -66,13 +63,10 @@ function setMask(el: HTMLElement | null, mask: string) {
  *
  * A full-size button opens the book; the corner button (or a right-click) opens the edit popover.
  */
-export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, series, number, ref: slotRef, onOpen, onEdit }: TileProps) {
+export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, ref: slotRef, onOpen, onEdit }: TileProps) {
   const b = item.book;
-  // A stack names its series where the author would be; a card in a series row, its number.
-  const tag = series
-    ? { byline: `${series.name} · ${numberOf(series, b)} of ${series.books.length}` }
-    : { meta: number !== undefined ? `Book ${number}` : undefined };
-  const behind = series ? series.books.filter((x) => x !== b).slice(0, 2) : [];
+  // A card in a series row leads with its number.
+  const meta = number !== undefined ? `Book ${number}` : undefined;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
@@ -118,10 +112,6 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
       layout="position"
       layoutDependency={layoutKey}
     >
-      {/* Its other books, finished ones in their colour, peek out above the card. */}
-      {behind.map((x, k) => (
-        <span key={x.id} className={`tile-behind is-${k}${x.progress >= 1 ? ' is-read' : ''}`} style={bookVars(x)} aria-hidden="true" />
-      ))}
       <div
         ref={ref}
         className={`tile tile-${variant}${hasArt ? ' has-art' : ''}`}
@@ -132,17 +122,17 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           if (!open) onEdit(b, moreRef.current);
         }}
       >
-        <div className="tile-face"><TileContent book={b} variant={variant} now={now} {...tag} /></div>
+        <div className="tile-face"><TileContent book={b} variant={variant} now={now} meta={meta} /></div>
         {started && (
           <div ref={inkRef} className="tile-face is-ink" aria-hidden="true">
-            <TileContent book={b} variant={variant} now={now} {...tag} />
+            <TileContent book={b} variant={variant} now={now} meta={meta} />
           </div>
         )}
         <button
           type="button"
           className="tile-hit"
           data-id={b.id}
-          aria-label={series ? `${series.name}, ${series.books.length} books. Next: ${b.title}, ${progressText(b)}` : `${b.title}, ${progressText(b)}`}
+          aria-label={`${b.title}, ${progressText(b)}`}
           onClick={(e) => onOpen(b, (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect())}
         />
         {hasArt && (
@@ -184,10 +174,10 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
  */
 const Line = ({ book }: { book: ShelfItem }) => (book.line ? <span className="t-line">{book.line}</span> : null);
 
-function TileContent({ book: b, variant, now, byline, meta }: { book: ShelfItem; variant: Variant; now: number; byline?: string; meta?: string }): ReactNode {
+function TileContent({ book: b, variant, now, meta }: { book: ShelfItem; variant: Variant; now: number; meta?: string }): ReactNode {
   const title = <span className="t-title">{b.title}</span>;
   const top = when(b, now);
-  const by = byline ?? b.author;
+  const by = b.author;
   const short = meta ? `${meta} · ${shortProgress(b)}` : shortProgress(b);
   const push = <span className="t-title t-push">{b.title}</span>;
   switch (variant) {

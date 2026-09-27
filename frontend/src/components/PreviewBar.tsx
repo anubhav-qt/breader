@@ -1,5 +1,4 @@
 import { PREVIEW_MODES, type PreviewMode } from '../data/library';
-import { SERIES_LOOKS, type SeriesLook } from '../features/gallery/series';
 import './preview-bar.css';
 
 export type AppTheme = 'auto' | 'light' | 'dark';
@@ -9,13 +8,11 @@ interface Props {
   onMode: (m: PreviewMode) => void;
   theme: AppTheme;
   onTheme: (t: AppTheme) => void;
-  series: SeriesLook;
-  onSeries: (s: SeriesLook) => void;
   onReset: () => void;
 }
 
-/** Development only: switch between real data and placeholder libraries, force a theme, and try the series designs. */
-export function PreviewBar({ mode, onMode, theme, onTheme, series, onSeries, onReset }: Props) {
+/** Development only: switch between real data and placeholder libraries, and force a theme. */
+export function PreviewBar({ mode, onMode, theme, onTheme, onReset }: Props) {
   return (
     <div className="pv" role="group" aria-label="Preview controls">
       <span className="pv-tag">preview</span>
@@ -28,13 +25,6 @@ export function PreviewBar({ mode, onMode, theme, onTheme, series, onSeries, onR
       {(['auto', 'light', 'dark'] as const).map((t) => (
         <button key={t} type="button" aria-pressed={theme === t} onClick={() => onTheme(t)}>
           {t}
-        </button>
-      ))}
-      <span className="pv-sep" />
-      <span className="pv-tag">series</span>
-      {SERIES_LOOKS.map((s) => (
-        <button key={s} type="button" aria-pressed={series === s} onClick={() => onSeries(s)}>
-          {s}
         </button>
       ))}
       <span className="pv-sep" />

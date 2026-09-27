@@ -18,7 +18,6 @@ import { KeyDialog } from './features/add/KeyDialog';
 import { AccountMenu } from './features/account/AccountMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
-import { SERIES_LOOKS, type SeriesLook } from './features/gallery/series';
 import { Reader } from './features/reader/Reader';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
@@ -105,7 +104,6 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('mine');
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
-  const [seriesLook, setSeriesLook] = useState<SeriesLook>(() => (devTools ? readParam('series', SERIES_LOOKS, 'stack') : 'stack'));
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
@@ -136,7 +134,6 @@ export default function App() {
     writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
-  useEffect(() => { writeParam('series', seriesLook, 'stack'); }, [seriesLook]);
 
   // Back from Google, or from a link in one of Breader's emails.
   useEffect(() => {
@@ -451,7 +448,6 @@ export default function App() {
               key={`${tab}-${preview}`}
               books={books}
               now={now}
-              look={seriesLook}
               labelledBy={`tab-${tab}`}
               onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={() => setAdding({ mode: 'file' })}
@@ -541,7 +537,7 @@ export default function App() {
 
       <Toast toast={toast} onDone={dismissToast} />
       {devTools && route.name === 'library' && (
-        <PreviewBar mode={preview} onMode={setPreview} theme={theme} onTheme={setTheme} series={seriesLook} onSeries={setSeriesLook} onReset={() => void lib.reset()} />
+        <PreviewBar mode={preview} onMode={setPreview} theme={theme} onTheme={setTheme} onReset={() => void lib.reset()} />
       )}
     </MotionConfig>
   );

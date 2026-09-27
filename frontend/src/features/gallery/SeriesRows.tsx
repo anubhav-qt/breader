@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import type { ShelfItem } from '../../data/useLibrary';
 import { finishedIn, numberOf, type Series } from './series';
+import { ROW_H } from './layouts/Wall';
 import { Tile } from './Tile';
 
 interface Props {
@@ -13,10 +14,11 @@ interface Props {
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
 }
 
-const H = 270;
-const W = 196;
+/** Covers as tall as the wall's rows beside them. */
+const H = ROW_H;
+const W = Math.round(ROW_H * 0.72);
 
-/** Each series as a row of its books in order, below Recent (the rows design). */
+/** Each series as a row of its books in order, sideways scrolling. */
 export function SeriesRows({ list, now, enter, indexBase, editingId, onOpen, onEdit }: Props) {
   return (
     <div className="srows">
@@ -32,7 +34,7 @@ export function SeriesRows({ list, now, enter, indexBase, editingId, onOpen, onE
               return (
                 <Tile
                   key={key}
-                  item={{ kind: 'book', key, book: b }}
+                  item={{ key, book: b }}
                   variant="cover"
                   index={indexBase + j * 3 + k}
                   enter={enter}

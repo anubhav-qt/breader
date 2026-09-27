@@ -1,13 +1,12 @@
 import { useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useElementWidth } from '../useElementWidth';
-import { Card } from '../Card';
-import type { SeriesLook } from '../series';
+import { Tile } from '../Tile';
 import type { Variant } from '../Tile';
 import type { GalleryItem, SectionProps } from '../types';
 
 const GAP = 14;
-const ROW_H = 236;
+export const ROW_H = 236;
 /** The shapes a card can take, so rows mix portraits, squares and panoramas. */
 const ASPECTS = [0.68, 1.55, 1, 0.68, 2.15, 1.3, 0.68, 1.55, 1];
 
@@ -17,16 +16,6 @@ function aspectFor(id: string) {
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
   return ASPECTS[Math.abs(h) % ASPECTS.length];
 }
-
-/** A series of spines is as wide as its books need. */
-const spinesAspect = (books: number) => Math.min(2.15, 0.75 + 0.28 * books);
-
-function aspectOf(item: GalleryItem, look: SeriesLook) {
-  return item.series && look === 'spines' ? spinesAspect(item.series.books.length) : aspectFor(item.key);
-}
-
-/** When a card was last read: a series goes by its latest book. */
-const lastRead = (item: GalleryItem) => (item.series ? Math.max(...item.series.books.map((b) => b.lastOpened)) : item.book.lastOpened);
 
 function variantFor(a: number): Variant {
   if (a < 0.8) return 'cover';
@@ -93,13 +82,13 @@ function wallGroup(t: number, now: number): string {
   return String(d.getFullYear());
 }
 
-export function Wall({ items, now, enter, indexBase = 0, editingId, look, onOpen, onEdit, onSeries }: SectionProps) {
+export function Wall({ items, now, enter, indexBase = 0, editingId, onOpen, onEdit }: SectionProps) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
 
   const groups = useMemo(() => {
     const out: Array<{ label: string; items: Array<{ item: GalleryItem; i: number }> }> = [];
     items.forEach((item, i) => {
-      const label = wallGroup(lastRead(item), now);
+      const label = wallGroup(item.book.lastOpened, now);
       if (!out.length || out[out.length - 1].label !== label) out.push({ label, items: [] });
       out[out.length - 1].items.push({ item, i });
     });
@@ -110,7 +99,7 @@ export function Wall({ items, now, enter, indexBase = 0, editingId, look, onOpen
   return (
     <div ref={ref} className="wall">
       {width > 0 && groups.map((g) => {
-        const aspects = g.items.map(({ item }) => aspectOf(item, look));
+        const aspects = g.items.map(({ item }) => aspectFor(item.key));
         const sizes = justify(aspects, width - 1);
         const books = g.items.length;
         return (
@@ -122,10 +111,8 @@ export function Wall({ items, now, enter, indexBase = 0, editingId, look, onOpen
             <div className="wall-rows">
               <AnimatePresence mode="popLayout" initial={false}>
                 {g.items.map(({ item, i }, k) => (
-                  <Card
+                  <Tile
                     key={item.key}
-                    look={look}
-                    onSeries={onSeries}
                     item={item}
                     variant={variantFor(aspects[k])}
                     index={indexBase + i}
