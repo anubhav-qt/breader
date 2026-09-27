@@ -1,11 +1,11 @@
-import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, type Chapter } from '../chapters';
 import { canFullscreen, useFullscreen } from '../fullscreen';
 import { AppearancePanel, ContentsPanel } from '../Panels';
-import { useLoadState } from '../voice/speaker';
+import { level, useLoadState } from '../voice/speaker';
 import { FOCUS, GROW, PAUSE, PLAY, SHRINK } from './icons';
 import { ChapterLabel, Digits, DotIcon, Typed } from './parts';
 import { VoiceSheet } from './VoiceSheet';
@@ -48,6 +48,28 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
     narration?.toggle();
   };
 
+  // Listening, the dot for where you are becomes a level meter: up to seven dots tall, like a Doto
+  // letter, with its neighbours a step behind.
+  const footRef = useRef<HTMLDivElement>(null);
+  const listening = !!narration?.listening;
+  useEffect(() => {
+    const el = footRef.current;
+    if (!listening || !el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0;
+    let lv = 0;
+    let step = -1;
+    const tick = () => {
+      // Up at once, down gently, so it doesn't flicker between words.
+      const now = level();
+      lv = now > lv ? now : lv * 0.88 + now * 0.12;
+      const s = lv < 0.1 ? 0 : lv < 0.3 ? 1 : lv < 0.55 ? 2 : 3;
+      if (s !== step) { step = s; el.dataset.lv = String(s); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); delete el.dataset.lv; };
+  }, [listening]);
+
   return (
     <>
       <div className={`i3-head${head || panel ? ' is-on' : ''}`} onPointerEnter={() => setHead(true)} onPointerLeave={() => setHead(false)}>
@@ -86,7 +108,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         </div>
       </div>
 
-      <div className={`i3-foot${foot ? ' is-on' : ''}`} onPointerEnter={() => setFoot(true)} onPointerLeave={() => setFoot(false)}>
+      <div ref={footRef} className={`i3-foot${foot ? ' is-on' : ''}`} onPointerEnter={() => setFoot(true)} onPointerLeave={() => setFoot(false)}>
         <span className="i3-read"><Digits value={progress * 100} width={3} /><small>%</small></span>
         <Dots chapters={chapters} progress={progress} onPick={onPick} />
         <span className="i3-read is-right">

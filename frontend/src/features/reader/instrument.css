@@ -155,20 +155,21 @@
 .i3-read.is-right { justify-self: end; }
 .i3-dots { position: relative; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .i3-dot {
+  --dc: var(--r-line);
   flex: none;
   width: 5px;
   height: 5px;
   margin: 0 1.5px;
   border-radius: 1px;
-  background: var(--r-line);
+  background: var(--dc);
   transition: background-color 240ms ease, transform var(--dur-snappy) var(--ease-snappy);
 }
 .i3-dot.is-split { margin-left: 6.5px; }
-.i3-dot.is-read { background: var(--book-mark); }
-.i3-dot.is-now { background: var(--r-fg); }
+.i3-dot.is-read { --dc: var(--book-mark); }
+.i3-dot.is-now { --dc: var(--r-fg); }
 .i3-foot.is-on .i3-dot { transform: scale(1.2); }
 .i3-foot .i3-dot.is-hover { transform: scale(1.6); }
-.i3-dot.is-hover.is-next { background: var(--r-mu); }
+.i3-dot.is-hover.is-next { --dc: var(--r-mu); }
 
 /* Phones: the readouts and the back button take less room, so the chapter and the dots get it. */
 @media (max-width: 520px) {
@@ -216,6 +217,31 @@
 .rd.is-focus:not(.is-awake) .i3-foot { opacity: 0; pointer-events: none; }
 .rd.is-focus:not(.is-awake) .fv-zone span { opacity: 0; }
 .rd.is-focus.is-still, .rd.is-focus.is-still * { cursor: none !important; }
+
+
+/* ------------------------------------------------------------------ */
+/* Listening (Immersive voices). The page dims to a third of its ink around the sentence being
+   read, which comes up full and takes the book's colour word by word as it's said. The controls
+   sleep as in focus mode, all but the dot row, where you are in the book now moves with the voice. */
+
+.rd .fv-flow { transition: color 600ms ease; }
+.rd .fv-flow :is(img, svg) { transition: opacity 600ms ease; }
+.rd.is-listening .fv-flow { color: color-mix(in oklab, var(--r-fg) 32%, var(--r-bg)); }
+.rd.is-listening .fv-flow :is(a, blockquote, .ph-author, .ph-note) { color: inherit; border-bottom-color: transparent; }
+.rd.is-listening .fv-flow :is(img, svg) { opacity: 0.3; }
+.rd.is-listening ::highlight(narrate) { color: var(--r-fg); }
+.rd.is-listening ::highlight(narrate-said) { color: var(--book-mark); }
+
+.rd.is-listening:not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }
+.rd.is-listening:not(.is-awake) .i3-read { opacity: 0; }
+.i3-read { transition: opacity 260ms ease; }
+
+/* The meter: a column of dots grown from the now-dot (Instrument sets data-lv, 0 to 3). */
+.i3-foot[data-lv="1"] .i3-dot.is-now { box-shadow: 0 -8px var(--dc), 0 8px var(--dc); }
+.i3-foot[data-lv="2"] .i3-dot.is-now { box-shadow: 0 -8px var(--dc), 0 8px var(--dc), 0 -16px var(--dc), 0 16px var(--dc); }
+.i3-foot[data-lv="3"] .i3-dot.is-now { box-shadow: 0 -8px var(--dc), 0 8px var(--dc), 0 -16px var(--dc), 0 16px var(--dc), 0 -24px var(--dc), 0 24px var(--dc); }
+.i3-foot[data-lv="2"] :is(.i3-dot:has(+ .is-now), .is-now + .i3-dot) { box-shadow: 0 -8px var(--dc), 0 8px var(--dc); }
+.i3-foot[data-lv="3"] :is(.i3-dot:has(+ .is-now), .is-now + .i3-dot) { box-shadow: 0 -8px var(--dc), 0 8px var(--dc), 0 -16px var(--dc), 0 16px var(--dc); }
 
 
 /* ------------------------------------------------------------------ */

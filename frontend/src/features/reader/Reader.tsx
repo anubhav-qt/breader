@@ -10,6 +10,8 @@ import { useFullscreenReading } from './fullscreen';
 import { canNarrate, useNarration } from './narration';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
+import { useVoicePrefs } from './voice/prefs';
+import { useLoadState } from './voice/speaker';
 import { useReaderSettings, type ThemeName } from './settings';
 import { useReadingClock } from './useReadingClock';
 import './reader.css';
@@ -71,6 +73,13 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const { awake, still, wake, sleep } = useWake(!closing);
   // Opening in focus mode shows where the controls are before they go.
   useEffect(() => { if (focus) wake(1800); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Immersive voices get the page to themselves: the text dims around the sentence being read and
+  // the controls step away, as in focus mode, until the voice stops.
+  const voice = useVoicePrefs();
+  const load = useLoadState();
+  const listening = canNarrate && narration.playing && voice.mode === 'immersive' && load.key === null;
+  const hush = focus || listening;
+  useEffect(() => { if (listening) wake(1800); }, [listening, wake]);
 
   const [start] = useState<Start>(() => {
     if (initial?.pos) return { kind: 'pos', pos: initial.pos };
@@ -114,11 +123,11 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const onClickCapture = (e: MouseEvent) => {
     if (e.timeStamp - swipedAt.current < 500) { e.stopPropagation(); e.preventDefault(); }
   };
-  // Touch screens have no mouse to wake the controls: in focus mode a tap mid-page does, and hides them again.
+  // Touch screens have no mouse to wake the controls: in focus mode (or listening) a tap mid-page does, and hides them again.
   const touched = useRef(false);
   const onPointerDown = (e: PointerEvent) => { touched.current = e.pointerType === 'touch'; };
   const onClick = (e: MouseEvent) => {
-    if (!focus || !touched.current || e.defaultPrevented || closing) return;
+    if (!hush || !touched.current || e.defaultPrevented || closing) return;
     if ((e.target as HTMLElement).closest('a, button, input, select, textarea')) return;
     if (window.getSelection()?.toString()) return;
     if (awake) sleep();
@@ -174,7 +183,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     book, title, loc, chapters, current, settings, update, isPdf: book.kind === 'pdf',
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
-    narration: canNarrate ? { playing: narration.playing, toggle: narration.toggle, start: narration.start, stop: narration.stop } : null,
+    narration: canNarrate ? { playing: narration.playing, listening, toggle: narration.toggle, start: narration.start, stop: narration.stop } : null,
     focus: { on: focus, toggle: toggleFocus },
   };
   const vars = {
@@ -184,7 +193,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   } as CSSProperties;
 
   return (
-    <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}${focus ? ' is-focus' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
+    <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}${hush ? ' is-focus' : ''}${listening ? ' is-listening' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
           {book.kind === 'flow' ? (
