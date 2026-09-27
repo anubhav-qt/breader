@@ -43,6 +43,13 @@
       "when": 1790498225783,
       "tag": "0005_shelf",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790498909836,
+      "tag": "0006_reading_time",
+      "breakpoints": true
     }
   ]
 }

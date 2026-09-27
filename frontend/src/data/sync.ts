@@ -7,6 +7,7 @@ import { api, ApiError, OfflineError, type ApiBase } from '../lib/api';
 import { report } from '../lib/report';
 import { readLocal, store } from '../lib/store';
 import { onNews, tell, withData, withSync } from '../lib/tabs';
+import { allCountsLocked } from './readTime';
 
 /*
  * The browser stays the first place anything is saved (backend design §6). Once a library has a
@@ -221,6 +222,9 @@ function enqueue(s: SyncState, m: NewMutation) {
     }
   } else if (m.type === 'settings.put') {
     s.outbox = s.outbox.filter((x) => x.type !== 'settings.put');
+  } else if (m.type === 'time.put') {
+    const { bookId, day, device } = m;
+    s.outbox = s.outbox.filter((x) => !(x.type === 'time.put' && x.bookId === bookId && x.day === day && x.device === device));
   }
   if (m.type === 'book.remove' || m.type === 'book.restore') {
     const { bookId } = m;
@@ -278,6 +282,7 @@ async function queueSnapshotLocked() {
   }
   const prefs = readLocal<Record<string, unknown> | null>(SETTINGS, null);
   if (prefs) muts.push({ type: 'settings.put', prefs });
+  muts.push(...(await allCountsLocked(ids)));
   if (resend) for (const r of s.removed ?? []) if (!ids.has(r.id)) muts.push({ type: 'book.remove', bookId: r.id });
   s.outbox = muts.map((m) => ({ ...m, id: s.nextId++ }) as Mutation);
   const files = mine.filter((r) => r.source === 'file' && !r.origin);

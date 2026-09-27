@@ -467,6 +467,7 @@ export default function App() {
             closing={!!leaving}
             onBack={back}
             onSave={onSave}
+            onReadTime={(seconds) => lib.addReadTime(shown.id, seconds)}
             onRemove={canRemove(shownRec) ? () => void removeOpen() : undefined}
           />
         </div>

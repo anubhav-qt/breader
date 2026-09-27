@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import type pg from 'pg';
 import { AccountRequest, LIMITS, newLibraryKey, normalizeKey, type Account, type AccountOutcome } from '@breader/shared';
 import type { AppEnv, Deps, LibraryRow } from '../context.ts';
-import { libraries, libraryItems, readingStates } from '../db/schema.ts';
+import { libraries, libraryItems, readingStates, readingTime } from '../db/schema.ts';
 import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { libraryInfo } from '../lib/library.ts';
@@ -157,7 +157,7 @@ async function claim(pool: pg.Pool, fromId: string, toId: string, userId: string
     await c.query(`UPDATE blobs SET owner_library_id = $2 WHERE owner_library_id = $1 AND sha256 NOT IN (${theirs})`, [fromId, toId]);
 
     const rev = to.rev + 1;
-    for (const [table, t] of [['library_items', libraryItems], ['reading_states', readingStates]] as const) {
+    for (const [table, t] of [['library_items', libraryItems], ['reading_states', readingStates], ['reading_time', readingTime]] as const) {
       const names = cols(t);
       const list = names.map((n) => `"${n}"`).join(', ');
       const values = names.map((n) => (n === 'library_id' ? '$2' : n === 'rev' ? '$3::bigint' : `"${n}"`)).join(', ');

@@ -8,6 +8,7 @@ import type { BookEdit, BookRecord, ReadState } from '../books/types';
 import { normColor, pickColor } from './colors';
 import { sampleRecords } from './library';
 import { newId, newLibraryKey } from '../lib/key';
+import { countLocked } from './readTime';
 import { shelfCover } from './shelf';
 import { adopt, editFromWire, enterAccount, fromWire, queueLocked, startSync, toWire, type LibraryData, type SyncHost } from './sync';
 
@@ -439,6 +440,14 @@ function nextColor() {
   return pickColor(view.records.filter((r) => r.source !== 'placeholder').map((r) => normColor(r.color, r.title)));
 }
 
+/** Seconds spent reading a book, added to today's count and sent as this browser's share. */
+function addReadTime(id: string, seconds: number) {
+  if (!holds(id) || seconds <= 0) return;
+  withData(async () => queueLocked([await countLocked(id, seconds)])).catch((err) => {
+    console.warn('Couldn’t save reading time:', err);
+  });
+}
+
 /** Reading positions change often, so they're saved at most every 400 ms. */
 function saveRead(id: string, read: ReadState) {
   void change((d) => ({ reads: { ...d.reads, [id]: read } }), holds(id) ? [{ type: 'read.put', bookId: id, read }] : [], { wait: 400 });
@@ -486,7 +495,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, editBook, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, addReadTime, editBook, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

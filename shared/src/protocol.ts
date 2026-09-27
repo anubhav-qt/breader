@@ -70,6 +70,8 @@ export type Prefs = z.infer<typeof Prefs>;
 /* ---- Push ---- */
 
 const MutationId = z.number().int().positive();
+/** A calendar day, YYYY-MM-DD. */
+const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const Mutation = z.discriminatedUnion('type', [
   z.object({ id: MutationId, type: z.literal('book.put'), book: Book }),
@@ -79,6 +81,8 @@ export const Mutation = z.discriminatedUnion('type', [
   z.object({ id: MutationId, type: z.literal('edit.put'), bookId: Id, edit: Edit }),
   z.object({ id: MutationId, type: z.literal('read.put'), bookId: Id, read: ReadState }),
   z.object({ id: MutationId, type: z.literal('settings.put'), prefs: Prefs }),
+  /** This device's running count of seconds spent reading a book on one day. */
+  z.object({ id: MutationId, type: z.literal('time.put'), bookId: Id, day: Day, device: Id, seconds: z.number().int().min(0).max(86_400) }),
 ]);
 export type Mutation = z.infer<typeof Mutation>;
 type OmitEach<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;

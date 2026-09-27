@@ -1,7 +1,7 @@
 import { and, eq, or, sql } from 'drizzle-orm';
 import type { Mutation } from '@breader/shared';
 import type { Db } from '../db/client.ts';
-import { blobs, libraryItems, librarySettings, readingStates } from '../db/schema.ts';
+import { blobs, libraryItems, librarySettings, readingStates, readingTime } from '../db/schema.ts';
 import { ApiError } from '../lib/errors.ts';
 import { onShelf, usedBy } from '../lib/shelf.ts';
 
@@ -152,6 +152,19 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             rev,
           },
           setWhere: sql`${readingStates.readAt} <= excluded.read_at`,
+        });
+      return;
+    }
+
+    case 'time.put': {
+      // A device's count only grows, so an older count arriving late changes nothing.
+      await tx
+        .insert(readingTime)
+        .values({ libraryId, bookId: m.bookId, day: m.day, device: m.device, seconds: m.seconds, rev })
+        .onConflictDoUpdate({
+          target: [readingTime.libraryId, readingTime.bookId, readingTime.day, readingTime.device],
+          set: { seconds: sql`greatest(${readingTime.seconds}, excluded.seconds)`, rev },
+          setWhere: sql`${readingTime.seconds} < excluded.seconds`,
         });
       return;
     }

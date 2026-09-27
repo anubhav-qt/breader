@@ -6,6 +6,7 @@ import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { PdfView } from './PdfView';
 import { useReaderSettings, type ThemeName } from './settings';
+import { useReadingClock } from './useReadingClock';
 import './reader.css';
 import './instrument.css';
 
@@ -21,6 +22,8 @@ interface Props {
   closing?: boolean;
   onBack: () => void;
   onSave: (read: ReadState) => void;
+  /** Seconds spent reading, counted while the book is on screen and being read. */
+  onReadTime?: (seconds: number) => void;
   onRemove?: () => void;
 }
 
@@ -35,7 +38,9 @@ const luminance = (rgb: number[]) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 
-export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onRemove }: Props) {
+const noTime = () => {};
+
+export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove }: Props) {
   const [settings, update] = useReaderSettings();
   const [panel, setPanel] = useState<PanelName | null>(null);
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
@@ -46,6 +51,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const body = useRef<HTMLDivElement>(null);
   const chapters = useMemo(() => chaptersOf(book), [book]);
   const current = chapterAt(chapters, loc);
+
+  useReadingClock(!closing, onReadTime);
 
   const [start] = useState<Start>(() => {
     if (initial?.pos) return { kind: 'pos', pos: initial.pos };

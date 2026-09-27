@@ -173,6 +173,26 @@ export const readingStates = pgTable(
   (t) => [primaryKey({ columns: [t.libraryId, t.bookId] }), index('reading_states_rev_idx').on(t.libraryId, t.rev)],
 );
 
+/**
+ * Time spent reading, in seconds, per book and per day (the reader's own calendar day), as each
+ * device counted it. Every device sends its own running count, so a retry or a resend never counts
+ * twice; a book's total is the sum over days and devices. Kept for reading statistics. Fed.
+ */
+export const readingTime = pgTable(
+  'reading_time',
+  {
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    bookId: text('book_id').notNull(),
+    /** YYYY-MM-DD, in the reader's time zone. */
+    day: text('day').notNull(),
+    device: text('device').notNull(),
+    seconds: integer('seconds').notNull(),
+    rev: big('rev').notNull(),
+    version: version(),
+  },
+  (t) => [primaryKey({ columns: [t.libraryId, t.bookId, t.day, t.device] }), index('reading_time_rev_idx').on(t.libraryId, t.rev)],
+);
+
 /** Reading style, typeface, size and theme, so they follow the reader between browsers. Fed. */
 export const librarySettings = pgTable('library_settings', {
   libraryId: text('library_id').primaryKey().references(() => libraries.id, { onDelete: 'cascade' }),
@@ -333,5 +353,6 @@ export const FED_TABLES = {
   library_items: ['library_id', 'book_id'],
   reading_states: ['library_id', 'book_id'],
   library_settings: ['library_id'],
+  reading_time: ['library_id', 'book_id', 'day', 'device'],
 } as const;
 export type FedTable = keyof typeof FED_TABLES;
