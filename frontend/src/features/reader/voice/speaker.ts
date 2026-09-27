@@ -34,6 +34,8 @@ const setLoad = (s: Partial<LoadState>) => {
 };
 /** Reading aloud stopped over something other than loading: the voice sheet says what. Null clears it. */
 export const failed = (error: string | null) => setLoad({ key: null, error, gpu: false });
+/** Reading aloud starts again: what went wrong last time no longer applies. */
+export const retry = () => { if (loadState.error && loadState.key === null) setLoad({ error: null, gpu: false }); };
 export const useLoadState = () => useSyncExternalStore(
   (f) => { loadSubs.add(f); return () => { loadSubs.delete(f); }; },
   () => loadState,
@@ -238,8 +240,12 @@ export function level() {
 }
 
 export interface Playing {
-  /** Settles when the clip ends, is stopped, or is paused from outside (a call, the lock screen). */
-  done: Promise<'ended' | 'stopped' | 'paused'>;
+  /**
+   * Settles when the clip ends, is stopped, is paused from outside (a call, the lock screen), or
+   * the browser won't play it at all (`refusal` says why).
+   */
+  done: Promise<'ended' | 'stopped' | 'paused' | 'refused'>;
+  refusal: string | null;
   /** How far through it is, 0 to 1. */
   time: () => number;
   stop: () => void;
@@ -253,9 +259,10 @@ export function play(clip: Clip): Playing {
   let started = false;
   a.src = url;
   current = { clip, a };
-  const done = new Promise<'ended' | 'stopped' | 'paused'>((resolve) => {
+  const out: Playing = { done: null!, refusal: null, time: () => Math.min(1, a.currentTime / length), stop: () => {} };
+  out.done = new Promise((resolve) => {
     let settled = false;
-    const finish = (how: 'ended' | 'stopped' | 'paused') => {
+    const finish = (how: 'ended' | 'stopped' | 'paused' | 'refused') => {
       if (settled) return;
       settled = true;
       a.removeEventListener('ended', ended);
@@ -269,17 +276,19 @@ export function play(clip: Clip): Playing {
     const paused = () => { if (started && !a.ended) finish(stopped ? 'stopped' : 'paused'); };
     a.addEventListener('ended', ended);
     a.addEventListener('pause', paused);
-    a.play().then(() => { started = true; }, () => finish(stopped ? 'stopped' : 'paused'));
+    a.play().then(() => { started = true; }, (e: Error) => {
+      if (stopped) { finish('stopped'); return; }
+      out.refusal = e?.name || String(e);
+      console.warn('The browser wouldn’t play the voice:', e);
+      finish('refused');
+    });
   });
-  return {
-    done,
-    time: () => Math.min(1, a.currentTime / length),
-    stop: () => {
-      if (stopped) return;
-      stopped = true;
-      a.pause();
-    },
+  out.stop = () => {
+    if (stopped) return;
+    stopped = true;
+    a.pause();
   };
+  return out;
 }
 
 /** Plays a voice's sample line from a URL (bundled clips, uploaded samples). */

@@ -4,7 +4,7 @@ import { checkGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, setVoicePrefs, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import { respell, type Swap } from './voice/sayas';
-import { failed, missing, play, prepare, synth, unlock, type Clip, type Playing } from './voice/speaker';
+import { failed, missing, play, prepare, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
 
 /*
  * Reading aloud with voices that run on this device (voice/): from the top of the page on screen,
@@ -264,6 +264,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     };
 
     let failures = 0;
+    let lastError = '';
     while (live()) {
       // A new voice or speed reads from here on.
       const p = voicePrefs();
@@ -314,9 +315,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         clip = await Promise.race([clipOf(s), interrupted]);
       } catch (e) {
         console.warn('A sentence couldn’t be read aloud:', e);
+        lastError = e instanceof Error ? e.message : String(e);
       }
       if (!live()) return;
-      let how: 'ended' | 'stopped' | 'paused' | null = null;
+      let how: Awaited<Playing['done']> | null = null;
+      let refusal: string | null = null;
       if (clip) {
         const marks = wordMarks(s.text, respell(s.text).swaps);
         const now = play(clip);
@@ -347,6 +350,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         };
         raf = requestAnimationFrame(tick);
         how = await Promise.race([now.done, interrupted]);
+        refusal = now.refusal;
         cancelAnimationFrame(raf);
         if (player.current === now) player.current = null;
       }
@@ -367,9 +371,17 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         stop();
         return;
       }
+      if (how === 'refused') {
+        // The browser wouldn't play it: say so, rather than going quiet. Play tries again from here.
+        last.current = s;
+        stop();
+        failed(`This browser wouldn’t play the voice (${refusal}). Tap Read aloud to try again.`);
+        openSheet();
+        return;
+      }
       if (!clip) {
         if (++failures >= 3) {
-          failed('The voice couldn’t read this part of the book.');
+          failed(`The voice couldn’t read this part of the book${lastError ? ` (${lastError})` : ''}.`);
           openSheet();
           break;
         }
@@ -388,6 +400,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const start = () => {
     if (!canNarrate || !listen() || playingRef.current) return;
     unlock();
+    retry();
     if (voicePrefs().introduce) setVoicePrefs({ introduce: false });
     const gen = ++run.current;
     player.current?.stop();
