@@ -337,6 +337,7 @@ async function storeCover(id: string, cover: Blob, upload: boolean) {
 async function addBook(rec: BookRecord, blob: Blob | string, cover?: Blob) {
   await store.set(`file:${rec.id}`, blob);
   if (cover) {
+    rec = { ...rec, hasCover: true };
     await store.set(`cover:${rec.id}`, cover);
     noCover.delete(rec.id);
   }

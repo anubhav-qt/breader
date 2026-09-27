@@ -1,3 +1,4 @@
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { PdfBook, TocItem } from './types';
 
 /** Rough words per PDF page, only used for time-left estimates. */
@@ -37,4 +38,27 @@ export async function openPdf(data: ArrayBuffer, fallbackTitle: string): Promise
     words: doc.numPages * WORDS_PER_PDF_PAGE,
     cleanup: () => { void doc.destroy(); },
   };
+}
+
+const COVER_WIDTH = 600;
+
+/** The first page as a picture, for the book's cover. */
+export async function pdfCover(doc: PDFDocumentProxy): Promise<Blob | undefined> {
+  try {
+    const page = await doc.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: COVER_WIDTH / base.width });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(vp.width);
+    canvas.height = Math.round(vp.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+    // Pages without a background of their own are white on paper.
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    return await new Promise<Blob | undefined>((done) => canvas.toBlob((b) => done(b ?? undefined), 'image/jpeg', 0.85));
+  } catch {
+    return undefined;
+  }
 }

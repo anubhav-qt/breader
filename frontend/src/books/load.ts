@@ -59,6 +59,12 @@ function placeholderBook(rec: BookRecord): FlowBook {
   };
 }
 
+/** A book's cover: the one it carries, its first picture, or a PDF's first page. */
+export async function coverOf(book: LoadedBook): Promise<Blob | undefined> {
+  if (book.kind === 'flow') return book.cover;
+  return (await import('./pdf')).pdfCover(book.doc);
+}
+
 const cache = new Map<string, LoadedBook>();
 
 export async function loadRecord(rec: BookRecord): Promise<LoadedBook> {

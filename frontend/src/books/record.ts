@@ -50,7 +50,7 @@ export function recordFromBook(book: LoadedBook, format: Format, shared: boolean
     addedAt: now,
     words: book.words,
     color,
-    hasCover: book.kind === 'flow' && !!book.cover,
+    hasCover: false,
     progress: 0,
     line: book.kind === 'flow' ? firstSentence(book.sections) : `Page 1 of ${book.pages}`,
     lastOpened: now,

@@ -4,7 +4,7 @@ import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/
 import { Header, type Tab } from './components/Header';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
-import { detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
+import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
 import { normColor } from './data/colors';
@@ -222,8 +222,9 @@ export default function App() {
       const book = await loadRecord(rec);
       loadedId.current = id;
       setLoaded({ id, book });
-      if (book.kind === 'flow' && book.cover && !rec.hasCover && rec.source === 'file') {
-        void lib.setCover(id, book.cover);
+      // Books added before they had a cover get one the first time they open.
+      if (!rec.hasCover && rec.source === 'file') {
+        void coverOf(book).then((cover) => { if (cover) void lib.setCover(id, cover); });
       }
       return book;
     } catch (e) {
@@ -334,7 +335,7 @@ export default function App() {
       try {
         const book = await parseSource(file, format, titleFromName(file.name));
         const rec = recordFromBook(book, format, shared, lib.nextColor());
-        const cover = book.kind === 'flow' ? book.cover : undefined;
+        const cover = await coverOf(book);
         book.cleanup?.();
         await lib.addBook(rec, file, cover);
         setPreview('live');

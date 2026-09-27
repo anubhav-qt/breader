@@ -28,6 +28,9 @@ function parseMarkup(text: string): Document {
 
 interface ManifestItem { href: string; type: string; props: string[] }
 
+/** The smallest image that counts as a picture for a cover, in bytes. */
+const MIN_PICTURE = 8 * 1024;
+
 export async function parseEpub(data: Blob | ArrayBuffer, fallbackTitle: string): Promise<FlowBook> {
   const zip = await JSZip.loadAsync(data);
   const read = (p: string) => zip.file(p)?.async('string');
@@ -59,14 +62,18 @@ export async function parseEpub(data: Blob | ArrayBuffer, fallbackTitle: string)
 
   const urls: string[] = [];
   const blobUrls = new Map<string, string>();
+  /** Every image the chapters show, in reading order, with its size. */
+  const images: Array<{ path: string; size: number }> = [];
   async function blobUrl(path: string): Promise<string> {
     const hit = blobUrls.get(path);
     if (hit) return hit;
     const f = zip.file(path);
     if (!f) return '';
-    const url = URL.createObjectURL(new Blob([await f.async('arraybuffer')], { type: typeOf.get(path) || '' }));
+    const bytes = await f.async('arraybuffer');
+    const url = URL.createObjectURL(new Blob([bytes], { type: typeOf.get(path) || '' }));
     urls.push(url);
     blobUrls.set(path, url);
+    images.push({ path, size: bytes.byteLength });
     return url;
   }
 
@@ -170,10 +177,15 @@ export async function parseEpub(data: Blob | ArrayBuffer, fallbackTitle: string)
     s.title = t?.title || (h?.textContent || '').replace(/\s+/g, ' ').trim() || (s.words ? `Section ${i + 1}` : i === 0 ? 'Cover' : 'Illustration');
   });
 
+  // The cover the book names, or else the first picture in it. Small images are ornaments and
+  // dividers, not pictures.
   const coverId = byTag(opf, 'meta').find((m) => m.getAttribute('name') === 'cover')?.getAttribute('content');
-  const coverItem = Array.from(manifest.values()).find((m) => m.props.includes('cover-image')) || (coverId ? manifest.get(coverId) : undefined);
-  const coverFile = coverItem && /^image\//.test(coverItem.type) ? zip.file(coverItem.href) : null;
-  const cover = coverFile ? new Blob([await coverFile.async('arraybuffer')], { type: coverItem!.type }) : undefined;
+  const named = Array.from(manifest.values()).find((m) => m.props.includes('cover-image')) || (coverId ? manifest.get(coverId) : undefined);
+  const coverPath = named && /^image\//.test(named.type) && zip.file(named.href)
+    ? named.href
+    : images.find((im) => im.size >= MIN_PICTURE && /^image\//.test(typeOf.get(im.path) || ''))?.path;
+  const coverFile = coverPath ? zip.file(coverPath) : null;
+  const cover = coverFile ? new Blob([await coverFile.async('arraybuffer')], { type: typeOf.get(coverPath!) }) : undefined;
 
   return {
     kind: 'flow',

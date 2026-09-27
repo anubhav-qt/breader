@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Modal } from '../../components/Modal';
 import { IconLock, IconPaste, IconPeople, IconUpload } from '../../components/icons';
-import { ACCEPT, detectFormat, parseSource, titleFromName } from '../../books/load';
+import { ACCEPT, coverOf, detectFormat, parseSource, titleFromName } from '../../books/load';
 import type { BookRecord, Format, LoadedBook } from '../../books/types';
 import { colorVars } from '../../data/colors';
 import { recordFromBook } from '../../books/record';
@@ -79,7 +79,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     if (step.kind !== 'decide') return;
     const { book, data, format, color } = step;
     const rec = recordFromBook(book, format, shared, color);
-    const cover = book.kind === 'flow' ? book.cover : undefined;
+    const cover = await coverOf(book);
     book.cleanup?.();
     await onAdded(rec, data, cover);
     // Shared books need a key too: it's how they reach the server, and so the Shared Library.
