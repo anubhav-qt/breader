@@ -239,7 +239,9 @@ label.clbl { display: block; }
 /* PDF */
 .pdfv { position: absolute; inset: 0; }
 .pdf-page { position: absolute; inset: 48px; display: grid; place-items: center; }
-.pdf-page canvas, .pdf-slot canvas { filter: var(--r-pdf); box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); border-radius: 2px; background: #fff; }
+.pdf-page canvas, .pdf-slot canvas { grid-area: 1 / 1; filter: var(--r-pdf); box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); border-radius: 2px; background: #fff; }
+/* Pictures, redrawn over the page so dark themes don't turn photos into negatives. */
+.pdf-page .pdf-pics, .pdf-slot .pdf-pics { z-index: 1; filter: var(--r-pdf-pics); box-shadow: none; background: none; pointer-events: none; }
 .pdf-scroll { position: absolute; inset: 0; overflow-y: auto; padding: 48px 0; display: flex; flex-direction: column; align-items: center; gap: 24px; }
 .pdf-slot { flex: none; display: grid; place-items: center; }
 .pdfv .fv-zone { width: calc(50% - var(--vw, 600px) / 2 + 60px); }
