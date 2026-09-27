@@ -112,6 +112,12 @@
 .i3-head .i3-side:last-child { justify-self: end; }
 .i3-head.is-on .i3-side { opacity: 1; transform: none; }
 .i3-side.is-open { background: var(--r-fill); }
+.i3-head .i3-ends { justify-self: end; display: flex; align-items: center; gap: 2px; }
+.i3-listen { display: grid; place-items: center; padding: 10px; }
+.i3-listen svg { width: 11px; height: 11px; fill: currentColor; }
+/* While it reads aloud the button stays in sight, in the book's colour, and so does the sentence. */
+.i3-head .i3-listen.is-playing { opacity: 1; transform: none; color: var(--book-mark); }
+.rd ::highlight(narrate) { background-color: color-mix(in srgb, var(--book-mark) 30%, transparent); }
 .i3-mid {
   min-width: 0;
   max-width: min(560px, calc(var(--pw) - 220px));

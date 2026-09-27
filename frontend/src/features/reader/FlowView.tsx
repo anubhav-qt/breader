@@ -4,7 +4,8 @@ import { animate } from 'motion';
 import type { FlowBook, Position } from '../../books/types';
 import { countWords } from '../../lib/format';
 import { firstSentence } from '../../books/record';
-import { charRect, collectBlocks, firstCharWhere, firstRect, sentenceAt } from './dom';
+import { charRect, collectBlocks, firstCharWhere, firstRect, rangeOf, sentenceAt } from './dom';
+import { light, sentencesIn, type Listen, type Sentence } from './narration';
 import { fontFamily, type Style, type StyleSettings } from './settings';
 import { curves, runTurn, swaps, type TurnStyle } from './turn';
 
@@ -31,6 +32,8 @@ export interface ViewHandle {
   /** Open at a fraction of the whole book. */
   goToFraction: (f: number) => void;
   turn: (dir: 1 | -1) => void;
+  /** For reading aloud (narration.ts). */
+  listen: Listen;
 }
 
 /** Told to the reader's controls as a page or chapter change starts, e.g. to sweep a line across it. */
@@ -365,6 +368,60 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     runTurn(turnStyle, dir, 'page', move, viewRef.current?.getBoundingClientRect());
   };
 
+  /* Reading aloud */
+
+  /** Where a character sits against the page on screen: on it, on the one after, or elsewhere. */
+  const placeOf = (block: number, offset: number): 'here' | 'next' | 'away' => {
+    const el = blocks.current[block];
+    const r = el ? charRect(el, offset) : null;
+    if (!r) return 'away';
+    if (pagesMode) {
+      const p = Math.floor((r.left - flowLeft() + 1) / step);
+      return p === pageRef.current ? 'here' : p === pageRef.current + 1 ? 'next' : 'away';
+    }
+    const v = viewRef.current!.getBoundingClientRect();
+    if (r.top >= v.top - 1 && r.bottom <= v.bottom - 24) return 'here';
+    return r.top > v.top && r.top < v.bottom + v.height ? 'next' : 'away';
+  };
+
+  const listen: Listen = {
+    at: () => section,
+    from: async () => {
+      const out: Sentence[] = [];
+      const { block, offset } = loc.current;
+      blocks.current.forEach((el, i) => {
+        if (i < block) return;
+        const text = el.textContent ?? '';
+        for (const [start, end] of sentencesIn(text, i === block ? offset : 0)) out.push({ section, block: i, start, end, text: text.slice(start, end) });
+      });
+      return out;
+    },
+    show: (sn, at) => {
+      if (sn.section !== section) return false;
+      if (at === 0) {
+        const el = blocks.current[sn.block];
+        light(el ? rangeOf(el, sn.start, sn.end) : null);
+      }
+      const place = placeOf(sn.block, sn.start + at);
+      if (place === 'next') {
+        if (pagesMode) turn(1);
+        else {
+          const v = viewRef.current!;
+          const r = charRect(blocks.current[sn.block], sn.start + at);
+          if (r) v.scrollBy({ top: r.top - v.getBoundingClientRect().top - 88, behavior: 'smooth' });
+        }
+      }
+      return place !== 'away';
+    },
+    onScreen: (sn, at) => sn.section === section && placeOf(sn.block, sn.start + at) === 'here',
+    clear: () => light(null),
+    next: () => {
+      if (section >= n - 1) return false;
+      goSection(section + 1, { kind: 'start' }, 1);
+      return true;
+    },
+  };
+
   useImperativeHandle(ref, () => ({
     goTo: (i, anchor) => goSection(i, anchor ? { kind: 'anchor', id: anchor } : { kind: 'start' }),
     goToFraction: (f) => {
@@ -372,6 +429,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       goSection(at.section, at.target);
     },
     turn,
+    listen,
   }));
 
   const scrollFrame = useRef(0);

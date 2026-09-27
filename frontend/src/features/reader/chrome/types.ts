@@ -33,6 +33,8 @@ export interface ChromeProps {
   body: RefObject<HTMLDivElement | null>;
   /** Going back to the library: anything that should leave first, leaves now. */
   closing: boolean;
+  /** Reading aloud, where the device has voices. */
+  narration: { playing: boolean; toggle: () => void } | null;
 }
 
 export const toItem = (c: Chapter): TocItem => ({ title: c.title, section: c.section, anchor: c.anchor, level: 0 });

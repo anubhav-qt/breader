@@ -4,6 +4,7 @@ import type { RenderTask } from 'pdfjs-dist';
 import type { PdfBook } from '../../books/types';
 import { WORDS_PER_PDF_PAGE } from '../../books/pdf';
 import type { Loc, Start, TurnEvent, ViewHandle } from './FlowView';
+import { sentencesIn } from './narration';
 import type { Layout } from './settings';
 import { runTurn, swaps, type TurnStyle } from './turn';
 
@@ -157,7 +158,27 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
         r.scrollBy({ top: dir * (r.clientHeight - 80), behavior: 'smooth' });
       } else goTo(page + dir);
     },
-  }), [goTo, layout, page, total]);
+    // Read aloud a page at a time. The text sits in the drawing, so nothing lights up.
+    listen: {
+      at: () => page,
+      from: async () => {
+        const content = await (await book.doc.getPage(page + 1)).getTextContent();
+        let text = '';
+        for (const it of content.items) if ('str' in it) text += it.str + (it.hasEOL ? '\n' : '');
+        // Words broken across lines join up again.
+        text = text.replace(/-\n(?=\p{Ll})/gu, '').replace(/\s+/g, ' ');
+        return sentencesIn(text, 0).map(([start, end]) => ({ section: page, block: 0, start, end, text: text.slice(start, end) }));
+      },
+      show: (sn) => sn.section === page,
+      onScreen: (sn) => sn.section === page,
+      clear: () => {},
+      next: () => {
+        if (page >= total - 1) return false;
+        goTo(page + 1);
+        return true;
+      },
+    },
+  }), [book, goTo, layout, page, total]);
 
   return (
     <div ref={rootRef} className={`pdfv is-${layout}`} style={{ '--vw': `${Math.max(0, pageW)}px` } as CSSProperties}>

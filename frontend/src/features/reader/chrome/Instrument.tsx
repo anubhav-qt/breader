@@ -15,7 +15,7 @@ const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, narration }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [foot, setFoot] = useState(false);
   const progress = loc?.progress ?? 0;
@@ -30,7 +30,22 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           <Typed text={label} />
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
-        <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'}>Aa</button>
+        <div className="i3-ends">
+          {narration && (
+            <button
+              type="button"
+              className={`i3-side i3-listen${narration.playing ? ' is-playing' : ''}`}
+              onClick={narration.toggle}
+              aria-label={narration.playing ? 'Stop reading aloud' : 'Read aloud'}
+              aria-pressed={narration.playing}
+            >
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                {narration.playing ? <path d="M2.5 1.5h2.5v9H2.5zM7 1.5h2.5v9H7z" /> : <path d="M3 1.2 10.5 6 3 10.8z" />}
+              </svg>
+            </button>
+          )}
+          <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'}>Aa</button>
+        </div>
       </div>
 
       <div className={`i3-foot${foot ? ' is-on' : ''}`} onPointerEnter={() => setFoot(true)} onPointerLeave={() => setFoot(false)}>

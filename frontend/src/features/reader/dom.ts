@@ -49,6 +49,24 @@ export function charRect(el: HTMLElement, offset: number): DOMRect | null {
   return firstRect(el);
 }
 
+/** A range over characters [start, end) of a block's text. */
+export function rangeOf(el: HTMLElement, start: number, end: number): Range | null {
+  const nodes = textNodes(el);
+  const range = document.createRange();
+  let at = 0;
+  let began = false;
+  for (const node of nodes) {
+    const len = node.data.length;
+    if (!began && start < at + len) { range.setStart(node, start - at); began = true; }
+    if (began && end <= at + len) { range.setEnd(node, end - at); return range; }
+    at += len;
+  }
+  if (!began) return null;
+  const last = nodes[nodes.length - 1];
+  range.setEnd(last, last.data.length);
+  return range;
+}
+
 /** The first character in the block for which `pred` holds, by binary search (characters flow in order). */
 export function firstCharWhere(el: HTMLElement, pred: (r: DOMRect) => boolean): number {
   const nodes = textNodes(el);

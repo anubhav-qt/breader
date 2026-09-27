@@ -48,6 +48,7 @@
 
 .ctl { margin-bottom: 18px; }
 .clbl { font: var(--ui-w) 12px/1 var(--ui); color: var(--r-mu); margin-bottom: 9px; }
+label.clbl { display: block; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border-radius: 11px; background: var(--r-fill); }
 .seg button {
   height: 32px;
@@ -103,6 +104,22 @@
 .stp button:hover:not(:disabled) { background: var(--r-bg); }
 .stp button:disabled { opacity: 0.3; }
 .stp-v { text-align: center; font: var(--ui-w-strong) 15px/1 var(--ui); }
+/* A native picker (the voices), dressed like the other controls. */
+.sel { position: relative; }
+.sel select {
+  width: 100%;
+  height: 38px;
+  padding: 0 34px 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--r-fill);
+  color: var(--r-fg);
+  font: var(--ui-w) 13px/1 var(--ui);
+  appearance: none;
+  -webkit-appearance: none;
+  text-overflow: ellipsis;
+}
+.sel::after { content: "▾"; position: absolute; right: 13px; top: 50%; translate: 0 -50%; font-size: 10px; color: var(--r-mu); pointer-events: none; }
 .tgrow { display: flex; align-items: center; justify-content: space-between; }
 .tgrow .clbl { margin: 0; }
 .tg { position: relative; width: 44px; height: 26px; border-radius: 13px; background: var(--r-line); transition: background-color 160ms ease; }

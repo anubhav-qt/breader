@@ -6,6 +6,7 @@ import { InstrumentChrome } from './chrome/Instrument';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useFullscreenReading } from './fullscreen';
+import { canNarrate, useNarration } from './narration';
 import { PdfView } from './PdfView';
 import { useReaderSettings, type ThemeName } from './settings';
 import { useReadingClock } from './useReadingClock';
@@ -54,7 +55,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const chapters = useMemo(() => chaptersOf(book), [book]);
   const current = chapterAt(chapters, loc);
 
-  useReadingClock(!closing, onReadTime);
+  const narration = useNarration(view, !closing, loc);
+  useReadingClock(!closing, onReadTime, narration.busy);
   useFullscreenReading(!closing);
 
   const [start] = useState<Start>(() => {
@@ -148,6 +150,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     book, title, loc, chapters, current, settings, update, isPdf: book.kind === 'pdf',
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
+    narration: canNarrate ? { playing: narration.playing, toggle: narration.toggle } : null,
   };
   const vars = {
     '--book': `var(--bc-${color})`,
