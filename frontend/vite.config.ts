@@ -8,12 +8,25 @@ import react from '@vitejs/plugin-react'
  * at the CDN copy instead.
  */
 const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/'
+
+/*
+ * The runtime also sets aside 4 GB of memory before it loads a model, which phones refuse: iPhones
+ * say "Out of memory", and Chrome on Android, 32-bit on many phones, can't find 4 GB in one piece.
+ * Normal's voices run in under 512 MB, so the CPU runtime asks for 1 GB, or 512 MB where even that
+ * is refused. Immersive's (the WebGPU runtime) is left alone: its model is 326 MB before it starts.
+ */
+const MEMORY = 'new WebAssembly.Memory({initial:256,maximum:65536,shared:!0})'
+const SMALLER = '(()=>{for(const m of[16384,8192])try{return new WebAssembly.Memory({initial:256,maximum:m,shared:!0})}catch(e){if(m===8192)throw e}})()'
+
 const ortWasm = (): Plugin => ({
   name: 'breader-ort-wasm',
   enforce: 'pre',
   transform(code, id) {
     if (!/onnxruntime-web[\\/]dist[\\/]ort\.[\w.]*mjs$/.test(id)) return null
-    return code.replace(/new URL\("(ort-wasm[\w.-]*)",\s*import\.meta\.url\)/g, `new URL("${ORT}$1")`)
+    const out = code.replace(/new URL\("(ort-wasm[\w.-]*)",\s*import\.meta\.url\)/g, `new URL("${ORT}$1")`)
+    if (!/[\\/]ort\.wasm\.bundle[\w.]*mjs$/.test(id)) return out
+    if (!out.includes(MEMORY)) this.error('ONNX Runtime sets aside its memory differently now: update MEMORY in vite.config.ts.')
+    return out.replace(MEMORY, SMALLER)
   },
 })
 
