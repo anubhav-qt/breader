@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import type { ListedVoice } from '@breader/shared/protocol';
 import manifest from './files.json';
 import { hosted, uploaded, type HostedName, type Want } from './store';
@@ -97,5 +98,29 @@ export function weight(wants: Want[]) {
   return wants.reduce((n, w) => n + ((files[w.name as keyof Files] as { transfer?: number } | undefined)?.transfer ?? w.size), 0);
 }
 
-/** Can this browser run Immersive voices? */
-export const hasGpu = () => typeof navigator !== 'undefined' && 'gpu' in navigator;
+/*
+ * Can this browser run Immersive voices? Having WebGPU isn't enough: some browsers have it but no
+ * graphics chip to lend it (the iOS Simulator, older phones, a blocklisted driver), so it's asked
+ * for one. Null until then.
+ */
+type Gpu = { requestAdapter: () => Promise<unknown> };
+let gpu: boolean | null = typeof navigator !== 'undefined' && 'gpu' in navigator ? null : false;
+let asking: Promise<boolean> | null = null;
+const gpuSubs = new Set<() => void>();
+const setGpu = (v: boolean) => { gpu = v; gpuSubs.forEach((f) => f()); };
+
+export function checkGpu(): Promise<boolean> {
+  if (gpu !== null) return Promise.resolve(gpu);
+  asking ??= (navigator as Navigator & { gpu: Gpu }).gpu.requestAdapter().then((a) => !!a, () => false).then((ok) => { setGpu(ok); return ok; });
+  return asking;
+}
+/** False once this browser is known not to run them; true until then. */
+export const hasGpu = () => gpu !== false;
+/**
+ * Whose voices a mode reads with here. Immersive without a graphics chip to run its own reads with
+ * Normal's, so the page still dims and follows the voice.
+ */
+export const voicesOf = (m: Mode): Mode => (m === 'immersive' && !hasGpu() ? 'normal' : m);
+/** Immersive failed to start on this device's graphics: read with Normal's voices from now on. */
+export const noGpu = () => setGpu(false);
+export const useGpu = () => useSyncExternalStore((f) => { gpuSubs.add(f); return () => { gpuSubs.delete(f); }; }, () => gpu);

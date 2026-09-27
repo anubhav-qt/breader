@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { KOKORO_PACK_BYTES, LIMITS } from '@breader/shared/limits';
 import { storeFile } from '../../../data/sync';
-import { fromListed, hasGpu, SAMPLE_LINE, type Engine } from './catalog';
+import { checkGpu, fromListed, SAMPLE_LINE, type Engine } from './catalog';
 import { putVoice } from './list';
 import { drop, failed, missing, synth, wav } from './speaker';
 import { forget, keep, uploaded } from './store';
@@ -94,7 +94,7 @@ export async function uploadVoice(d: Draft, as: { name: string; accent: Accent; 
   if (d.config) await keep(files[1], d.config);
   let sample: Blob | null = null;
   try {
-    if (d.engine === 'piper' || (hasGpu() && (await missing(trial)).bytes === 0)) {
+    if (d.engine === 'piper' || ((await checkGpu()) && (await missing(trial)).bytes === 0)) {
       const clip = await synth(trial, SAMPLE_LINE, 1);
       if (!clip.audio.length || clip.audio.some((x) => Number.isNaN(x))) throw new Error('it made no sound');
       sample = wav(clip.audio, clip.rate);

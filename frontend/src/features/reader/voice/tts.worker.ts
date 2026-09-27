@@ -58,7 +58,9 @@ async function fetchAll(id: number, wants: Want[]) {
 
 async function start(id: number, which: 'piper' | 'kokoro') {
   engine = which;
-  if (which === 'kokoro' && !(navigator as Navigator & { gpu?: unknown }).gpu) throw Object.assign(new Error('This browser can’t run Immersive voices.'), { gpu: true });
+  // Asked before anything downloads: a browser can have WebGPU and no graphics chip to lend it.
+  const gpu = (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
+  if (which === 'kokoro' && !(await gpu?.requestAdapter().catch(() => null))) throw Object.assign(new Error('This browser can’t run Immersive voices.'), { gpu: true });
   const [wasm] = await fetchAll(id, [hosted(which === 'kokoro' ? 'ort-gpu' : 'ort-cpu')]);
   ort = which === 'kokoro' ? await import('onnxruntime-web/webgpu') : await import('onnxruntime-web/wasm');
   ort.env.wasm.wasmBinary = wasm.buffer as ArrayBuffer;
@@ -70,7 +72,8 @@ async function start(id: number, which: 'piper' | 'kokoro') {
     try {
       kokoro = await ort.InferenceSession.create(model, { executionProviders: ['webgpu'], logSeverityLevel: 3 });
     } catch (e) {
-      throw Object.assign(new Error(`Immersive voices couldn’t start on this device’s graphics (${e instanceof Error ? e.message : e}).`), { gpu: true });
+      console.warn('Kokoro couldn’t start on WebGPU:', e);
+      throw Object.assign(new Error('Immersive voices couldn’t start on this device’s graphics chip.'), { gpu: true });
     }
   }
 }

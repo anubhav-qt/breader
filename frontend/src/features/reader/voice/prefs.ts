@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { readLocal, writeLocal } from '../../../lib/store';
-import { BUILT_IN, DEFAULT_VOICE, engineOf, fromListed, type Mode, type VoiceInfo } from './catalog';
+import { BUILT_IN, DEFAULT_VOICE, engineOf, fromListed, voicesOf, type Mode, type VoiceInfo } from './catalog';
 import { listedVoices } from './list';
 
 /*
@@ -36,12 +36,17 @@ export const useVoicePrefs = () => useSyncExternalStore(
   () => prefs,
 );
 
-/** The voice picked for a mode, or the mode's first voice when that one has gone. */
-export function voiceFor(mode: Mode, key = prefs.voice[mode]): VoiceInfo {
-  const built = BUILT_IN[mode].find((v) => v.key === key);
+/**
+ * The voice a mode reads with: the one picked, or the first when that one has gone. Immersive on a
+ * device that can't run its voices reads with Normal's pick (catalog.ts, voicesOf).
+ */
+export function voiceFor(mode: Mode): VoiceInfo {
+  const m = voicesOf(mode);
+  const key = prefs.voice[m];
+  const built = BUILT_IN[m].find((v) => v.key === key);
   if (built) return built;
-  const up = listedVoices().find((v) => `user:${v.id}` === key && v.engine === engineOf(mode));
-  return up ? fromListed(up) : BUILT_IN[mode].find((v) => v.key === DEFAULT_VOICE[mode])!;
+  const up = listedVoices().find((v) => `user:${v.id}` === key && v.engine === engineOf(m));
+  return up ? fromListed(up) : BUILT_IN[m].find((v) => v.key === DEFAULT_VOICE[m])!;
 }
 
 /**

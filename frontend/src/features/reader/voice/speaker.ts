@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { api } from '../../../lib/api';
-import { engineFiles, filesOf, weight, type Engine, type VoiceInfo } from './catalog';
+import { engineFiles, filesOf, noGpu, weight, type Engine, type VoiceInfo } from './catalog';
 import { has, type Want } from './store';
 import type { Reply, Request } from './tts.worker';
 
@@ -144,6 +144,7 @@ export function prepare(v: VoiceInfo): Promise<void> {
       r.voices.delete(v.key);
       const err = e as Error & { gpu?: boolean };
       setLoad({ key: null, error: err.message, gpu: !!err.gpu });
+      if (err.gpu) noGpu();
       // A failed start leaves the worker unusable; the next try gets a fresh one.
       if (runners[v.engine] === r) { r.stop(); delete runners[v.engine]; }
       throw e;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { hasKey } from '../../../data/sync';
 import { api } from '../../../lib/api';
 import { Segmented } from '../Panels';
-import { BUILT_IN, engineOf, fromListed, hasGpu, type Mode, type VoiceInfo } from '../voice/catalog';
+import { BUILT_IN, checkGpu, engineOf, fromListed, useGpu, type Mode, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
 import { RATES, setVoicePrefs, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
@@ -19,7 +19,7 @@ const ABOUT: Record<Mode, string> = {
   normal: 'Voices that run on this device’s processor, fine on any phone or laptop. Each one downloads once, about 66 MB, and then reads offline.',
   immersive: 'Richer voices on this device’s graphics chip, for newer computers. The page dims and follows the voice. One download of about 330 MB for all five.',
 };
-const NO_GPU = 'Immersive needs WebGPU, which this browser doesn’t have. A recent Chrome or Edge, or Safari 26, on a newer computer does.';
+const FALLBACK = 'The page dims and follows the voice. This device can’t run Immersive’s richer voices, so it reads with the Normal ones, each about 66 MB. A newer computer with a recent Chrome, Edge or Safari can.';
 
 const mb = (n: number) => `${n > 0 && n < 500_000 ? '<1' : Math.round(n / 1e6)} MB`;
 
@@ -34,14 +34,19 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   const listed = useListedVoices();
   const load = useLoadState();
   const mode = prefs.mode;
-  const engine = engineOf(mode);
+  // Immersive where the GPU can't run its voices reads with Normal's (catalog.ts, voicesOf).
+  const gpu = useGpu();
+  const fallback = mode === 'immersive' && gpu === false;
+  const voices: Mode = fallback ? 'normal' : mode;
+  const engine = engineOf(voices);
   const current = voiceFor(mode);
-  const blocked = mode === 'immersive' && !hasGpu();
   const [bytes, setBytes] = useState<number | null>(null);
   const [hearing, setHearing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => { void refreshVoices(); }, []);
+  // Whether Immersive can run here, asked before it offers a download.
+  useEffect(() => { if (mode === 'immersive') void checkGpu(); }, [mode]);
   useEffect(() => stopSample, []);
   // What the picked voice still has to download; again once a download ends.
   useEffect(() => {
@@ -50,7 +55,7 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
     return () => { on = false; };
   }, [current, load.key]);
 
-  const pick = (key: string) => setVoicePrefs({ voice: { ...prefs.voice, [mode]: key } });
+  const pick = (key: string) => setVoicePrefs({ voice: { ...prefs.voice, [voices]: key } });
   // Switching to Immersive while nothing reads: the next tap on play comes here first.
   const setMode = (m: Mode) => setVoicePrefs({ mode: m, introduce: m === 'immersive' && !playing });
 
@@ -70,13 +75,13 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   if (adding) {
     return (
       <AddVoice
-        mode={mode}
+        mode={voices}
         onBusy={() => { if (playing) onStop(); }}
         onDone={(added) => {
           setAdding(false);
           if (!added) return;
           setVoicePrefs({ voice: { ...prefs.voice, [added.mode]: added.key } });
-          if (added.mode !== mode) setMode(added.mode);
+          if (added.mode !== voices) setMode(added.mode);
         }}
       />
     );
@@ -93,44 +98,40 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
     <div className="pnl vs">
       <div className="pnl-h">Read aloud</div>
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
-      <p className="p-note vs-about">{blocked ? NO_GPU : ABOUT[mode]}</p>
-      {!blocked && (
-        <>
-          <div className="vs-lists" role="radiogroup" aria-label="Voice">
-            <div className="vs-list">{BUILT_IN[mode].map((v) => row(v))}</div>
-            {others.length > 0 && (
-              <>
-                <div className="clbl vs-sub">Shared by readers</div>
-                <div className="vs-list">{others.map((v) => row(v))}</div>
-              </>
-            )}
-            <div className="clbl vs-sub">Yours</div>
-            <div className="vs-list">
-              {yours.map((v) => row(v, <Own v={v} />))}
-              {hasKey() ? (
-                <button type="button" className="vs-add" onClick={() => { stopSample(); setAdding(true); }}>
-                  <DotIcon rows={PLUS} />
-                  <span>Add a voice</span>
-                </button>
-              ) : (
-                <p className="p-note vs-sub-note">Once this library has a key, you can add voices of your own.</p>
-              )}
-            </div>
-          </div>
-          <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />
-          <div className="vs-foot">
-            {loading ? (
-              <Progress loaded={load.loaded} total={load.total} />
-            ) : load.error ? (
-              <p className="p-note vs-err" role="alert">{load.error}</p>
-            ) : null}
-            <button type="button" className="vs-go" onClick={playing ? onStop : onStart}>
-              <DotIcon rows={playing ? PAUSE : PLAY} />
-              <span>{playing ? (loading ? 'Cancel' : 'Stop') : bytes ? `Download ${mb(bytes)} and read` : 'Read aloud'}</span>
+      <p className="p-note vs-about">{fallback ? FALLBACK : ABOUT[mode]}</p>
+      <div className="vs-lists" role="radiogroup" aria-label="Voice">
+        <div className="vs-list">{BUILT_IN[voices].map((v) => row(v))}</div>
+        {others.length > 0 && (
+          <>
+            <div className="clbl vs-sub">Shared by readers</div>
+            <div className="vs-list">{others.map((v) => row(v))}</div>
+          </>
+        )}
+        <div className="clbl vs-sub">Yours</div>
+        <div className="vs-list">
+          {yours.map((v) => row(v, <Own v={v} />))}
+          {hasKey() ? (
+            <button type="button" className="vs-add" onClick={() => { stopSample(); setAdding(true); }}>
+              <DotIcon rows={PLUS} />
+              <span>Add a voice</span>
             </button>
-          </div>
-        </>
-      )}
+          ) : (
+            <p className="p-note vs-sub-note">Once this library has a key, you can add voices of your own.</p>
+          )}
+        </div>
+      </div>
+      <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />
+      <div className="vs-foot">
+        {loading ? (
+          <Progress loaded={load.loaded} total={load.total} />
+        ) : load.error && !(fallback && load.gpu) ? (
+          <p className="p-note vs-err" role="alert">{load.error}</p>
+        ) : null}
+        <button type="button" className="vs-go" onClick={playing ? onStop : onStart}>
+          <DotIcon rows={playing ? PAUSE : PLAY} />
+          <span>{playing ? (loading ? 'Cancel' : 'Stop') : bytes ? `Download ${mb(bytes)} and read` : 'Read aloud'}</span>
+        </button>
+      </div>
     </div>
   );
 }

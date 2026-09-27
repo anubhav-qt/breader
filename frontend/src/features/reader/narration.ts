@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Loc, ViewHandle } from './FlowView';
-import { hasGpu, type VoiceInfo } from './voice/catalog';
+import { checkGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, setVoicePrefs, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import { respell, type Swap } from './voice/sayas';
@@ -267,6 +267,9 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     while (live()) {
       // A new voice or speed reads from here on.
       const p = voicePrefs();
+      // Immersive reads with Normal's voices where the GPU can't run its own.
+      if (p.mode === 'immersive') await checkGpu();
+      if (!live()) return;
       const want = voiceFor(p.mode);
       if (want.key !== voice?.key || p.rate !== rate) {
         clips = new Map();
@@ -274,7 +277,6 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         if (want.key !== voice?.key) {
           const first = !voice;
           voice = null;
-          if (want.engine === 'kokoro' && !hasGpu()) { openSheet(); break; }
           if (!first && (await missing(want)).bytes > 0 && askFirst()) { openSheet(); break; }
           try {
             await prepare(want);
@@ -404,18 +406,19 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const toggle = () => {
     if (playing) { halt(); return; }
     const p = voicePrefs();
-    if (p.mode === 'immersive' && (p.introduce || !hasGpu())) {
-      if (p.introduce) setVoicePrefs({ introduce: false });
+    if (p.mode === 'immersive' && p.introduce) {
+      setVoicePrefs({ introduce: false });
       openSheet();
       return;
     }
     // Sound can only start in the tap itself.
     unlock();
-    const v = voiceFor(p.mode);
-    void missing(v).then((m) => {
+    void (async () => {
+      if (p.mode === 'immersive') await checkGpu();
+      const m = await missing(voiceFor(p.mode));
       if (m.bytes > 0 && askFirst()) openSheet();
       else start();
-    });
+    })();
   };
 
   // A page turned or chapter picked by hand: carry on from the top of it. Not while the page is
@@ -448,7 +451,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
   // A new voice or speed takes over mid-sentence.
   const prefs = useVoicePrefs();
-  const picked = prefs.voice[prefs.mode];
+  const picked = voiceFor(prefs.mode).key;
   useEffect(() => {
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
