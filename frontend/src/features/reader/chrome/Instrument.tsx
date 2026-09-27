@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, type Chapter } from '../chapters';
+import { canFullscreen, useFullscreen } from '../fullscreen';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { ChapterLabel, Digits, Typed } from './parts';
 import type { ChromeProps, PanelName } from './types';
@@ -15,8 +16,9 @@ const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, narration }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, narration, focus }: ChromeProps) {
   const [head, setHead] = useState(false);
+  const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
   const progress = loc?.progress ?? 0;
   const label = chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
@@ -39,12 +41,18 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               aria-label={narration.playing ? 'Stop reading aloud' : 'Read aloud'}
               aria-pressed={narration.playing}
             >
-              <svg viewBox="0 0 12 12" aria-hidden="true">
-                {narration.playing ? <path d="M2.5 1.5h2.5v9H2.5zM7 1.5h2.5v9H7z" /> : <path d="M3 1.2 10.5 6 3 10.8z" />}
-              </svg>
+              <DotIcon rows={narration.playing ? PAUSE : PLAY} />
             </button>
           )}
           <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'}>Aa</button>
+          <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on}>
+            <DotIcon rows={FOCUS} />
+          </button>
+          {canFullscreen() && (
+            <button type="button" className={`i3-side i3-icon${full ? ' is-open' : ''}`} onClick={toggleFull} aria-label="Full screen" aria-pressed={full}>
+              <DotIcon rows={full ? SHRINK : GROW} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -77,6 +85,24 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+/*
+ * The head's icons, drawn in square dots on the same 7-row grid as Doto's letters, so they sit
+ * with "Aa" as if typed in it.
+ */
+const PLAY = ['x....', 'xx...', 'xxx..', 'xxxx.', 'xxx..', 'xx...', 'x....'];
+const PAUSE = ['xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx'];
+const FOCUS = ['..xxx..', '.x...x.', 'x.....x', 'x..x..x', 'x.....x', '.x...x.', '..xxx..'];
+const GROW = ['xx...xx', 'x.....x', '.......', '.......', '.......', 'x.....x', 'xx...xx'];
+const SHRINK = ['.x...x.', 'xx...xx', '.......', '.......', '.......', 'xx...xx', '.x...x.'];
+
+function DotIcon({ rows }: { rows: string[] }) {
+  return (
+    <svg className="i3-dots-icon" viewBox={`0 0 ${rows[0].length} ${rows.length}`} style={{ width: `${(rows[0].length / rows.length) * 0.8}em` }} aria-hidden="true">
+      {rows.flatMap((r, y) => [...r].map((c, x) => (c === 'x' ? <rect key={`${x}.${y}`} x={x + 0.1} y={y + 0.1} width={0.8} height={0.8} rx={0.1} /> : null)))}
+    </svg>
   );
 }
 

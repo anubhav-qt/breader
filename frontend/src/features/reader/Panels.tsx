@@ -3,7 +3,6 @@ import type { LoadedBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import type { Loc } from './FlowView';
-import { canFullscreen, useFullscreen } from './fullscreen';
 import { canNarrate, RATES, setVoicePrefs, useVoicePrefs, useVoices } from './narration';
 import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, type ReaderSettings, type StyleSettings } from './settings';
 
@@ -218,7 +217,6 @@ export function AppearancePanel({ settings, isPdf, update }: LookProps) {
         </>
       )}
       {canNarrate && <VoiceRows />}
-      {canFullscreen() && <FullscreenRow />}
     </div>
   );
 }
@@ -248,15 +246,5 @@ function VoiceRows() {
       </div>
       <Segmented label="Speed" value={rate} onChange={(v) => setVoicePrefs({ rate: v })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />
     </>
-  );
-}
-
-function FullscreenRow() {
-  const [on, toggle] = useFullscreen();
-  return (
-    <div className="ctl tgrow">
-      <span className="clbl">Full screen</span>
-      <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Full screen" onClick={toggle} />
-    </div>
   );
 }

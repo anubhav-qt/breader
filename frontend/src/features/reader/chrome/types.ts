@@ -35,6 +35,8 @@ export interface ChromeProps {
   closing: boolean;
   /** Reading aloud, where the device has voices. */
   narration: { playing: boolean; toggle: () => void } | null;
+  /** Focus mode: everything but the text hides until the mouse moves or a tap mid-page. */
+  focus: { on: boolean; toggle: () => void };
 }
 
 export const toItem = (c: Chapter): TocItem => ({ title: c.title, section: c.section, anchor: c.anchor, level: 0 });

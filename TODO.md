@@ -1,8 +1,5 @@
 # Breader: to do later
 
-## Next
-- [ ] Focus mode: an icon next to Aa in the reader's top line that removes everything but the text (margin readouts, controls). Any way back out should be obvious.
-
 ## Input mode setting
 - [ ] Add a setting for **mouse-first** (default) or **keyboard-first**.
   - Mouse-first is what the current design assumes: left nav, hover reveals, clicks.

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type TouchEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
 import type { BookRecord, LoadedBook, ReadState, TocItem } from '../../books/types';
 import { paintBars } from '../../lib/bars';
 import { chapterAt, chaptersOf } from './chapters';
 import { InstrumentChrome } from './chrome/Instrument';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
+import { useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
 import { canNarrate, useNarration } from './narration';
 import { PdfView } from './PdfView';
@@ -58,6 +59,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const narration = useNarration(view, !closing, loc);
   useReadingClock(!closing, onReadTime, narration.busy);
   useFullscreenReading(!closing);
+  const [focus, toggleFocus] = useFocusMode();
+  const { awake, still, wake, sleep } = useWake(!closing);
+  // Opening in focus mode shows where the controls are before they go.
+  useEffect(() => { if (focus) wake(1800); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [start] = useState<Start>(() => {
     if (initial?.pos) return { kind: 'pos', pos: initial.pos };
@@ -99,6 +104,16 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   // The tap zones under a swipe mustn't turn the page a second time.
   const onClickCapture = (e: MouseEvent) => {
     if (e.timeStamp - swipedAt.current < 500) { e.stopPropagation(); e.preventDefault(); }
+  };
+  // Touch screens have no mouse to wake the controls: in focus mode a tap mid-page does, and hides them again.
+  const touched = useRef(false);
+  const onPointerDown = (e: PointerEvent) => { touched.current = e.pointerType === 'touch'; };
+  const onClick = (e: MouseEvent) => {
+    if (!focus || !touched.current || e.defaultPrevented || closing) return;
+    if ((e.target as HTMLElement).closest('a, button, input, select, textarea')) return;
+    if (window.getSelection()?.toString()) return;
+    if (awake) sleep();
+    else wake(3500);
   };
 
   useEffect(() => {
@@ -151,6 +166,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
     narration: canNarrate ? { playing: narration.playing, toggle: narration.toggle } : null,
+    focus: { on: focus, toggle: toggleFocus },
   };
   const vars = {
     '--book': `var(--bc-${color})`,
@@ -159,9 +175,9 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   } as CSSProperties;
 
   return (
-    <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}`} style={vars}>
+    <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}${focus ? ' is-focus' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
-        <main className="rd-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onClickCapture={onClickCapture}>
+        <main className="rd-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           ) : (
