@@ -207,6 +207,8 @@ export type ShelfResponse = z.infer<typeof ShelfResponse>;
 /** A voice as the voice list shows it. */
 export const ListedVoice = Voice.extend({
   addedAt: Millis,
+  /** The model's or pack's size in bytes, for download progress. */
+  fileSize: z.number(),
   /** This library's own. */
   mine: z.boolean(),
   /** Words this library has heard in it. Past KEEP_WORDS it stays, private or removed. */

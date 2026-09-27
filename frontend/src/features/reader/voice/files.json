@@ -1,0 +1,114 @@
+{
+  "$comment": "Files reading aloud needs. `from` files are fetched at build time (scripts/voices.mjs) into public/, split into parts under Cloudflare Pages' 25 MiB limit; `url` files come straight from their CDN. Sizes are unpacked bytes; `transfer` is what a compressed download weighs.",
+  "partBytes": 25165824,
+  "files": {
+    "ort-cpu": {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort-wasm-simd-threaded.wasm",
+      "size": 14239897,
+      "sha256": "3398c10d07d229bd91b364548e130e0e51a8e5704b88c7c083ebbeb78842dee2",
+      "transfer": 3073897
+    },
+    "ort-gpu": {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort-wasm-simd-threaded.asyncify.wasm",
+      "size": 26781914,
+      "sha256": "39f9f0894d478800487ed9f7dbe92618498db320cf55c8e3d89adff8dce658da",
+      "transfer": 5528011
+    },
+    "kokoro": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/onnx/model.onnx",
+      "path": "tts/kokoro-v1.0-fp32.8fbea51e.onnx",
+      "size": 325532232,
+      "sha256": "8fbea51ea711f2af382e88c833d9e288c6dc82ce5e98421ea61c058ce21a34cb"
+    },
+    "kokoro-af_heart": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_heart.bin",
+      "path": "tts/kokoro-af_heart.d583ccff.bin",
+      "size": 522240,
+      "sha256": "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"
+    },
+    "kokoro-am_michael": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/am_michael.bin",
+      "path": "tts/kokoro-am_michael.1d1f21dd.bin",
+      "size": 522240,
+      "sha256": "1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1"
+    },
+    "kokoro-bf_emma": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bf_emma.bin",
+      "path": "tts/kokoro-bf_emma.669fe064.bin",
+      "size": 522240,
+      "sha256": "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73"
+    },
+    "kokoro-bm_george": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bm_george.bin",
+      "path": "tts/kokoro-bm_george.c4b235a4.bin",
+      "size": 522240,
+      "sha256": "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc"
+    },
+    "kokoro-af_bella": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_bella.bin",
+      "path": "tts/kokoro-af_bella.f69d8362.bin",
+      "size": 522240,
+      "sha256": "f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b"
+    },
+    "piper-kristin": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/kristin/medium/en_US-kristin-medium.onnx",
+      "path": "tts/en_US-kristin-medium.5849957f.onnx",
+      "size": 63531379,
+      "sha256": "5849957f929cbf720c258f8458692d6103fff2f0e3d3b19c8259474bb06a18d4"
+    },
+    "piper-kristin-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/kristin/medium/en_US-kristin-medium.onnx.json",
+      "path": "tts/en_US-kristin-medium.5681426d.json",
+      "size": 4968,
+      "sha256": "5681426d4aead22195de70531eeeeddb46493cfaffc5764b2ea3db73428b651c"
+    },
+    "piper-norman": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/norman/medium/en_US-norman-medium.onnx",
+      "path": "tts/en_US-norman-medium.b9739443.onnx",
+      "size": 63531379,
+      "sha256": "b9739443232a80a59c7d18810dd856899bf16a7964725f5ab81ea49b1351cb71"
+    },
+    "piper-norman-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/norman/medium/en_US-norman-medium.onnx.json",
+      "path": "tts/en_US-norman-medium.6c2db7f5.json",
+      "size": 4968,
+      "sha256": "6c2db7f558a4a8deb9fe822583c1c5105f6c4e834dd0f9de8ad17a888ee9fe1d"
+    },
+    "piper-cori": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/cori/medium/en_GB-cori-medium.onnx",
+      "path": "tts/en_GB-cori-medium.1899f98e.onnx",
+      "size": 63531379,
+      "sha256": "1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d"
+    },
+    "piper-cori-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/cori/medium/en_GB-cori-medium.onnx.json",
+      "path": "tts/en_GB-cori-medium.e262c16d.json",
+      "size": 4966,
+      "sha256": "e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36"
+    },
+    "piper-northern": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx",
+      "path": "tts/en_GB-northern_english_male-medium.57a219ae.onnx",
+      "size": 63201294,
+      "sha256": "57a219ae8e638873db7d18893304be5069c42868f392bb95c3ff17f0690d0689"
+    },
+    "piper-northern-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json",
+      "path": "tts/en_GB-northern_english_male-medium.69557ed3.json",
+      "size": 4847,
+      "sha256": "69557ed3d974463453e9b0c09dd99a7ed0e52b8b87b64b357dbeeb2540a97d47"
+    },
+    "piper-ljspeech": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx",
+      "path": "tts/en_US-ljspeech-medium.6f52a751.onnx",
+      "size": 63531379,
+      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
+    },
+    "piper-ljspeech-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json",
+      "path": "tts/en_US-ljspeech-medium.141d612c.json",
+      "size": 4972,
+      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    }
+  }
+}

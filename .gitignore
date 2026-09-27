@@ -9,3 +9,4 @@ infra/data/
 infra/update.log
 *.tsbuildinfo
 .claude/settings.local.json
+frontend/public/tts/

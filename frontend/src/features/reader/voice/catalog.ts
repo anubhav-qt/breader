@@ -1,0 +1,98 @@
+import type { ListedVoice } from '@breader/shared/protocol';
+import manifest from './files.json';
+import { hosted, uploaded, type HostedName, type Want } from './store';
+
+/*
+ * The voices that read aloud. Each mode has five built in, hosted with the app, plus any voices
+ * readers uploaded (data from GET /v1/voices):
+ *
+ *   Normal     Piper voices, about 64 MB each, on the CPU. Trained on public-domain or CC-licensed
+ *              recordings (rhasspy/piper-voices).
+ *   Immersive  Kokoro-82M voices (Apache 2.0), one 326 MB model for all of them, on the GPU. It
+ *              has to be full precision: the fp16 and q4f16 models only give NaNs on WebGPU.
+ */
+
+export type Mode = 'normal' | 'immersive';
+export type Engine = 'piper' | 'kokoro';
+export const engineOf = (m: Mode): Engine => (m === 'normal' ? 'piper' : 'kokoro');
+
+export interface VoiceInfo {
+  /** piper:kristin, kokoro:af_heart, or user:<id> for uploaded ones. */
+  key: string;
+  engine: Engine;
+  name: string;
+  /** US, UK… */
+  accent: string;
+  /** A short line in this voice: a bundled clip, or an uploaded sample's file id. */
+  sample?: { url: string } | { fileId: string };
+  /** Kokoro only: says words the British way. */
+  british?: boolean;
+  /** Uploaded voices. */
+  upload?: ListedVoice;
+}
+
+const clip = (key: string) => ({ url: `/voices/${key.replace(':', '-')}.m4a` });
+
+const piper = (id: string, name: string, accent: string): VoiceInfo => ({ key: `piper:${id}`, engine: 'piper', name, accent, sample: clip(`piper:${id}`) });
+const kokoro = (id: string, name: string, accent: string): VoiceInfo => ({ key: `kokoro:${id}`, engine: 'kokoro', name, accent, british: accent === 'UK', sample: clip(`kokoro:${id}`) });
+
+export const BUILT_IN: Record<Mode, VoiceInfo[]> = {
+  normal: [
+    piper('kristin', 'Kristin', 'US'),
+    piper('norman', 'Norman', 'US'),
+    piper('cori', 'Cori', 'UK'),
+    piper('northern', 'Northern', 'UK'),
+    piper('ljspeech', 'Linda', 'US'),
+  ],
+  immersive: [
+    kokoro('af_heart', 'Heart', 'US'),
+    kokoro('am_michael', 'Michael', 'US'),
+    kokoro('bf_emma', 'Emma', 'UK'),
+    kokoro('bm_george', 'George', 'UK'),
+    kokoro('af_bella', 'Bella', 'US'),
+  ],
+};
+
+export const DEFAULT_VOICE: Record<Mode, string> = { normal: 'piper:kristin', immersive: 'kokoro:af_heart' };
+
+/** US for American English, UK for the rest of the English eSpeak knows. */
+export const accentOf = (lang: string) => (lang.toLowerCase().startsWith('en-us') ? 'US' : 'UK');
+
+export function fromListed(v: ListedVoice): VoiceInfo {
+  return {
+    key: `user:${v.id}`,
+    engine: v.engine,
+    name: v.name,
+    accent: accentOf(v.lang),
+    british: v.engine === 'kokoro' && accentOf(v.lang) === 'UK',
+    sample: v.sampleId ? { fileId: v.sampleId } : undefined,
+    upload: v,
+  };
+}
+
+/** What a voice needs besides its engine: Piper's model and settings, or a Kokoro pack. */
+export function filesOf(v: VoiceInfo): { model?: Want; config?: Want; pack?: Want } {
+  const id = v.key.split(':')[1];
+  if (v.upload) {
+    const u = v.upload;
+    return v.engine === 'kokoro'
+      ? { pack: uploaded(u.fileId, u.fileSize) }
+      : { model: uploaded(u.fileId, u.fileSize), config: uploaded(u.configId!, 5_000) };
+  }
+  return v.engine === 'kokoro'
+    ? { pack: hosted(`kokoro-${id}` as HostedName) }
+    : { model: hosted(`piper-${id}` as HostedName), config: hosted(`piper-${id}-config` as HostedName) };
+}
+
+/** The engine's own files: its runtime, and Kokoro's model. */
+export const engineFiles = (e: Engine): Want[] => (e === 'kokoro' ? [hosted('ort-gpu'), hosted('kokoro')] : [hosted('ort-cpu')]);
+
+type Files = typeof manifest.files;
+/** Bytes a download of these files weighs over the network. */
+export function weight(wants: Want[]) {
+  const files = manifest.files as Files;
+  return wants.reduce((n, w) => n + ((files[w.name as keyof Files] as { transfer?: number } | undefined)?.transfer ?? w.size), 0);
+}
+
+/** Can this browser run Immersive voices? */
+export const hasGpu = () => typeof navigator !== 'undefined' && 'gpu' in navigator;
