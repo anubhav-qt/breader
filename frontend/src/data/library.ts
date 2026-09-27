@@ -82,6 +82,31 @@ const PLACEHOLDERS: Seed[] = [
   { title: 'Anne of Avonlea', author: 'L. M. Montgomery', words: 88000, hoursAgo: 60, progress: 0, line: 'A tall, slim girl, “half-past sixteen,” with serious gray eyes and hair which her friends called auburn, had sat down on the broad red sandstone doorstep of a Prince Edward Island farmhouse one ripe afternoon in August, firmly resolved to construe so many lines of Virgil.' },
 ];
 
+/* More books in series, only for the series preview. */
+const SERIES_EXTRAS: Seed[] = [
+  { title: 'Dorothy and the Wizard in Oz', author: 'L. Frank Baum', words: 44000, line: 'The train from ’Frisco was very late.' },
+  { title: 'The Road to Oz', author: 'L. Frank Baum', words: 40000, line: '“Please, miss,” said the shaggy man, “can you tell me the road to Butterfield?”' },
+  { title: 'Good Wives', author: 'Louisa May Alcott', words: 90000, line: 'In order that we may start afresh and go to Meg’s wedding with free minds, it will be well to begin with a little gossip about the Marches.' },
+  { title: 'Little Men', author: 'Louisa May Alcott', words: 100000, line: '“Please, sir, is this Plumfield?” asked a ragged boy of the man who opened the great gate at which the omnibus left him.' },
+  { title: 'Jo’s Boys', author: 'Louisa May Alcott', words: 95000, line: '“If anyone had told me what wonderful changes were to take place here in ten years, I wouldn’t have believed it,” said Mrs. Jo to Mrs. Meg, as they sat on the piazza at Plumfield one summer day, looking about them with faces full of pride and pleasure.' },
+  { title: 'A Princess of Mars', author: 'Edgar Rice Burroughs', words: 65000, line: 'I am a very old man; how old I do not know.' },
+  { title: 'The Gods of Mars', author: 'Edgar Rice Burroughs', words: 88000, line: 'Twelve years had passed since I had laid the body of my great-uncle, Captain John Carter, of Virginia, away from the sight of men in that strange mausoleum in the old cemetery at Richmond.' },
+  { title: 'The Warlord of Mars', author: 'Edgar Rice Burroughs', words: 70000, line: 'In the shadows of the forest that flanks the crimson plain by the side of the Lost Sea of Korus in the Valley Dor, beneath the hurtling moons of Mars…' },
+];
+
+/*
+ * The series preview: five series and no other books, each in a different state. Oz is part way
+ * through, Sherlock Holmes has its latest finished so the next is up, Little Women is all read,
+ * Barsoom is just started and Anne hasn't been opened. [title, hours since read, progress]
+ */
+const SERIES_PREVIEW: Array<{ name: string; books: Array<[string, number, number]> }> = [
+  { name: 'The Land of Oz', books: [['The Wonderful Wizard of Oz', 700, 1], ['The Marvelous Land of Oz', 150, 1], ['Ozma of Oz', 9, 0.35], ['Dorothy and the Wizard in Oz', 400, 0], ['The Road to Oz', 400, 0]] },
+  { name: 'Sherlock Holmes', books: [['A Study in Scarlet', 3000, 1], ['The Sign of the Four', 20, 1], ['The Adventures of Sherlock Holmes', 500, 0], ['The Hound of the Baskervilles', 500, 0]] },
+  { name: 'Little Women', books: [['Little Women', 2000, 1], ['Good Wives', 1400, 1], ['Little Men', 600, 1], ['Jo’s Boys', 90, 1]] },
+  { name: 'Barsoom', books: [['A Princess of Mars', 2, 0.12], ['The Gods of Mars', 30, 0], ['The Warlord of Mars', 30, 0]] },
+  { name: 'Anne of Green Gables', books: [['Anne of Green Gables', 200, 0], ['Anne of Avonlea', 200, 0]] },
+];
+
 /** Placeholder books that belong to a series, by title: [series, number]. */
 const SERIES: Record<string, [string, number]> = {
   'The Wonderful Wizard of Oz': ['The Land of Oz', 1],
@@ -138,6 +163,20 @@ export function placeholderRecords(now: number): BookRecord[] {
   });
 }
 
+export function seriesRecords(now: number): BookRecord[] {
+  const seeds = new Map([...PLACEHOLDERS, ...SERIES_EXTRAS].map((p) => [p.title, p]));
+  return SERIES_PREVIEW.flatMap(({ name, books }) =>
+    books.map(([title, hoursAgo, progress], j) => {
+      const p = seeds.get(title)!;
+      return {
+        id: `ph-${slug(title)}`, title, author: p.author, format: p.format ?? FORMAT_MIX[(title.length + j) % FORMAT_MIX.length], source: 'placeholder' as const, shared: false,
+        addedAt: now - (hoursAgo + 24) * HOUR, words: p.words, color: colorKeyFor(title), progress, line: p.line, lastOpened: now - hoursAgo * HOUR,
+        series: name, seriesIndex: SERIES[title]?.[1] ?? j + 1,
+      };
+    }),
+  );
+}
+
 /** What other people have put on the shared shelf, for previews. */
 export function shelfRecords(now: number): BookRecord[] {
   return PLACEHOLDERS.slice(19, 33).map((p, j) => ({
@@ -150,7 +189,7 @@ export function shelfRecords(now: number): BookRecord[] {
 /** Books other people put on the shared shelf are theirs to take off, not yours. */
 export const canRemove = (rec: BookRecord) => rec.source !== 'shelf' && !(rec.shared && rec.source === 'placeholder');
 
-export type PreviewMode = 'live' | 'empty' | 'one' | 'few' | 'many';
+export type PreviewMode = 'live' | 'empty' | 'one' | 'few' | 'many' | 'series';
 
 export const PREVIEW_MODES: Array<{ id: PreviewMode; label: string }> = [
   { id: 'live', label: 'Live' },
@@ -158,4 +197,5 @@ export const PREVIEW_MODES: Array<{ id: PreviewMode; label: string }> = [
   { id: 'one', label: '1 book' },
   { id: 'few', label: '6 books' },
   { id: 'many', label: '50 books' },
+  { id: 'series', label: '5 series' },
 ];

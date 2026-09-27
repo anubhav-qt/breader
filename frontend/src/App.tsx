@@ -8,7 +8,7 @@ import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName }
 import { recordFromBook } from './books/record';
 import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
 import { normColor } from './data/colors';
-import { canRemove, placeholderRecords, sampleRecords, shelfRecords, type PreviewMode } from './data/library';
+import { canRemove, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, shelfRecords, type PreviewMode } from './data/library';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { shelfRecord, useShelf } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
@@ -103,7 +103,7 @@ export default function App() {
   const [now] = useState(() => Date.now());
   const [route, setRoute] = useState<Route>(parseHash);
   const [tab, setTab] = useState<Tab>('mine');
-  const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', ['live', 'empty', 'one', 'few', 'many'] as const, 'live') : 'live'));
+  const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
   const [seriesLook, setSeriesLook] = useState<SeriesLook>(() => (devTools ? readParam('series', SERIES_LOOKS, 'stack') : 'stack'));
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
@@ -172,7 +172,7 @@ export default function App() {
 
   /* Data for the current view */
   const previewSets = useMemo(
-    () => (devTools ? { all: [...sampleRecords(now), ...placeholderRecords(now)], shelf: shelfRecords(now) } : { all: [], shelf: [] }),
+    () => (devTools ? { all: [...sampleRecords(now), ...placeholderRecords(now)], series: seriesRecords(now), shelf: shelfRecords(now) } : { all: [], series: [], shelf: [] }),
     [now],
   );
   /*
@@ -191,8 +191,10 @@ export default function App() {
   const recordById = useMemo(() => {
     const m = new Map<string, BookRecord>();
     for (const r of [...previewSets.all, ...previewSets.shelf, ...sharedRecords, ...lib.records]) m.set(r.id, r);
+    // The series preview places some of the same books differently; it wins while it's showing.
+    if (preview === 'series') for (const r of previewSets.series) m.set(r.id, r);
     return m;
-  }, [previewSets, sharedRecords, lib.records]);
+  }, [previewSets, sharedRecords, lib.records, preview]);
 
   const items = useMemo(() => {
     const covers = { ...shelf.covers, ...lib.covers };
@@ -207,6 +209,7 @@ export default function App() {
       case 'one': mine = liveMine.slice(0, 1).length ? liveMine.slice(0, 1) : view(previewSets.all).slice(0, 1); break;
       case 'few': mine = view(previewSets.all).slice(0, 6); break;
       case 'many': mine = view(previewSets.all); break;
+      case 'series': mine = view(previewSets.series); break;
       default: mine = liveMine;
     }
     return { mine, shelf: onShelf };
