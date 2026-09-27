@@ -5,7 +5,7 @@ import { report } from '../lib/report';
 import { store } from '../lib/store';
 import { onNews, tell, withData } from '../lib/tabs';
 import type { BookEdit, BookRecord, ReadState } from '../books/types';
-import { normColor } from './colors';
+import { normColor, pickColor } from './colors';
 import { sampleRecords } from './library';
 import { newLibraryKey } from '../lib/key';
 import { adopt, editFromWire, enterAccount, fromWire, queueLocked, startSync, toWire, type LibraryData, type SyncHost } from './sync';
@@ -391,6 +391,9 @@ async function restoreBook(r: RemovedBook) {
   );
 }
 
+/** The colour the next book added gets. Only the colour each book was given counts, not recolours. */
+const nextColor = () => pickColor(view.records.filter((r) => r.source !== 'placeholder').map((r) => normColor(r.color, r.title)));
+
 /** Reading positions change often, so they're saved at most every 400 ms. */
 function saveRead(id: string, read: ReadState) {
   void change((d) => ({ reads: { ...d.reads, [id]: read } }), holds(id) ? [{ type: 'read.put', bookId: id, read }] : [], { wait: 400 });
@@ -438,7 +441,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, addBook, setCover, removeBook, restoreBook, saveRead, editBook, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, setCover, removeBook, restoreBook, saveRead, editBook, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

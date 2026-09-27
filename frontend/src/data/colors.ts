@@ -36,6 +36,19 @@ export function colorKeyFor(title: string): BookColor {
   return BOOK_COLORS[Math.abs(h) % BOOK_COLORS.length].key;
 }
 
+/**
+ * A colour for a new book: a random one of those the library has given out least. So each colour
+ * leaves the pool once used, and the pool refills only when every colour has been used. `given`
+ * is the colour each book was first given; recolouring a book later doesn't count.
+ */
+export function pickColor(given: string[]): BookColor {
+  const counts = new Map<string, number>(BOOK_COLORS.map((c) => [c.key, 0]));
+  for (const g of given) if (counts.has(g)) counts.set(g, counts.get(g)! + 1);
+  const least = Math.min(...counts.values());
+  const pool = [...counts].filter(([, n]) => n === least).map(([k]) => k as BookColor);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export function normColor(value: string | undefined, title: string): BookColor {
   if (value && KEYS.has(value)) return value as BookColor;
   if (value && LEGACY[value.toUpperCase()]) return LEGACY[value.toUpperCase()];

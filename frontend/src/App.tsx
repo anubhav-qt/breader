@@ -306,7 +306,7 @@ export default function App() {
       if (!format) { say(`Breader can’t open “${file.name}”`); continue; }
       try {
         const book = await parseSource(file, format, titleFromName(file.name));
-        const rec = recordFromBook(book, format, shared);
+        const rec = recordFromBook(book, format, shared, lib.nextColor());
         const cover = book.kind === 'flow' ? book.cover : undefined;
         book.cleanup?.();
         await lib.addBook(rec, file, cover);
@@ -478,6 +478,7 @@ export default function App() {
             initialFile={adding.file}
             initialMode={adding.mode}
             hasKey={!!lib.key}
+            nextColor={lib.nextColor}
             defaultShared={tab === 'shelf'}
             onClose={() => setAdding(null)}
             onAdded={onAdded}

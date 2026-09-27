@@ -1,4 +1,3 @@
-import { colorKeyFor } from '../data/colors';
 import { newId } from '../lib/key';
 import type { BookRecord, Format, LoadedBook, Section } from './types';
 
@@ -38,8 +37,8 @@ export function firstSentence(sections: Section[], from = 0): string {
   return '';
 }
 
-/** A new library record for a book someone has just added. */
-export function recordFromBook(book: LoadedBook, format: Format, shared: boolean): BookRecord {
+/** A new library record for a book someone has just added, in a colour from the library's pool. */
+export function recordFromBook(book: LoadedBook, format: Format, shared: boolean, color: string): BookRecord {
   const now = Date.now();
   return {
     id: newId(),
@@ -50,7 +49,7 @@ export function recordFromBook(book: LoadedBook, format: Format, shared: boolean
     shared,
     addedAt: now,
     words: book.words,
-    color: colorKeyFor(book.title),
+    color,
     hasCover: book.kind === 'flow' && !!book.cover,
     progress: 0,
     line: book.kind === 'flow' ? firstSentence(book.sections) : `Page 1 of ${book.pages}`,

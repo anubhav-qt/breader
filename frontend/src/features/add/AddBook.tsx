@@ -4,7 +4,7 @@ import { Modal } from '../../components/Modal';
 import { IconLock, IconPaste, IconPeople, IconUpload } from '../../components/icons';
 import { ACCEPT, detectFormat, parseSource, titleFromName } from '../../books/load';
 import type { BookRecord, Format, LoadedBook } from '../../books/types';
-import { colorKeyFor, colorVars } from '../../data/colors';
+import { colorVars } from '../../data/colors';
 import { recordFromBook } from '../../books/record';
 import { newLibraryKey } from '../../lib/key';
 import { springs } from '../../lib/springs';
@@ -15,7 +15,7 @@ type Step =
   | { kind: 'choose' }
   | { kind: 'paste' }
   | { kind: 'reading'; name: string }
-  | { kind: 'decide'; book: LoadedBook; data: Blob | string; format: Format; name: string; size: number }
+  | { kind: 'decide'; book: LoadedBook; data: Blob | string; format: Format; name: string; size: number; color: string }
   | { kind: 'key'; key: string; title: string }
   | { kind: 'error'; message: string };
 
@@ -23,6 +23,8 @@ interface Props {
   initialFile?: File | null;
   initialMode?: 'file' | 'paste';
   hasKey: boolean;
+  /** The colour the book will get, from the library's pool. */
+  nextColor: () => string;
   /** Start on "Shared Library" when adding from that tab. */
   defaultShared?: boolean;
   onClose: () => void;
@@ -35,7 +37,7 @@ interface Props {
 const MB = 1024 * 1024;
 const sizeText = (b: number) => (b >= MB ? `${(b / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function AddBook({ initialFile, initialMode, hasKey, defaultShared = false, onClose, onAdded, onKey, onLogin }: Props) {
+export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultShared = false, onClose, onAdded, onKey, onLogin }: Props) {
   const [step, setStep] = useState<Step>(initialMode === 'paste' ? { kind: 'paste' } : { kind: 'choose' });
   const [shared, setShared] = useState(defaultShared);
   const [dragging, setDragging] = useState(false);
@@ -52,7 +54,7 @@ export function AddBook({ initialFile, initialMode, hasKey, defaultShared = fals
     setStep({ kind: 'reading', name: file.name });
     try {
       const book = await parseSource(file, format, titleFromName(file.name));
-      setStep({ kind: 'decide', book, data: file, format, name: file.name, size: file.size });
+      setStep({ kind: 'decide', book, data: file, format, name: file.name, size: file.size, color: nextColor() });
     } catch (e) {
       console.error(e);
       setStep({ kind: 'error', message: `Breader couldn’t read “${file.name}”. It may be damaged or copy-protected.` });
@@ -70,13 +72,13 @@ export function AddBook({ initialFile, initialMode, hasKey, defaultShared = fals
     const title = pasteTitle.trim() || text.split('\n')[0].replace(/^#+\s*/, '').slice(0, 80);
     const book = await parseSource(text, 'Text', title);
     if (pasteTitle.trim()) book.title = pasteTitle.trim();
-    setStep({ kind: 'decide', book, data: text, format: 'Text', name: 'Pasted text', size: new Blob([text]).size });
+    setStep({ kind: 'decide', book, data: text, format: 'Text', name: 'Pasted text', size: new Blob([text]).size, color: nextColor() });
   };
 
   const add = async () => {
     if (step.kind !== 'decide') return;
-    const { book, data, format } = step;
-    const rec = recordFromBook(book, format, shared);
+    const { book, data, format, color } = step;
+    const rec = recordFromBook(book, format, shared, color);
     const cover = book.kind === 'flow' ? book.cover : undefined;
     book.cleanup?.();
     await onAdded(rec, data, cover);
@@ -153,7 +155,7 @@ export function AddBook({ initialFile, initialMode, hasKey, defaultShared = fals
           {step.kind === 'decide' && (
             <>
               <div className="add-file">
-                <span className="add-fic" style={colorVars(colorKeyFor(step.book.title))} />
+                <span className="add-fic" style={colorVars(step.color)} />
                 <div>
                   <b>{step.book.title}</b>
                   <span>{[step.book.author, step.format === 'Text' ? 'Pasted text' : step.format, sizeText(step.size)].filter(Boolean).join(' · ')}</span>
