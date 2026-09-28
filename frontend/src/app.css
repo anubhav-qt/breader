@@ -53,6 +53,20 @@
 }
 .toast-action:hover { background: color-mix(in srgb, var(--canvas) 26%, transparent); }
 .toast-action:focus-visible { outline-color: var(--canvas); outline-offset: 2px; }
+.toast.is-stay { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 16px; pointer-events: auto; }
+.toast.is-stay .toast-text { margin-right: 10px; }
+.toast-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  opacity: 0.7;
+  transition: background-color 140ms ease, opacity 140ms ease;
+}
+.toast-close:hover { opacity: 1; background: color-mix(in srgb, var(--canvas) 16%, transparent); }
+.toast-close:focus-visible { outline-color: var(--canvas); outline-offset: 2px; }
 
 /* While files are dragged over the library, the window gets a quiet frame. */
 .drop-over {

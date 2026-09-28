@@ -53,7 +53,7 @@ export function chaptersOf(book: LoadedBook): Chapter[] {
 }
 
 /** The chapter holding the reader's place. */
-export function chapterAt(chapters: Chapter[], loc: Loc | null): number {
+export function chapterAt(chapters: Chapter[], loc: Pick<Loc, 'section'> | null): number {
   if (!loc) return 0;
   let at = 0;
   chapters.forEach((c, i) => { if (c.section <= loc.section) at = i; });

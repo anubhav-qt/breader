@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
-import type { BookRecord, LoadedBook, ReadState, TocItem } from '../../books/types';
-import { markTracker } from '../../books/mark';
+import type { BookRecord, LoadedBook, ReadMark, ReadState, TocItem } from '../../books/types';
+import { markTracker, screenWords } from '../../books/mark';
+import { Toast, type ToastMessage } from '../../components/Toast';
 import { paintBars } from '../../lib/bars';
-import { chapterAt, chaptersOf } from './chapters';
+import { chapterAt, chapterName, chaptersOf } from './chapters';
 import { InstrumentChrome } from './chrome/Instrument';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
@@ -274,15 +275,33 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const [marker] = useState(() =>
     markTracker(initial?.mark ?? (initial ? { pos: initial.pos ?? { section: 0, block: 0, offset: 0 }, progress: initial.progress, line: initial.line } : undefined), book.words),
   );
+  /** Opened well past the mark: the way back to it, offered until taken, closed, or not needed. */
+  const [away, setAway] = useState<ReadMark | null>(null);
   const onLocation = useCallback((l: Loc) => {
     setLoc(l);
-    const moved = lastAt.current === null ? 0 : (l.progress - lastAt.current) * book.words;
+    const first = lastAt.current === null;
+    const moved = first ? 0 : (l.progress - lastAt.current!) * book.words;
     lastAt.current = l.progress;
     if (moved > 0 && moved <= 1500) wordsRead.current += Math.round(moved);
     const pos = { section: l.section, block: l.block, offset: l.offset };
+    const before = marker.get();
     const mark = marker.step({ pos, progress: l.progress, line: l.line, screen: l.screen });
     onSave({ pos, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current, mark });
+    const screen = screenWords(l.screen);
+    const ahead = (l.progress - mark.progress) * book.words;
+    if (first && before && ahead > Math.max(500, screen * 2)) setAway(before);
+    else if (ahead <= screen) setAway(null);
   }, [onSave, book.words, marker]);
+  const goBack = useCallback(() => {
+    if (away) view.current?.listen.reach({ section: away.pos.section, block: away.pos.block, start: away.pos.offset, end: away.pos.offset, text: '' }, 0);
+    setAway(null);
+  }, [away]);
+  const awayToast = useMemo<ToastMessage | null>(() => {
+    if (!away) return null;
+    const i = chapterAt(chapters, { section: away.pos.section });
+    const where = chapters.length > 1 ? `in ${chapterName(chapters, i)}` : book.kind === 'pdf' ? `on page ${away.pos.section + 1}` : 'further back';
+    return { id: 1, text: `You were reading ${where} before you jumped here.`, stay: true, action: { label: 'Go back', run: goBack } };
+  }, [away, chapters, book.kind, goBack]);
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
   const paged = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'pages';
@@ -444,6 +463,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
           <InstrumentChrome {...chromeProps} />
         </div>
       </div>
+      <Toast className="rd-toast" toast={closing ? null : awayToast} onDone={() => setAway(null)} />
     </div>
   );
 }

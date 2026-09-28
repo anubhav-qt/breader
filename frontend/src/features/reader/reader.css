@@ -13,6 +13,12 @@
 /* Everything but the design switch: the page, and the controls layered over it. */
 .rd-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .rd-chrome { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+/* In a book: above the bottom line of controls, in the page's own colours. */
+.toast-host.rd-toast { bottom: 88px; }
+.rd .toast { background: var(--r-fg); color: var(--r-bg); }
+.rd :is(.toast-action, .toast-close:hover) { background: color-mix(in srgb, var(--r-bg) 16%, transparent); }
+.rd .toast-action:hover { background: color-mix(in srgb, var(--r-bg) 26%, transparent); }
+.rd :is(.toast-action, .toast-close):focus-visible { outline-color: var(--r-bg); }
 .rd-chrome > * { pointer-events: auto; }
 .rd ::selection { background: var(--r-acc-soft); }
 
