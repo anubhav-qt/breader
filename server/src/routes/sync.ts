@@ -103,6 +103,7 @@ export function syncRoutes(deps: Deps) {
             source: i.source as 'file' | 'sample',
             ...(i.url ? { url: i.url } : {}),
             shared: i.shared,
+            ...(i.sharedOnly ? { sharedOnly: true } : {}),
             addedAt: i.addedAt.getTime(),
             words: i.words,
             color: i.color,

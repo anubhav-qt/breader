@@ -1,0 +1,1 @@
+ALTER TABLE "library_items" ADD COLUMN "shared_only" boolean DEFAULT false NOT NULL;

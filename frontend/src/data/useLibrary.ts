@@ -477,8 +477,21 @@ function saveRead(id: string, read: ReadState) {
 function setShared(id: string, shared: boolean) {
   const rec = view.records.find((r) => r.id === id);
   if (!rec || rec.shared === shared) return;
-  const next = { ...rec, shared };
-  void change((d) => ({ records: d.records.map((r) => (r.id === id ? { ...r, shared } : r)) }), [{ type: 'book.put', book: toWire(next) }]);
+  put({ ...rec, shared });
+}
+
+/** Takes a shared book out of the reader's own books while it stays on the Shared Library, or puts it back. */
+function setSharedOnly(id: string, sharedOnly: boolean) {
+  const rec = view.records.find((r) => r.id === id);
+  if (!rec || !!rec.sharedOnly === sharedOnly) return;
+  const next = { ...rec };
+  if (sharedOnly) next.sharedOnly = true;
+  else delete next.sharedOnly;
+  put(next);
+}
+
+function put(next: BookRecord) {
+  void change((d) => ({ records: d.records.map((r) => (r.id === next.id ? next : r)) }), [{ type: 'book.put', book: toWire(next) }]);
 }
 
 /** Rename, recolour or favourite a book. Works for placeholders too, so previews can be styled. */
@@ -523,7 +536,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, addReadTime, editBook, setShared, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, addReadTime, editBook, setShared, setSharedOnly, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

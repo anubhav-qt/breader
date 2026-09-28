@@ -40,6 +40,8 @@ button:disabled { cursor: not-allowed; }
 .btn-quiet:hover:not(:disabled) { background: var(--line); }
 .btn-ghost { color: var(--ink-2); }
 .btn-ghost:hover:not(:disabled) { color: var(--ink); background: var(--fill); }
+.btn-danger { background: var(--danger-soft); color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-soft-2); }
 .btn:disabled { opacity: 0.4; }
 .btn svg { width: 18px; height: 18px; }
 

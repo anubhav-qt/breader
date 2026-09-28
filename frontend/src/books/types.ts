@@ -61,6 +61,8 @@ export interface BookRecord {
   source: 'file' | 'sample' | 'placeholder' | 'shelf';
   url?: string;
   shared: boolean;
+  /** Taken out of the reader's own books but left on the Shared Library. */
+  sharedOnly?: boolean;
   addedAt: number;
   words: number;
   /** A palette key from data/colors.ts. */

@@ -314,3 +314,9 @@
 .ep-fav.is-on svg { fill: currentColor; }
 .ep-remove { background: var(--danger-soft); color: var(--danger); }
 .ep-remove:hover { background: var(--danger-soft-2); }
+
+/* Removing a book that's in both places */
+.rm { display: grid; gap: 10px; }
+.rm-ask { margin: 0; font-size: 23px; line-height: 1.15; }
+.rm-note { margin: 0; font: var(--ui-w) 12px/1.5 var(--ui); color: var(--ink-2); }
+.rm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }

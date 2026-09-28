@@ -8,7 +8,7 @@ import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName }
 import { recordFromBook } from './books/record';
 import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
 import { normColor } from './data/colors';
-import { canRemove, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, shelfRecords, type PreviewMode } from './data/library';
+import { canRemove, canShare, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, shelfRecords, type PreviewMode } from './data/library';
 import { KEEP_WORDS } from '@breader/shared/limits';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { shelfRecord, useShelf } from './data/shelf';
@@ -19,6 +19,7 @@ import { KeyDialog } from './features/add/KeyDialog';
 import { AccountMenu } from './features/account/AccountMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
+import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesNames } from './features/gallery/series';
 import { Reader } from './features/reader/Reader';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
@@ -112,6 +113,8 @@ export default function App() {
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
+  /** A book in both places being removed from one: asking whether it leaves the other too. */
+  const [asking, setAsking] = useState<{ id: string; title: string; from: Tab; fromKeyboard: boolean; then?: () => void } | null>(null);
   const [login, setLogin] = useState<LoginStart | null>(null);
   const account = useAccount();
   const [dragOver, setDragOver] = useState(false);
@@ -212,7 +215,7 @@ export default function App() {
     const covers = { ...shelf.covers, ...lib.covers };
     const view = (recs: BookRecord[]) =>
       recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, covers, lib.edits)).sort(byRecent);
-    const liveMine = view(lib.records.filter((r) => !lapsed.has(r.id)));
+    const liveMine = view(lib.records.filter((r) => !lapsed.has(r.id) && !r.sharedOnly));
     // A copy stands where its shared book stood, so its card stays put when it's started.
     const onShelf = view([...sharedRecords, ...previewSets.shelf]).map((b) => (b.origin ? { ...b, key: b.origin } : b));
     let mine: ShelfItem[];
@@ -336,11 +339,34 @@ export default function App() {
     say(`Removed “${title}”`, { action: { label: 'Undo', run: () => void undo() }, focus: fromKeyboard });
   }, [recordById, lib, say]);
 
-  const removeOpen = useCallback(async () => {
-    if (route.name !== 'read') return;
-    await removeBook(route.id);
-    back();
-  }, [route, removeBook, back]);
+  /** Removes a book, first asking about the other place when it's in both the reader's books and the Shared Library. */
+  const askRemove = useCallback((id: string, fromKeyboard = false, then?: () => void) => {
+    const rec = lib.records.find((r) => r.id === id);
+    if (rec && canShare(rec) && rec.shared && !rec.sharedOnly) {
+      setAsking({ id, title: lib.edits[id]?.title?.trim() || rec.title, from: tab, fromKeyboard, then });
+      return;
+    }
+    void removeBook(id, fromKeyboard).then(then);
+  }, [lib, tab, removeBook]);
+
+  const chooseRemove = useCallback((both: boolean) => {
+    if (!asking) return;
+    const { id, title, from, fromKeyboard, then } = asking;
+    setAsking(null);
+    if (both) void removeBook(id, fromKeyboard);
+    else if (from === 'mine') {
+      lib.setSharedOnly(id, true);
+      say(`Took “${title}” out of your books. It stays on the Shared Library.`, { action: { label: 'Undo', run: () => lib.setSharedOnly(id, false) }, focus: fromKeyboard });
+    } else {
+      lib.setShared(id, false);
+      say(`Took “${title}” off the Shared Library. It stays in your books.`, { action: { label: 'Undo', run: () => lib.setShared(id, true) }, focus: fromKeyboard });
+    }
+    then?.();
+  }, [asking, lib, removeBook, say]);
+
+  const removeOpen = useCallback(() => {
+    if (route.name === 'read') askRemove(route.id, false, back);
+  }, [route, askRemove, back]);
 
   /* Drop files anywhere on the library and they're added straight to the tab you're on. */
   const tabRef = useRef(tab);
@@ -474,8 +500,10 @@ export default function App() {
               onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={() => setAdding({ mode: 'file' })}
               onEdit={(id, patch) => void editBook(id, patch)}
-              onRemove={(b, fromKeyboard) => void removeBook(b.id, fromKeyboard)}
+              onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
+                // Out of their books already: off the Shared Library too, it's nowhere, so it goes.
+                if (!shared && b.sharedOnly) { void removeBook(b.id); return; }
                 lib.setShared(b.id, shared);
                 say(shared ? `“${b.title}” is on the Shared Library` : `Took “${b.title}” off the Shared Library. Anyone well into it keeps it.`);
               }}
@@ -497,7 +525,7 @@ export default function App() {
             onBack={back}
             onSave={onSave}
             onReadTime={(seconds) => lib.addReadTime(shown.id, seconds)}
-            onRemove={canRemove(shownRec) ? () => void removeOpen() : undefined}
+            onRemove={canRemove(shownRec) ? removeOpen : undefined}
           />
         </div>
       )}
@@ -546,6 +574,7 @@ export default function App() {
             onLogin={loggedIn ? undefined : loginInstead}
           />
         )}
+        {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
         {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onOpen={openKey} />}
         {freshKey && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
         {login && (

@@ -35,6 +35,8 @@ export const Book = z.object({
   /** Samples only: the bundled file, e.g. /samples/alice.epub. */
   url: z.string().regex(/^\/samples\/[\w.-]+$/).optional(),
   shared: z.boolean(),
+  /** Taken out of the reader's own books but left on the Shared Library. */
+  sharedOnly: z.boolean().optional(),
   addedAt: Millis,
   words: z.number().int().nonnegative(),
   color: z.string().max(32),

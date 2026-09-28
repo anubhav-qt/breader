@@ -84,6 +84,17 @@ describe('shared library', () => {
     expect(await listed()).toContain(shared.id);
   });
 
+  it('keeps a book on the shelf that its sharer took out of their own books', async () => {
+    const { b: owner, shared } = await sharer();
+    const listed = async () => (await browser().get('/v1/shelf')).body.books.map((x: { id: string }) => x.id);
+    const mine = async () => (await owner.get('/v1/sync/pull?since=0')).body.books.find((x: { id: string }) => x.id === shared.id);
+    await owner.post('/v1/sync/push', push('s1', { type: 'book.put', book: { ...shared, sharedOnly: true } }));
+    expect(await listed()).toContain(shared.id);
+    expect(await mine()).toMatchObject({ shared: true, sharedOnly: true, removedAt: null });
+    await owner.post('/v1/sync/push', push('s2', { type: 'book.put', book: { ...shared, sharedOnly: false } }));
+    expect((await mine()).sharedOnly).toBeUndefined();
+  });
+
   it('lets a copy lapse while it’s barely read and its book is private, and keeps it once read into', async () => {
     const { b: owner, shared } = await sharer();
     const { b: reader } = await registered();

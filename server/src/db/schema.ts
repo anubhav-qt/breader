@@ -125,6 +125,8 @@ export const libraryItems = pgTable(
     source: text('source').notNull(),
     url: text('url'),
     shared: boolean('shared').notNull().default(false),
+    /** Taken out of the reader's own books but left on the Shared Library. */
+    sharedOnly: boolean('shared_only').notNull().default(false),
     addedAt: at('added_at').notNull(),
     words: integer('words').notNull().default(0),
     color: text('color').notNull(),
