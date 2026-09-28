@@ -10,7 +10,7 @@ import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
 import { level, useLoadState } from '../voice/speaker';
 import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
-import { CHECK, CROSS, FOCUS, GROW, MINUS, PAUSE, PLAY, PLUS, SHRINK, VOICES } from './icons';
+import { CHECK, CROSS, FOCUS, FOCUSED, GROW, MINUS, PAUSE, PLAY, PLUS, SHRINK, VOICES } from './icons';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { SayAs } from './SayAs';
 import { HeadTips } from './Tip';
@@ -112,7 +112,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           )}
           <button type="button" className={`i3-side i3-aa${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip="Typeface, size, spacing and theme">Aa</button>
           <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on} data-tip={focus.on ? 'Keep the controls in sight' : 'Hide everything but the words'}>
-            <DotIcon rows={FOCUS} />
+            <DotIcon rows={focus.on ? FOCUSED : FOCUS} />
           </button>
           {canFullscreen() && (
             <button type="button" className={`i3-side i3-icon${full ? ' is-open' : ''}`} onClick={toggleFull} aria-label="Full screen" aria-pressed={full} data-tip={full ? 'Leave full screen' : 'Fill the whole screen'}>

@@ -4,7 +4,9 @@
  */
 export const PLAY = ['x....', 'xx...', 'xxx..', 'xxxx.', 'xxx..', 'xx...', 'x....'];
 export const PAUSE = ['xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx', 'xx.xx'];
-export const FOCUS = ['..xxx..', '.x...x.', 'x.....x', 'x..x..x', 'x.....x', '.x...x.', '..xxx..'];
+/** Focus: just the page and its lines. Off it's drawn in outline; on, the page fills and the lines show through. */
+export const FOCUS = ['xxxxxx', 'x....x', 'x.xx.x', 'x....x', 'x.xx.x', 'x....x', 'xxxxxx'];
+export const FOCUSED = ['xxxxxx', 'xxxxxx', 'xx..xx', 'xxxxxx', 'xx..xx', 'xxxxxx', 'xxxxxx'];
 export const GROW = ['xx...xx', 'x.....x', '.......', '.......', '.......', 'x.....x', 'xx...xx'];
 export const SHRINK = ['.x...x.', 'xx...xx', '.......', '.......', '.......', 'xx...xx', '.x...x.'];
 export const STOP = ['.....', 'xxxxx', 'xxxxx', 'xxxxx', 'xxxxx', 'xxxxx', '.....'];
