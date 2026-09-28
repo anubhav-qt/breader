@@ -22,6 +22,8 @@ export interface ReaderSettings {
   book: StyleSettings;
   modern: StyleSettings;
   pdfLayout: Layout;
+  /** Which of the changes below (loadSettings) these have been through. */
+  v?: number;
 }
 
 /** Reading typefaces. New faces get added here as they arrive. */
@@ -57,21 +59,33 @@ export const MEASURES = [
 const DEFAULTS: ReaderSettings = {
   style: 'book',
   theme: 'auto',
-  book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: true },
+  book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: false },
   modern: { font: 'dongle', size: 22, lh: 1.65, measure: 620, layout: 'scroll', justify: false },
   pdfLayout: 'pages',
+  v: 2,
 };
 
 const KEY = 'breader.reader.v1';
 
+/** Settings changed on the way in, to keep and send on once the reader is open. */
+let changedOnLoad: ReaderSettings | null = null;
+
 function loadSettings(): ReaderSettings {
   const saved = readLocal<Partial<ReaderSettings>>(KEY, {});
-  return {
+  const s = {
     ...DEFAULTS,
     ...saved,
     book: { ...DEFAULTS.book, ...saved.book },
     modern: { ...DEFAULTS.modern, ...saved.modern },
   };
+  // 2: Justify was on by default for Book, so nearly everyone had it without choosing it. Off.
+  if ((saved.v ?? 1) < 2) {
+    s.book.justify = false;
+    s.modern.justify = false;
+    s.v = 2;
+    if (saved.book || saved.modern) changedOnLoad = s;
+  }
+  return s;
 }
 
 /** Reader settings follow the reader between browsers once the library syncs. */
@@ -89,6 +103,12 @@ export function useReaderSettings() {
     };
   }, []);
   const changed = useRef(false);
+  useEffect(() => {
+    if (!changedOnLoad) return;
+    writeLocal(KEY, changedOnLoad);
+    record({ type: 'settings.put', prefs: changedOnLoad as unknown as Record<string, unknown> });
+    changedOnLoad = null;
+  }, [settings]);
   const update = useCallback((fn: (s: ReaderSettings) => ReaderSettings) => {
     changed.current = true;
     setSettings((s) => {
