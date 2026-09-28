@@ -19,6 +19,7 @@ import { KeyDialog } from './features/add/KeyDialog';
 import { AccountMenu } from './features/account/AccountMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
+import { seriesNames } from './features/gallery/series';
 import { Reader } from './features/reader/Reader';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
@@ -225,6 +226,7 @@ export default function App() {
     }
     return { mine, shelf: onShelf };
   }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, shelf.covers, sharedRecords, previewSets, preview, hidden]);
+  const allSeries = useMemo(() => seriesNames([...items.mine, ...items.shelf]), [items]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
   const finishOpen = useCallback((id: string) => {
@@ -461,6 +463,7 @@ export default function App() {
             <Gallery
               key={`${t}-${preview}`}
               books={t === 'mine' ? items.mine : items.shelf}
+              seriesNames={allSeries}
               now={now}
               id={`library-${t}`}
               labelledBy={`tab-${t}`}

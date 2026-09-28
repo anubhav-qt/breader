@@ -275,8 +275,6 @@
   transition: border-color 140ms ease;
 }
 .ep-input:focus { border-color: var(--accent); }
-.ep-series { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 8px; }
-.ep-num { text-align: center; }
 .ep-swatches { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; }
 .ep-sw {
   aspect-ratio: 1;
@@ -293,22 +291,6 @@
 .ep-sw svg { width: 14px; height: 14px; }
 .ep-share { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
 .ep-share .ep-label { margin: 0; }
-.ep-tg { position: relative; width: 40px; height: 24px; border-radius: 12px; background: var(--line); transition: background-color 160ms ease; }
-.ep-tg::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--paper);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  transition: transform var(--dur-snappy) var(--ease-snappy);
-}
-.ep-tg[aria-checked="true"] { background: var(--ink); }
-.ep-tg[aria-checked="true"]::after { transform: translateX(16px); }
-.ep-tg:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .ep-actions { display: flex; gap: 8px; margin-top: 4px; }
 .ep-act {
   flex: 1 1 0;

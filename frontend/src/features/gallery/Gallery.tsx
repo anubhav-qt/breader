@@ -8,7 +8,7 @@ import { EditPopover } from './EditPopover';
 import { Bento } from './layouts/Bento';
 import { RECENT } from './layouts/slots';
 import { Wall } from './layouts/Wall';
-import { findSeries, type Series } from './series';
+import { findSeries, type Series, type SeriesName } from './series';
 import { SeriesRows } from './SeriesRows';
 import { TitleHint } from './TitleHint';
 import type { GalleryItem } from './types';
@@ -16,6 +16,8 @@ import './gallery.css';
 
 interface Props {
   books: ShelfItem[];
+  /** Every series in either library, offered as a series name is typed. */
+  seriesNames: SeriesName[];
   now: number;
   /** The panel's id, and the id of the tab that labels it. */
   id: string;
@@ -36,7 +38,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, side by side, a row per series and everything else as a wall by time.
  */
-export function Gallery({ books, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare }: Props) {
+export function Gallery({ books, seriesNames, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -47,7 +49,6 @@ export function Gallery({ books, now, id, labelledBy, hidden = false, onOpen, on
   useEffect(() => { if (hidden) setEditing(null); }, [hidden]);
 
   const series = useMemo(() => findSeries(books), [books]);
-  const seriesNames = useMemo(() => [...new Set(books.flatMap((b) => (b.series ? [b.series] : [])))].sort(), [books]);
   const { recent, rest, rows } = useMemo(() => {
     const toItem = (b: ShelfItem): GalleryItem => ({ key: b.key ?? b.id, book: b });
     const rows: Series[] = [];

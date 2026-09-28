@@ -6,11 +6,13 @@ import { BOOK_COLORS, colorVars } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
 import { IconCheck, IconClose, IconStar, IconTrash } from '../../components/icons';
+import type { SeriesName } from './series';
+import { SeriesField, type SeriesValue } from './SeriesField';
 
 interface Props {
   book: ShelfItem;
-  /** Series already in the library, offered as the name is typed. */
-  seriesNames: string[];
+  /** Series in either library, offered as the name is typed. */
+  seriesNames: SeriesName[];
   anchor: HTMLElement;
   onChange: (patch: BookEdit) => void;
   /** Absent for books someone else shared: only they can take them off the shelf. */
@@ -33,8 +35,8 @@ const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown:
 export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onShare, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(book.title);
-  const [series, setSeries] = useState(book.series ?? '');
-  const [num, setNum] = useState(book.seriesIndex !== undefined ? String(book.seriesIndex) : '');
+  const numText = book.seriesIndex !== undefined ? String(book.seriesIndex) : '';
+  const [series, setSeries] = useState<SeriesValue>({ name: book.series ?? '', num: numText });
   const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
   const removing = useRef(false);
 
@@ -54,16 +56,16 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
     if (!t) setName(book.title);
   };
   // An empty name takes the book out of its series; an empty number leaves it unnumbered.
-  const commitSeries = () => {
+  const commitSeries = (v = series) => {
     if (removing.current) return;
-    const s = series.trim();
-    const n = num.trim() === '' ? undefined : Number(num.replace(',', '.'));
+    const s = v.name.trim();
+    const n = v.num.trim() === '' ? undefined : Number(v.num.replace(',', '.'));
     const patch: BookEdit = {};
     if (s !== (book.series ?? '')) patch.series = s;
     if (n === undefined || (Number.isFinite(n) && n >= 0 && n <= 10_000)) {
       if (n !== book.seriesIndex) patch.seriesIndex = n;
     } else {
-      setNum(book.seriesIndex !== undefined ? String(book.seriesIndex) : '');
+      setSeries({ ...v, num: numText });
     }
     if (Object.keys(patch).length) onChange(patch);
   };
@@ -152,34 +154,7 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
         autoComplete="off"
       />
       <label className="ep-label" htmlFor="ep-series">Series</label>
-      <div className="ep-series">
-        <input
-          id="ep-series"
-          className="ep-input"
-          value={series}
-          list="ep-series-names"
-          placeholder="None"
-          onChange={(e) => setSeries(e.target.value)}
-          onBlur={commitSeries}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <input
-          className="ep-input ep-num"
-          value={num}
-          inputMode="decimal"
-          placeholder="#"
-          aria-label="Number in the series"
-          onChange={(e) => setNum(e.target.value)}
-          onBlur={commitSeries}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          autoComplete="off"
-        />
-        <datalist id="ep-series-names">
-          {seriesNames.map((s) => <option key={s} value={s} />)}
-        </datalist>
-      </div>
+      <SeriesField id="ep-series" value={series} known={seriesNames} inputClass="ep-input" onChange={setSeries} onDone={commitSeries} />
       <div className="ep-label" id="ep-colour">Colour</div>
       <div className="ep-swatches" role="radiogroup" aria-labelledby="ep-colour" onKeyDown={onSwatchKey}>
         {BOOK_COLORS.map((c, i) => (
@@ -202,7 +177,7 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
       {onShare && (
         <div className="ep-share">
           <span className="ep-label" id="ep-share">On the Shared Library</span>
-          <button type="button" className="ep-tg" role="switch" aria-checked={!!book.shared} aria-labelledby="ep-share" onClick={() => onShare(!book.shared)} />
+          <button type="button" className="switch" role="switch" aria-checked={!!book.shared} aria-labelledby="ep-share" onClick={() => onShare(!book.shared)} />
         </div>
       )}
       <div className="ep-actions">
