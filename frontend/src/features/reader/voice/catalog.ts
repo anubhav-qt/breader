@@ -24,15 +24,32 @@ export interface VoiceInfo {
   name: string;
   /** US, UK… */
   accent: string;
-  /** A short line in this voice: a bundled clip, or an uploaded sample's file id. */
-  sample?: { url: string } | { fileId: string };
+  /** Short lines in this voice: a bundled clip of each part of the sample, or an uploaded sample's file id. */
+  sample?: { parts: Record<SamplePart, string> } | { fileId: string };
   /** Kokoro only: says words the British way. */
   british?: boolean;
   /** Uploaded voices. */
   upload?: ListedVoice;
 }
 
-const clip = (key: string) => ({ url: `/voices/${key.replace(':', '-')}.m4a` });
+/**
+ * What each voice's sample says, in three parts to hear one at a time: a greeting, a line of a
+ * story, and a question, so its tone, its pace and how it rises and falls can all be heard before
+ * picking it.
+ */
+export type SamplePart = 'greeting' | 'narration' | 'question';
+export const SAMPLE_PARTS: SamplePart[] = ['greeting', 'narration', 'question'];
+export const SAMPLES: Record<SamplePart, string> = {
+  greeting: "Hello, I'll be reading to you today.",
+  narration: 'It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness.',
+  question: 'Shall we turn the page, and see what happens next?',
+};
+/** An uploaded voice keeps one sample: all three in a row. */
+export const SAMPLE_LINE = SAMPLE_PARTS.map((p) => SAMPLES[p]).join(' ');
+
+const clip = (key: string) => ({
+  parts: Object.fromEntries(SAMPLE_PARTS.map((p) => [p, `/voices/${key.replace(':', '-')}-${p}.m4a`])) as Record<SamplePart, string>,
+});
 
 const piper = (id: string, name: string, accent: string): VoiceInfo => ({ key: `piper:${id}`, engine: 'piper', name, accent, sample: clip(`piper:${id}`) });
 const kokoro = (id: string, name: string, accent: string): VoiceInfo => ({ key: `kokoro:${id}`, engine: 'kokoro', name, accent, british: accent === 'UK', sample: clip(`kokoro:${id}`) });
@@ -53,9 +70,6 @@ export const BUILT_IN: Record<Mode, VoiceInfo[]> = {
     kokoro('af_bella', 'Bella', 'US'),
   ],
 };
-
-/** What every voice's sample says: the app's name, between the two words it's mistaken for. */
-export const SAMPLE_LINE = 'breeder breader breeder';
 
 export const DEFAULT_VOICE: Record<Mode, string> = { normal: 'piper:kristin', immersive: 'kokoro:af_heart' };
 

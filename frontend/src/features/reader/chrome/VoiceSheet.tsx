@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { hasKey } from '../../../data/sync';
 import { api } from '../../../lib/api';
 import { Segmented } from '../Panels';
-import { BUILT_IN, checkGpu, engineOf, fromListed, useGpu, type Mode, type VoiceInfo } from '../voice/catalog';
+import { BUILT_IN, checkGpu, engineOf, fromListed, useGpu, type Mode, type SamplePart, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
 import { RATES, setVoicePrefs, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
@@ -12,7 +12,8 @@ import { DotIcon } from './parts';
 
 /*
  * The voice sheet, from the button beside play: Normal or Immersive,
- * the voice, and the speed. Each voice has a line to hear before anything downloads.
+ * the voice, and the speed. Each voice has lines to hear before anything downloads: a greeting, a
+ * bit of a story and a question, one at a time.
  */
 
 const ABOUT: Record<Mode, string> = {
@@ -20,6 +21,14 @@ const ABOUT: Record<Mode, string> = {
   immersive: 'Richer voices on this device’s graphics chip, for newer computers. The page dims and follows the voice. One download of about 330 MB for all five.',
 };
 const FALLBACK = 'The page dims and follows the voice. This device can’t run Immersive’s richer voices, so it reads with the Normal ones, each about 66 MB. A newer computer with a recent Chrome, Edge or Safari can.';
+
+const PARTS: Array<{ v: SamplePart; label: string }> = [
+  { v: 'greeting', label: 'Greeting' },
+  { v: 'narration', label: 'Story' },
+  { v: 'question', label: 'Question' },
+];
+/** The part last listened to, for the next time the sheet opens. */
+let lastPart: SamplePart = 'greeting';
 
 const mb = (n: number) => `${n > 0 && n < 500_000 ? '<1' : Math.round(n / 1e6)} MB`;
 
@@ -42,6 +51,8 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   const current = voiceFor(mode);
   const [bytes, setBytes] = useState<number | null>(null);
   const [hearing, setHearing] = useState<string | null>(null);
+  const [part, setPart] = useState(lastPart);
+  const heard = useRef<VoiceInfo | null>(null);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => { void refreshVoices(); }, []);
@@ -58,12 +69,24 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   const pick = (key: string) => setVoicePrefs({ voice: { ...prefs.voice, [voices]: key } });
   const setMode = (m: Mode) => setVoicePrefs({ mode: m });
 
-  const hear = async (v: VoiceInfo) => {
+  const toggleHear = (v: VoiceInfo) => {
     if (hearing === v.key) { stopSample(); setHearing(null); return; }
+    void hear(v);
+  };
+  // Another part while one is playing plays that voice saying it.
+  const pickPart = (p: SamplePart) => {
+    setPart(p);
+    lastPart = p;
+    if (hearing && heard.current?.key === hearing) void hear(heard.current, p);
+  };
+
+  const hear = async (v: VoiceInfo, p = part) => {
     if (!v.sample) return;
+    heard.current = v;
     setHearing(v.key);
     try {
-      const url = 'url' in v.sample ? v.sample.url : (await api.get<{ url: string }>(`/v1/voices/files/${encodeURIComponent(v.sample.fileId)}/link`)).url;
+      // An uploaded voice has one sample, all three parts in a row.
+      const url = 'parts' in v.sample ? v.sample.parts[p] : (await api.get<{ url: string }>(`/v1/voices/files/${encodeURIComponent(v.sample.fileId)}/link`)).url;
       const audio = playSample(url);
       audio.onended = audio.onerror = () => setHearing((k) => (k === v.key ? null : k));
     } catch {
@@ -89,7 +112,7 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   const others = listed.filter((v) => v.engine === engine && !v.mine).map(fromListed);
   const yours = listed.filter((v) => v.engine === engine && v.mine).map(fromListed);
   const row = (v: VoiceInfo, extra?: React.ReactNode) => (
-    <Row key={v.key} v={v} on={current.key === v.key} hearing={hearing === v.key} onPick={() => pick(v.key)} onHear={() => void hear(v)} extra={extra} />
+    <Row key={v.key} v={v} on={current.key === v.key} hearing={hearing === v.key} onPick={() => pick(v.key)} onHear={() => toggleHear(v)} extra={extra} />
   );
   const loading = load.key !== null;
 
@@ -98,6 +121,7 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
       <div className="pnl-h">Read aloud</div>
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
       <p className="p-note vs-about">{fallback ? FALLBACK : ABOUT[mode]}</p>
+      <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
       <div className="vs-lists" role="radiogroup" aria-label="Voice">
         <div className="vs-list">{BUILT_IN[voices].map((v) => row(v))}</div>
         {others.length > 0 && (
