@@ -8,6 +8,10 @@ import type { Reply, Request } from './tts.worker';
 /*
  * The page's side of speech: a worker per engine (tts.worker.ts), what's loading and how far it's
  * got, and playing what comes back.
+ *
+ * A worker holds a lot while it runs (about 300 MB for a Normal voice, 760 MB and the graphics
+ * chip's memory for a heavy one), so it holds one voice at a time, and goes when the book closes
+ * or nothing has been said for five minutes. Starting again takes a second or two, from the cache.
  */
 
 export interface Clip {
@@ -45,6 +49,7 @@ export const useLoadState = () => useSyncExternalStore(
 /* Workers */
 
 interface Pending {
+  type: Request['type'];
   resolve: (r: Extract<Reply, { ok: true }>) => void;
   reject: (e: Error & { gpu?: boolean }) => void;
   onBytes?: (name: string, n: number) => void;
@@ -75,10 +80,17 @@ class Runner {
 
   call(req: Request, onBytes?: Pending['onBytes']) {
     const id = this.next++;
+    idle();
     return new Promise<Extract<Reply, { ok: true }>>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, onBytes });
+      this.pending.set(id, { type: req.type, resolve, reject, onBytes });
       this.worker.postMessage({ ...req, id });
-    });
+    }).finally(idle);
+  }
+
+  /** Downloading or loading a voice. Sentences being made ahead can be let go. */
+  get loading() {
+    for (const p of this.pending.values()) if (p.type === 'start' || p.type === 'voice') return true;
+    return false;
   }
 
   stop() {
@@ -89,6 +101,24 @@ class Runner {
 }
 
 const runners: Partial<Record<Engine, Runner>> = {};
+
+/** Unused this long, the engines go. */
+const IDLE_MS = 5 * 60_000;
+let idleTimer = 0;
+function idle() {
+  if (typeof window === 'undefined') return;
+  window.clearTimeout(idleTimer);
+  idleTimer = window.setTimeout(release, IDLE_MS);
+}
+
+/** Lets the engines go, with everything they hold, unless one is still loading a voice. */
+export function release() {
+  for (const k of Object.keys(runners) as Engine[]) {
+    if (runners[k]!.loading) { idle(); continue; }
+    runners[k]!.stop();
+    delete runners[k];
+  }
+}
 
 /** One engine runs at a time: its models are big. */
 function runner(e: Engine) {
@@ -119,6 +149,11 @@ export function prepare(v: VoiceInfo): Promise<void> {
   const r = runner(v.engine);
   const ready = r.voices.get(v.key);
   if (ready) return ready;
+  // One voice at a time: another one loaded alongside would need its room too.
+  for (const k of r.voices.keys()) {
+    r.voices.delete(k);
+    void r.call({ type: 'forget', key: k }).catch(() => {});
+  }
   const p = (async () => {
     const f = filesOf(v);
     const wants = [...(r.started ? [] : engineFiles(v.engine)), f.model, f.config, f.pack].filter((w): w is Want => !!w);
@@ -162,7 +197,10 @@ export function prepare(v: VoiceInfo): Promise<void> {
 
 export async function synth(v: VoiceInfo, text: string, speed: number): Promise<Clip> {
   await prepare(v);
-  const res = await runner(v.engine).call({ type: 'say', key: v.key, text, speed });
+  // Not a new engine: this one was let go while the voice was being readied.
+  const r = runners[v.engine];
+  if (!r) throw new Error('Stopped');
+  const res = await r.call({ type: 'say', key: v.key, text, speed });
   return { audio: res.audio!, rate: res.rate! };
 }
 

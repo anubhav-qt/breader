@@ -4,7 +4,7 @@ import { checkGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import { respell, type Swap } from './voice/sayas';
-import { failed, missing, play, prepare, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
+import { failed, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
 
 /*
  * Reading aloud with voices that run on this device (voice/): from the top of the page on screen,
@@ -503,9 +503,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (playing) ms.metadata = new MediaMetadata({ title: about.title, artist: about.author ?? '', album: 'Breader' });
   }, [active, playing, about.title, about.author]);
 
+  // Leaving the book, the voice's engine goes too, and what it holds.
   useEffect(() => {
-    if (!active) stop();
-    return stop;
+    const leave = () => { stop(); release(); };
+    if (!active) leave();
+    return leave;
   }, [active, stop]);
 
   const busy = useCallback(() => playingRef.current, []);
