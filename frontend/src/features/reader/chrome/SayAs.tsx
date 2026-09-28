@@ -9,6 +9,7 @@ import { sayAsFor, setSayAs } from '../voice/sayas';
 import { play, synth, unlock, type Playing } from '../voice/speaker';
 import { PLAY, STOP } from './icons';
 import { CloseDots, DotIcon } from './parts';
+import { REST_MS, TIP_MS, TipBox, type Tip } from './Tip';
 
 /*
  * Saying a word the reader's way. Tap a word while a voice reads, or select a few: it pauses, and
@@ -87,12 +88,6 @@ function wordAt(x: number, y: number): Range | null {
 type Highlights = { set: (name: string, h: unknown) => void; delete: (name: string) => void };
 const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
 
-/** A line saying what a tap on a word does: by the resting pointer, or for touch, under the page. */
-interface Tip { id: number; x: number; y: number; touch: boolean }
-
-/** How long the pointer rests on a word before the tip, and how long the tip stays. */
-const REST_MS = 250;
-const TIP_MS = 3000;
 /** Times a touch screen is told, and for how long. */
 const TOLD = 'breader.sayas-told.v1';
 const TELL = 3;
@@ -199,7 +194,7 @@ export function SayAs({ narration, body }: Props) {
       const x = e.clientX - a.left;
       const y = e.clientY - a.top;
       const here = on;
-      rest = window.setTimeout(() => { here.told = true; show({ x, y, touch: false }, TIP_MS); }, REST_MS);
+      rest = window.setTimeout(() => { here.told = true; show({ x, y, touch: false, text: 'Click to change how it sounds' }, TIP_MS); }, REST_MS);
     };
     const onLeave = () => { on = null; area.classList.remove('is-word'); hide(); };
     area.addEventListener('pointermove', onMove);
@@ -209,7 +204,7 @@ export function SayAs({ narration, body }: Props) {
       const told = readLocal<number>(TOLD, 0);
       if (told < TELL) {
         writeLocal(TOLD, told + 1);
-        show({ x: 0, y: 0, touch: true }, TELL_MS);
+        show({ x: 0, y: 0, touch: true, text: 'Tap a word to change how it sounds' }, TELL_MS);
       }
     }
     return () => {
@@ -238,45 +233,6 @@ export function SayAs({ narration, body }: Props) {
         {tip && !open && <TipBox key={tip.id} tip={tip} area={body} />}
       </AnimatePresence>
     </>
-  );
-}
-
-const TIP_X = 12;
-const TIP_Y = 22;
-
-function TipBox({ tip, area }: { tip: Tip; area: RefObject<HTMLDivElement | null> }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-
-  // Below and right of the pointer, flipped where that would leave the page.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const a = area.current;
-    if (!el || !a || tip.touch) return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    const flipX = tip.x + TIP_X + w > a.clientWidth - EDGE;
-    const flipY = tip.y + TIP_Y + h > a.clientHeight - EDGE;
-    setPos({
-      left: flipX ? Math.max(EDGE, tip.x - TIP_X - w) : tip.x + TIP_X,
-      top: flipY ? Math.max(EDGE, tip.y - 10 - h) : tip.y + TIP_Y,
-    });
-  }, [tip, area]);
-
-  const placed = tip.touch || !!pos;
-  return (
-    <motion.div
-      ref={ref}
-      className={`sa-tip${tip.touch ? ' is-touch' : ''}`}
-      role="status"
-      style={tip.touch ? undefined : { left: pos?.left ?? -9999, top: pos?.top ?? 0 }}
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={placed ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.96 }}
-      exit={{ opacity: 0, transition: { duration: 0.12 } }}
-      transition={springs.snappy}
-    >
-      {tip.touch ? 'Tap a word to change how it sounds' : 'Click to change how it sounds'}
-    </motion.div>
   );
 }
 

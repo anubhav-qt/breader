@@ -12,6 +12,7 @@ import type { Paragraph } from '../narration';
 import { CHECK, CROSS, FOCUS, GROW, MINUS, PAUSE, PLAY, PLUS, SHRINK, VOICES } from './icons';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { SayAs } from './SayAs';
+import { HeadTips } from './Tip';
 import { VoiceSheet } from './VoiceSheet';
 import type { ChromeProps, PanelName } from './types';
 
@@ -27,6 +28,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   const [head, setHead] = useState(false);
   const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
+  const headRef = useRef<HTMLDivElement>(null);
   const progress = loc?.progress ?? 0;
   const label = chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
   const toggle = (k: PanelName) => openPanel(panel === k ? null : k);
@@ -75,9 +77,9 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
 
   return (
     <>
-      <div className={`i3-head${head || panel ? ' is-on' : ''}`} onPointerEnter={() => setHead(true)} onPointerLeave={() => setHead(false)}>
-        <button type="button" className="i3-side" onClick={onBack} aria-label="Back to library">‹<span className="i3-back-word"> Library</span></button>
-        <button type="button" className={`i3-mid${panel === 'toc' ? ' is-open' : ''}`} onClick={() => toggle('toc')} aria-label={`Contents. ${label}`} aria-expanded={panel === 'toc'}>
+      <div ref={headRef} className={`i3-head${head || panel ? ' is-on' : ''}`} onPointerEnter={() => setHead(true)} onPointerLeave={() => setHead(false)}>
+        <button type="button" className="i3-side" onClick={onBack} aria-label="Back to library" data-tip="Back to your books">‹<span className="i3-back-word"> Library</span></button>
+        <button type="button" className={`i3-mid${panel === 'toc' ? ' is-open' : ''}`} onClick={() => toggle('toc')} aria-label={`Contents. ${label}`} aria-expanded={panel === 'toc'} data-tip="The chapters, to jump to one">
           <Typed text={label} />
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
@@ -89,6 +91,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               onClick={narration.toggle}
               aria-label={narration.playing ? 'Pause reading aloud' : 'Read aloud'}
               aria-pressed={narration.playing}
+              data-tip={narration.playing ? 'Pause the voice' : 'Read aloud from here'}
             >
               <DotIcon rows={narration.playing && !loading ? PAUSE : PLAY} lit={loading ? load.loaded / Math.max(1, load.total) : undefined} />
             </button>
@@ -101,16 +104,17 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               aria-label="Voices and modes"
               aria-expanded={panel === 'voice'}
               aria-haspopup="dialog"
+              data-tip="Voices, speed and Immersive"
             >
               <DotIcon rows={VOICES} />
             </button>
           )}
-          <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'}>Aa</button>
-          <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on}>
+          <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip="Typeface, size, spacing and theme">Aa</button>
+          <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on} data-tip={focus.on ? 'Keep the controls in sight' : 'Hide everything but the words'}>
             <DotIcon rows={FOCUS} />
           </button>
           {canFullscreen() && (
-            <button type="button" className={`i3-side i3-icon${full ? ' is-open' : ''}`} onClick={toggleFull} aria-label="Full screen" aria-pressed={full}>
+            <button type="button" className={`i3-side i3-icon${full ? ' is-open' : ''}`} onClick={toggleFull} aria-label="Full screen" aria-pressed={full} data-tip={full ? 'Leave full screen' : 'Fill the whole screen'}>
               <DotIcon rows={full ? SHRINK : GROW} />
             </button>
           )}
@@ -193,6 +197,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
       </AnimatePresence>
 
       {narration && <SayAs narration={narration} body={body} />}
+      <HeadTips bar={headRef} area={body} />
     </>
   );
 }

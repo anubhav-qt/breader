@@ -532,3 +532,5 @@
   pointer-events: none;
 }
 .sa-tip.is-touch { left: 50%; bottom: 52px; translate: -50% 0; }
+/* The top buttons' tips sit over the bar they come from. */
+.sa-tip.is-head { z-index: 10; }
