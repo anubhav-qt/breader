@@ -161,9 +161,10 @@ const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && s.blo
  * Reads the book on screen aloud. `loc` is the reader's place, so a page turned or a chapter picked
  * by hand while it reads moves the voice there too. `openSheet` shows the voice sheet: for a
  * download to agree to, or something gone wrong. `about` names the book for the lock screen.
- * `sleep` watches for a reader who fell asleep to it (sleep.ts).
+ * `sleep` watches for a reader who fell asleep to it (sleep.ts). `here` is where a press from
+ * outside the page carries on from (Immersive's light).
  */
-export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }, sleep?: RefObject<SleepWatch>) {
+export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }, sleep?: RefObject<SleepWatch>, here?: () => Sentence | undefined) {
   const [playing, setPlaying] = useState(false);
   const playingRef = useRef(playing);
   playingRef.current = playing;
@@ -429,12 +430,15 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
   /**
    * Starts reading: from the voice sheet's button, the lock screen, or a tap on play that needs
-   * nothing first. From `from` when given (Immersive's light), or else where it stopped or the top
-   * of the page.
+   * nothing first. From `from` when given (Immersive's light, or the top of the page), or else
+   * where it stopped or the top of the page.
    */
-  const start = (from?: Sentence) => {
+  const start = (from?: Sentence | 'top') => {
     if (!canNarrate || !listen() || playingRef.current) return;
-    if (from) {
+    if (from === 'top') {
+      last.current = null;
+      jumped.current = false;
+    } else if (from) {
       last.current = from;
       jumped.current = true;
     }
@@ -453,18 +457,25 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (s) last.current = s.s;
   };
 
-  /** The tap on play. */
-  const toggle = (from?: Sentence) => {
-    if (playing) { halt(); return; }
+  /**
+   * Reads from a tap: the voice sheet opens instead when there's a download to agree to first,
+   * unless it was already `agreed`. True once it's reading.
+   */
+  const readFrom = async (from?: Sentence | 'top', agreed = false) => {
     const p = voicePrefs();
     // Sound can only start in the tap itself.
     unlock();
-    void (async () => {
-      if (p.mode === 'immersive') await checkGpu();
-      const m = await missing(voiceFor(p.mode));
-      if (m.bytes > 0 && askFirst()) openSheet();
-      else start(from);
-    })();
+    if (p.mode === 'immersive') await checkGpu();
+    const m = await missing(voiceFor(p.mode));
+    if (m.bytes > 0 && !agreed && askFirst()) { openSheet(); return false; }
+    actions.current.start(from);
+    return true;
+  };
+
+  /** The tap on play. */
+  const toggle = (from?: Sentence) => {
+    if (playing) halt();
+    else void readFrom(from);
   };
 
   // A page turned or chapter picked by hand: carry on from the top of it. Not while the page is
@@ -509,15 +520,17 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const actions = useRef({ start, halt, toggle });
   actions.current = { start, halt, toggle };
   const pressed = useRef(-Infinity);
+  const hereRef = useRef(here);
+  hereRef.current = here;
   const media = useCallback((what: 'play' | 'pause' | 'toggle') => {
     const now = performance.now();
     if (now - pressed.current < 400) return;
     pressed.current = now;
     sleep?.current.touched();
-    if (what === 'play') actions.current.start();
+    if (what === 'play') actions.current.start(hereRef.current?.());
     else if (what === 'pause') actions.current.halt();
     else if (playingRef.current) actions.current.halt();
-    else actions.current.toggle();
+    else actions.current.toggle(hereRef.current?.());
   }, [sleep]);
   useEffect(() => {
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
@@ -563,5 +576,5 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     }
   }, [view]);
 
-  return { playing, toggle, start, stop: halt, busy, where, media, current, jump };
+  return { playing, toggle, start, readFrom, stop: halt, busy, where, media, current, jump };
 }

@@ -92,7 +92,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               onClick={narration.toggle}
               aria-label={narration.playing ? 'Pause reading aloud' : 'Read aloud'}
               aria-pressed={narration.playing}
-              data-tip={narration.playing ? 'Pause the voice' : 'Read aloud from here'}
+              data-tip={narration.playing ? 'Pause the voice' : immersion ? 'Read aloud, from where you pick' : 'Read aloud from here'}
             >
               <DotIcon rows={narration.playing && !loading ? PAUSE : PLAY} lit={loading ? load.loaded / Math.max(1, load.total) : undefined} />
             </button>
@@ -126,11 +126,11 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         {setting ? (
           <PaceSetter onKeep={keep} />
         ) : immersion && choosing ? (
-          // Begin, pressed: from the top of the page, or a paragraph by its number.
+          // Begin, pressed: from the top of the page (or where it paused), or a paragraph by its number.
           <div className="i3-start" role="group" aria-label="Where to begin">
-            <button type="button" className="i3-begin" onClick={immersion.fromTop}>
+            <button type="button" className="i3-begin" onClick={immersion.begun ? immersion.carryOn : immersion.fromTop}>
               <DotIcon rows={PLAY} />
-              From the top
+              {immersion.begun ? 'Continue' : 'From the top'}
             </button>
             <button type="button" className={`i3-para${panel === 'paras' ? ' is-open' : ''}`} onClick={() => toggle('paras')} aria-label="Pick a paragraph" aria-expanded={panel === 'paras'} aria-haspopup="dialog">
               ¶ {immersion.nowAt ? pad2(immersion.nowAt) : '--'}
@@ -185,7 +185,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               {panel === 'toc' ? (
                 <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
               ) : panel === 'voice' && (narration || immersion) ? (
-                <VoiceSheet playing={!!narration?.playing} onStart={narration?.start} onStop={narration?.stop} canPace={!!immersion} />
+                <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} />
               ) : panel === 'sleep' && sleep ? (
                 <SleepPanel asked={sleep.asked} chapters={chapters} playing={!!narration?.playing} onBack={sleep.back} onAwake={sleep.awake} />
               ) : panel === 'paras' && immersion ? (

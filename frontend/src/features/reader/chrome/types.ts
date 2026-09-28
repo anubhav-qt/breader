@@ -35,20 +35,35 @@ export interface ChromeProps {
   body: RefObject<HTMLDivElement | null>;
   /** Going back to the library: anything that should leave first, leaves now. */
   closing: boolean;
-  /** Reading aloud, where the browser can: a tap on play, and the voice sheet's own button. `listening` is an Immersive voice speaking. */
-  narration: { playing: boolean; listening: boolean; toggle: () => void; start: () => void; stop: () => void } | null;
+  /**
+   * Reading aloud, where the browser can. `listening` is an Immersive voice speaking. `toggle` is
+   * play up top, `read` and `stop` the voice sheet's button; `hush` and `resume` pause it while a
+   * word is asked about (SayAs).
+   */
+  narration: {
+    playing: boolean;
+    listening: boolean;
+    toggle: () => void;
+    read: () => void;
+    stop: () => void;
+    hush: () => void;
+    resume: () => void;
+  } | null;
   /**
    * Immersive on a book whose words can light up (pacing.ts): `running` while the light moves on
-   * its own, `waiting` while nothing is lit yet. Begin (`choose`) numbers the paragraphs, and
-   * `choosing`, the reader starts from the top of the page or picks one by its number.
+   * its own, `waiting` while Begin is on the bottom line. Begin (`choose`) numbers the paragraphs,
+   * and `choosing`, the reader starts from the top of the page, or once `begun`, carries on, or
+   * picks one by its number.
    */
   immersion: {
     running: boolean;
     waiting: boolean;
     choosing: boolean;
+    begun: boolean;
     choose: () => void;
     cancel: () => void;
     fromTop: () => void;
+    carryOn: () => void;
     /** The chapter's paragraphs while choosing, and the first one on screen. */
     paragraphs: Paragraph[];
     nowAt?: number;

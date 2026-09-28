@@ -21,7 +21,7 @@ import { REST_MS, TIP_MS, TipBox, type Tip } from './Tip';
  */
 
 interface Props {
-  narration: { playing: boolean; start: () => void; stop: () => void };
+  narration: { playing: boolean; hush: () => void; resume: () => void };
   /** The reader's positioned area, which the card is placed in. */
   body: RefObject<HTMLDivElement | null>;
 }
@@ -117,7 +117,7 @@ export function SayAs({ narration, body }: Props) {
     let mouse = false;
     const ask = (p: Picked) => {
       window.clearTimeout(timer);
-      actions.current.stop();
+      actions.current.hush();
       setOpen(p);
     };
     const check = () => {
@@ -222,7 +222,7 @@ export function SayAs({ narration, body }: Props) {
     if (open && say !== null) setSayAs(open.text, say);
     setOpen(null);
     document.getSelection()?.removeAllRanges();
-    actions.current.start();
+    actions.current.resume();
   };
 
   return (

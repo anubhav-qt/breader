@@ -71,7 +71,9 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   // Did you sleep? Checkpoints while the voice reads untouched, asked about on the way back (sleep.ts).
   const saying = useRef<() => Sentence | null>(() => null);
   const slept = useSleepWatch(record.id, !closing, () => saying.current());
-  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch);
+  // A headset's press carries on from Immersive's light, which comes later.
+  const lightAt = useRef<() => Sentence | undefined>(() => undefined);
+  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current());
   saying.current = narration.current;
   const { asked, done: sleptDone } = slept;
   useEffect(() => { if (asked) openPanel('sleep'); }, [asked, openPanel]);
@@ -117,30 +119,74 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   }, [narration.playing]);
   /** In Immersive, a voice starts where the light is. */
   const fromLight = () => (immersive ? pacing.current()?.s : undefined);
+  lightAt.current = fromLight;
 
   /*
-   * Where the light begins. Begin numbers the paragraphs, and the reader picks: the top of the page,
-   * a paragraph by its number, or a tap on one. With nothing lit, a tap on a paragraph starts at
-   * its beginning; with the light stopped partway, a tap on a sentence starts there, and on the lit
-   * one carries on.
+   * Where Immersive begins. Begin numbers the paragraphs, and the reader picks: the top of the page,
+   * a paragraph by its number, or a tap on one. After the first start, every pause offers the same
+   * again, with Continue in place of the top. Play picks the voice for all of it, until Immersive is
+   * switched off; before that, it's the light.
    */
-  const [choosing, setChoosing] = useState(false);
-  useEffect(() => { if (!immersive || pacing.running || narration.playing) setChoosing(false); }, [immersive, pacing.running, narration.playing]);
+  const [asking, setAsking] = useState(false);
+  const [begun, setBegun] = useState(false);
+  const [byVoice, setByVoice] = useState(false);
+  const going = pacing.running || narration.playing;
+  /** The voice waiting on a word's card (SayAs): not a pause that asks where to carry on. */
+  const hushed = useRef(false);
+  const wasGoing = useRef(false);
+  useEffect(() => {
+    if (!immersive) {
+      setAsking(false);
+      setBegun(false);
+      setByVoice(false);
+    } else if (going) {
+      hushed.current = false;
+      setBegun(true);
+      setAsking(false);
+      if (narration.playing) setByVoice(true);
+    } else if (wasGoing.current && !hushed.current) setAsking(true);
+    wasGoing.current = going;
+  }, [immersive, going, narration.playing]);
+  const choosing = immersive && asking && !going;
   const paragraphs = useMemo(() => (choosing ? view.current?.listen.paragraphs?.() ?? [] : []), [choosing, loc?.section]); // eslint-disable-line react-hooks/exhaustive-deps
   /** The first paragraph that starts on screen: the picker starts there. */
   const nowAt = loc ? (paragraphs.find((p) => p.s.block > loc.block || (p.s.block === loc.block && loc.offset === 0)) ?? paragraphs[paragraphs.length - 1])?.n : undefined;
   /** Lights from a sentence, taking the page to it first when it's off screen (a paragraph picked by number). */
-  const lightFrom = (s: Sentence) => {
+  const lightFrom = (s: Sentence, at = 0) => {
     const l = view.current?.listen;
     if (!l) return;
-    setChoosing(false);
-    if (l.onScreen(s, 0)) { pacing.begin(s); return; }
-    l.reach(s, 0);
-    void shown(s).then(() => pacing.begin(s));
+    setAsking(false);
+    if (l.onScreen(s, at)) { pacing.begin(s, at); return; }
+    l.reach(s, at);
+    void shown(s).then(() => pacing.begin(s, at));
   };
   /** Once the page has got to a sentence it was sent to, or a second on. */
   const shown = async (s: Sentence) => {
     for (let waited = 0; !view.current?.listen.onScreen(s, 0) && waited < 1000; waited += 50) await new Promise((r) => window.setTimeout(r, 50));
+  };
+  /**
+   * The voice from a sentence or the top of the page. A download still to agree to opens the voice
+   * sheet first, and its Read aloud starts from here.
+   */
+  const agreed = useRef(false);
+  const waitingVoice = useRef<Sentence | 'top' | null>(null);
+  const voiceFrom = (from: Sentence | 'top') => {
+    setAsking(false);
+    void narration.readFrom(from, agreed.current).then((started) => { waitingVoice.current = started ? null : from; });
+  };
+  useEffect(() => { if (panel !== 'voice') waitingVoice.current = null; }, [panel]);
+  const beginAt = (s: Sentence, at = 0) => (byVoice ? voiceFrom(s) : lightFrom(s, at));
+  /** From the top of the page on screen. */
+  const fromTop = () => {
+    if (byVoice) { voiceFrom('top'); return; }
+    void view.current?.listen.from().then((list) => { if (list[0]) lightFrom(list[0]); });
+  };
+  /** From where it paused: the light's place, which a paused voice leaves lit too. */
+  const carryOn = () => {
+    const h = pacing.current();
+    if (byVoice) voiceFrom(h?.s ?? narration.where() ?? 'top');
+    else if (h) lightFrom(h.s, h.at);
+    else fromTop();
   };
   /** Back to a checkpoint: the voice reads on from there, or waits there (lit, in Immersive) for play. */
   const backTo = (s: Sentence) => {
@@ -149,28 +195,59 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     narration.jump(s);
     if (immersive && !reading) void shown(s).then(() => pacing.hold(s));
   };
-  /** From the top of the page on screen. */
-  const fromTop = () => { void view.current?.listen.from().then((list) => { if (list[0]) lightFrom(list[0]); }); };
+  /** A tap on the page: on what's lit, it carries on; elsewhere it starts there, or at the paragraph's start when nothing's lit yet. */
   const tapped = (s: Sentence) => {
-    const h = pacing.current();
-    if (!pacing.lit || !h) lightFrom(view.current?.listen.paragraphs?.().find((p) => p.s.block === s.block)?.s ?? s);
-    else if (overlaps(h.s, s)) pacing.begin(h.s, h.at);
-    else pacing.begin(s);
+    const h = pacing.lit ? pacing.current() : null;
+    if (h && overlaps(h.s, s)) carryOn();
+    else beginAt(h ? s : view.current?.listen.paragraphs?.().find((p) => p.s.block === s.block)?.s ?? s);
   };
   /** The light stops at a tap anywhere: it moves on too quickly to aim at. Controls hidden in focus mode come back. */
   const pauseLight = () => {
     pacing.pause();
     if (focus) wake(3500);
   };
-  /** Enter stops the light, carries on where it stopped, or starts it at the top of the page. False when it's not Enter's to take. */
+  /** Enter stops the light, carries on where it paused, or starts at the top of the page. False when it's not Enter's to take. */
   const onEnter = useRef<() => boolean>(() => false);
   onEnter.current = () => {
     if (!immersive || narration.playing || closing) return false;
-    const h = pacing.current();
     if (pacing.running) pauseLight();
-    else if (h && view.current?.listen.onScreen(h.s, h.at)) pacing.begin(h.s, h.at);
+    else if (begun) carryOn();
     else fromTop();
     return true;
+  };
+  /** Play, up top. In Immersive it picks the voice and asks where from, with anything open put away. */
+  const onPlay = () => {
+    if (!immersive) { narration.toggle(); return; }
+    if (narration.playing) { narration.stop(); return; }
+    openPanel(null);
+    setByVoice(true);
+    if (pacing.running) pacing.pause();
+    setAsking(true);
+  };
+  /**
+   * The voice sheet's Read aloud. In Immersive: Begin, on the bottom line, as for the light. Or
+   * straight on, when the sheet opened to ask for a download, or to say the voice failed.
+   */
+  const onRead = () => {
+    if (!immersive) { narration.start(); return; }
+    const from = waitingVoice.current;
+    waitingVoice.current = null;
+    agreed.current = true;
+    openPanel(null);
+    setByVoice(true);
+    if (from) narration.start(from);
+    else if (load.error) narration.start(fromLight());
+    else setAsking(false);
+  };
+  /** Headset and keyboard play and pause: never asks, just pauses or carries on. */
+  const mediaKey = useRef<(what: 'play' | 'pause' | 'toggle') => void>(() => {});
+  mediaKey.current = (what) => {
+    if (immersive && !byVoice) {
+      if (pacing.running) { if (what !== 'play') pauseLight(); }
+      else if (what !== 'pause') carryOn();
+      return;
+    }
+    if (canNarrate) media(what);
   };
 
   const [start] = useState<Start>(() => {
@@ -245,8 +322,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     const onKey = (e: KeyboardEvent) => {
       // A keyboard's media keys, where the browser passes them on: play and pause the voice.
       const key = MEDIA_KEYS[e.key];
-      if (key) { if (canNarrate) media(key); e.preventDefault(); return; }
-      if (e.key === 'Escape') { if (panel) openPanel(null); else if (choosing) setChoosing(false); else onBack(); return; }
+      if (key) { mediaKey.current(key); e.preventDefault(); return; }
+      if (e.key === 'Escape') { if (panel) openPanel(null); else if (choosing) setAsking(false); else onBack(); return; }
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
       if (e.key === 'Enter' && !target.closest('a, button') && onEnter.current()) { e.preventDefault(); return; }
@@ -260,7 +337,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [panel, choosing, settings, book.kind, onBack, openPanel, closing, media]);
+  }, [panel, choosing, settings, book.kind, onBack, openPanel, closing]);
 
   // Thin marks in a book colour close to the page (graphite on Night, sand on Day) lean toward the ink.
   const theme: ThemeName = settings.theme;
@@ -297,17 +374,27 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     book, title, loc, chapters, current, settings, update, isPdf: book.kind === 'pdf',
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
-    narration: canNarrate ? { playing: narration.playing, listening, toggle: () => narration.toggle(fromLight()), start: () => narration.start(fromLight()), stop: narration.stop } : null,
+    narration: canNarrate ? {
+      playing: narration.playing,
+      listening,
+      toggle: onPlay,
+      read: onRead,
+      stop: narration.stop,
+      hush: () => { hushed.current = true; narration.stop(); },
+      resume: () => narration.start(fromLight()),
+    } : null,
     immersion: immersive ? {
       running: pacing.running,
-      waiting: !pacing.lit && !pacing.running && !narration.playing,
+      waiting: !going && !asking,
       choosing,
-      choose: () => setChoosing(true),
-      cancel: () => setChoosing(false),
+      begun,
+      choose: () => setAsking(true),
+      cancel: () => setAsking(false),
       fromTop,
+      carryOn,
       paragraphs,
       nowAt,
-      pick: (p: Paragraph) => lightFrom(p.s),
+      pick: (p: Paragraph) => beginAt(p.s),
     } : null,
     focus: { on: focus, toggle: toggleFocus },
     sleep: asked ? {
