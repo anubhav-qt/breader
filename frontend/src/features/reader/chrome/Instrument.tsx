@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, type Chapter } from '../chapters';
@@ -135,10 +135,11 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         )}
       </div>
 
+      {/* Clear, so nothing to fade: it goes with the tap that closes the drop, never left over the page. */}
+      {panel && <div className="i3-scrim" onClick={() => openPanel(null)} />}
       <AnimatePresence>
-        {panel && <motion.div key="scrim" className="i3-scrim" onClick={() => openPanel(null)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}
         {panel && (
-          <motion.div
+          <Drop
             key={panel}
             className={`i3-drop is-${panel}`}
             data-panel
@@ -158,13 +159,19 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               )}
             </div>
             <CloseDots onClick={() => openPanel(null)} />
-          </motion.div>
+          </Drop>
         )}
       </AnimatePresence>
 
       {narration && <SayAs narration={narration} body={body} />}
     </>
   );
+}
+
+/** A drop on its way out takes no taps, so one that never quite leaves can't sit over the page. */
+function Drop(props: HTMLMotionProps<'div'>) {
+  const present = useIsPresent();
+  return <motion.div {...props} style={present ? props.style : { ...props.style, pointerEvents: 'none' }} />;
 }
 
 /** Immersive's pace, asked on the bottom line the first time the light moves on its own. */

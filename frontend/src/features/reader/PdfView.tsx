@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import type { RenderTask } from 'pdfjs-dist';
 import type { PdfBook } from '../../books/types';
 import { WORDS_PER_PDF_PAGE } from '../../books/pdf';
+import { glide } from '../../lib/glide';
 import type { Loc, Start, TurnEvent, ViewHandle } from './FlowView';
 import { sentencesIn, type Sentence } from './narration';
 import { findPictures, keepPictures } from './pictures';
@@ -161,7 +162,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
     if (layout === 'scroll') {
       setPage(p);
       const slot = scrollRef.current?.querySelector<HTMLElement>(`.pdf-slot[data-i="${p}"]`);
-      if (slot) scrollRef.current!.scrollTo({ top: slot.offsetTop - 40, behavior: 'smooth' });
+      if (slot) glide(scrollRef.current!, slot.offsetTop - 40 - scrollRef.current!.scrollTop);
       return;
     }
     const dir = p > page ? 1 : -1;
@@ -181,7 +182,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
     turn: (dir) => {
       if (layout === 'scroll') {
         const r = scrollRef.current!;
-        r.scrollBy({ top: dir * (r.clientHeight - 80), behavior: 'smooth' });
+        glide(r, dir * (r.clientHeight - 80));
       } else goTo(page + dir);
     },
     // Read aloud a page at a time. The text sits in the drawing, so nothing lights up.

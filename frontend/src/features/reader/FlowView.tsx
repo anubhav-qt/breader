@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import type { FlowBook, Position } from '../../books/types';
 import { countWords } from '../../lib/format';
+import { glide, stopGlide } from '../../lib/glide';
 import { firstSentence } from '../../books/record';
 import { caretAt, charRect, collectBlocks, firstCharWhere, firstRect, offsetIn, rangeOf, sentenceAt } from './dom';
 import { light, sentencesIn, type Listen, type Sentence } from './narration';
@@ -276,6 +277,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       setX(p, true);
     } else {
       const v = viewRef.current!;
+      stopGlide(v);
       if (t.kind === 'start') v.scrollTop = 0;
       else if (t.kind === 'end') v.scrollTop = v.scrollHeight;
       else {
@@ -348,10 +350,9 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   const turn = (dir: 1 | -1) => {
     if (!pagesMode) {
       const v = viewRef.current!;
-      steering.current = 0;
       if (dir > 0 && v.scrollTop + v.clientHeight >= v.scrollHeight - 4) { if (section < n - 1) goSection(section + 1, { kind: 'start' }, 1); return; }
       if (dir < 0 && v.scrollTop <= 0) { if (section > 0) goSection(section - 1, { kind: 'end' }, -1); return; }
-      v.scrollBy({ top: dir * (v.clientHeight - s.size * s.lh * 2), behavior: 'smooth' });
+      glide(v, dir * (v.clientHeight - s.size * s.lh * 2));
       return;
     }
     const np = pageRef.current + dir;
@@ -372,25 +373,18 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   /* Reading aloud */
 
   /**
-   * Until when the page is scrolling itself to keep up with the voice. Those scrolls move the
-   * reader's place too, but aren't the reader going somewhere else: the spot the voice is on is
-   * where the page is headed. The reader's own wheel, touch or keys end it at once.
+   * The page is scrolling itself to keep up with the voice. Those scrolls move the reader's place
+   * too, but aren't the reader going somewhere else: the spot the voice is on is where the page is
+   * headed. The reader's own wheel, touch or keys end it at once (glide.ts).
    */
-  const steering = useRef(0);
-  const steered = () => !pagesMode && performance.now() < steering.current;
-  useEffect(() => {
-    const v = viewRef.current;
-    if (!v || pagesMode) return;
-    const hand = () => { steering.current = 0; };
-    const opts = { passive: true, capture: true };
-    const kinds = ['wheel', 'touchstart', 'pointerdown', 'scrollend'] as const;
-    for (const t of kinds) v.addEventListener(t, hand, opts);
-    window.addEventListener('keydown', hand, opts);
-    return () => {
-      for (const t of kinds) v.removeEventListener(t, hand, opts);
-      window.removeEventListener('keydown', hand, opts);
-    };
-  }, [pagesMode]);
+  const steering = useRef(false);
+  const steerings = useRef(0);
+  const steered = () => !pagesMode && steering.current;
+  const steer = (by: number) => {
+    const mine = ++steerings.current;
+    steering.current = true;
+    glide(viewRef.current!, by, () => { if (steerings.current === mine) steering.current = false; });
+  };
 
   /** Where a character sits against the page on screen: on it, on the one after, or elsewhere. */
   const placeOf = (block: number, offset: number): 'here' | 'next' | 'away' => {
@@ -431,10 +425,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
         const r = charRect(blocks.current[sn.block], sn.start + at);
         const box = v.getBoundingClientRect();
         const top = r && r.top - box.top - (centre ? box.height * 0.38 : 88);
-        if (top && Math.abs(top) > (centre ? box.height * 0.12 : 0)) {
-          steering.current = performance.now() + 1500;
-          v.scrollBy({ top, behavior: 'smooth' });
-        }
+        if (top && Math.abs(top) > (centre ? box.height * 0.12 : 0)) steer(top);
       }
       return place !== 'away';
     },

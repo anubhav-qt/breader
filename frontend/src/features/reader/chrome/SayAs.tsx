@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { SAY_AS } from '@breader/shared/limits';
 import { springs } from '../../../lib/springs';
 import { readLocal, writeLocal } from '../../../lib/store';
@@ -231,11 +231,13 @@ export function SayAs({ narration, body }: Props) {
   };
 
   return (
-    <AnimatePresence>
-      {open && <motion.div key="scrim" className="i3-scrim" onClick={() => done(null)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}
-      {open && <Card key={`${open.text}@${open.top}`} at={open} area={body} onDone={done} />}
-      {tip && !open && <TipBox key={tip.id} tip={tip} area={body} />}
-    </AnimatePresence>
+    <>
+      {open && <div className="i3-scrim" onClick={() => done(null)} />}
+      <AnimatePresence>
+        {open && <Card key={`${open.text}@${open.top}`} at={open} area={body} onDone={done} />}
+        {tip && !open && <TipBox key={tip.id} tip={tip} area={body} />}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -287,6 +289,8 @@ function Card({ at, area, onDone }: { at: Picked; area: RefObject<HTMLDivElement
   const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  // On its way out, it takes no taps (Instrument's drops do the same).
+  const present = useIsPresent();
   /** The preview being made or said; a new one (or none) bumps gen. */
   const sound = useRef<{ gen: number; player: Playing | null }>({ gen: 0, player: null });
 
@@ -368,7 +372,7 @@ function Card({ at, area, onDone }: { at: Picked; area: RefObject<HTMLDivElement
       data-panel
       role="dialog"
       aria-label={`How to say ${at.text}`}
-      style={pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' }}
+      style={pos ? { left: pos.left, top: pos.top, pointerEvents: present ? undefined : 'none' } : { visibility: 'hidden' }}
       initial={{ opacity: 0, y: pos?.above ? 6 : -6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: pos?.above ? 6 : -6 }}
