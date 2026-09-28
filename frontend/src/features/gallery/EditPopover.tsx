@@ -87,15 +87,21 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
       anchor.focus({ preventScroll: true });
       onClose();
     };
-    const onScroll = () => onClose();
+    // Only a scroll that moves the book it points at: a field following its cursor, or the series
+    // list, scrolls too.
+    const onScroll = (e: Event) => {
+      const t = e.target;
+      if (t === document || (t instanceof Node && t.contains(anchor))) onClose();
+    };
+    const onResize = () => onClose();
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onResize);
     document.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('pointerdown', onDown);
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
       document.removeEventListener('scroll', onScroll, true);
     };
   }, [anchor, onClose]);
