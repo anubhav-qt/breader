@@ -180,17 +180,29 @@ export function Reader({ record, title, color, book, initial, closing = false, o
 
   useEffect(() => {
     if (closing) return;
+    // A button clicked keeps the focus, and the browser rings it at the next key: a page turned by
+    // key lets go of it first. One reached with Tab keeps its ring.
+    let clicked: Element | null = null;
+    const onDown = (e: Event) => { clicked = (e.target as Element).closest?.('button') ?? null; };
+    const letGo = () => {
+      const a = document.activeElement;
+      if (a instanceof HTMLElement && a === clicked) a.blur();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { if (panel) openPanel(null); else onBack(); return; }
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
       if (e.key === 'Enter' && !target.closest('a, button') && onEnter.current()) { e.preventDefault(); return; }
       const scroll = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'scroll';
-      if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !scroll)) { view.current?.turn(1); e.preventDefault(); }
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !scroll)) { view.current?.turn(-1); e.preventDefault(); }
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !scroll)) { letGo(); view.current?.turn(1); e.preventDefault(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !scroll)) { letGo(); view.current?.turn(-1); e.preventDefault(); }
     };
+    window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [panel, settings, book.kind, onBack, openPanel, closing]);
 
   // Thin marks in a book colour close to the page (graphite on Night, sand on Day) lean toward the ink.
