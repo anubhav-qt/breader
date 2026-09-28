@@ -65,28 +65,22 @@ export async function has(w: Want): Promise<boolean> {
   }
 }
 
-/** Reads a response's body, counting bytes as they arrive. */
-async function drain(res: Response, onBytes: (n: number) => void, signal?: AbortSignal): Promise<Uint8Array> {
+/** Hands over a response's body as it arrives, counting the bytes. */
+async function drain(res: Response, write: (chunk: Uint8Array) => void, onBytes: (n: number) => void, signal?: AbortSignal) {
   if (!res.body) {
     const b = new Uint8Array(await res.arrayBuffer());
+    write(b);
     onBytes(b.byteLength);
-    return b;
+    return;
   }
   const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
   for (;;) {
     if (signal?.aborted) { void reader.cancel(); throw new DOMException('Stopped', 'AbortError'); }
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
+    write(value);
     onBytes(value.byteLength);
   }
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) { out.set(c, at); at += c.byteLength; }
-  return out;
 }
 
 const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -94,10 +88,25 @@ const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toStr
 /**
  * The whole file, from the cache or the network. `onBytes` hears every byte, cached ones at once,
  * so progress starts from what's already here.
+ *
+ * Parts go straight into one buffer the size of the file as they come, so a model is held once,
+ * not once in parts and again joined up (a phone may have little room for either).
  */
 export async function load(w: Want, onBytes: (n: number) => void = () => {}, signal?: AbortSignal): Promise<Uint8Array> {
   const c = await open();
-  const parts: Uint8Array[] = [];
+  let whole: Uint8Array | null = null;
+  let at = 0;
+  const write = (b: Uint8Array) => {
+    if (!whole) whole = new Uint8Array(Math.max(w.size, b.byteLength));
+    // Bigger than it said (an uploaded file's size is a guess until it's here).
+    if (at + b.byteLength > whole.length) {
+      const grown = new Uint8Array(Math.max(at + b.byteLength, whole.length * 1.5));
+      grown.set(whole.subarray(0, at));
+      whole = grown;
+    }
+    whole.set(b, at);
+    at += b.byteLength;
+  };
   let fresh = false;
   for (let i = 0; i < w.keys.length; i++) {
     const key = w.keys[i];
@@ -105,22 +114,19 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
     if (hit) {
       const b = new Uint8Array(await hit.arrayBuffer());
       onBytes(b.byteLength);
-      parts.push(b);
+      // A file in one part is already whole.
+      if (w.keys.length === 1) { whole = b; at = b.byteLength; }
+      else write(b);
       continue;
     }
     const res = await fetch(w.from?.[i] ?? key, { cache: 'no-store' });
     if (!res.ok) throw new Error(`Breader couldn’t download a voice file (${res.status}).`);
-    const b = await drain(res, onBytes, signal);
-    await c.put(key, new Response(b, { headers: { 'content-type': 'application/octet-stream' } }));
-    parts.push(b);
+    const from = at;
+    await drain(res, write, onBytes, signal);
+    await c.put(key, new Response((whole ?? new Uint8Array(0)).subarray(from, at), { headers: { 'content-type': 'application/octet-stream' } }));
     fresh = true;
   }
-  const size = parts.reduce((n, p) => n + p.byteLength, 0);
-  const out = parts.length === 1 ? parts[0] : new Uint8Array(size);
-  if (parts.length > 1) {
-    let at = 0;
-    for (const p of parts) { out.set(p, at); at += p.byteLength; }
-  }
+  const out = (whole ?? new Uint8Array(0)).subarray(0, at);
   if (w.sha256 && crypto.subtle && (fresh || !(await c.match(verifiedKey(w.sha256))))) {
     const got = hex(await crypto.subtle.digest('SHA-256', out));
     if (got !== w.sha256) {
