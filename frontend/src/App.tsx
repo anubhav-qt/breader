@@ -72,7 +72,7 @@ const FULL = 'inset(0px 0px 0px 0px round 0px)';
 
 /** Where a book's card is in the library, as it will settle (the library may still be rising in). */
 function cardRect(id: string): DOMRect | null {
-  const tile = document.querySelector<HTMLElement>(`.tile-hit[data-id="${CSS.escape(id)}"]`)?.parentElement;
+  const tile = document.querySelector<HTMLElement>(`.gallery:not([hidden]) .tile-hit[data-id="${CSS.escape(id)}"]`)?.parentElement;
   if (!tile) return null;
   const r = tile.getBoundingClientRect();
   const slot = tile.closest<HTMLElement>('.tile-slot');
@@ -103,6 +103,9 @@ export default function App() {
   const [now] = useState(() => Date.now());
   const [route, setRoute] = useState<Route>(parseHash);
   const [tab, setTab] = useState<Tab>('mine');
+  // Each tab's library stays once it's been seen, so switching back finds it as it was.
+  const [seen, setSeen] = useState<ReadonlySet<Tab>>(() => new Set([tab]));
+  if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
@@ -324,7 +327,7 @@ export default function App() {
       });
       if (refocus) {
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          document.querySelector<HTMLElement>(`.tile-hit[data-id="${CSS.escape(id)}"]`)?.focus();
+          document.querySelector<HTMLElement>(`.gallery:not([hidden]) .tile-hit[data-id="${CSS.escape(id)}"]`)?.focus();
         }));
       }
     };
@@ -454,12 +457,14 @@ export default function App() {
             onKey={() => setKeyOpen(true)}
             account={<AccountMenu account={account} onLogin={() => setLogin({ mode: 'login' })} onLogOut={logOutAll} />}
           />
-          {lib.ready && (
+          {lib.ready && (['mine', 'shelf'] as const).filter((t) => seen.has(t)).map((t) => (
             <Gallery
-              key={`${tab}-${preview}`}
-              books={books}
+              key={`${t}-${preview}`}
+              books={t === 'mine' ? items.mine : items.shelf}
               now={now}
-              labelledBy={`tab-${tab}`}
+              id={`library-${t}`}
+              labelledBy={`tab-${t}`}
+              hidden={t !== tab}
               onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={() => setAdding({ mode: 'file' })}
               onEdit={(id, patch) => void editBook(id, patch)}
@@ -469,7 +474,7 @@ export default function App() {
                 say(shared ? `“${b.title}” is on the Shared Library` : `Took “${b.title}” off the Shared Library. Anyone well into it keeps it.`);
               }}
             />
-          )}
+          ))}
         </div>
       )}
 

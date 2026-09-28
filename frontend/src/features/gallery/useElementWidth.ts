@@ -7,9 +7,11 @@ export function useElementWidth<T extends HTMLElement>() {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    // Hidden (in the library tab not showing), it keeps its width, to come back as it was.
+    const read = () => { if (el.getClientRects().length) setWidth(el.clientWidth); };
+    const ro = new ResizeObserver(read);
     ro.observe(el);
-    setWidth(el.clientWidth);
+    read();
     return () => ro.disconnect();
   }, []);
   return [ref, width] as const;

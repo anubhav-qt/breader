@@ -49,7 +49,7 @@ export function Header({ tab, counts, canAdd, onTab, onAdd, onKey, account }: Pr
             type="button"
             className="tab"
             aria-selected={tab === t.id}
-            aria-controls="library"
+            aria-controls={`library-${t.id}`}
             tabIndex={tab === t.id ? 0 : -1}
             onClick={() => onTab(t.id)}
           >

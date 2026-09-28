@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { ShelfItem } from '../../data/useLibrary';
 import { finishedIn, numberOf, type Series } from './series';
 import { ROW_H } from './layouts/Wall';
@@ -29,26 +29,28 @@ export function SeriesRows({ list, now, enter, indexBase, editingId, onOpen, onE
             <span className="wall-count">{finishedIn(s)} of {s.books.length} finished</span>
           </header>
           <motion.div className="srow" layoutScroll>
-            {s.books.map((b, k) => {
-              const key = b.key ?? b.id;
-              return (
-                <Tile
-                  key={key}
-                  item={{ key, book: b }}
-                  variant="cover"
-                  index={indexBase + j * 3 + k}
-                  enter={enter}
-                  now={now}
-                  radius="8px 18px 18px 8px"
-                  className="srow-tile"
-                  style={{ width: W, height: H }}
-                  number={numberOf(s, b)}
-                  open={key === editingId}
-                  onOpen={onOpen}
-                  onEdit={onEdit}
-                />
-              );
-            })}
+            <AnimatePresence initial={false}>
+              {s.books.map((b, k) => {
+                const key = b.key ?? b.id;
+                return (
+                  <Tile
+                    key={key}
+                    item={{ key, book: b }}
+                    variant="cover"
+                    index={indexBase + j * 3 + k}
+                    enter={enter}
+                    now={now}
+                    radius="8px 18px 18px 8px"
+                    className="srow-tile"
+                    style={{ width: W, height: H }}
+                    number={numberOf(s, b)}
+                    open={key === editingId}
+                    onOpen={onOpen}
+                    onEdit={onEdit}
+                  />
+                );
+              })}
+            </AnimatePresence>
           </motion.div>
         </section>
       ))}

@@ -17,8 +17,11 @@ import './gallery.css';
 interface Props {
   books: ShelfItem[];
   now: number;
-  /** The id of the tab that labels this panel. */
+  /** The panel's id, and the id of the tab that labels it. */
+  id: string;
   labelledBy: string;
+  /** The other tab is showing: this one waits as it was, scrolled where it was. */
+  hidden?: boolean;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onAdd: () => void;
   onEdit: (id: string, patch: BookEdit) => void;
@@ -26,18 +29,22 @@ interface Props {
   onShare: (book: ShelfItem, shared: boolean) => void;
 }
 
+/** The cards rise in and their colour grows only the first time a library appears after the page loads. */
+let entered = false;
+
 /**
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, side by side, a row per series and everything else as a wall by time.
  */
-export function Gallery({ books, now, labelledBy, onOpen, onAdd, onEdit, onRemove, onShare }: Props) {
-  const first = useRef(true);
+export function Gallery({ books, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare }: Props) {
+  const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   useEffect(() => {
-    const t = window.setTimeout(() => { first.current = false; }, 60);
+    const t = window.setTimeout(() => { first.current = false; entered = true; }, 60);
     return () => window.clearTimeout(t);
   }, []);
+  useEffect(() => { if (hidden) setEditing(null); }, [hidden]);
 
   const series = useMemo(() => findSeries(books), [books]);
   const seriesNames = useMemo(() => [...new Set(books.flatMap((b) => (b.series ? [b.series] : [])))].sort(), [books]);
@@ -60,7 +67,7 @@ export function Gallery({ books, now, labelledBy, onOpen, onAdd, onEdit, onRemov
   const closeEdit = useCallback(() => setEditing(null), []);
   const editingBook = editing ? books.find((b) => (b.key ?? b.id) === editing.id) : undefined;
 
-  const panel = { id: 'library', role: 'tabpanel', 'aria-labelledby': labelledBy } as const;
+  const panel = { id, role: 'tabpanel', 'aria-labelledby': labelledBy, hidden } as const;
 
   if (!books.length) {
     return (
