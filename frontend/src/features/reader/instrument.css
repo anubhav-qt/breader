@@ -397,3 +397,21 @@
 .sa-go { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .sa-go .vs-go { height: 40px; }
 .vs-go.is-quiet { background: var(--r-fill); color: var(--r-fg); }
+
+/* While it reads, words take a click: the hand over them, and a small line saying what it does. */
+.rd-body.is-word .fv-flow { cursor: pointer; }
+.sa-tip {
+  position: absolute;
+  z-index: 8;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--r-bg);
+  box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow);
+  font: var(--ui-w) 11px/1.2 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-fg);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.sa-tip.is-touch { left: 50%; bottom: 52px; translate: -50% 0; }

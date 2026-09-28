@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import { AnimatePresence, motion } from 'motion/react';
 import { SAY_AS } from '@breader/shared/limits';
 import { springs } from '../../../lib/springs';
+import { readLocal, writeLocal } from '../../../lib/store';
 import { voiceFor, voicePrefs } from '../voice/prefs';
 import { sayAsFor, setSayAs } from '../voice/sayas';
 import { play, synth, unlock, type Playing } from '../voice/speaker';
@@ -12,6 +13,9 @@ import { CloseDots, DotIcon } from './parts';
  * Saying a word the reader's way. Tap a word while a voice reads, or select a few: it pauses, and
  * a small card by them asks how they should sound. Preview says the new spelling in the voice that
  * was reading; Save keeps it (voice/sayas.ts). Either way the voice carries on from its sentence.
+ *
+ * So it's found: over a word the pointer becomes a hand, and resting on one says what a click does.
+ * A touch screen is told as the voice starts, its first few times.
  */
 
 interface Props {
@@ -83,6 +87,17 @@ function wordAt(x: number, y: number): Range | null {
 type Highlights = { set: (name: string, h: unknown) => void; delete: (name: string) => void };
 const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
 
+/** A line saying what a tap on a word does: by the resting pointer, or for touch, under the page. */
+interface Tip { id: number; x: number; y: number; touch: boolean }
+
+/** How long the pointer rests on a word before the tip, and how long the tip stays. */
+const REST_MS = 250;
+const TIP_MS = 3000;
+/** Times a touch screen is told, and for how long. */
+const TOLD = 'breader.sayas-told.v1';
+const TELL = 3;
+const TELL_MS = 4000;
+
 /** Lights the word being asked about, or nothing. */
 function mark(word: Range | undefined) {
   if (!highlights) return;
@@ -150,6 +165,61 @@ export function SayAs({ narration, body }: Props) {
     return () => mark(undefined);
   }, [open]);
 
+  // The hand over words, and the tip: after resting on one, or for touch, as the voice starts.
+  const [tip, setTip] = useState<Tip | null>(null);
+  useEffect(() => {
+    const area = body.current;
+    if (!playing || !area) return;
+    let rest = 0;
+    let gone = 0;
+    let n = 0;
+    /** The word the pointer is on, and whether its tip has been shown. */
+    let on: { node: Node; at: number; told: boolean } | null = null;
+    const hide = () => { window.clearTimeout(rest); window.clearTimeout(gone); setTip(null); };
+    const show = (t: Omit<Tip, 'id'>, ms: number) => {
+      setTip({ ...t, id: ++n });
+      window.clearTimeout(gone);
+      gone = window.setTimeout(() => setTip(null), ms);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return;
+      const t = e.target as Element;
+      const word = t.closest('.fv-flow') && !t.closest('a, button') ? wordAt(e.clientX, e.clientY) : null;
+      area.classList.toggle('is-word', !!word);
+      if (!word) { on = null; hide(); return; }
+      if (on?.node === word.startContainer && on.at === word.startOffset) {
+        // Resting again on a word already told about: once is enough.
+        if (on.told) return;
+      } else {
+        on = { node: word.startContainer, at: word.startOffset, told: false };
+        hide();
+      }
+      window.clearTimeout(rest);
+      const a = area.getBoundingClientRect();
+      const x = e.clientX - a.left;
+      const y = e.clientY - a.top;
+      const here = on;
+      rest = window.setTimeout(() => { here.told = true; show({ x, y, touch: false }, TIP_MS); }, REST_MS);
+    };
+    const onLeave = () => { on = null; area.classList.remove('is-word'); hide(); };
+    area.addEventListener('pointermove', onMove);
+    area.addEventListener('pointerleave', onLeave);
+    area.addEventListener('pointerdown', hide);
+    if (matchMedia('(hover: none)').matches) {
+      const told = readLocal<number>(TOLD, 0);
+      if (told < TELL) {
+        writeLocal(TOLD, told + 1);
+        show({ x: 0, y: 0, touch: true }, TELL_MS);
+      }
+    }
+    return () => {
+      area.removeEventListener('pointermove', onMove);
+      area.removeEventListener('pointerleave', onLeave);
+      area.removeEventListener('pointerdown', hide);
+      onLeave();
+    };
+  }, [playing, body]);
+
   // Play pressed while it asks: the question goes.
   useEffect(() => { if (playing) setOpen(null); }, [playing]);
 
@@ -164,7 +234,47 @@ export function SayAs({ narration, body }: Props) {
     <AnimatePresence>
       {open && <motion.div key="scrim" className="i3-scrim" onClick={() => done(null)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}
       {open && <Card key={`${open.text}@${open.top}`} at={open} area={body} onDone={done} />}
+      {tip && !open && <TipBox key={tip.id} tip={tip} area={body} />}
     </AnimatePresence>
+  );
+}
+
+const TIP_X = 12;
+const TIP_Y = 22;
+
+function TipBox({ tip, area }: { tip: Tip; area: RefObject<HTMLDivElement | null> }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  // Below and right of the pointer, flipped where that would leave the page.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const a = area.current;
+    if (!el || !a || tip.touch) return;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const flipX = tip.x + TIP_X + w > a.clientWidth - EDGE;
+    const flipY = tip.y + TIP_Y + h > a.clientHeight - EDGE;
+    setPos({
+      left: flipX ? Math.max(EDGE, tip.x - TIP_X - w) : tip.x + TIP_X,
+      top: flipY ? Math.max(EDGE, tip.y - 10 - h) : tip.y + TIP_Y,
+    });
+  }, [tip, area]);
+
+  const placed = tip.touch || !!pos;
+  return (
+    <motion.div
+      ref={ref}
+      className={`sa-tip${tip.touch ? ' is-touch' : ''}`}
+      role="status"
+      style={tip.touch ? undefined : { left: pos?.left ?? -9999, top: pos?.top ?? 0 }}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={placed ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.96 }}
+      exit={{ opacity: 0, transition: { duration: 0.12 } }}
+      transition={springs.snappy}
+    >
+      {tip.touch ? 'Tap a word to change how it sounds' : 'Click to change how it sounds'}
+    </motion.div>
   );
 }
 
