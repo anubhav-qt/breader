@@ -10,7 +10,7 @@
 }
 .gallery > * { max-width: 1400px; margin-inline: auto; }
 .gallery[hidden] { display: none; }
-.gallery.is-empty { display: grid; place-items: center; padding-bottom: 76px; }
+.gallery.is-empty:not([hidden]) { display: grid; place-items: center; padding-bottom: 76px; }
 .gallery-add { height: 50px; padding: 0 22px; border-radius: 14px; font-size: 15px; }
 .gallery-add svg { width: 18px; height: 18px; }
 
