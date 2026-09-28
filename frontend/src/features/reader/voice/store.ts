@@ -5,6 +5,10 @@ import manifest from './files.json';
  * files come in parts (scripts/voices.mjs), each cached as it arrives, so a download that stops
  * picks up where it left off. A file is checked against its SHA-256 once, the first time it's whole.
  *
+ * A phone short of space may refuse to keep a file. Then the other voices' files make room (they
+ * download again if they're wanted), and if there's still none, the voice reads anyway, from what
+ * was just downloaded, and downloads again next time.
+ *
  * Works in the page and in the speech worker alike. A page opened over plain http (a phone trying
  * the dev server) has no Cache Storage or hashing: files are then kept in memory and not checked.
  */
@@ -31,6 +35,7 @@ interface Box {
   match(key: string): Promise<Response | undefined>;
   put(key: string, res: Response): Promise<void>;
   delete(key: string): Promise<boolean>;
+  keys?(): Promise<readonly Request[]>;
 }
 const memory = new Map<string, Response>();
 const inMemory: Box = {
@@ -40,6 +45,23 @@ const inMemory: Box = {
 };
 const open = (): Promise<Box> => (typeof caches === 'undefined' ? Promise.resolve(inMemory) : caches.open(CACHE));
 const verifiedKey = (sha: string) => `/voice-cache/verified/${sha}`;
+
+/** Files this page or worker has used, which room is never made by clearing out. */
+const held = new Set<string>();
+
+/** Keeps one file, or part of one, making room if the device is out of it. */
+async function stash(c: Box, key: string, bytes: Uint8Array) {
+  const res = () => new Response(bytes as Uint8Array<ArrayBuffer>, { headers: { 'content-type': 'application/octet-stream' } });
+  try {
+    await c.put(key, res());
+  } catch (e) {
+    if ((e as DOMException | null)?.name !== 'QuotaExceededError' || !c.keys) return;
+    for (const r of await c.keys()) {
+      if (!held.has(r.url) && !r.url.includes('/voice-cache/verified/')) await c.delete(r.url);
+    }
+    await c.put(key, res()).catch(() => {});
+  }
+}
 
 /** One of the files the app hosts (files.json). */
 export function hosted(name: HostedName): Want {
@@ -94,6 +116,7 @@ const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toStr
  */
 export async function load(w: Want, onBytes: (n: number) => void = () => {}, signal?: AbortSignal): Promise<Uint8Array> {
   const c = await open();
+  for (const k of w.keys) held.add(k);
   let whole: Uint8Array | null = null;
   let at = 0;
   const write = (b: Uint8Array) => {
@@ -123,7 +146,7 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
     if (!res.ok) throw new Error(`Breader couldn’t download a voice file (${res.status}).`);
     const from = at;
     await drain(res, write, onBytes, signal);
-    await c.put(key, new Response((whole ?? new Uint8Array(0)).subarray(from, at), { headers: { 'content-type': 'application/octet-stream' } }));
+    await stash(c, key, (whole ?? new Uint8Array(0)).subarray(from, at));
     fresh = true;
   }
   const out = (whole ?? new Uint8Array(0)).subarray(0, at);
@@ -133,7 +156,7 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
       await forget(w);
       throw new Error('A voice file arrived damaged. Try again.');
     }
-    await c.put(verifiedKey(w.sha256), new Response(''));
+    await c.put(verifiedKey(w.sha256), new Response('')).catch(() => {});
   }
   return out;
 }
@@ -141,7 +164,8 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
 /** Keeps a file this device already holds, one it just uploaded, so it needn't come back down. */
 export async function keep(w: Want, bytes: Uint8Array) {
   const c = await open();
-  await c.put(w.keys[0], new Response(bytes as Uint8Array<ArrayBuffer>, { headers: { 'content-type': 'application/octet-stream' } }));
+  held.add(w.keys[0]);
+  await stash(c, w.keys[0], bytes);
 }
 
 export async function forget(w: Want) {
