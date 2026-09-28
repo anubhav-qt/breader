@@ -324,6 +324,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     swipedAt.current = e.timeStamp;
     view.current?.turn(dx < 0 ? 1 : -1);
   };
+  // Scrolled, a hand moving the page stops the light as a tap does, so it neither starts over from the
+  // top of the screen nor pulls the page back to where it was: the page is the reader's, until
+  // Continue or a tap on a sentence.
+  const onHandScroll = () => { if (pacing.running && !paged && !closing) pauseLight(); };
   // The tap zones under a swipe mustn't turn the page a second time.
   const onClickCapture = (e: MouseEvent) => {
     if (e.timeStamp - swipedAt.current < 500) { e.stopPropagation(); e.preventDefault(); }
@@ -452,7 +456,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   return (
     <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
-        <main className="rd-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
+        <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} />
           ) : (
