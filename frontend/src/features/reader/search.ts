@@ -73,6 +73,7 @@ export function readBook(book: LoadedBook, listen: Listen, onRead?: (done: numbe
   p = (async () => {
     const out: Block[] = [];
     let before = 0;
+    let since = performance.now();
     for (let i = 0; i < count; i++) {
       const sentences = (await listen.section(i)) ?? [];
       // A block's text again, from its sentences where they sit in it.
@@ -90,8 +91,11 @@ export function readBook(book: LoadedBook, listen: Listen, onRead?: (done: numbe
       }
       before += weight(i);
       onRead?.(i + 1, count);
-      // Room for the page to breathe between chapters of a long book.
-      if (i % 8 === 7) await new Promise((r) => window.setTimeout(r, 0));
+      // Room for the page to breathe: never more than a few milliseconds at a time.
+      if (performance.now() - since > 8) {
+        await new Promise((r) => window.setTimeout(r, 0));
+        since = performance.now();
+      }
     }
     return out;
   })();

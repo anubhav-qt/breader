@@ -6,12 +6,14 @@ import { chapterAtFraction, chapterName, pad2, type Chapter } from '../chapters'
 import { canFullscreen, useFullscreen } from '../fullscreen';
 import { paceLevel } from '../pacing';
 import { AppearancePanel, ContentsPanel } from '../Panels';
+import type { Scope } from '../revisit';
 import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
 import { level, useLoadState } from '../voice/speaker';
 import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
 import { CHECK, CROSS, FOCUS, FOCUSED, GROW, MINUS, PAUSE, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
+import { RevisitMenu, RevisitWindow } from './Revisit';
 import { SayAs } from './SayAs';
 import { SearchPanel } from './Search';
 import { HeadTips } from './Tip';
@@ -20,6 +22,9 @@ import type { ChromeProps, PanelName } from './types';
 
 const DROP_CLOSED = 'inset(-12% -24% 100% -24%)';
 const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
+// Revisit's drop comes up from the bottom line.
+const UP_CLOSED = 'inset(100% -24% -12% -24%)';
+const UP_OPEN = 'inset(-40% -24% -12% -24%)';
 
 /**
  * The reader's controls. Doto leads: the page's margins are readouts. The line above the text names the
@@ -76,6 +81,9 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   const keep = () => { setVoicePrefs({ paceKept: true }); setKept(true); };
   const tap = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches ? 'Tap' : 'Click';
   const choosing = !!immersion?.choosing;
+  // Revisit, once anything's been read: past the first screen of the book.
+  const [scope, setScope] = useState<Scope>('chapter');
+  const canRevisit = !!search && !!loc && (loc.section > 0 || loc.block > 0);
 
   return (
     <>
@@ -148,7 +156,14 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           </div>
         ) : (
           <>
-            <span className="i3-read"><Digits value={progress * 100} width={3} /><small>%</small></span>
+            <span className="i3-left">
+              <span className="i3-read"><Digits value={progress * 100} width={3} /><small>%</small></span>
+              {canRevisit && (
+                <button type="button" className={`i3-rv${panel === 'revisit' || panel === 'recap' ? ' is-open' : ''}`} onClick={() => toggle('revisit')} aria-expanded={panel === 'revisit'} aria-haspopup="dialog">
+                  Revisit<span className="i3-caret" aria-hidden="true">▴</span>
+                </button>
+              )}
+            </span>
             {immersion?.waiting ? (
               // Immersive, nothing lit yet: Begin numbers the paragraphs, to pick where.
               <span className="i3-say">
@@ -174,16 +189,16 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
       )}
 
       {/* Clear, so nothing to fade: it goes with the tap that closes the drop, never left over the page. */}
-      {panel && <div className="i3-scrim" onClick={() => openPanel(null)} />}
+      {panel && <div className={`i3-scrim${panel === 'recap' ? ' is-dim' : ''}`} onClick={() => openPanel(null)} />}
       <AnimatePresence>
-        {panel && (
+        {panel && panel !== 'recap' && (
           <Drop
             key={panel}
             className={`i3-drop is-${panel}`}
             data-panel
-            initial={{ clipPath: DROP_CLOSED, y: -6 }}
-            animate={{ clipPath: DROP_OPEN, y: 0 }}
-            exit={{ clipPath: DROP_CLOSED, y: -6 }}
+            initial={{ clipPath: panel === 'revisit' ? UP_CLOSED : DROP_CLOSED, y: panel === 'revisit' ? 6 : -6 }}
+            animate={{ clipPath: panel === 'revisit' ? UP_OPEN : DROP_OPEN, y: 0 }}
+            exit={{ clipPath: panel === 'revisit' ? UP_CLOSED : DROP_CLOSED, y: panel === 'revisit' ? 6 : -6 }}
             transition={springs.snappy}
           >
             {/* The drop keeps its close button in place; what's in it scrolls. */}
@@ -196,6 +211,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
                 <SleepPanel asked={sleep.asked} chapters={chapters} playing={!!narration?.playing} onBack={sleep.back} onAwake={sleep.awake} />
               ) : panel === 'find' && search ? (
                 <SearchPanel book={book} chapters={chapters} read={search.read} onGo={(f) => { openPanel(null); search.go(f); }} />
+              ) : panel === 'revisit' ? (
+                <RevisitMenu chapters={chapters} current={current} loc={loc} onPick={(v) => { setScope(v); openPanel('recap'); }} />
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
@@ -204,6 +221,24 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
             </div>
             <CloseDots onClick={() => openPanel(null)} />
           </Drop>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {panel === 'recap' && search && loc && (
+          <motion.div
+            key="recap"
+            className="rv"
+            data-panel
+            role="dialog"
+            aria-label="Revisit"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={springs.snappy}
+          >
+            <RevisitWindow book={book} chapters={chapters} current={current} loc={loc} scope={scope} read={search.read} />
+            <CloseDots onClick={() => openPanel(null)} />
+          </motion.div>
         )}
       </AnimatePresence>
 

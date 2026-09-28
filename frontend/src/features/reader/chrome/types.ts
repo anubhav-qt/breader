@@ -7,7 +7,8 @@ import type { Block, Found } from '../search';
 import type { Asleep } from '../sleep';
 import type { ReaderSettings } from '../settings';
 
-export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find';
+/** `revisit` is the drop up from the bottom line; `recap` the window it opens (chrome/Revisit.tsx). */
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
