@@ -4,7 +4,7 @@ import { checkGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import { respell, type Swap } from './voice/sayas';
-import { failed, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
+import { failed, hold, letGoKeys, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
 
 /*
  * Reading aloud with voices that run on this device (voice/): from the top of the page on screen,
@@ -190,6 +190,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     player.current = null;
     cut.current = null;
     view.current?.listen?.clear();
+    hold(false);
     setPlaying(false);
   }, [view]);
 
@@ -489,21 +490,33 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.mode, picked, prefs.rate]);
 
-  // The lock screen's and headphones' play and pause.
-  const actions = useRef({ start, halt });
-  actions.current = { start, halt };
+  // Play and pause from outside the page: the lock screen, a headset's button, a keyboard's media
+  // keys. Some browsers send a key both as a key press (Reader.tsx) and to the media session, so a
+  // second one straight after the first is the same press.
+  const actions = useRef({ start, halt, toggle });
+  actions.current = { start, halt, toggle };
+  const pressed = useRef(-Infinity);
+  const media = useCallback((what: 'play' | 'pause' | 'toggle') => {
+    const now = performance.now();
+    if (now - pressed.current < 400) return;
+    pressed.current = now;
+    if (what === 'play') actions.current.start();
+    else if (what === 'pause') actions.current.halt();
+    else if (playingRef.current) actions.current.halt();
+    else actions.current.toggle();
+  }, []);
   useEffect(() => {
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
     if (!ms || !active) return;
-    ms.setActionHandler('play', () => actions.current.start());
-    ms.setActionHandler('pause', () => actions.current.halt());
-    ms.setActionHandler('stop', () => actions.current.halt());
+    ms.setActionHandler('play', () => media('play'));
+    ms.setActionHandler('pause', () => media('pause'));
+    ms.setActionHandler('stop', () => media('pause'));
     return () => {
       for (const a of ['play', 'pause', 'stop'] as const) ms.setActionHandler(a, null);
       ms.metadata = null;
       ms.playbackState = 'none';
     };
-  }, [active]);
+  }, [active, media]);
   useEffect(() => {
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
     if (!ms || !active) return;
@@ -513,7 +526,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
   // Leaving the book, the voice's engine goes too, and what it holds.
   useEffect(() => {
-    const leave = () => { stop(); release(); };
+    const leave = () => { stop(); release(); letGoKeys(); };
     if (!active) leave();
     return leave;
   }, [active, stop]);
@@ -522,5 +535,5 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   /** Where it stopped, or null. */
   const where = useCallback(() => last.current, []);
 
-  return { playing, toggle, start, stop: halt, busy, where };
+  return { playing, toggle, start, stop: halt, busy, where, media };
 }

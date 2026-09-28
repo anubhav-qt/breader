@@ -48,6 +48,8 @@ const luminance = (rgb: number[]) => {
 
 const noTime = () => {};
 
+const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
+
 export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove }: Props) {
   const [settings, update] = useReaderSettings();
   const [panel, setPanel] = useState<PanelName | null>(null);
@@ -73,7 +75,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const pacing = usePacing(view, immersive && !closing, loc);
   // Voices readers uploaded, so the one picked last time is known.
   useEffect(() => { if (canNarrate) void refreshVoices(); }, []);
-  const { busy: speaking } = narration;
+  const { busy: speaking, media } = narration;
   const { busy: lighting } = pacing;
   const busy = useCallback(() => speaking() || lighting(), [speaking, lighting]);
   useReadingClock(!closing, onReadTime, busy);
@@ -220,6 +222,9 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       if (a instanceof HTMLElement && a === clicked) a.blur();
     };
     const onKey = (e: KeyboardEvent) => {
+      // A keyboard's media keys, where the browser passes them on: play and pause the voice.
+      const key = MEDIA_KEYS[e.key];
+      if (key) { if (canNarrate) media(key); e.preventDefault(); return; }
       if (e.key === 'Escape') { if (panel) openPanel(null); else if (choosing) setChoosing(false); else onBack(); return; }
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
@@ -234,7 +239,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [panel, choosing, settings, book.kind, onBack, openPanel, closing]);
+  }, [panel, choosing, settings, book.kind, onBack, openPanel, closing, media]);
 
   // Thin marks in a book colour close to the page (graphite on Night, sand on Day) lean toward the ink.
   const theme: ThemeName = settings.theme;

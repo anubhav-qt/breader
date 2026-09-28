@@ -260,11 +260,46 @@ let silence: string | null = null;
 export function unlock() {
   const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
   if (session) session.type = 'playback';
+  hold(true);
   const a = audio();
   if (!a.paused) return;
   silence ??= URL.createObjectURL(wav(new Float32Array(2400), 24_000));
   a.src = silence;
   void a.play().catch(() => {});
+}
+
+/*
+ * Chrome and Firefox give the media keys, a headset's button and their own media controls only to
+ * a page playing something longer than a few seconds (five, in Chrome), and many sentences are
+ * shorter. So while it reads, a second element loops a few seconds of silence to keep hold of them.
+ * Safari gives them to the voice as it is, and an iPhone might let the silence cut the voice off,
+ * so it's left out there (every browser on an iPhone is Safari underneath).
+ */
+const safari = typeof navigator !== 'undefined' && (
+  'audioSession' in navigator || /iP(hone|ad|od)/.test(navigator.userAgent) || (/Safari\//.test(navigator.userAgent) && !/Chrome|Chromium|Edg|OPR|Firefox/.test(navigator.userAgent))
+);
+let carrier: HTMLAudioElement | null = null;
+let quiet: string | null = null;
+
+/** Keeps hold of the media keys while it reads (true), or lets the silence rest, still holding them, while paused. */
+export function hold(on: boolean) {
+  if (safari) return;
+  if (!on) { carrier?.pause(); return; }
+  if (!carrier) {
+    quiet ??= URL.createObjectURL(wav(new Float32Array(8000 * 6), 8000));
+    carrier = new Audio(quiet);
+    carrier.loop = true;
+  }
+  if (carrier.paused) void carrier.play().catch(() => {});
+}
+
+/** The book closed: the media keys go back to whatever else is playing. */
+export function letGoKeys() {
+  if (!carrier) return;
+  carrier.pause();
+  carrier.removeAttribute('src');
+  carrier.load();
+  carrier = null;
 }
 
 let current: { clip: Clip; a: HTMLAudioElement } | null = null;
