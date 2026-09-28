@@ -12,21 +12,38 @@ const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/'
 /*
  * The runtime also sets aside 4 GB of memory before it loads a model, which phones refuse: iPhones
  * say "Out of memory", and Chrome on Android, 32-bit on many phones, can't find 4 GB in one piece.
- * Normal's voices run in under 512 MB, so the CPU runtime asks for 1 GB, or 512 MB where even that
- * is refused. Immersive's (the WebGPU runtime) is left alone: its model is 326 MB before it starts.
+ * What each engine uses, measured in Chrome with a voice loaded and its longest sentences read:
+ *
+ *   CPU (Normal's voices)        about 300 MB, the same for a 78 MB upload: runs in 320 MB, not 288.
+ *   WebGPU (the heavy voices)    757 MB, all of it while the 326 MB model loads: runs in 768, not 704.
+ *
+ * So each asks for that with room to spare, and where that's refused, for just enough: the CPU
+ * runtime 512 MB, then 384; the WebGPU one 1 GB, then 800 MB. It's room set aside, not memory
+ * taken: either takes only what its voice needs.
  */
 const MEMORY = 'new WebAssembly.Memory({initial:256,maximum:65536,shared:!0})'
-const SMALLER = '(()=>{for(const m of[16384,8192])try{return new WebAssembly.Memory({initial:256,maximum:m,shared:!0})}catch(e){if(m===8192)throw e}})()'
+/** The first of these sizes, in MB, that the browser will set aside. */
+const oneOf = (mb: number[]) => {
+  const pages = mb.map((m) => m * 16)
+  return `(()=>{for(const m of[${pages}])try{return new WebAssembly.Memory({initial:256,maximum:m,shared:!0})}catch(e){if(m===${pages[pages.length - 1]})throw e}})()`
+}
+const SIZED: Array<[RegExp, string]> = [
+  [/[\\/]ort\.wasm\.bundle[\w.]*mjs$/, oneOf([512, 384])],
+  [/[\\/]ort\.webgpu\.bundle[\w.]*mjs$/, oneOf([1024, 800])],
+]
 
 const ortWasm = (): Plugin => ({
   name: 'breader-ort-wasm',
   enforce: 'pre',
   transform(code, id) {
-    if (!/onnxruntime-web[\\/]dist[\\/]ort\.[\w.]*mjs$/.test(id)) return null
+    // The dev server adds ?v=… to it; a build doesn't.
+    const file = id.split('?')[0]
+    if (!/onnxruntime-web[\\/]dist[\\/]ort\.[\w.]*mjs$/.test(file)) return null
     const out = code.replace(/new URL\("(ort-wasm[\w.-]*)",\s*import\.meta\.url\)/g, `new URL("${ORT}$1")`)
-    if (!/[\\/]ort\.wasm\.bundle[\w.]*mjs$/.test(id)) return out
+    const sized = SIZED.find(([re]) => re.test(file))
+    if (!sized) return out
     if (!out.includes(MEMORY)) this.error('ONNX Runtime sets aside its memory differently now: update MEMORY in vite.config.ts.')
-    return out.replace(MEMORY, SMALLER)
+    return out.replace(MEMORY, sized[1])
   },
 })
 
