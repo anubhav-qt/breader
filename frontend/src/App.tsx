@@ -264,6 +264,8 @@ export default function App() {
     const entry = recordById.get(book.id);
     const rec = entry?.source === 'shelf' ? await lib.startShelfBook(entry) : entry;
     if (!rec) return;
+    // One taken out of My books comes back in once it's being read again.
+    if (rec.sharedOnly) lib.setSharedOnly(rec.id, false);
     setOpening({ id: rec.id, rect });
     void startLoad(rec.id, rec).then((b) => {
       if (!b) setOpening(null);
@@ -345,12 +347,21 @@ export default function App() {
   /** Removes a book, first asking about the other place when it's in both the reader's books and the Shared Library. */
   const askRemove = useCallback((id: string, fromKeyboard = false, then?: () => void) => {
     const rec = lib.records.find((r) => r.id === id);
+    const title = (rec && lib.edits[id]?.title?.trim()) || rec?.title || '';
     if (rec && canShare(rec) && rec.shared && !rec.sharedOnly) {
-      setAsking({ id, title: lib.edits[id]?.title?.trim() || rec.title, from: tab, fromKeyboard, then });
+      setAsking({ id, title, from: tab, fromKeyboard, then });
+      return;
+    }
+    // Someone else's shared book, started here: out of My books, it stays on the Shared Library with
+    // the reader's place in it, for when they come back to it.
+    if (rec?.origin && !rec.sharedOnly && tab === 'mine' && shelf.books.some((b) => b.id === rec.origin)) {
+      lib.setSharedOnly(id, true);
+      say(`Took “${title}” out of your books. It stays on the Shared Library, and so does your place in it.`, { action: { label: 'Undo', run: () => lib.setSharedOnly(id, false) }, focus: fromKeyboard });
+      then?.();
       return;
     }
     void removeBook(id, fromKeyboard).then(then);
-  }, [lib, tab, removeBook]);
+  }, [lib, tab, shelf.books, removeBook, say]);
 
   const chooseRemove = useCallback((both: boolean) => {
     if (!asking) return;
