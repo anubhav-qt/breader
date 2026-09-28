@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
@@ -6,7 +6,7 @@ import { chapterAtFraction, chapterName, type Chapter } from '../chapters';
 import { canFullscreen, useFullscreen } from '../fullscreen';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { level, useLoadState } from '../voice/speaker';
-import { FOCUS, GROW, PAUSE, PLAY, SHRINK } from './icons';
+import { FOCUS, GROW, PAUSE, PLAY, SHRINK, VOICES } from './icons';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { SayAs } from './SayAs';
 import { VoiceSheet } from './VoiceSheet';
@@ -28,26 +28,9 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   const label = chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
   const toggle = (k: PanelName) => openPanel(panel === k ? null : k);
 
-  // Play reads aloud; held down (or right-clicked) it opens the voice sheet instead.
+  // Play reads aloud and pauses; the button beside it opens the voices and modes.
   const load = useLoadState();
   const loading = !!narration?.playing && load.key !== null;
-  const hold = useRef(0);
-  const held = useRef(false);
-  const press = (e: PointerEvent) => {
-    if (e.button !== 0) return;
-    held.current = false;
-    window.clearTimeout(hold.current);
-    hold.current = window.setTimeout(() => {
-      held.current = true;
-      navigator.vibrate?.(8);
-      openPanel('voice');
-    }, 450);
-  };
-  const letGo = () => window.clearTimeout(hold.current);
-  const tapPlay = () => {
-    if (held.current) { held.current = false; return; }
-    narration?.toggle();
-  };
 
   // Listening, the dot for where you are becomes a level meter: up to seven dots tall, like a Doto
   // letter, with its neighbours a step behind.
@@ -81,21 +64,27 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         </button>
         <div className="i3-ends">
           {narration && (
-            <button
-              type="button"
-              className={`i3-side i3-listen${narration.playing ? ' is-playing' : ''}${panel === 'voice' ? ' is-open' : ''}`}
-              onClick={tapPlay}
-              onPointerDown={press}
-              onPointerUp={letGo}
-              onPointerLeave={letGo}
-              onPointerCancel={letGo}
-              onContextMenu={(e) => { e.preventDefault(); letGo(); openPanel('voice'); }}
-              aria-label={narration.playing ? 'Stop reading aloud' : 'Read aloud. Hold for voices'}
-              aria-pressed={narration.playing}
-              aria-haspopup="dialog"
-            >
-              <DotIcon rows={narration.playing && !loading ? PAUSE : PLAY} lit={loading ? load.loaded / Math.max(1, load.total) : undefined} />
-            </button>
+            <>
+              <button
+                type="button"
+                className={`i3-side i3-listen${narration.playing ? ' is-playing' : ''}`}
+                onClick={narration.toggle}
+                aria-label={narration.playing ? 'Pause reading aloud' : 'Read aloud'}
+                aria-pressed={narration.playing}
+              >
+                <DotIcon rows={narration.playing && !loading ? PAUSE : PLAY} lit={loading ? load.loaded / Math.max(1, load.total) : undefined} />
+              </button>
+              <button
+                type="button"
+                className={`i3-side i3-icon i3-voices${panel === 'voice' ? ' is-open' : ''}`}
+                onClick={() => toggle('voice')}
+                aria-label="Voices and modes"
+                aria-expanded={panel === 'voice'}
+                aria-haspopup="dialog"
+              >
+                <DotIcon rows={VOICES} />
+              </button>
+            </>
           )}
           <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'}>Aa</button>
           <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on}>

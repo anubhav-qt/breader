@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { Loc, ViewHandle } from './FlowView';
 import { checkGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
-import { askFirst, setVoicePrefs, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import { askFirst, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import { respell, type Swap } from './voice/sayas';
 import { failed, missing, play, prepare, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
 
@@ -148,9 +148,8 @@ const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && s.blo
 
 /**
  * Reads the book on screen aloud. `loc` is the reader's place, so a page turned or a chapter picked
- * by hand while it reads moves the voice there too. `openSheet` shows the voice sheet: for a first
- * go at Immersive, a download to agree to, or something gone wrong. `about` names the book for the
- * lock screen.
+ * by hand while it reads moves the voice there too. `openSheet` shows the voice sheet: for a
+ * download to agree to, or something gone wrong. `about` names the book for the lock screen.
  */
 export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }) {
   const [playing, setPlaying] = useState(false);
@@ -403,7 +402,6 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (!canNarrate || !listen() || playingRef.current) return;
     unlock();
     retry();
-    if (voicePrefs().introduce) setVoicePrefs({ introduce: false });
     const gen = ++run.current;
     player.current?.stop();
     setPlaying(true);
@@ -421,11 +419,6 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const toggle = () => {
     if (playing) { halt(); return; }
     const p = voicePrefs();
-    if (p.mode === 'immersive' && p.introduce) {
-      setVoicePrefs({ introduce: false });
-      openSheet();
-      return;
-    }
     // Sound can only start in the tap itself.
     unlock();
     void (async () => {

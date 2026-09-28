@@ -11,7 +11,7 @@ import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
 import { DotIcon } from './parts';
 
 /*
- * The voice sheet, under the play button (a long press, or a right click): Normal or Immersive,
+ * The voice sheet, from the button beside play: Normal or Immersive,
  * the voice, and the speed. Each voice has a line to hear before anything downloads.
  */
 
@@ -56,8 +56,7 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   }, [current, load.key]);
 
   const pick = (key: string) => setVoicePrefs({ voice: { ...prefs.voice, [voices]: key } });
-  // Switching to Immersive while nothing reads: the next tap on play comes here first.
-  const setMode = (m: Mode) => setVoicePrefs({ mode: m, introduce: m === 'immersive' && !playing });
+  const setMode = (m: Mode) => setVoicePrefs({ mode: m });
 
   const hear = async (v: VoiceInfo) => {
     if (hearing === v.key) { stopSample(); setHearing(null); return; }

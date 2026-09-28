@@ -13,15 +13,13 @@ export interface VoicePrefs {
   /** The voice picked for each mode (catalog.ts keys). */
   voice: Record<Mode, string>;
   rate: number;
-  /** Just switched to Immersive: the next tap on play opens the voice sheet instead of reading. */
-  introduce: boolean;
 }
 
 const KEY = 'breader.voice.v2';
 export const RATES = [0.8, 1, 1.25, 1.5, 2];
 
 const stored = readLocal<Partial<VoicePrefs>>(KEY, {});
-let prefs: VoicePrefs = { mode: 'normal', rate: 1, introduce: false, ...stored, voice: { ...DEFAULT_VOICE, ...stored.voice } };
+let prefs: VoicePrefs = { mode: stored.mode ?? 'normal', rate: stored.rate ?? 1, voice: { ...DEFAULT_VOICE, ...stored.voice } };
 const subs = new Set<() => void>();
 
 export function setVoicePrefs(patch: Partial<VoicePrefs>) {
