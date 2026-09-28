@@ -444,6 +444,19 @@ export default function App() {
     say('Opened the library for that key');
   }, [say]);
 
+  /*
+   * Logged in, with no library in this browser: a phone's home-screen app, which starts with the
+   * login Safari had and none of its storage, or a browser that cleared its storage. It opens the
+   * account's library quietly, as logging in would have; offline, it tries again next time.
+   */
+  const rejoined = useRef(false);
+  const { ready: libReady, key: libKey, joinAccount } = lib;
+  useEffect(() => {
+    if (rejoined.current || account.status !== 'in' || !libReady || libKey || login) return;
+    rejoined.current = true;
+    void joinAccount().then((res) => { if (res.outcome === 'choose') setLogin({ mode: 'entering' }); }, () => {});
+  }, [account.status, libReady, libKey, joinAccount, login]);
+
   const loggedIn = account.status === 'in';
   const onLoggedIn = useCallback((res: AccountResponse) => {
     setLogin(null);

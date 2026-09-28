@@ -645,8 +645,10 @@ export async function enterAccount(claim?: boolean): Promise<AccountResponse> {
     if (!(await saved())) throw new Error('Breader couldn’t save the books in this browser first. Try again when you’re online.');
     const key = host!.snapshot().key;
     const res = await api.post<AccountResponse>('/v1/session/account', { key: key ?? undefined, claim }, 30_000);
-    // Adopted and same: this browser already holds the account's library.
-    if (res.outcome === 'choose' || res.outcome === 'adopted' || res.outcome === 'same') return { res };
+    // Adopted and same: this browser already holds the account's library. Unless its session is all
+    // it has: a phone's home-screen app starts with the login Safari had, and none of its storage.
+    const held = res.outcome === 'same' && (await read()).libraryId === res.library?.id;
+    if (res.outcome === 'choose' || res.outcome === 'adopted' || held) return { res };
     return { res, pull: await swapLocked(res.library!.id, res.key ?? null) };
   });
   if (out.pull) opened(out.pull);
