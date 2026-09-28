@@ -87,13 +87,16 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
       anchor.focus({ preventScroll: true });
       onClose();
     };
-    // Only a scroll that moves the book it points at: a field following its cursor, or the series
-    // list, scrolls too.
+    // Only the library scrolling under it: a field following its cursor, or the series list, scrolls
+    // too, and so does the page when a phone makes room for the keyboard (the library scrolls in its
+    // own panel, never the page).
     const onScroll = (e: Event) => {
       const t = e.target;
-      if (t === document || (t instanceof Node && t.contains(anchor))) onClose();
+      if (t instanceof Element && t.contains(anchor)) onClose();
     };
-    const onResize = () => onClose();
+    // A window turned or made narrower; a phone's keyboard only takes some of its height.
+    const width = window.innerWidth;
+    const onResize = () => { if (window.innerWidth !== width) onClose(); };
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onResize);
