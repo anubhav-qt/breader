@@ -54,6 +54,30 @@ describe('sync', () => {
     expect((await b.get('/v1/sync/pull?since=0')).body.reads[0].read.progress).toBe(0.95);
   });
 
+  it('only moves the read mark forward, or on to a new reading', async () => {
+    const { b } = await registered();
+    const a = book();
+    const mark = (progress: number, n?: number) => ({ pos: { section: Math.floor(progress * 10), block: 0, offset: 0 }, progress, line: `At ${progress}`, ...(n ? { n } : {}) });
+    const read = (id: string, progress: number, m: ReturnType<typeof mark>, lastOpened = Date.now()) =>
+      push(id, { type: 'read.put', bookId: a.id, read: { progress, line: '', lastOpened, mark: m } });
+    const pulled = async () => (await b.get('/v1/sync/pull?since=0')).body.reads[0].read;
+
+    await b.post('/v1/sync/push', push('m0', { type: 'book.put', book: a }));
+    await b.post('/v1/sync/push', read('m1', 0.3, mark(0.3)));
+    // A jump ahead to look: the place moves, the mark stays.
+    await b.post('/v1/sync/push', read('m2', 0.9, mark(0.3)));
+    expect(await pulled()).toMatchObject({ progress: 0.9, mark: mark(0.3) });
+    // Another device, newer, whose mark is behind: its place wins, the mark doesn't go back.
+    await b.post('/v1/sync/push', read('m3', 0.2, mark(0.2), Date.now() + 1));
+    expect(await pulled()).toMatchObject({ progress: 0.2, mark: mark(0.3) });
+    // An older session further in still carries the mark on.
+    await b.post('/v1/sync/push', read('m4', 0.4, mark(0.4), Date.now() - 60_000));
+    expect(await pulled()).toMatchObject({ progress: 0.2, mark: mark(0.4) });
+    // Read again from the start: the new reading wins though it's not as far in.
+    await b.post('/v1/sync/push', read('m5', 0.05, mark(0.05, 1), Date.now() + 2));
+    expect((await pulled()).mark).toEqual(mark(0.05, 1));
+  });
+
   it('merges card edits field by field', async () => {
     const { b } = await registered();
     const a = book();

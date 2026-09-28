@@ -64,6 +64,19 @@ export const Edit = z.object({
 });
 export type Edit = z.infer<typeof Edit>;
 
+/**
+ * How far the reader has really read, as against where the book is open: a jump ahead to look
+ * doesn't move it, reading on does. It only goes forward, on every device, until the book is read
+ * again from the start (n counts the readings).
+ */
+export const ReadMark = z.object({
+  pos: Position,
+  progress: z.number().min(0).max(1),
+  line: z.string().max(1000),
+  n: z.number().int().nonnegative().optional(),
+});
+export type ReadMark = z.infer<typeof ReadMark>;
+
 export const ReadState = z.object({
   pos: Position.optional(),
   progress: z.number().min(0).max(1),
@@ -72,6 +85,7 @@ export const ReadState = z.object({
   words: z.number().int().nonnegative().optional(),
   /** Words read in it so far, on every device: it only grows. */
   wordsRead: z.number().int().nonnegative().optional(),
+  mark: ReadMark.optional(),
 });
 export type ReadState = z.infer<typeof ReadState>;
 

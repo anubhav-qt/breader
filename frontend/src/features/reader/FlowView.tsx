@@ -24,6 +24,8 @@ export interface Loc {
   line: string;
   page: number;
   pages: number;
+  /** About how many words fit on the screen here. */
+  screen: number;
 }
 
 /** Where to open: an exact position, or a fraction of the book plus the saved sentence to look for. */
@@ -222,10 +224,11 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     const into = (blockWords.current[block] ?? 0) + countWords(text.slice(0, offset));
     const secWords = Math.max(book.sections[section]?.words ?? 0, into);
     const done = starts[section] + into;
+    const v = viewRef.current!;
     let atEnd = false;
     if (section === n - 1) {
       if (pagesMode) atEnd = pageRef.current >= pagesRef.current - 1;
-      else { const v = viewRef.current!; atEnd = v.scrollTop + v.clientHeight >= v.scrollHeight - 4; }
+      else atEnd = v.scrollTop + v.clientHeight >= v.scrollHeight - 4;
     }
     onLocationRef.current({
       section,
@@ -237,6 +240,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       line: lineAt(block, offset),
       page: pageRef.current,
       pages: pagesRef.current,
+      screen: pagesMode ? secWords / pagesRef.current : (secWords * v.clientHeight) / Math.max(1, v.scrollHeight),
     });
   };
 

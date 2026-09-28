@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
 import type { BookRecord, LoadedBook, ReadState, TocItem } from '../../books/types';
+import { markTracker } from '../../books/mark';
 import { paintBars } from '../../lib/bars';
 import { chapterAt, chaptersOf } from './chapters';
 import { InstrumentChrome } from './chrome/Instrument';
@@ -268,13 +269,20 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   // Words read: each page turned or scrolled forward counts; jumps through the contents don't.
   const wordsRead = useRef(initial?.wordsRead ?? 0);
   const lastAt = useRef<number | null>(null);
+  // The mark: how far the reader has really read, wherever the book is open (mark.ts). A place saved
+  // before there were marks is taken as one.
+  const [marker] = useState(() =>
+    markTracker(initial?.mark ?? (initial ? { pos: initial.pos ?? { section: 0, block: 0, offset: 0 }, progress: initial.progress, line: initial.line } : undefined), book.words),
+  );
   const onLocation = useCallback((l: Loc) => {
     setLoc(l);
     const moved = lastAt.current === null ? 0 : (l.progress - lastAt.current) * book.words;
     lastAt.current = l.progress;
     if (moved > 0 && moved <= 1500) wordsRead.current += Math.round(moved);
-    onSave({ pos: { section: l.section, block: l.block, offset: l.offset }, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current });
-  }, [onSave, book.words]);
+    const pos = { section: l.section, block: l.block, offset: l.offset };
+    const mark = marker.step({ pos, progress: l.progress, line: l.line, screen: l.screen });
+    onSave({ pos, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current, mark });
+  }, [onSave, book.words, marker]);
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
   const paged = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'pages';

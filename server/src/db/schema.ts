@@ -176,6 +176,8 @@ export const readingStates = pgTable(
     words: integer('words'),
     /** Words read so far on every device; only grows. Copies of shared books kept past KEEP_WORDS. */
     wordsRead: integer('words_read').notNull().default(0),
+    /** How far the reader has really read ({pos, progress, line, n}); only goes forward, whichever session is newer. */
+    mark: jsonb('mark'),
     readAt: at('read_at').notNull(),
     rev: big('rev').notNull(),
     version: version(),

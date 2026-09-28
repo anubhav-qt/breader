@@ -212,7 +212,14 @@ export function editFromWire(e: SyncedBook['edit']): BookEdit | null {
   return Object.keys(out).length ? out : null;
 }
 
-const readToWire = (r: ReadState): ReadState => ({ ...r, line: clip(r.line ?? '', 1000), progress: Math.min(1, Math.max(0, r.progress)), lastOpened: Math.round(r.lastOpened) });
+const unit = (n: number) => Math.min(1, Math.max(0, n));
+const readToWire = (r: ReadState): ReadState => ({
+  ...r,
+  line: clip(r.line ?? '', 1000),
+  progress: unit(r.progress),
+  lastOpened: Math.round(r.lastOpened),
+  ...(r.mark ? { mark: { ...r.mark, line: clip(r.mark.line ?? '', 1000), progress: unit(r.mark.progress) } } : {}),
+});
 
 /* ---- Recording changes ---- */
 

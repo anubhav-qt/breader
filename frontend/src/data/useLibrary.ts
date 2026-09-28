@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { Edit, Mutation, NewMutation, PullResponse } from '@breader/shared/protocol';
 import { forget } from '../books/load';
+import { laterMark } from '../books/mark';
 import { report } from '../lib/report';
 import { store } from '../lib/store';
 import { onNews, tell, withData } from '../lib/tabs';
@@ -248,12 +249,15 @@ function mergePull(d: LibraryData, pull: PullResponse, pending: Mutation[]): { n
       if (r.source !== 'placeholder' && !listed.has(r.id) && !adding.has(r.id)) drop(i);
     }
   }
-  // The most recent reading session wins. This browser's unsent place is always newer.
+  // The most recent reading session wins. This browser's unsent place is always newer. Words read
+  // and the mark only go forward, whichever it is.
   for (const { bookId, read } of pull.reads) {
     const local = reads[bookId];
     const wordsRead = Math.max(local?.wordsRead ?? 0, read.wordsRead ?? 0);
-    if (!local || local.lastOpened < read.lastOpened) reads[bookId] = { ...read, wordsRead };
-    else if (wordsRead > (local.wordsRead ?? 0)) reads[bookId] = { ...local, wordsRead };
+    const mark = laterMark(local?.mark, read.mark);
+    const kept = { wordsRead, ...(mark ? { mark } : {}) };
+    if (!local || local.lastOpened < read.lastOpened) reads[bookId] = { ...read, ...kept };
+    else if (wordsRead > (local.wordsRead ?? 0) || mark !== local.mark) reads[bookId] = { ...local, ...kept };
   }
   return { next: { ...d, records, edits, reads }, gone };
 }
@@ -563,8 +567,9 @@ export function withReading(
     favorite: !!e.favorite,
     opened: !!r,
     coverUrl: covers[rec.id],
-    progress: r && rec.source !== 'placeholder' ? r.progress : rec.progress,
-    line: r && rec.source !== 'placeholder' && r.line && !UNTITLED.test(r.line) ? r.line : rec.line,
+    // How far it's really read, not a page jumped ahead to (books/mark.ts).
+    progress: r && rec.source !== 'placeholder' ? (r.mark ?? r).progress : rec.progress,
+    line: r && rec.source !== 'placeholder' && (r.mark ?? r).line && !UNTITLED.test((r.mark ?? r).line) ? (r.mark ?? r).line : rec.line,
     lastOpened: r ? r.lastOpened : rec.lastOpened,
     words: r?.words ?? rec.words,
   };

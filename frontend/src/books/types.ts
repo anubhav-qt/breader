@@ -100,4 +100,14 @@ export interface ReadState {
   words?: number;
   /** Words read so far: pages turned forward, not jumps. Only grows. */
   wordsRead?: number;
+  /** How far the reader has really read, whatever page the book is open at (reader/mark.ts). */
+  mark?: ReadMark;
+}
+
+/** The furthest place read on purpose. n counts the times the book has been read again. */
+export interface ReadMark {
+  pos: Position;
+  progress: number;
+  line: string;
+  n?: number;
 }

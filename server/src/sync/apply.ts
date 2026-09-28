@@ -161,6 +161,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           line: m.read.line,
           words: m.read.words ?? null,
           wordsRead: m.read.wordsRead ?? 0,
+          mark: m.read.mark ?? null,
           readAt,
           rev,
         })
@@ -182,6 +183,20 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           .update(readingStates)
           .set({ wordsRead: m.read.wordsRead, rev })
           .where(and(eq(readingStates.libraryId, libraryId), eq(readingStates.bookId, m.bookId), sql`${readingStates.wordsRead} < ${m.read.wordsRead}`));
+      }
+      // So does the mark: a later reading of the book, or further into this one.
+      if (m.read.mark) {
+        const { n = 0, progress } = m.read.mark;
+        await tx
+          .update(readingStates)
+          .set({ mark: m.read.mark, rev })
+          .where(
+            and(
+              eq(readingStates.libraryId, libraryId),
+              eq(readingStates.bookId, m.bookId),
+              sql`(${readingStates.mark} is null or (coalesce((${readingStates.mark}->>'n')::int, 0), (${readingStates.mark}->>'progress')::float8) < (${n}::int, ${progress}::float8))`,
+            ),
+          );
       }
       return;
     }

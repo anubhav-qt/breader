@@ -1,0 +1,1 @@
+ALTER TABLE "reading_states" ADD COLUMN "mark" jsonb;

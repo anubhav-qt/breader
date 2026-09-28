@@ -104,6 +104,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
       line: `Page ${page + 1} of ${total}`,
       page,
       pages: total,
+      screen: WORDS_PER_PDF_PAGE,
     });
   }, [page, total]);
 

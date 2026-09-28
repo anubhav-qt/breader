@@ -1,7 +1,7 @@
 import { and, eq, gt } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { PushRequest, type PullResponse, type PushResponse } from '@breader/shared';
+import { PushRequest, type PullResponse, type PushResponse, type ReadMark } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { libraries, libraryItems, librarySettings, readingStates, syncClients, syncMeta } from '../db/schema.ts';
 import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
@@ -128,6 +128,7 @@ export function syncRoutes(deps: Deps) {
               lastOpened: s.readAt.getTime(),
               ...(s.words !== null ? { words: s.words } : {}),
               ...(s.wordsRead ? { wordsRead: s.wordsRead } : {}),
+              ...(s.mark ? { mark: s.mark as ReadMark } : {}),
             },
           })),
           settings: (settings?.prefs as Record<string, unknown> | undefined) ?? null,
