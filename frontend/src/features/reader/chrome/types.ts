@@ -2,10 +2,11 @@ import type { RefObject } from 'react';
 import type { LoadedBook, TocItem } from '../../../books/types';
 import type { Chapter } from '../chapters';
 import type { Loc } from '../FlowView';
-import type { Paragraph } from '../narration';
+import type { Paragraph, Sentence } from '../narration';
+import type { Asleep } from '../sleep';
 import type { ReaderSettings } from '../settings';
 
-export type PanelName = 'toc' | 'look' | 'voice' | 'paras';
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
@@ -55,6 +56,8 @@ export interface ChromeProps {
   } | null;
   /** Focus mode: everything but the text hides until the mouse moves or a tap mid-page. */
   focus: { on: boolean; toggle: () => void };
+  /** Did you sleep? What's being asked, going back to a checkpoint, and carrying on (sleep.ts). */
+  sleep: { asked: Asleep; back: (s: Sentence) => void; awake: () => void } | null;
 }
 
 export const toItem = (c: Chapter): TocItem => ({ title: c.title, section: c.section, anchor: c.anchor, level: 0 });

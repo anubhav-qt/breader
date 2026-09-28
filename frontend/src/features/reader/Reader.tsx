@@ -14,6 +14,7 @@ import { refreshVoices } from './voice/list';
 import { useVoicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
 import { useReaderSettings, type ThemeName } from './settings';
+import { useSleepWatch } from './sleep';
 import { useReadingClock } from './useReadingClock';
 import './reader.css';
 import './instrument.css';
@@ -67,7 +68,19 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (p) setLastPanel(p);
   }, []);
 
-  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author });
+  // Did you sleep? Checkpoints while the voice reads untouched, asked about on the way back (sleep.ts).
+  const saying = useRef<() => Sentence | null>(() => null);
+  const slept = useSleepWatch(record.id, !closing, () => saying.current());
+  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch);
+  saying.current = narration.current;
+  const { asked, done: sleptDone } = slept;
+  useEffect(() => { if (asked) openPanel('sleep'); }, [asked, openPanel]);
+  // Closed, it's been answered.
+  const wasAsking = useRef(false);
+  useEffect(() => {
+    if (wasAsking.current && panel !== 'sleep') sleptDone();
+    wasAsking.current = panel === 'sleep';
+  }, [panel, sleptDone]);
   // Immersive: the page dims, and its words light up from a tap at the reader's pace, until play
   // adds a voice (pacing.ts). Only where there are words to light, not on a PDF's drawn pages.
   const voice = useVoicePrefs();
@@ -123,10 +136,18 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     setChoosing(false);
     if (l.onScreen(s, 0)) { pacing.begin(s); return; }
     l.reach(s, 0);
-    void (async () => {
-      for (let waited = 0; !view.current?.listen.onScreen(s, 0) && waited < 1000; waited += 50) await new Promise((r) => window.setTimeout(r, 50));
-      pacing.begin(s);
-    })();
+    void shown(s).then(() => pacing.begin(s));
+  };
+  /** Once the page has got to a sentence it was sent to, or a second on. */
+  const shown = async (s: Sentence) => {
+    for (let waited = 0; !view.current?.listen.onScreen(s, 0) && waited < 1000; waited += 50) await new Promise((r) => window.setTimeout(r, 50));
+  };
+  /** Back to a checkpoint: the voice reads on from there, or waits there (lit, in Immersive) for play. */
+  const backTo = (s: Sentence) => {
+    openPanel(null);
+    const reading = narration.playing;
+    narration.jump(s);
+    if (immersive && !reading) void shown(s).then(() => pacing.hold(s));
   };
   /** From the top of the page on screen. */
   const fromTop = () => { void view.current?.listen.from().then((list) => { if (list[0]) lightFrom(list[0]); }); };
@@ -289,6 +310,12 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       pick: (p: Paragraph) => lightFrom(p.s),
     } : null,
     focus: { on: focus, toggle: toggleFocus },
+    sleep: asked ? {
+      asked,
+      back: backTo,
+      // Awake: the voice carries on, from where it stopped if it faded out.
+      awake: () => { openPanel(null); if (asked.stopped && !narration.playing && canNarrate) narration.start(); },
+    } : null,
   };
   const vars = {
     '--book': `var(--bc-${color})`,

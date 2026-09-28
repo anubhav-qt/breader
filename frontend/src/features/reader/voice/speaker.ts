@@ -328,13 +328,15 @@ export interface Playing {
   stop: () => void;
 }
 
-export function play(clip: Clip): Playing {
+/** Plays a sentence's sound. `volume` below 1 is a fade (ignored by iPhones, which keep their own). */
+export function play(clip: Clip, volume = 1): Playing {
   const a = audio();
   const url = URL.createObjectURL(wav(clip.audio, clip.rate));
   const length = clip.audio.length / clip.rate;
   let stopped = false;
   let started = false;
   a.src = url;
+  a.volume = volume;
   current = { clip, a };
   const out: Playing = { done: null!, refusal: null, time: () => Math.min(1, a.currentTime / length), stop: () => {} };
   out.done = new Promise((resolve) => {

@@ -317,6 +317,17 @@
   color: var(--book-mark);
 }
 .rd .fv-flow [data-para]::first-letter { -webkit-initial-letter: normal; initial-letter: normal; font-weight: inherit; margin-right: 0; }
+/* Did you sleep? (sleep.ts): the last touch and the checkpoints, each a time, its chapter and the
+   sentence it had got to. */
+.i3-drop.is-sleep { left: max(12px, calc(50% - 180px)); width: min(360px, calc(100% - 24px)); }
+.sl-about { margin: -6px 0 14px; }
+.rd .sl-item { flex-direction: column; align-items: stretch; gap: 7px; padding: 10px; }
+.rd .sl-item::before { display: none; }
+.sl-when { display: flex; align-items: baseline; gap: 10px; min-width: 0; font: var(--ui-w) 11.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); white-space: nowrap; }
+.sl-when b { flex: none; font-weight: var(--ui-w-strong); color: var(--r-fg); }
+.sl-ch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sl-when em { flex: none; margin-left: auto; font-style: normal; color: var(--book-mark); }
+
 /* The paragraphs' drop: numbers and first sentences, like the contents' chapters. */
 .i3-drop.is-paras { left: max(12px, calc(50% - 180px)); width: min(360px, calc(100% - 24px)); }
 /* The field stays in reach above the list as it scrolls. */

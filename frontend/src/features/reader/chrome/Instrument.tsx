@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from 'motion/react';
-import { minutesFor } from '../../../lib/format';
+import { duration, minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, pad2, type Chapter } from '../chapters';
 import { canFullscreen, useFullscreen } from '../fullscreen';
@@ -8,7 +8,8 @@ import { paceLevel } from '../pacing';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
 import { level, useLoadState } from '../voice/speaker';
-import type { Paragraph } from '../narration';
+import type { Paragraph, Sentence } from '../narration';
+import type { Asleep } from '../sleep';
 import { CHECK, CROSS, FOCUS, GROW, MINUS, PAUSE, PLAY, PLUS, SHRINK, VOICES } from './icons';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { SayAs } from './SayAs';
@@ -24,7 +25,7 @@ const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, sleep }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
@@ -185,6 +186,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
                 <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
               ) : panel === 'voice' && (narration || immersion) ? (
                 <VoiceSheet playing={!!narration?.playing} onStart={narration?.start} onStop={narration?.stop} canPace={!!immersion} />
+              ) : panel === 'sleep' && sleep ? (
+                <SleepPanel asked={sleep.asked} chapters={chapters} playing={!!narration?.playing} onBack={sleep.back} onAwake={sleep.awake} />
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
@@ -206,6 +209,45 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
 function Drop(props: HTMLMotionProps<'div'>) {
   const present = useIsPresent();
   return <motion.div {...props} style={present ? props.style : { ...props.style, pointerEvents: 'none' }} />;
+}
+
+/** Did you sleep? The last touch and the checkpoints since, each a place to go back to (sleep.ts). */
+function SleepPanel({ asked, chapters, playing, onBack, onAwake }: { asked: Asleep; chapters: Chapter[]; playing: boolean; onBack: (s: Sentence) => void; onAwake: () => void }) {
+  const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const chapterOf = (s: Sentence) => chapterName(chapters, chapters.reduce((at, c, i) => (c.section <= s.section ? i : at), 0));
+  const end = asked.stopped?.at ?? asked.points[asked.points.length - 1]?.at ?? asked.touch;
+  const rows = [
+    ...(asked.touched ? [{ at: asked.touch, s: asked.touched, note: 'Last touch' }] : []),
+    ...asked.points.map((p) => ({ ...p, note: '' })),
+    ...(asked.stopped ? [{ ...asked.stopped, note: 'Faded out' }] : []),
+  ];
+  return (
+    <div className="pnl">
+      <div className="pnl-h">Did you sleep?</div>
+      <p className="p-note sl-about">
+        Nothing was touched for {duration((end - asked.touch) / 60_000)}
+        {asked.stopped ? `, and the voice faded out at ${clock(asked.stopped.at)}` : ''}. Go back to where you last heard it.
+      </p>
+      <div className="p-list">
+        {rows.map((r, i) => (
+          <button key={`${r.at}.${i}`} type="button" className={`p-item sl-item${r.note === 'Last touch' ? ' is-now' : ''}`} onClick={() => onBack(r.s)}>
+            <span className="sl-when">
+              <b>{clock(r.at)}</b>
+              <span className="sl-ch">{chapterOf(r.s)}</span>
+              {r.note && <em>{r.note}</em>}
+            </span>
+            <span className="p-item-t">{r.s.text.trim()}</span>
+          </button>
+        ))}
+      </div>
+      <div className="vs-foot">
+        <button type="button" className="vs-go" onClick={onAwake}>
+          {!playing && asked.stopped && <DotIcon rows={PLAY} />}
+          <span>Awake, carry on</span>
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**

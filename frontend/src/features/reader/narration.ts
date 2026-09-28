@@ -3,6 +3,7 @@ import type { Loc, ViewHandle } from './FlowView';
 import { checkGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { failed, hold, letGoKeys, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
 
@@ -160,8 +161,9 @@ const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && s.blo
  * Reads the book on screen aloud. `loc` is the reader's place, so a page turned or a chapter picked
  * by hand while it reads moves the voice there too. `openSheet` shows the voice sheet: for a
  * download to agree to, or something gone wrong. `about` names the book for the lock screen.
+ * `sleep` watches for a reader who fell asleep to it (sleep.ts).
  */
-export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }) {
+export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }, sleep?: RefObject<SleepWatch>) {
   const [playing, setPlaying] = useState(false);
   const playingRef = useRef(playing);
   playingRef.current = playing;
@@ -174,7 +176,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const jumped = useRef(false);
   const player = useRef<Playing | null>(null);
   /** Stops the sentence being said or waited for, so the loop looks again. */
-  const cut = useRef<((why: 'moved' | 'prefs') => void) | null>(null);
+  const cut = useRef<((why: 'moved' | 'prefs' | 'jump') => void) | null>(null);
   /**
    * The page is behind the voice: it read on while the page was hidden (another tab, a locked
    * phone), or into the next chapter. The page catches up the next time it's seen.
@@ -316,7 +318,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (s.section !== l.at()) behind.current = true;
       ahead();
 
-      let why: 'moved' | 'prefs' | null = null;
+      let why: 'moved' | 'prefs' | 'jump' | null = null;
       const interrupted = new Promise<null>((resolve) => {
         cut.current = (w) => {
           why = w;
@@ -335,8 +337,15 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       let how: Awaited<Playing['done']> | null = null;
       let refusal: string | null = null;
       if (clip) {
+        // An hour nobody touched anything: it fades out over a few sentences, and stops.
+        const volume = sleep?.current.before(s) ?? 1;
+        if (volume <= 0) {
+          last.current = s;
+          stop();
+          return;
+        }
         const marks = wordMarks(s.text, respell(s.text).swaps);
-        const now = play(clip);
+        const now = play(clip, volume);
         player.current = now;
         let shown = -2;
         let catching = false;
@@ -375,6 +384,10 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         if (why === 'moved') {
           // From the top of where the reader went, not again from the sentence before.
           last.current = null;
+          ({ list, i } = await fresh());
+          clips = new Map();
+        } else if (why === 'jump') {
+          // Back to a checkpoint (sleep.ts): from there, and the page follows.
           ({ list, i } = await fresh());
           clips = new Map();
         }
@@ -500,11 +513,12 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     const now = performance.now();
     if (now - pressed.current < 400) return;
     pressed.current = now;
+    sleep?.current.touched();
     if (what === 'play') actions.current.start();
     else if (what === 'pause') actions.current.halt();
     else if (playingRef.current) actions.current.halt();
     else actions.current.toggle();
-  }, []);
+  }, [sleep]);
   useEffect(() => {
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
     if (!ms || !active) return;
@@ -534,6 +548,20 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const busy = useCallback(() => playingRef.current, []);
   /** Where it stopped, or null. */
   const where = useCallback(() => last.current, []);
+  /** The sentence being said, or where it stopped. */
+  const current = useCallback(() => spot.current?.s ?? last.current, []);
 
-  return { playing, toggle, start, stop: halt, busy, where, media };
+  /** Goes back to a sentence: reading on from there if it's reading, or waiting there for play. */
+  const jump = useCallback((s: Sentence) => {
+    last.current = s;
+    jumped.current = true;
+    if (playingRef.current) {
+      behind.current = true;
+      cut.current?.('jump');
+    } else {
+      view.current?.listen.reach(s, 0);
+    }
+  }, [view]);
+
+  return { playing, toggle, start, stop: halt, busy, where, media, current, jump };
 }
