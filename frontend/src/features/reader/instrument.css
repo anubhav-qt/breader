@@ -125,6 +125,8 @@
 /* While it reads aloud the button stays in sight, and the sentence being read turns the book's colour. */
 .i3-head .i3-listen.is-playing { opacity: 1; transform: none; color: var(--book-mark); }
 .rd ::highlight(narrate) { color: var(--book-mark); }
+/* Nothing to see: a change that makes Safari draw a paragraph again when its lit words move (narration.ts). */
+.rd .hl-paint { outline-color: rgba(255, 255, 255, 0); }
 /* The word a tap is asking about (chrome/SayAs.tsx), lit like a selection. */
 .rd ::highlight(say-as) { background-color: color-mix(in srgb, var(--book) 34%, transparent); }
 .i3-mid {

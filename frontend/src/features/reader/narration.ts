@@ -109,8 +109,35 @@ const SAID = 'narrate-said';
 type Highlights = { set: (name: string, h: unknown) => void; delete: (name: string) => void };
 const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
 
+/*
+ * Safari on a phone draws the page in tiles and doesn't draw one again when only a highlight on it
+ * changed: each tile keeps whatever was lit when something else last made it draw, so old words
+ * stay lit and new ones never light. So each change also gives the paragraphs it left and reached a
+ * change Safari has to draw (an outline colour nobody sees, reader.css), once a frame, since two
+ * in one frame would cancel out.
+ */
+let litIn: Element[] = [];
+const toRepaint = new Set<Element>();
+let repaintFrame = 0;
+const holder = (r: Range) => {
+  const n = r.commonAncestorContainer;
+  return n instanceof Element ? n : n.parentElement;
+};
+function repaint(els: Element[]) {
+  for (const el of els) toRepaint.add(el);
+  if (repaintFrame) return;
+  repaintFrame = requestAnimationFrame(() => {
+    repaintFrame = 0;
+    for (const el of toRepaint) el.classList.toggle('hl-paint');
+    toRepaint.clear();
+  });
+}
+
 export function light(range: Range | null, said: Range | null = null) {
   if (!highlights) return;
+  const was = litIn;
+  litIn = range ? [holder(range)].filter((el): el is Element => !!el) : [];
+  repaint([...was, ...litIn]);
   if (!range) { highlights.delete(HIGHLIGHT); highlights.delete(SAID); return; }
   const H = (globalThis as unknown as { Highlight: new (...r: Range[]) => { priority: number } }).Highlight;
   highlights.set(HIGHLIGHT, new H(range));
