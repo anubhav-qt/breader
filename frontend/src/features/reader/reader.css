@@ -219,6 +219,9 @@ label.clbl { display: block; }
 @media (hover: hover) {
   .fv-zone:hover span { opacity: 0.8; transform: none; }
 }
+/* While a voice reads, a tap on a word asks how to say it (chrome/SayAs.tsx): only the margins,
+   where the arrows are, turn the page. */
+.rd.is-aloud .fv .fv-zone { width: max(44px, calc(50% - var(--vw) / 2)); }
 
 /* PDF */
 .pdfv { position: absolute; inset: 0; }

@@ -9,8 +9,8 @@ import { PLAY, STOP } from './icons';
 import { CloseDots, DotIcon } from './parts';
 
 /*
- * Saying a word the reader's way. Select some text while a voice reads: it pauses, and a small
- * card by the selection asks how it should sound. Preview says the new spelling in the voice that
+ * Saying a word the reader's way. Tap a word while a voice reads, or select a few: it pauses, and
+ * a small card by them asks how they should sound. Preview says the new spelling in the voice that
  * was reading; Save keeps it (voice/sayas.ts). Either way the voice carries on from its sentence.
  */
 
@@ -28,19 +28,20 @@ interface Picked {
   bottom: number;
   /** Selected with a mouse: the field takes the keyboard straight away. */
   mouse: boolean;
+  /** A tapped word, lit while the card asks about it (a selection shows itself). */
+  word?: Range;
 }
 
 const ENDS = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
+const LETTER = /[\p{L}\p{N}]/u;
+const IN_WORD = /[\p{L}\p{N}'\u2019-]/u;
 
-/** The selection in the book's text, if it's a word or a few within one paragraph. */
-function picked(area: HTMLElement, mouse: boolean): Picked | null {
-  const sel = document.getSelection();
-  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
-  const range = sel.getRangeAt(0);
+/** Some of the book's text to ask about, if it's a word or a few within one paragraph. */
+function asking(range: Range, area: HTMLElement, mouse: boolean): Picked | null {
   const node = range.commonAncestorContainer;
   const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
   if (!el?.closest('.fv-flow')) return null;
-  const raw = sel.toString().trim();
+  const raw = range.toString().trim();
   if (/\n/.test(raw)) return null;
   const text = raw.replace(ENDS, '').replace(/\s+/g, ' ');
   if (!text || text.length > SAY_AS.textChars || !/\p{L}/u.test(text)) return null;
@@ -49,40 +50,105 @@ function picked(area: HTMLElement, mouse: boolean): Picked | null {
   return { text, x: box.left + box.width / 2 - a.left, top: box.top - a.top, bottom: box.bottom - a.top, mouse };
 }
 
+/** The selection, if it's something to ask about. */
+function picked(area: HTMLElement, mouse: boolean): Picked | null {
+  const sel = document.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  return asking(sel.getRangeAt(0), area, mouse);
+}
+
+/** The word at a point on the page, if the point is on it. */
+function wordAt(x: number, y: number): Range | null {
+  const p = 'caretPositionFromPoint' in document ? document.caretPositionFromPoint(x, y) : null;
+  const r = !p && 'caretRangeFromPoint' in document ? document.caretRangeFromPoint(x, y) : null;
+  const node = p ? p.offsetNode : r?.startContainer;
+  if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+  const text = node.textContent ?? '';
+  let a = p ? p.offset : r!.startOffset;
+  let b = a;
+  while (a > 0 && IN_WORD.test(text[a - 1])) a--;
+  while (b < text.length && IN_WORD.test(text[b])) b++;
+  // Apostrophes and hyphens only count inside a word.
+  while (a < b && !LETTER.test(text[a])) a++;
+  while (b > a && !LETTER.test(text[b - 1])) b--;
+  if (a === b) return null;
+  const word = document.createRange();
+  word.setStart(node, a);
+  word.setEnd(node, b);
+  // The caret finds the nearest letter even from the blank end of a line: only the word itself counts.
+  const on = Array.from(word.getClientRects()).some((q) => x >= q.left - 3 && x <= q.right + 3 && y >= q.top - 3 && y <= q.bottom + 3);
+  return on ? word : null;
+}
+
+type Highlights = { set: (name: string, h: unknown) => void; delete: (name: string) => void };
+const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
+
+/** Lights the word being asked about, or nothing. */
+function mark(word: Range | undefined) {
+  if (!highlights) return;
+  if (!word) { highlights.delete('say-as'); return; }
+  const H = (globalThis as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+  highlights.set('say-as', new H(word));
+}
+
 export function SayAs({ narration, body }: Props) {
   const [open, setOpen] = useState<Picked | null>(null);
   const { playing } = narration;
   const actions = useRef(narration);
   actions.current = narration;
 
-  // While a voice reads, a selection that settles (the mouse let go, or handles left alone on a
-  // touch screen) pauses it and asks.
+  // While a voice reads, a tap on a word, or a selection that settles (the mouse let go, or
+  // handles left alone on a touch screen), pauses it and asks.
   useEffect(() => {
-    if (!playing) return;
+    const area = body.current;
+    if (!playing || !area) return;
     let timer = 0;
     let down = false;
     let mouse = false;
-    const check = () => {
-      const area = body.current;
-      const p = !down && area ? picked(area, mouse) : null;
-      if (!p) return;
+    const ask = (p: Picked) => {
+      window.clearTimeout(timer);
       actions.current.stop();
       setOpen(p);
+    };
+    const check = () => {
+      const p = !down ? picked(area, mouse) : null;
+      if (p) ask(p);
     };
     const later = (ms: number) => { window.clearTimeout(timer); timer = window.setTimeout(check, ms); };
     const onChange = () => later(600);
     const onDown = (e: PointerEvent) => { mouse = e.pointerType === 'mouse'; down = mouse; };
     const onUp = (e: PointerEvent) => { if (e.pointerType === 'mouse') { down = false; later(80); } };
+    // After the reader's own capture (a swipe's click never gets here), before its tap that wakes
+    // the controls, which this one takes.
+    const onTap = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const t = e.target as Element;
+      if (!t.closest('.fv-flow') || t.closest('a, button, input, select, textarea')) return;
+      // Letting go of a selection clicks too: that's the selection's to ask about.
+      if (document.getSelection()?.isCollapsed === false) return;
+      const word = wordAt(e.clientX, e.clientY);
+      const p = word && asking(word, area, mouse);
+      if (!p) return;
+      e.preventDefault();
+      ask({ ...p, word });
+    };
     document.addEventListener('selectionchange', onChange);
     document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('pointerup', onUp, true);
+    area.addEventListener('click', onTap);
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener('selectionchange', onChange);
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('pointerup', onUp, true);
+      area.removeEventListener('click', onTap);
     };
   }, [playing, body]);
+
+  useEffect(() => {
+    mark(open?.word);
+    return () => mark(undefined);
+  }, [open]);
 
   // Play pressed while it asks: the question goes.
   useEffect(() => { if (playing) setOpen(null); }, [playing]);
