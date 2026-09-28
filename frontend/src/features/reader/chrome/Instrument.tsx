@@ -10,9 +10,10 @@ import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
 import { level, useLoadState } from '../voice/speaker';
 import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
-import { CHECK, CROSS, FOCUS, FOCUSED, GROW, MINUS, PAUSE, PLAY, PLUS, SHRINK, VOICES } from './icons';
+import { CHECK, CROSS, FOCUS, FOCUSED, GROW, MINUS, PAUSE, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { SayAs } from './SayAs';
+import { SearchPanel } from './Search';
 import { HeadTips } from './Tip';
 import { VoiceSheet } from './VoiceSheet';
 import type { ChromeProps, PanelName } from './types';
@@ -25,7 +26,7 @@ const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, sleep }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
@@ -85,6 +86,11 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
         <div className="i3-ends">
+          {search && (
+            <button type="button" className={`i3-side i3-icon${panel === 'find' ? ' is-open' : ''}`} onClick={() => toggle('find')} aria-label="Search the book" aria-expanded={panel === 'find'} aria-haspopup="dialog" data-tip="Find words in the book">
+              <DotIcon rows={SEARCH} />
+            </button>
+          )}
           {narration && (
             <button
               type="button"
@@ -188,6 +194,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
                 <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} />
               ) : panel === 'sleep' && sleep ? (
                 <SleepPanel asked={sleep.asked} chapters={chapters} playing={!!narration?.playing} onBack={sleep.back} onAwake={sleep.awake} />
+              ) : panel === 'find' && search ? (
+                <SearchPanel book={book} chapters={chapters} read={search.read} onGo={(f) => { openPanel(null); search.go(f); }} />
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (

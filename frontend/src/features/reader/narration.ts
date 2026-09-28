@@ -51,6 +51,8 @@ export interface Listen {
   pick?: (x: number, y: number) => Sentence | null;
   /** The chapter's paragraphs, numbered from 1 as the page shows them while choosing where to begin. */
   paragraphs?: () => Paragraph[];
+  /** A sentence's words on the page, when its chapter is the one on screen: to point at them. */
+  range?: (s: Sentence) => Range | null;
 }
 
 /** A paragraph by its number in the chapter, and its first sentence. */

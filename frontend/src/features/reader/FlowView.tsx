@@ -478,6 +478,10 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       });
       return out;
     },
+    range: (sn) => {
+      const el = sn.section === section ? blocks.current[sn.block] : undefined;
+      return el ? rangeOf(el, sn.start, sn.end) : null;
+    },
     pick: (x, y) => {
       const hit = caretAt(x, y);
       const i = hit ? blocks.current.findIndex((b) => b.contains(hit.node)) : -1;

@@ -16,3 +16,5 @@ export const CHECK = ['.......', '......x', '.....x.', 'x...x..', '.x.x...', '..
 export const CROSS = ['.....', 'x...x', '.x.x.', '..x..', '.x.x.', 'x...x', '.....'];
 /** A voice's waveform: the voices and how they read. */
 export const VOICES = ['..x....', '..x.x..', 'x.x.x.x', 'x.x.x.x', 'x.x.x.x', '..x.x..', '..x....'];
+/** Search: a magnifying glass. */
+export const SEARCH = ['.xxx...', 'x...x..', 'x...x..', 'x...x..', '.xxx...', '....xx.', '.....xx'];

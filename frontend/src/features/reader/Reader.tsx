@@ -14,6 +14,7 @@ import { refreshVoices } from './voice/list';
 import { useVoicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
 import { useReaderSettings, type ThemeName } from './settings';
+import { flash, readBook, type Found } from './search';
 import { useSleepWatch } from './sleep';
 import { useReadingClock } from './useReadingClock';
 import './reader.css';
@@ -188,6 +189,14 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     else if (h) lightFrom(h.s, h.at);
     else fromTop();
   };
+  /** A match found in the book: the page goes to it, and it's lit for a moment. */
+  const goFound = (f: Found) => {
+    const l = view.current?.listen;
+    if (!l) return;
+    if (!l.onScreen(f.s, 0)) l.reach(f.s, 0);
+    void shown(f.s).then(() => flash(view.current?.listen.range?.(f.s) ?? null, body.current));
+  };
+  const readAll = useCallback((onRead?: (done: number, of: number) => void) => readBook(book, view.current!.listen, onRead), [book]);
   /** Back to a checkpoint: the voice reads on from there, or waits there (lit, in Immersive) for play. */
   const backTo = (s: Sentence) => {
     openPanel(null);
@@ -324,6 +333,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       const key = MEDIA_KEYS[e.key];
       if (key) { mediaKey.current(key); e.preventDefault(); return; }
       if (e.key === 'Escape') { if (panel) openPanel(null); else if (choosing) setAsking(false); else onBack(); return; }
+      // The browser's own find sees only the chapter on screen: this one reads the whole book.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'f') { e.preventDefault(); openPanel('find'); return; }
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
       if (e.key === 'Enter' && !target.closest('a, button') && onEnter.current()) { e.preventDefault(); return; }
@@ -397,6 +408,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       pick: (p: Paragraph) => beginAt(p.s),
     } : null,
     focus: { on: focus, toggle: toggleFocus },
+    search: { read: readAll, go: goFound },
     sleep: asked ? {
       asked,
       back: backTo,
