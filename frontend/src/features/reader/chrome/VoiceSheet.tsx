@@ -2,25 +2,27 @@ import { useEffect, useRef, useState } from 'react';
 import { hasKey } from '../../../data/sync';
 import { api } from '../../../lib/api';
 import { Segmented } from '../Panels';
-import { BUILT_IN, checkGpu, engineOf, fromListed, useGpu, type Mode, type SamplePart, type VoiceInfo } from '../voice/catalog';
+import { BUILT_IN, checkGpu, fromListed, useGpu, type Engine, type Mode, type SamplePart, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
-import { RATES, setVoicePrefs, useVoicePrefs, voiceFor } from '../voice/prefs';
+import { hung, RATES, setVoicePrefs, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { AddVoice } from './AddVoice';
 import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
 import { DotIcon } from './parts';
 
 /*
- * The voice sheet, from the button beside play: Normal or Immersive,
- * the voice, and the speed. Each voice has lines to hear before anything downloads: a greeting, a
+ * The voice sheet, from the button beside play: Normal or Immersive, the voice, and the speed.
+ * Immersive offers the Normal voices first, then the heavy ones, which are for computers. Each voice has lines to hear before anything downloads: a greeting, a
  * bit of a story and a question, one at a time.
  */
 
 const ABOUT: Record<Mode, string> = {
   normal: 'Voices that run on this device’s processor, fine on any phone or laptop. Each one downloads once, about 66 MB, and then reads offline.',
-  immersive: 'Richer voices on this device’s graphics chip, for newer computers. The page dims and follows the voice. One download of about 330 MB for all five.',
+  immersive: 'The page dims and follows the voice. It reads with any Normal voice, or on a computer, one of the richer heavy voices below.',
 };
-const FALLBACK = 'The page dims and follows the voice. This device can’t run Immersive’s richer voices, so it reads with the Normal ones, each about 66 MB. A newer computer with a recent Chrome, Edge or Safari can.';
+const HEAVY = 'Richer, and much heavier: one download of about 330 MB for all five, run on the graphics chip. Use them on a computer. On a phone they can hang the browser.';
+const FALLBACK = 'The page dims and follows the voice. This device can’t run the heavy voices, so it reads with the Normal ones, each about 66 MB. A newer computer with a recent Chrome, Edge or Safari can.';
+const HUNG = 'A heavy voice stopped this browser last time, so Immersive reads with a Normal voice now. The heavy ones are best on a computer.';
 
 const PARTS: Array<{ v: SamplePart; label: string }> = [
   { v: 'greeting', label: 'Greeting' },
@@ -43,11 +45,11 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   const listed = useListedVoices();
   const load = useLoadState();
   const mode = prefs.mode;
-  // Immersive where the GPU can't run its voices reads with Normal's (catalog.ts, voicesOf).
+  // Immersive where the GPU can't run the heavy voices offers only the Normal ones (prefs.ts, voiceFor).
   const gpu = useGpu();
   const fallback = mode === 'immersive' && gpu === false;
   const voices: Mode = fallback ? 'normal' : mode;
-  const engine = engineOf(voices);
+  const engines: Engine[] = voices === 'immersive' ? ['piper', 'kokoro'] : ['piper'];
   const current = voiceFor(mode);
   const [bytes, setBytes] = useState<number | null>(null);
   const [hearing, setHearing] = useState<string | null>(null);
@@ -102,17 +104,30 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
         onDone={(added) => {
           setAdding(false);
           if (!added) return;
-          setVoicePrefs({ voice: { ...prefs.voice, [added.mode]: added.key } });
-          if (added.mode !== voices) setMode(added.mode);
+          // Immersive reads with either kind; Normal only with its own.
+          const into = voices === 'immersive' ? 'immersive' : added.mode;
+          setVoicePrefs({ voice: { ...prefs.voice, [into]: added.key } });
+          if (into !== voices) setMode(into);
         }}
       />
     );
   }
 
-  const others = listed.filter((v) => v.engine === engine && !v.mine).map(fromListed);
-  const yours = listed.filter((v) => v.engine === engine && v.mine).map(fromListed);
+  // Normal's first, then the heavy ones.
+  const uploads = (mine: boolean) => engines.flatMap((e) => listed.filter((v) => v.engine === e && v.mine === mine)).map(fromListed);
+  const others = uploads(false);
+  const yours = uploads(true);
   const row = (v: VoiceInfo, extra?: React.ReactNode) => (
-    <Row key={v.key} v={v} on={current.key === v.key} hearing={hearing === v.key} onPick={() => pick(v.key)} onHear={() => toggleHear(v)} extra={extra} />
+    <Row
+      key={v.key}
+      v={v}
+      heavy={engines.length > 1 && v.engine === 'kokoro' && !!v.upload}
+      on={current.key === v.key}
+      hearing={hearing === v.key}
+      onPick={() => pick(v.key)}
+      onHear={() => toggleHear(v)}
+      extra={extra}
+    />
   );
   const loading = load.key !== null;
 
@@ -121,9 +136,17 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
       <div className="pnl-h">Read aloud</div>
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
       <p className="p-note vs-about">{fallback ? FALLBACK : ABOUT[mode]}</p>
+      {hung && mode === 'immersive' && <p className="p-note vs-about vs-err">{HUNG}</p>}
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
       <div className="vs-lists" role="radiogroup" aria-label="Voice">
-        <div className="vs-list">{BUILT_IN[voices].map((v) => row(v))}</div>
+        <div className="vs-list">{BUILT_IN.normal.map((v) => row(v))}</div>
+        {engines.includes('kokoro') && (
+          <>
+            <div className="clbl vs-sub">Heavy voices</div>
+            <p className="p-note vs-heavy">{HEAVY}</p>
+            <div className="vs-list">{BUILT_IN.immersive.map((v) => row(v))}</div>
+          </>
+        )}
         {others.length > 0 && (
           <>
             <div className="clbl vs-sub">Shared by readers</div>
@@ -159,8 +182,10 @@ export function VoiceSheet({ playing, onStart, onStop }: Props) {
   );
 }
 
-function Row({ v, on, hearing, onPick, onHear, extra }: {
+function Row({ v, heavy, on, hearing, onPick, onHear, extra }: {
   v: VoiceInfo;
+  /** A reader's heavy voice, among Normal ones. */
+  heavy: boolean;
   on: boolean;
   hearing: boolean;
   onPick: () => void;
@@ -171,7 +196,7 @@ function Row({ v, on, hearing, onPick, onHear, extra }: {
     <div className={`vs-row${on ? ' is-on' : ''}`}>
       <button type="button" role="radio" aria-checked={on} className="vs-pick" onClick={onPick}>
         <span className="vs-name">{v.name}</span>
-        <span className="vs-tag">{v.accent}</span>
+        <span className="vs-tag">{heavy ? `${v.accent} · Heavy` : v.accent}</span>
       </button>
       {extra}
       {v.sample && (

@@ -59,7 +59,7 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
         <button type="button" className="vs-back" onClick={() => onDone(null)} disabled={!!step}>‹ Voices</button>
       </div>
       <p className="p-note vs-about">
-        {mode === 'normal' ? 'A Piper voice for Normal: its .onnx and .onnx.json together.' : 'A Kokoro voice pack for Immersive: a .bin or .pt.'} English only, for now.
+        {mode === 'normal' ? 'A Piper voice: its .onnx and .onnx.json together.' : 'A Piper voice (its .onnx and .onnx.json together), or a Kokoro pack for a heavy voice (a .bin or .pt).'} English only, for now.
       </p>
       <input ref={input} type="file" multiple hidden accept=".onnx,.json,.bin,.pt" onChange={(e) => { void take([...(e.target.files ?? [])]); e.target.value = ''; }} />
       <button

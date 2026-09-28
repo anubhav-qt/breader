@@ -4,13 +4,15 @@ import manifest from './files.json';
 import { hosted, uploaded, type HostedName, type Want } from './store';
 
 /*
- * The voices that read aloud. Each mode has five built in, hosted with the app, plus any voices
+ * The voices that read aloud. Each engine has five built in, hosted with the app, plus any voices
  * readers uploaded (data from GET /v1/voices):
  *
  *   Normal     Piper voices, about 64 MB each, on the CPU. Trained on public-domain or CC-licensed
  *              recordings (rhasspy/piper-voices).
- *   Immersive  Kokoro-82M voices (Apache 2.0), one 326 MB model for all of them, on the GPU. It
+ *   Heavy      Kokoro-82M voices (Apache 2.0), one 326 MB model for all of them, on the GPU. It
  *              has to be full precision: the fp16 and q4f16 models only give NaNs on WebGPU.
+ *
+ * Normal mode reads with Normal voices; Immersive with either (prefs.ts).
  */
 
 export type Mode = 'normal' | 'immersive';
@@ -130,11 +132,6 @@ export function checkGpu(): Promise<boolean> {
 }
 /** False once this browser is known not to run them; true until then. */
 export const hasGpu = () => gpu !== false;
-/**
- * Whose voices a mode reads with here. Immersive without a graphics chip to run its own reads with
- * Normal's, so the page still dims and follows the voice.
- */
-export const voicesOf = (m: Mode): Mode => (m === 'immersive' && !hasGpu() ? 'normal' : m);
 /** Immersive failed to start on this device's graphics: read with Normal's voices from now on. */
 export const noGpu = () => setGpu(false);
 export const useGpu = () => useSyncExternalStore((f) => { gpuSubs.add(f); return () => { gpuSubs.delete(f); }; }, () => gpu);

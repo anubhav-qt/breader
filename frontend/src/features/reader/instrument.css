@@ -271,6 +271,7 @@
 .vs-about { margin: -6px 0 16px; }
 .vs-lists { margin-bottom: 18px; }
 .vs-sub { margin: 16px 0 6px 10px; }
+.vs-heavy { margin: 0 0 8px 10px; }
 .vs-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
 .vs-row { display: flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 3px 0 10px; border-radius: 9px; transition: background-color 140ms ease; }
 .vs-row:hover { background: var(--r-fill); }

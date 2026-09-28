@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { api } from '../../../lib/api';
 import { engineFiles, filesOf, noGpu, weight, type Engine, type VoiceInfo } from './catalog';
+import { startingHeavy } from './prefs';
 import { has, type Want } from './store';
 import type { Reply, Request } from './tts.worker';
 
@@ -130,6 +131,7 @@ export function prepare(v: VoiceInfo): Promise<void> {
     };
     try {
       if (!(await Promise.all(wants.map(has))).every(Boolean)) void navigator.storage?.persist?.().catch(() => {});
+      if (v.engine === 'kokoro') startingHeavy(v.key);
       r.started ??= r.call({ type: 'start', engine: v.engine }, onBytes).then(() => undefined);
       await r.started;
       const u = v.upload;
@@ -142,7 +144,9 @@ export function prepare(v: VoiceInfo): Promise<void> {
         british: v.british,
       }, onBytes);
       setLoad({ key: null, loaded: total });
+      if (v.engine === 'kokoro') startingHeavy(null);
     } catch (e) {
+      if (v.engine === 'kokoro') startingHeavy(null);
       r.voices.delete(v.key);
       const err = e as Error & { gpu?: boolean };
       setLoad({ key: null, error: err.message, gpu: !!err.gpu });
