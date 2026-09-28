@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PREFS_CHARS, SYNC } from './limits.ts';
+import { PREFS_CHARS, REVISIT, SYNC } from './limits.ts';
 
 /*
  * The wire format between the app and the server. Both sides validate with these schemas, so a
@@ -301,6 +301,45 @@ export const UploadResponse = z.object({
     .optional(),
 });
 export type UploadResponse = z.infer<typeof UploadResponse>;
+
+/* ---- Revisit ---- */
+
+/**
+ * What a part of a book says about its people, places and words (server/src/lib/mistral.ts): who
+ * each person is and what they do there, what each place is, what each unusual word means there.
+ */
+export const RevisitNotes = z.object({
+  people: z.array(z.object({ name: z.string(), aka: z.array(z.string()), who: z.string(), did: z.string() })),
+  places: z.array(z.object({ name: z.string(), about: z.string() })),
+  terms: z.array(z.object({ term: z.string(), meaning: z.string() })),
+});
+export type RevisitNotes = z.infer<typeof RevisitNotes>;
+
+/**
+ * How the parts a reader asked about stand, by the SHA-256 of their text, without sending the text:
+ * the notes of those read, which are being read now, and which couldn't be, with why.
+ */
+export const RevisitKnownRequest = z.object({ hashes: z.array(Sha256).max(500) });
+export type RevisitKnownRequest = z.infer<typeof RevisitKnownRequest>;
+export interface RevisitKnownResponse {
+  known: Record<string, RevisitNotes>;
+  reading: string[];
+  failed: Record<string, ApiError>;
+  /** Whether this server can read parts it hasn't yet (it has a Mistral key). */
+  on: boolean;
+}
+
+/** One part to read: its chapter's title, and its text. */
+export const RevisitPartRequest = z.object({
+  title: z.string().max(300),
+  text: z.string().min(1).max(REVISIT.partChars),
+});
+export type RevisitPartRequest = z.infer<typeof RevisitPartRequest>;
+/** Its notes when it's been read already; otherwise it's being read now, and /known says when it's done. */
+export interface RevisitPartResponse {
+  hash: string;
+  notes?: RevisitNotes;
+}
 
 export const ApiError = z.object({ code: z.string(), message: z.string() });
 export type ApiError = z.infer<typeof ApiError>;

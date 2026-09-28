@@ -74,6 +74,10 @@ const Env = z.object({
   BACKUP_RECIPIENT: z.string().optional(),
   /** Uptime monitor heartbeat URL. The worker calls it every 5 minutes while the copy is current. */
   HEARTBEAT_URL: z.string().url().optional(),
+
+  /** Revisit (routes/revisit.ts) reads what's been read with Mistral. Off without the key. */
+  MISTRAL_API_KEY: z.string().optional(),
+  MISTRAL_MODEL: z.string().default('ministral-14b-latest'),
 });
 
 export type Env = z.infer<typeof Env>;

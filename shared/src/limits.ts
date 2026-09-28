@@ -46,3 +46,10 @@ export const CLEANUP = {
   /** Rows of deleted files are kept this long, so the laptop's copy hears about the deletion. */
   deletedRowDays: 30,
 } as const;
+
+/**
+ * Revisit (names, places and words from what's been read): the most characters of a book sent in
+ * one part, and the most parts a library has read for it a day. Parts already read for anyone
+ * don't count.
+ */
+export const REVISIT = { partChars: 40_000, perDay: 150 } as const;

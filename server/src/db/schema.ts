@@ -401,6 +401,17 @@ export const mirrorTombstones = pgTable(
   (t) => [primaryKey({ columns: [t.tbl, t.pk] })],
 );
 
+/**
+ * Revisit's notes on a part of a book (routes/revisit.ts): keyed by the prompt's version and the
+ * SHA-256 of the part's text, so they're made once for every reader of the same words. Not fed:
+ * only Supabase needs them.
+ */
+export const recaps = pgTable('recaps', {
+  key: text('key').primaryKey(),
+  notes: jsonb('notes').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
 /** Fed tables and their primary keys, in the order a full reload copies them. */
 export const FED_TABLES = {
   users: ['id'],

@@ -7,7 +7,8 @@ name: breader-dev
 x-server: &server
   build: { context: .., dockerfile: server/Dockerfile }
   image: breader-server:dev
-  env_file: dev.env
+  # .env.dev: local secrets, such as a Mistral key for Revisit (never committed).
+  env_file: [dev.env, { path: .env.dev, required: false }]
   restart: unless-stopped
   depends_on:
     migrate: { condition: service_completed_successfully }

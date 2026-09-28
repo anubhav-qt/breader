@@ -10,6 +10,7 @@ import { adminRoutes } from './routes/admin.ts';
 import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
 import { libraryRoutes } from './routes/libraries.ts';
+import { revisitRoutes } from './routes/revisit.ts';
 import { shelfRoutes } from './routes/shelf.ts';
 import { syncRoutes } from './routes/sync.ts';
 import { voiceRoutes } from './routes/voices.ts';
@@ -55,6 +56,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', fileRoutes(deps));
   app.route('/v1', shelfRoutes(deps));
   app.route('/v1', voiceRoutes(deps));
+  app.route('/v1', revisitRoutes(deps));
 
   app.notFound((c) => c.json({ code: 'not_found', message: 'No such endpoint.' }, 404));
   app.onError(onError);
