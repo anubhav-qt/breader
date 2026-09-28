@@ -2,13 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
-import { chapterAtFraction, chapterName, type Chapter } from '../chapters';
+import { chapterAtFraction, chapterName, pad2, type Chapter } from '../chapters';
 import { canFullscreen, useFullscreen } from '../fullscreen';
 import { paceLevel } from '../pacing';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
 import { level, useLoadState } from '../voice/speaker';
-import { CHECK, FOCUS, GROW, MINUS, PAUSE, PLAY, PLUS, SHRINK, VOICES } from './icons';
+import type { Paragraph } from '../narration';
+import { CHECK, CROSS, FOCUS, GROW, MINUS, PAUSE, PLAY, PLUS, SHRINK, VOICES } from './icons';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { SayAs } from './SayAs';
 import { VoiceSheet } from './VoiceSheet';
@@ -70,6 +71,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   }, [kept]);
   const keep = () => { setVoicePrefs({ paceKept: true }); setKept(true); };
   const tap = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches ? 'Tap' : 'Click';
+  const choosing = !!immersion?.choosing;
 
   return (
     <>
@@ -115,14 +117,35 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         </div>
       </div>
 
-      <div ref={footRef} className={`i3-foot${foot ? ' is-on' : ''}${setting ? ' is-setting' : ''}`} onPointerEnter={() => setFoot(true)} onPointerLeave={() => setFoot(false)}>
+      <div ref={footRef} className={`i3-foot${foot ? ' is-on' : ''}${setting ? ' is-setting' : ''}${immersion?.waiting ? ' is-waiting' : ''}${choosing ? ' is-choosing' : ''}`} onPointerEnter={() => setFoot(true)} onPointerLeave={() => setFoot(false)}>
         {setting ? (
           <PaceSetter onKeep={keep} />
+        ) : immersion && choosing ? (
+          // Begin, pressed: from the top of the page, or a paragraph by its number.
+          <div className="i3-start" role="group" aria-label="Where to begin">
+            <button type="button" className="i3-begin" onClick={immersion.fromTop}>
+              <DotIcon rows={PLAY} />
+              From the top
+            </button>
+            <button type="button" className={`i3-para${panel === 'paras' ? ' is-open' : ''}`} onClick={() => toggle('paras')} aria-label="Pick a paragraph" aria-expanded={panel === 'paras'} aria-haspopup="dialog">
+              ¶ {immersion.nowAt ? pad2(immersion.nowAt) : '--'}
+              <span className="i3-caret" aria-hidden="true">▾</span>
+            </button>
+            <button type="button" className="i3-pace-b" onClick={immersion.cancel} aria-label="Not now">
+              <DotIcon rows={CROSS} />
+            </button>
+          </div>
         ) : (
           <>
             <span className="i3-read"><Digits value={progress * 100} width={3} /><small>%</small></span>
             {immersion?.waiting ? (
-              <span className="i3-say" role="status"><Typed text={`${tap} where to begin`} /></span>
+              // Immersive, nothing lit yet: Begin numbers the paragraphs, to pick where.
+              <span className="i3-say">
+                <button type="button" className="i3-begin" onClick={immersion.choose}>
+                  <DotIcon rows={PLAY} />
+                  Begin
+                </button>
+              </span>
             ) : kept ? (
               <span className="i3-say" role="status"><Typed text="Kept. Change it in" /><DotIcon rows={VOICES} /></span>
             ) : (
@@ -134,6 +157,10 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           </>
         )}
       </div>
+
+      {choosing && !panel && (
+        <div className="i3-hint" role="status"><Typed text={`${tap} a paragraph, or type its number`} /></div>
+      )}
 
       {/* Clear, so nothing to fade: it goes with the tap that closes the drop, never left over the page. */}
       {panel && <div className="i3-scrim" onClick={() => openPanel(null)} />}
@@ -154,6 +181,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
                 <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
               ) : panel === 'voice' && (narration || immersion) ? (
                 <VoiceSheet playing={!!narration?.playing} onStart={narration?.start} onStop={narration?.stop} canPace={!!immersion} />
+              ) : panel === 'paras' && immersion ? (
+                <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
                 <AppearancePanel settings={settings} isPdf={isPdf} update={update} />
               )}
@@ -172,6 +201,65 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
 function Drop(props: HTMLMotionProps<'div'>) {
   const present = useIsPresent();
   return <motion.div {...props} style={present ? props.style : { ...props.style, pointerEvents: 'none' }} />;
+}
+
+/**
+ * Where the light begins: a paragraph's number, typed (Enter or Go), or picked from the chapter's
+ * list, which opens on the first paragraph on screen.
+ */
+function ParagraphsPanel({ list, now, onPick, tap }: { list: Paragraph[]; now?: number; onPick: (p: Paragraph) => void; tap: string }) {
+  const [typed, setTyped] = useState('');
+  const hit = typed ? list.find((p) => p.n === Number(typed)) : undefined;
+  const input = useRef<HTMLInputElement>(null);
+  const rows = useRef<HTMLDivElement>(null);
+  // A mouse types straight away; a touch screen's keyboard waits for a tap in the field.
+  useEffect(() => { if (!matchMedia('(hover: none)').matches) input.current?.focus(); }, []);
+  // The typed one, or the first on screen, in the middle of the list under the field. By hand, not
+  // scrollIntoView, which would move the page behind too.
+  const head = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const row = rows.current?.querySelector<HTMLElement>(`[data-n="${hit?.n ?? now}"]`);
+    const box = row?.closest<HTMLElement>('.i3-drop-in');
+    if (!row || !box) return;
+    const top = head.current?.offsetHeight ?? 0;
+    box.scrollTop = row.offsetTop - top - (box.clientHeight - top) / 2 + row.offsetHeight / 2;
+  }, [hit, now]);
+  const go = () => { if (hit) onPick(hit); };
+  return (
+    <div className="pnl pp">
+      <div className="pp-head" ref={head}>
+        <div className="pnl-h">Begin from</div>
+        <p className="p-note pp-about">{tap} a paragraph on the page, or type its number.</p>
+        <div className="sa-say">
+          <input
+            ref={input}
+            className="vs-input"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } }}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            enterKeyHint="go"
+            placeholder={now ? pad2(now) : ''}
+            autoComplete="off"
+            aria-label="Paragraph number"
+          />
+          <button type="button" className="sa-hear" onClick={go} disabled={!hit}>
+            <DotIcon rows={PLAY} />
+            Go
+          </button>
+        </div>
+      </div>
+      <div className="p-list pp-list" ref={rows}>
+        {list.map((p) => (
+          <button key={p.n} type="button" data-n={p.n} className={`p-item pp-item${p.n === now ? ' is-now' : ''}${p.n === hit?.n ? ' is-hit' : ''}`} onClick={() => onPick(p)}>
+            <span className="pp-n">{pad2(p.n)}</span>
+            <span className="p-item-t">{p.s.text.trim()}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** Immersive's pace, asked on the bottom line the first time the light moves on its own. */

@@ -48,6 +48,14 @@ export interface Listen {
   reach: (s: Sentence, at: number) => void;
   /** The sentence at a point on screen, for Immersive's tap to begin there (pacing.ts). */
   pick?: (x: number, y: number) => Sentence | null;
+  /** The chapter's paragraphs, numbered from 1 as the page shows them while choosing where to begin. */
+  paragraphs?: () => Paragraph[];
+}
+
+/** A paragraph by its number in the chapter, and its first sentence. */
+export interface Paragraph {
+  n: number;
+  s: Sentence;
 }
 
 export const canNarrate = typeof window !== 'undefined' && typeof Audio !== 'undefined' && typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined';

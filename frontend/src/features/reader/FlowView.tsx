@@ -6,7 +6,8 @@ import { countWords } from '../../lib/format';
 import { glide, stopGlide } from '../../lib/glide';
 import { firstSentence } from '../../books/record';
 import { caretAt, charRect, collectBlocks, firstCharWhere, firstRect, offsetIn, rangeOf, sentenceAt } from './dom';
-import { light, sentencesIn, type Listen, type Sentence } from './narration';
+import { pad2 } from './chapters';
+import { light, sentencesIn, type Listen, type Paragraph, type Sentence } from './narration';
 import { fontFamily, type Style, type StyleSettings } from './settings';
 import { curves, runTurn, swaps, type TurnStyle } from './turn';
 
@@ -65,9 +66,14 @@ interface Props {
   onLocation: (l: Loc) => void;
   onWidth: (w: number) => void;
   onTurn?: (e: TurnEvent) => void;
+  /** Each paragraph shows its number, for Immersive's choosing where to begin. */
+  numbered?: boolean;
 }
 
 const PAGE_SPRING = { type: 'spring', stiffness: 158, damping: 25.1, mass: 1 } as const;
+
+/** Paragraphs get numbers: blocks with words, not headings (the chapter's title isn't paragraph 1). */
+const isParagraph = (el: HTMLElement) => !/^H[1-6]$/.test(el.tagName) && /[\p{L}\p{N}]/u.test(el.textContent ?? '');
 
 function resolveStart(book: FlowBook, starts: number[], start: Start): { section: number; target: Target } {
   if (start.kind === 'pos' && start.pos.section < book.sections.length) {
@@ -89,7 +95,7 @@ function resolveStart(book: FlowBook, starts: number[], start: Start): { section
   return { section: s, target: { kind: 'words', value: w - starts[s] } };
 }
 
-export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, style, s, start, turnStyle, onLocation, onWidth, onTurn }, ref) {
+export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, style, s, start, turnStyle, onLocation, onWidth, onTurn, numbered = false }, ref) {
   const n = book.sections.length;
   const starts = useMemo(() => {
     let acc = 0;
@@ -293,6 +299,23 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     report();
   };
 
+  // Numbers on the paragraphs, drawn by CSS from an attribute so the text's own offsets don't
+  // move. They widen the first lines a little, so paged, the page on screen is found again.
+  const wasNumbered = useRef(false);
+  useLayoutEffect(() => {
+    const flow = flowRef.current;
+    if (!flow) return;
+    let n = 0;
+    for (const el of collectBlocks(flow)) {
+      if (numbered && isParagraph(el)) el.dataset.para = pad2(++n);
+      else delete el.dataset.para;
+    }
+    const toggled = wasNumbered.current !== numbered;
+    wasNumbered.current = numbered;
+    if (toggled && pagesMode && size.w && taggedFor.current === section) land({ kind: 'pos', ...loc.current });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numbered, section]);
+
   useLayoutEffect(() => {
     const flow = flowRef.current;
     if (!flow || !size.w) return;
@@ -395,8 +418,9 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       const p = Math.floor((r.left - flowLeft() + 1) / step);
       return p === pageRef.current ? 'here' : p === pageRef.current + 1 ? 'next' : 'away';
     }
+    // Not under the bottom line of controls, which covers the last few lines of a scrolled page.
     const v = viewRef.current!.getBoundingClientRect();
-    if (r.top >= v.top - 1 && r.bottom <= v.bottom - 24) return 'here';
+    if (r.top >= v.top - 1 && r.bottom <= v.bottom - 84) return 'here';
     return r.top > v.top && r.top < v.bottom + v.height ? 'next' : 'away';
   };
 
@@ -444,6 +468,16 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       return out;
     },
     reach: (sn, at) => goSection(sn.section, { kind: 'pos', block: sn.block, offset: sn.start + at }),
+    paragraphs: () => {
+      const out: Paragraph[] = [];
+      blocks.current.forEach((el, b) => {
+        if (!isParagraph(el)) return;
+        const text = el.textContent ?? '';
+        const [first] = sentencesIn(text, 0);
+        if (first) out.push({ n: out.length + 1, s: { section, block: b, start: first[0], end: first[1], text: text.slice(first[0], first[1]) } });
+      });
+      return out;
+    },
     pick: (x, y) => {
       const hit = caretAt(x, y);
       const i = hit ? blocks.current.findIndex((b) => b.contains(hit.node)) : -1;

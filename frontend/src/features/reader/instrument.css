@@ -263,6 +263,87 @@
    faster, and Keep, after which the pace is in the voice sheet. */
 .i3-say { justify-self: center; display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; color: var(--r-fg); }
 .i3-say .i3-dots-icon { flex: none; }
+/* Nothing lit yet: Begin, filled like Keep. Pressed, the paragraphs take numbers and the line
+   offers the top of the page or one by its number. Choosing where to begin is a call to act, so the
+   line stays in sight in focus mode too. */
+.rd.is-focus:not(.is-awake) .i3-foot:is(.is-waiting, .is-choosing) { opacity: 1; pointer-events: auto; }
+.i3-foot.is-choosing { grid-template-columns: minmax(0, 1fr); }
+.i3-start { justify-self: center; display: flex; align-items: center; gap: 8px; }
+.i3-para {
+  height: 32px;
+  padding: 0 10px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  font: var(--ui-w-strong) 12px/1 var(--ui);
+  letter-spacing: 0.06em;
+  color: var(--r-fg);
+  background: var(--r-fill);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow 140ms ease;
+}
+.i3-para .i3-caret { opacity: 1; }
+.i3-para.is-open { box-shadow: inset 0 0 0 1px var(--r-line); }
+.i3-para.is-open .i3-caret { transform: rotate(180deg); }
+.i3-start .i3-pace-b { margin-left: 4px; }
+/* What to do, in a word above the line, as the say-as tip is for touch. */
+.rd-chrome > .i3-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  translate: -50% 0;
+  z-index: 9;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--r-bg);
+  box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow);
+  font: var(--ui-w) 11px/1.2 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-fg);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* The numbers, in the book's colour before each paragraph's first word. Drawn from an attribute
+   (FlowView), so the book's text and its offsets stay as they are. No drop cap meanwhile. */
+.rd .fv-flow [data-para]::before {
+  content: attr(data-para);
+  display: inline-block;
+  margin-right: 0.6em;
+  font: var(--ui-w-strong) 12px/1 var(--ui);
+  letter-spacing: 0.06em;
+  text-indent: 0;
+  color: var(--book-mark);
+}
+.rd .fv-flow [data-para]::first-letter { -webkit-initial-letter: normal; initial-letter: normal; font-weight: inherit; margin-right: 0; }
+/* The paragraphs' drop: numbers and first sentences, like the contents' chapters. */
+.i3-drop.is-paras { left: max(12px, calc(50% - 180px)); width: min(360px, calc(100% - 24px)); }
+/* The field stays in reach above the list as it scrolls. */
+.pnl.pp { padding-top: 0; }
+.pp-head { position: sticky; top: 0; z-index: 1; padding: 22px 0 12px; background: var(--r-bg); }
+.pp-head .sa-say { margin-bottom: 0; }
+.pp-about { margin: -6px 0 14px; }
+.pp-list { margin-top: 2px; }
+.rd .pp-item::before { display: none; }
+.pp-n { flex: none; min-width: 2.4em; font: var(--ui-w-strong) 12px/1 var(--ui); letter-spacing: 0.06em; color: var(--book-mark); }
+.rd .pp-item.is-hit { background: var(--r-fill); box-shadow: inset 0 0 0 1px var(--r-line); }
+.i3-begin {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  font: var(--ui-w-strong) 12px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--r-fg);
+  color: var(--r-bg);
+  transition: opacity 140ms ease, transform var(--dur-snappy) var(--ease-snappy);
+}
+.i3-begin:active { transform: scale(0.97); }
 .rd.is-pacing .i3-foot.is-setting { grid-template-columns: minmax(0, 1fr); opacity: 1; pointer-events: auto; }
 .rd.is-pacing .i3-foot.is-setting .i3-read { opacity: 1; }
 .i3-pace { justify-self: center; display: flex; align-items: center; gap: 4px; }
@@ -288,6 +369,8 @@
 @media (hover: hover) {
   .i3-pace-b:hover:not(:disabled) { background: var(--r-fill); }
   .i3-pace-keep:hover { opacity: 0.86; }
+  .i3-begin:hover { opacity: 0.86; }
+  .i3-para:hover { box-shadow: inset 0 0 0 1px var(--r-line); }
 }
 
 /* The meter: a column of dots grown from the now-dot (Instrument sets data-lv, 0 to 3). */

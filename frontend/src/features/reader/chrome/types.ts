@@ -2,9 +2,10 @@ import type { RefObject } from 'react';
 import type { LoadedBook, TocItem } from '../../../books/types';
 import type { Chapter } from '../chapters';
 import type { Loc } from '../FlowView';
+import type { Paragraph } from '../narration';
 import type { ReaderSettings } from '../settings';
 
-export type PanelName = 'toc' | 'look' | 'voice';
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
@@ -37,9 +38,21 @@ export interface ChromeProps {
   narration: { playing: boolean; listening: boolean; toggle: () => void; start: () => void; stop: () => void } | null;
   /**
    * Immersive on a book whose words can light up (pacing.ts): `running` while the light moves on
-   * its own, `waiting` while nothing is lit yet, for a tap to say where to begin.
+   * its own, `waiting` while nothing is lit yet. Begin (`choose`) numbers the paragraphs, and
+   * `choosing`, the reader starts from the top of the page or picks one by its number.
    */
-  immersion: { running: boolean; waiting: boolean } | null;
+  immersion: {
+    running: boolean;
+    waiting: boolean;
+    choosing: boolean;
+    choose: () => void;
+    cancel: () => void;
+    fromTop: () => void;
+    /** The chapter's paragraphs while choosing, and the first one on screen. */
+    paragraphs: Paragraph[];
+    nowAt?: number;
+    pick: (p: Paragraph) => void;
+  } | null;
   /** Focus mode: everything but the text hides until the mouse moves or a tap mid-page. */
   focus: { on: boolean; toggle: () => void };
 }

@@ -7,7 +7,7 @@ import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
-import { canNarrate, useNarration, type Sentence } from './narration';
+import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
 import { overlaps, usePacing } from './pacing';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
@@ -103,20 +103,50 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   /** In Immersive, a voice starts where the light is. */
   const fromLight = () => (immersive ? pacing.current()?.s : undefined);
 
-  /** A sentence tapped in Immersive, without a voice: the light goes there, or pauses if it's there. */
+  /*
+   * Where the light begins. Begin numbers the paragraphs, and the reader picks: the top of the page,
+   * a paragraph by its number, or a tap on one. With nothing lit, a tap on a paragraph starts at
+   * its beginning; with the light stopped partway, a tap on a sentence starts there, and on the lit
+   * one carries on.
+   */
+  const [choosing, setChoosing] = useState(false);
+  useEffect(() => { if (!immersive || pacing.running || narration.playing) setChoosing(false); }, [immersive, pacing.running, narration.playing]);
+  const paragraphs = useMemo(() => (choosing ? view.current?.listen.paragraphs?.() ?? [] : []), [choosing, loc?.section]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** The first paragraph that starts on screen: the picker starts there. */
+  const nowAt = loc ? (paragraphs.find((p) => p.s.block > loc.block || (p.s.block === loc.block && loc.offset === 0)) ?? paragraphs[paragraphs.length - 1])?.n : undefined;
+  /** Lights from a sentence, taking the page to it first when it's off screen (a paragraph picked by number). */
+  const lightFrom = (s: Sentence) => {
+    const l = view.current?.listen;
+    if (!l) return;
+    setChoosing(false);
+    if (l.onScreen(s, 0)) { pacing.begin(s); return; }
+    l.reach(s, 0);
+    void (async () => {
+      for (let waited = 0; !view.current?.listen.onScreen(s, 0) && waited < 1000; waited += 50) await new Promise((r) => window.setTimeout(r, 50));
+      pacing.begin(s);
+    })();
+  };
+  /** From the top of the page on screen. */
+  const fromTop = () => { void view.current?.listen.from().then((list) => { if (list[0]) lightFrom(list[0]); }); };
   const tapped = (s: Sentence) => {
     const h = pacing.current();
-    if (!h || !overlaps(h.s, s)) pacing.begin(s);
-    else if (pacing.running) pacing.pause();
-    else pacing.begin(h.s, h.at);
+    if (!pacing.lit || !h) lightFrom(view.current?.listen.paragraphs?.().find((p) => p.s.block === s.block)?.s ?? s);
+    else if (overlaps(h.s, s)) pacing.begin(h.s, h.at);
+    else pacing.begin(s);
   };
-  /** Enter, the same for the lit sentence, or the top of the page when nothing is lit. False when it's not Enter's to take. */
+  /** The light stops at a tap anywhere: it moves on too quickly to aim at. Controls hidden in focus mode come back. */
+  const pauseLight = () => {
+    pacing.pause();
+    if (focus) wake(3500);
+  };
+  /** Enter stops the light, carries on where it stopped, or starts it at the top of the page. False when it's not Enter's to take. */
   const onEnter = useRef<() => boolean>(() => false);
   onEnter.current = () => {
     if (!immersive || narration.playing || closing) return false;
     const h = pacing.current();
-    if (h) tapped(h.s);
-    else void view.current?.listen.from().then((list) => { if (list[0]) pacing.begin(list[0]); });
+    if (pacing.running) pauseLight();
+    else if (h && view.current?.listen.onScreen(h.s, h.at)) pacing.begin(h.s, h.at);
+    else fromTop();
     return true;
   };
 
@@ -162,15 +192,16 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const onClickCapture = (e: MouseEvent) => {
     if (e.timeStamp - swipedAt.current < 500) { e.stopPropagation(); e.preventDefault(); }
   };
-  // In Immersive without a voice, a tap on a sentence lights it. Otherwise touch screens, which
-  // have no mouse to wake the controls, wake them with a tap mid-page in focus mode (or while it
-  // reads), and hide them again.
+  // In Immersive without a voice, a tap anywhere stops the light, and a tap on a sentence starts it
+  // there. Otherwise touch screens, which have no mouse to wake the controls, wake them with a tap
+  // mid-page in focus mode (or while it reads), and hide them again.
   const touched = useRef(false);
   const onPointerDown = (e: PointerEvent) => { touched.current = e.pointerType === 'touch'; };
   const onClick = (e: MouseEvent) => {
     if (e.defaultPrevented || closing) return;
     if ((e.target as HTMLElement).closest('a, button, input, select, textarea')) return;
     if (window.getSelection()?.toString()) return;
+    if (pacing.running) { pauseLight(); return; }
     const s = immersive && !narration.playing ? view.current?.listen.pick?.(e.clientX, e.clientY) : null;
     if (s) { tapped(s); return; }
     if (!hush || !touched.current) return;
@@ -189,7 +220,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       if (a instanceof HTMLElement && a === clicked) a.blur();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { if (panel) openPanel(null); else onBack(); return; }
+      if (e.key === 'Escape') { if (panel) openPanel(null); else if (choosing) setChoosing(false); else onBack(); return; }
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
       if (e.key === 'Enter' && !target.closest('a, button') && onEnter.current()) { e.preventDefault(); return; }
@@ -203,7 +234,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [panel, settings, book.kind, onBack, openPanel, closing]);
+  }, [panel, choosing, settings, book.kind, onBack, openPanel, closing]);
 
   // Thin marks in a book colour close to the page (graphite on Night, sand on Day) lean toward the ink.
   const theme: ThemeName = settings.theme;
@@ -241,7 +272,17 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
     narration: canNarrate ? { playing: narration.playing, listening, toggle: () => narration.toggle(fromLight()), start: () => narration.start(fromLight()), stop: narration.stop } : null,
-    immersion: immersive ? { running: pacing.running, waiting: !pacing.lit && !pacing.running && !narration.playing } : null,
+    immersion: immersive ? {
+      running: pacing.running,
+      waiting: !pacing.lit && !pacing.running && !narration.playing,
+      choosing,
+      choose: () => setChoosing(true),
+      cancel: () => setChoosing(false),
+      fromTop,
+      paragraphs,
+      nowAt,
+      pick: (p: Paragraph) => lightFrom(p.s),
+    } : null,
     focus: { on: focus, toggle: toggleFocus },
   };
   const vars = {
@@ -255,7 +296,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
           {book.kind === 'flow' ? (
-            <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
+            <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} />
           ) : (
             <PdfView ref={view} book={book} layout={settings.pdfLayout} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           )}

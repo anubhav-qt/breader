@@ -19,14 +19,14 @@ import { DotIcon } from './parts';
 
 const ABOUT: Record<Mode, string> = {
   normal: 'Voices that run on this device’s processor, fine on any phone or laptop. Each one downloads once, about 66 MB, and then reads offline.',
-  immersive: 'The page dims. Tap where to begin and the words light up at your pace; tap the lit line to pause. Play adds a voice: any Normal one, or on a computer, one of the richer heavy ones below.',
+  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play adds a voice: any Normal one, or on a computer, one of the richer heavy ones below.',
 };
 const HEAVY = 'Richer, and much heavier: one download of about 330 MB for all five, run on the graphics chip. Use them on a computer. On a phone they can hang the browser.';
-const FALLBACK = 'The page dims. Tap where to begin and the words light up at your pace; tap the lit line to pause. Play adds a Normal voice, each about 66 MB. The heavy ones need a newer computer with a recent Chrome, Edge or Safari.';
+const FALLBACK = 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play adds a Normal voice, each about 66 MB. The heavy ones need a newer computer with a recent Chrome, Edge or Safari.';
 /** A browser that can't run any voice still has Immersive. */
 const NO_VOICES: Record<Mode, string> = {
   normal: 'This browser can’t run voices. Immersive still works without one.',
-  immersive: 'The page dims. Tap where to begin and the words light up at your pace; tap the lit line to pause. This browser can’t run voices, so it stays quiet.',
+  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. This browser can’t run voices, so it stays quiet.',
 };
 const HUNG = 'A heavy voice stopped this browser last time, so Immersive reads with a Normal voice now. The heavy ones are best on a computer.';
 
