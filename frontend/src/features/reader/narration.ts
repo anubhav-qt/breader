@@ -213,7 +213,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
     let voice = null as VoiceInfo | null;
     let rate = 1;
-    /** Sound for sentences, made ahead, by where they start. */
+    /** Sound for sentences made ahead, by where they start, until they're said. */
     let clips = new Map<string, Promise<Clip>>();
     const clipOf = (s: Sentence) => {
       const k = keyOf(s);
@@ -397,6 +397,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         // Past a hundred words in someone else's voice, the reader keeps it.
         if (voice?.upload && !voice.upload.mine) heardWords(voice.upload.id, wordsIn(s.text));
       }
+      // Said: its sound goes, or an hour of listening keeps an hour of it, about 300 MB.
+      clips.delete(keyOf(s));
       last.current = s;
       i++;
     }
