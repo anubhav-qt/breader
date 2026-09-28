@@ -15,3 +15,8 @@
 ## Found while building the frontend
 - [ ] Strip Project Gutenberg front matter and licence from EPUBs, so percentages match the story itself. It currently reads ~5% low on Alice.
 - [ ] Poetry and verse in EPUBs lose their indentation, because publisher CSS is set aside.
+
+## Testing on real phones
+- [ ] Reproduce phone browsers properly, then tune voices and Immersive against them. So far both were tuned in code and a desktop browser only.
+  - A real iPhone 13 with 1 to 2 GB free: Safari's memory ceiling for the voice worker, and what Cache Storage keeps when space is short.
+  - Tapping a sentence to light it, the pace setter on the bottom line, and pages turning under the light.
