@@ -110,7 +110,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               <DotIcon rows={VOICES} />
             </button>
           )}
-          <button type="button" className={`i3-side${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip="Typeface, size, spacing and theme">Aa</button>
+          <button type="button" className={`i3-side i3-aa${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip="Typeface, size, spacing and theme">Aa</button>
           <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on} data-tip={focus.on ? 'Keep the controls in sight' : 'Hide everything but the words'}>
             <DotIcon rows={FOCUS} />
           </button>

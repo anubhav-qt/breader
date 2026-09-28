@@ -95,7 +95,7 @@ interface LookProps {
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
   label: string;
   value: T;
-  options: Array<{ v: T; label: string; content?: React.ReactNode; disabled?: boolean }>;
+  options: Array<{ v: T; label: string; content?: React.ReactNode }>;
   onChange: (v: T) => void;
 }) {
   return (
@@ -109,8 +109,7 @@ export function Segmented<T extends string | number>({ label, value, options, on
             role="radio"
             aria-checked={value === o.v}
             aria-label={o.content ? o.label : undefined}
-            title={o.disabled ? 'Not designed yet' : o.content ? o.label : undefined}
-            disabled={o.disabled}
+            title={o.content ? o.label : undefined}
             className={value === o.v ? 'is-on' : ''}
             onClick={() => onChange(o.v)}
           >
@@ -147,7 +146,6 @@ export function AppearancePanel({ settings, isPdf, update }: LookProps) {
           options={[
             { v: 'book', label: 'Book' },
             { v: 'modern', label: 'Modern' },
-            { v: 'immersive' as 'book', label: 'Immersive', disabled: true },
           ]}
         />
       )}
