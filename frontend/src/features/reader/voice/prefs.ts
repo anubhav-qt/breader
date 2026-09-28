@@ -5,7 +5,8 @@ import { listedVoices } from './list';
 
 /*
  * How this device reads aloud: Normal or Immersive, the voice picked for each, and how fast. Kept
- * on this device, like the voices' files.
+ * on this device, like the voices' files. Immersive without a voice lights the words at a pace of
+ * its own (pacing.ts).
  *
  * Normal reads with Normal's voices. Immersive reads with any: Normal's, or the heavy ones, which
  * only a computer runs well. On a phone they can hang the whole browser, so phones start Immersive
@@ -17,6 +18,10 @@ export interface VoicePrefs {
   /** The voice picked for each mode (catalog.ts keys). Immersive's can be any voice. */
   voice: Record<Mode, string>;
   rate: number;
+  /** Immersive without a voice: words a minute. */
+  pace: number;
+  /** A pace was kept from the page, where it's asked the first time; after that it's set in the sheet. */
+  paceKept: boolean;
 }
 
 const KEY = 'breader.voice.v3';
@@ -25,6 +30,8 @@ const OLD = 'breader.voice.v2';
 /** The heavy voice starting up. Still there when the page loads again, it hung the browser. */
 const STARTING = 'breader.voice.starting';
 export const RATES = [0.8, 1, 1.25, 1.5, 2];
+/** Words a minute. A little under most people's silent reading, to start with. */
+export const PACE = { min: 80, max: 600, step: 20, start: 200 };
 
 /** Phones and tablets, where the heavy voices can hang the browser. */
 export const handheld = () => typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
@@ -44,7 +51,7 @@ if (hung) writeLocal(STARTING, null);
 const stored = readLocal<Partial<VoicePrefs> | null>(KEY, null) ?? fromOld(readLocal<Partial<VoicePrefs>>(OLD, {}));
 const normal = stored.voice?.normal ?? DEFAULT_VOICE.normal;
 const voice = { normal, immersive: handheld() ? normal : DEFAULT_VOICE.immersive, ...stored.voice };
-let prefs: VoicePrefs = { mode: stored.mode ?? 'normal', rate: stored.rate ?? 1, voice };
+let prefs: VoicePrefs = { mode: stored.mode ?? 'normal', rate: stored.rate ?? 1, pace: stored.pace ?? PACE.start, paceKept: stored.paceKept ?? false, voice };
 if (hung && voice.immersive === hung) {
   voice.immersive = normal;
   writeLocal(KEY, prefs);
@@ -58,6 +65,9 @@ export function setVoicePrefs(patch: Partial<VoicePrefs>) {
 }
 
 export const voicePrefs = () => prefs;
+
+/** A step slower or faster. */
+export const stepPace = (dir: 1 | -1) => setVoicePrefs({ pace: Math.max(PACE.min, Math.min(PACE.max, prefs.pace + dir * PACE.step)) });
 export const useVoicePrefs = () => useSyncExternalStore(
   (f) => { subs.add(f); return () => { subs.delete(f); }; },
   () => prefs,

@@ -7,7 +7,8 @@ import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
-import { canNarrate, useNarration } from './narration';
+import { canNarrate, useNarration, type Sentence } from './narration';
+import { overlaps, usePacing } from './pacing';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
 import { useVoicePrefs } from './voice/prefs';
@@ -65,21 +66,59 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   }, []);
 
   const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author });
+  // Immersive: the page dims, and its words light up from a tap at the reader's pace, until play
+  // adds a voice (pacing.ts). Only where there are words to light, not on a PDF's drawn pages.
+  const voice = useVoicePrefs();
+  const immersive = voice.mode === 'immersive' && book.kind === 'flow';
+  const pacing = usePacing(view, immersive && !closing, loc);
   // Voices readers uploaded, so the one picked last time is known.
   useEffect(() => { if (canNarrate) void refreshVoices(); }, []);
-  useReadingClock(!closing, onReadTime, narration.busy);
+  const { busy: speaking } = narration;
+  const { busy: lighting } = pacing;
+  const busy = useCallback(() => speaking() || lighting(), [speaking, lighting]);
+  useReadingClock(!closing, onReadTime, busy);
   useFullscreenReading(!closing);
   const [focus, toggleFocus] = useFocusMode();
   const { awake, still, wake, sleep } = useWake(!closing);
   // Opening in focus mode shows where the controls are before they go.
   useEffect(() => { if (focus) wake(1800); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // Immersive voices get the page to themselves: the text dims around the sentence being read and
-  // the controls step away, as in focus mode, until the voice stops.
-  const voice = useVoicePrefs();
+  // An Immersive voice or the light gets the page to itself: the controls step away, as in focus
+  // mode, until it stops.
   const load = useLoadState();
   const listening = canNarrate && narration.playing && voice.mode === 'immersive' && load.key === null;
-  const hush = focus || listening;
-  useEffect(() => { if (listening) wake(1800); }, [listening, wake]);
+  const hush = focus || listening || pacing.running;
+  useEffect(() => { if (listening || pacing.running) wake(1800); }, [listening, pacing.running, wake]);
+
+  // A voice takes over from the light, and leaves it lit where it stopped.
+  const voiced = useRef(false);
+  useEffect(() => {
+    if (narration.playing) pacing.release();
+    else if (voiced.current && immersive) {
+      const s = narration.where();
+      if (s) pacing.hold(s);
+    }
+    voiced.current = narration.playing;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narration.playing]);
+  /** In Immersive, a voice starts where the light is. */
+  const fromLight = () => (immersive ? pacing.current()?.s : undefined);
+
+  /** A sentence tapped in Immersive, without a voice: the light goes there, or pauses if it's there. */
+  const tapped = (s: Sentence) => {
+    const h = pacing.current();
+    if (!h || !overlaps(h.s, s)) pacing.begin(s);
+    else if (pacing.running) pacing.pause();
+    else pacing.begin(h.s, h.at);
+  };
+  /** Enter, the same for the lit sentence, or the top of the page when nothing is lit. False when it's not Enter's to take. */
+  const onEnter = useRef<() => boolean>(() => false);
+  onEnter.current = () => {
+    if (!immersive || narration.playing || closing) return false;
+    const h = pacing.current();
+    if (h) tapped(h.s);
+    else void view.current?.listen.from().then((list) => { if (list[0]) pacing.begin(list[0]); });
+    return true;
+  };
 
   const [start] = useState<Start>(() => {
     if (initial?.pos) return { kind: 'pos', pos: initial.pos };
@@ -123,13 +162,18 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const onClickCapture = (e: MouseEvent) => {
     if (e.timeStamp - swipedAt.current < 500) { e.stopPropagation(); e.preventDefault(); }
   };
-  // Touch screens have no mouse to wake the controls: in focus mode (or listening) a tap mid-page does, and hides them again.
+  // In Immersive without a voice, a tap on a sentence lights it. Otherwise touch screens, which
+  // have no mouse to wake the controls, wake them with a tap mid-page in focus mode (or while it
+  // reads), and hide them again.
   const touched = useRef(false);
   const onPointerDown = (e: PointerEvent) => { touched.current = e.pointerType === 'touch'; };
   const onClick = (e: MouseEvent) => {
-    if (!hush || !touched.current || e.defaultPrevented || closing) return;
+    if (e.defaultPrevented || closing) return;
     if ((e.target as HTMLElement).closest('a, button, input, select, textarea')) return;
     if (window.getSelection()?.toString()) return;
+    const s = immersive && !narration.playing ? view.current?.listen.pick?.(e.clientX, e.clientY) : null;
+    if (s) { tapped(s); return; }
+    if (!hush || !touched.current) return;
     if (awake) sleep();
     else wake(3500);
   };
@@ -140,6 +184,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       if (e.key === 'Escape') { if (panel) openPanel(null); else onBack(); return; }
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
+      if (e.key === 'Enter' && !target.closest('a, button') && onEnter.current()) { e.preventDefault(); return; }
       const scroll = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'scroll';
       if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !scroll)) { view.current?.turn(1); e.preventDefault(); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !scroll)) { view.current?.turn(-1); e.preventDefault(); }
@@ -183,7 +228,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     book, title, loc, chapters, current, settings, update, isPdf: book.kind === 'pdf',
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
-    narration: canNarrate ? { playing: narration.playing, listening, toggle: narration.toggle, start: narration.start, stop: narration.stop } : null,
+    narration: canNarrate ? { playing: narration.playing, listening, toggle: () => narration.toggle(fromLight()), start: () => narration.start(fromLight()), stop: narration.stop } : null,
+    immersion: immersive ? { running: pacing.running, waiting: !pacing.lit && !pacing.running && !narration.playing } : null,
     focus: { on: focus, toggle: toggleFocus },
   };
   const vars = {
@@ -193,7 +239,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   } as CSSProperties;
 
   return (
-    <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
+    <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
           {book.kind === 'flow' ? (

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { SAY_AS } from '@breader/shared/limits';
 import { springs } from '../../../lib/springs';
 import { readLocal, writeLocal } from '../../../lib/store';
+import { caretAt } from '../dom';
 import { voiceFor, voicePrefs } from '../voice/prefs';
 import { sayAsFor, setSayAs } from '../voice/sayas';
 import { play, synth, unlock, type Playing } from '../voice/speaker';
@@ -63,12 +64,11 @@ function picked(area: HTMLElement, mouse: boolean): Picked | null {
 
 /** The word at a point on the page, if the point is on it. */
 function wordAt(x: number, y: number): Range | null {
-  const p = 'caretPositionFromPoint' in document ? document.caretPositionFromPoint(x, y) : null;
-  const r = !p && 'caretRangeFromPoint' in document ? document.caretRangeFromPoint(x, y) : null;
-  const node = p ? p.offsetNode : r?.startContainer;
+  const hit = caretAt(x, y);
+  const node = hit?.node;
   if (!node || node.nodeType !== Node.TEXT_NODE) return null;
   const text = node.textContent ?? '';
-  let a = p ? p.offset : r!.startOffset;
+  let a = hit.offset;
   let b = a;
   while (a > 0 && IN_WORD.test(text[a - 1])) a--;
   while (b < text.length && IN_WORD.test(text[b])) b++;

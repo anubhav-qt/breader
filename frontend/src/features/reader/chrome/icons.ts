@@ -9,6 +9,8 @@ export const GROW = ['xx...xx', 'x.....x', '.......', '.......', '.......', 'x..
 export const SHRINK = ['.x...x.', 'xx...xx', '.......', '.......', '.......', 'xx...xx', '.x...x.'];
 export const STOP = ['.....', 'xxxxx', 'xxxxx', 'xxxxx', 'xxxxx', 'xxxxx', '.....'];
 export const PLUS = ['.....', '..x..', '..x..', 'xxxxx', '..x..', '..x..', '.....'];
+export const MINUS = ['.....', '.....', '.....', 'xxxxx', '.....', '.....', '.....'];
+export const CHECK = ['.......', '......x', '.....x.', 'x...x..', '.x.x...', '..x....', '.......'];
 export const CROSS = ['.....', 'x...x', '.x.x.', '..x..', '.x.x.', 'x...x', '.....'];
 /** A voice's waveform: the voices and how they read. */
 export const VOICES = ['..x....', '..x.x..', 'x.x.x.x', 'x.x.x.x', 'x.x.x.x', '..x.x..', '..x....'];

@@ -67,6 +67,22 @@ export function rangeOf(el: HTMLElement, start: number, end: number): Range | nu
   return range;
 }
 
+/** The text position at a point on screen, where the browser can say. */
+export function caretAt(x: number, y: number): { node: Node; offset: number } | null {
+  const p = 'caretPositionFromPoint' in document ? document.caretPositionFromPoint(x, y) : null;
+  if (p) return { node: p.offsetNode, offset: p.offset };
+  const r = 'caretRangeFromPoint' in document ? document.caretRangeFromPoint(x, y) : null;
+  return r ? { node: r.startContainer, offset: r.startOffset } : null;
+}
+
+/** How many characters of a block's text come before a position in it. */
+export function offsetIn(el: HTMLElement, node: Node, offset: number): number {
+  const range = document.createRange();
+  range.setStart(el, 0);
+  range.setEnd(node, offset);
+  return range.toString().length;
+}
+
 /** The first character in the block for which `pred` holds, by binary search (characters flow in order). */
 export function firstCharWhere(el: HTMLElement, pred: (r: DOMRect) => boolean): number {
   const nodes = textNodes(el);

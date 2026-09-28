@@ -46,6 +46,8 @@ export interface Listen {
   section: (i: number) => Promise<Sentence[] | null>;
   /** Takes the page to that spot: the voice read on while the page was out of sight. */
   reach: (s: Sentence, at: number) => void;
+  /** The sentence at a point on screen, for Immersive's tap to begin there (pacing.ts). */
+  pick?: (x: number, y: number) => Sentence | null;
 }
 
 export const canNarrate = typeof window !== 'undefined' && typeof Audio !== 'undefined' && typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined';
@@ -116,7 +118,7 @@ const WORDY = /[\p{L}\p{N}]/u;
  * engines don't say, so it's guessed from the letters: a space is quicker than a letter, and
  * commas and full stops are pauses. Words the reader respelled take as long as their new spelling.
  */
-function wordMarks(text: string, swaps: Swap[] = []) {
+export function wordMarks(text: string, swaps: Swap[] = []) {
   const marks: Array<{ at: number; f: number }> = [];
   let total = 0;
   let open: { start: number; f: number } | null = null;
@@ -133,7 +135,7 @@ function wordMarks(text: string, swaps: Swap[] = []) {
   return marks;
 }
 
-const wordsIn = (text: string) => text.match(/[\p{L}\p{N}]+/gu)?.length ?? 0;
+export const wordsIn = (text: string) => text.match(/[\p{L}\p{N}]+/gu)?.length ?? 0;
 
 const pause = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
@@ -160,6 +162,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const spot = useRef<{ s: Sentence; at: number } | null>(null);
   /** The last sentence said, to carry on from after a pause. */
   const last = useRef<Sentence | null>(null);
+  /** `last` is where to start, wherever it is: Immersive's light was there. */
+  const jumped = useRef(false);
   const player = useRef<Playing | null>(null);
   /** Stops the sentence being said or waited for, so the loop looks again. */
   const cut = useRef<((why: 'moved' | 'prefs') => void) | null>(null);
@@ -198,9 +202,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     const fresh = async () => {
       const l = listen()!;
       const r = last.current;
+      const jump = jumped.current;
       last.current = null;
+      jumped.current = false;
       // Behind the voice, the page on screen isn't where to carry on from.
-      const list = (r && behind.current ? await l.section(r.section) : await l.from()) ?? [];
+      const list = (r && (behind.current || jump) ? await l.section(r.section) : await l.from()) ?? [];
       const i = r ? list.findIndex(holds(r)) : -1;
       return { list, i: Math.max(0, i) };
     };
@@ -397,9 +403,17 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (live()) stop();
   };
 
-  /** Starts reading: from the voice sheet's button, the lock screen, or a tap on play that needs nothing first. */
-  const start = () => {
+  /**
+   * Starts reading: from the voice sheet's button, the lock screen, or a tap on play that needs
+   * nothing first. From `from` when given (Immersive's light), or else where it stopped or the top
+   * of the page.
+   */
+  const start = (from?: Sentence) => {
     if (!canNarrate || !listen() || playingRef.current) return;
+    if (from) {
+      last.current = from;
+      jumped.current = true;
+    }
     unlock();
     retry();
     const gen = ++run.current;
@@ -416,7 +430,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   };
 
   /** The tap on play. */
-  const toggle = () => {
+  const toggle = (from?: Sentence) => {
     if (playing) { halt(); return; }
     const p = voicePrefs();
     // Sound can only start in the tap itself.
@@ -425,7 +439,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (p.mode === 'immersive') await checkGpu();
       const m = await missing(voiceFor(p.mode));
       if (m.bytes > 0 && askFirst()) openSheet();
-      else start();
+      else start(from);
     })();
   };
 
@@ -493,6 +507,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   }, [active, stop]);
 
   const busy = useCallback(() => playingRef.current, []);
+  /** Where it stopped, or null. */
+  const where = useCallback(() => last.current, []);
 
-  return { playing, toggle, start, stop: halt, busy };
+  return { playing, toggle, start, stop: halt, busy, where };
 }

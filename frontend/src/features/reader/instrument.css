@@ -241,21 +241,54 @@
 
 
 /* ------------------------------------------------------------------ */
-/* Listening (Immersive voices). The page dims to a third of its ink around the sentence being
-   read, which comes up full and takes the book's colour word by word as it's said. The controls
-   sleep as in focus mode, all but the dot row, where you are in the book now moves with the voice. */
+/* Immersive. The page dims to a third of its ink around the lit sentence, which comes up full and
+   takes the book's colour word by word: as a voice says it, or without one, at the reader's pace
+   (pacing.ts). A click or tap on a sentence lights it. While it moves on, the controls sleep as in
+   focus mode, all but the dot row, where you are in the book now beats with the words. */
 
 .rd .fv-flow { transition: color 600ms ease; }
 .rd .fv-flow :is(img, svg) { transition: opacity 600ms ease; }
-.rd.is-listening .fv-flow { color: color-mix(in oklab, var(--r-fg) 32%, var(--r-bg)); }
-.rd.is-listening .fv-flow :is(a, blockquote, .ph-author, .ph-note) { color: inherit; border-bottom-color: transparent; }
-.rd.is-listening .fv-flow :is(img, svg) { opacity: 0.3; }
-.rd.is-listening ::highlight(narrate) { color: var(--r-fg); }
-.rd.is-listening ::highlight(narrate-said) { color: var(--book-mark); }
+.rd.is-immersed .fv-flow { color: color-mix(in oklab, var(--r-fg) 32%, var(--r-bg)); }
+.rd.is-immersed .fv-flow :is(a, blockquote, .ph-author, .ph-note) { color: inherit; border-bottom-color: transparent; }
+.rd.is-immersed .fv-flow :is(img, svg) { opacity: 0.3; }
+.rd.is-immersed ::highlight(narrate) { color: var(--r-fg); }
+.rd.is-immersed ::highlight(narrate-said) { color: var(--book-mark); }
+.rd.is-immersed:not(.is-aloud) .fv-flow { cursor: pointer; }
 
-.rd.is-listening:not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }
-.rd.is-listening:not(.is-awake) .i3-read { opacity: 0; }
+.rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }
+.rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-read { opacity: 0; }
 .i3-read { transition: opacity 260ms ease; }
+
+/* The bottom line asks where to begin, and the first time the light moves, how fast: slower,
+   faster, and Keep, after which the pace is in the voice sheet. */
+.i3-say { justify-self: center; display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; color: var(--r-fg); }
+.i3-say .i3-dots-icon { flex: none; }
+.rd.is-pacing .i3-foot.is-setting { grid-template-columns: minmax(0, 1fr); opacity: 1; pointer-events: auto; }
+.rd.is-pacing .i3-foot.is-setting .i3-read { opacity: 1; }
+.i3-pace { justify-self: center; display: flex; align-items: center; gap: 4px; }
+.i3-pace .i3-read { min-width: 84px; justify-content: center; }
+.i3-pace-b { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; color: var(--r-fg); transition: background-color 140ms ease; }
+.i3-pace-b:disabled { opacity: 0.3; }
+.i3-pace-keep {
+  margin-left: 12px;
+  height: 34px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  font: var(--ui-w-strong) 12px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--r-fg);
+  color: var(--r-bg);
+  transition: opacity 140ms ease, transform var(--dur-snappy) var(--ease-snappy);
+}
+.i3-pace-keep:active { transform: scale(0.97); }
+@media (hover: hover) {
+  .i3-pace-b:hover:not(:disabled) { background: var(--r-fill); }
+  .i3-pace-keep:hover { opacity: 0.86; }
+}
 
 /* The meter: a column of dots grown from the now-dot (Instrument sets data-lv, 0 to 3). */
 .i3-foot[data-lv="1"] .i3-dot.is-now { box-shadow: 0 -8px var(--dc), 0 8px var(--dc); }

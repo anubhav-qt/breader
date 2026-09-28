@@ -4,7 +4,7 @@ import { animate } from 'motion';
 import type { FlowBook, Position } from '../../books/types';
 import { countWords } from '../../lib/format';
 import { firstSentence } from '../../books/record';
-import { charRect, collectBlocks, firstCharWhere, firstRect, rangeOf, sentenceAt } from './dom';
+import { caretAt, charRect, collectBlocks, firstCharWhere, firstRect, offsetIn, rangeOf, sentenceAt } from './dom';
 import { light, sentencesIn, type Listen, type Sentence } from './narration';
 import { fontFamily, type Style, type StyleSettings } from './settings';
 import { curves, runTurn, swaps, type TurnStyle } from './turn';
@@ -453,6 +453,18 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       return out;
     },
     reach: (sn, at) => goSection(sn.section, { kind: 'pos', block: sn.block, offset: sn.start + at }),
+    pick: (x, y) => {
+      const hit = caretAt(x, y);
+      const i = hit ? blocks.current.findIndex((b) => b.contains(hit.node)) : -1;
+      const el = blocks.current[i];
+      // On a paragraph, not the space between two.
+      if (!hit || !el || !Array.from(el.getClientRects()).some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) return null;
+      const at = offsetIn(el, hit.node, hit.offset);
+      const text = el.textContent ?? '';
+      const all = sentencesIn(text, 0);
+      const found = all.find(([, end]) => at < end) ?? all[all.length - 1];
+      return found ? { section, block: i, start: found[0], end: found[1], text: text.slice(found[0], found[1]) } : null;
+    },
   };
 
   useImperativeHandle(ref, () => ({

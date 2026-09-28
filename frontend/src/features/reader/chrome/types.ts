@@ -35,6 +35,11 @@ export interface ChromeProps {
   closing: boolean;
   /** Reading aloud, where the browser can: a tap on play, and the voice sheet's own button. `listening` is an Immersive voice speaking. */
   narration: { playing: boolean; listening: boolean; toggle: () => void; start: () => void; stop: () => void } | null;
+  /**
+   * Immersive on a book whose words can light up (pacing.ts): `running` while the light moves on
+   * its own, `waiting` while nothing is lit yet, for a tap to say where to begin.
+   */
+  immersion: { running: boolean; waiting: boolean } | null;
   /** Focus mode: everything but the text hides until the mouse moves or a tap mid-page. */
   focus: { on: boolean; toggle: () => void };
 }
