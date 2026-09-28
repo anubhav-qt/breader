@@ -8,6 +8,8 @@ import { colorVars } from '../../data/colors';
 import { recordFromBook } from '../../books/record';
 import { newLibraryKey } from '../../lib/key';
 import { springs } from '../../lib/springs';
+import { detectSeries, type FoundSeries, type SeriesName } from '../gallery/series';
+import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
 import { FreshKey } from './FreshKey';
 import './add.css';
 
@@ -15,7 +17,7 @@ type Step =
   | { kind: 'choose' }
   | { kind: 'paste' }
   | { kind: 'reading'; name: string }
-  | { kind: 'decide'; book: LoadedBook; data: Blob | string; format: Format; name: string; size: number; color: string }
+  | { kind: 'decide'; book: LoadedBook; data: Blob | string; format: Format; name: string; size: number; color: string; found: FoundSeries | null }
   | { kind: 'key'; key: string; title: string }
   | { kind: 'error'; message: string };
 
@@ -27,6 +29,8 @@ interface Props {
   nextColor: () => string;
   /** Start on "Shared Library" when adding from that tab. */
   defaultShared?: boolean;
+  /** Every series in either library, offered as a series name is typed. */
+  knownSeries: SeriesName[];
   onClose: () => void;
   onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob) => Promise<void>;
   onKey: (key: string) => Promise<void>;
@@ -37,13 +41,23 @@ interface Props {
 const MB = 1024 * 1024;
 const sizeText = (b: number) => (b >= MB ? `${(b / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultShared = false, onClose, onAdded, onKey, onLogin }: Props) {
+export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultShared = false, knownSeries, onClose, onAdded, onKey, onLogin }: Props) {
   const [step, setStep] = useState<Step>(initialMode === 'paste' ? { kind: 'paste' } : { kind: 'choose' });
   const [shared, setShared] = useState(defaultShared);
+  const [inSeries, setInSeries] = useState(false);
+  const [series, setSeries] = useState<SeriesValue>({ name: '', num: '' });
   const [dragging, setDragging] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteText, setPasteText] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+
+  /** On to choosing who can read it, with the series found in the book already filled in. */
+  const decide = (book: LoadedBook, data: Blob | string, format: Format, name: string, size: number, fileName?: string) => {
+    const found = detectSeries(book.title, fileName, book.kind === 'flow' ? book.series : undefined, knownSeries);
+    setInSeries(!!found);
+    setSeries({ name: found?.name ?? '', num: found?.index !== undefined ? String(found.index) : '' });
+    setStep({ kind: 'decide', book, data, format, name, size, color: nextColor(), found });
+  };
 
   const read = async (file: File) => {
     const format = detectFormat(file);
@@ -54,7 +68,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     setStep({ kind: 'reading', name: file.name });
     try {
       const book = await parseSource(file, format, titleFromName(file.name));
-      setStep({ kind: 'decide', book, data: file, format, name: file.name, size: file.size, color: nextColor() });
+      decide(book, file, format, file.name, file.size, file.name);
     } catch (e) {
       console.error(e);
       setStep({ kind: 'error', message: `Breader couldn’t read “${file.name}”. It may be damaged or copy-protected.` });
@@ -72,13 +86,22 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     const title = pasteTitle.trim() || text.split('\n')[0].replace(/^#+\s*/, '').slice(0, 80);
     const book = await parseSource(text, 'Text', title);
     if (pasteTitle.trim()) book.title = pasteTitle.trim();
-    setStep({ kind: 'decide', book, data: text, format: 'Text', name: 'Pasted text', size: new Blob([text]).size, color: nextColor() });
+    decide(book, text, 'Text', 'Pasted text', new Blob([text]).size);
   };
 
   const add = async () => {
     if (step.kind !== 'decide') return;
     const { book, data, format, color } = step;
     const rec = recordFromBook(book, format, shared, color);
+    // Standalone unless it's in a series, whatever its file says.
+    const name = inSeries ? series.name.trim() : '';
+    const n = Number(series.num.trim().replace(',', '.'));
+    delete rec.series;
+    delete rec.seriesIndex;
+    if (name) {
+      rec.series = name;
+      if (series.num.trim() && Number.isFinite(n) && n >= 0 && n <= 10_000) rec.seriesIndex = n;
+    }
     const cover = await coverOf(book);
     book.cleanup?.();
     await onAdded(rec, data, cover);
@@ -175,6 +198,29 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                   <i className="add-radio" />
                 </button>
               </div>
+              <div className="add-switch">
+                <span className="add-label" id="add-series">Part of a series</span>
+                <button type="button" className="switch" role="switch" aria-checked={inSeries} aria-labelledby="add-series" onClick={() => setInSeries(!inSeries)} />
+              </div>
+              <AnimatePresence initial={false}>
+                {inSeries && (
+                  <motion.div
+                    key="series"
+                    className="add-series"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={springs.snappy}
+                  >
+                    <SeriesField id="add-series-name" value={series} known={knownSeries} inputClass="add-input" onChange={setSeries} autoFocus={!series.name} />
+                    <span className="add-found">
+                      {step.found && series.name.trim() === step.found.name
+                        ? step.found.from === 'file' ? 'Found in the book’s details' : 'Guessed from its title'
+                        : 'Type a series, or pick one as it appears'}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <p className="add-local">Saved in this browser first, then synced, so your key or account opens it anywhere.</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep({ kind: 'choose' })}>Choose another</button>

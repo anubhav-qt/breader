@@ -19,7 +19,7 @@ import { KeyDialog } from './features/add/KeyDialog';
 import { AccountMenu } from './features/account/AccountMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
-import { seriesNames } from './features/gallery/series';
+import { detectSeries, seriesNames } from './features/gallery/series';
 import { Reader } from './features/reader/Reader';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
@@ -354,6 +354,9 @@ export default function App() {
       try {
         const book = await parseSource(file, format, titleFromName(file.name));
         const rec = recordFromBook(book, format, shared, lib.nextColor());
+        // What the Add a book dialog would have filled in, taken as it is.
+        const found = detectSeries(book.title, file.name, book.kind === 'flow' ? book.series : undefined, allSeries);
+        if (found) Object.assign(rec, { series: found.name, seriesIndex: found.index });
         const cover = await coverOf(book);
         book.cleanup?.();
         await lib.addBook(rec, file, cover);
@@ -371,7 +374,7 @@ export default function App() {
         say(`Breader couldn’t read “${file.name}”`);
       }
     }
-  }, [lib, say]);
+  }, [lib, say, allSeries]);
 
   useEffect(() => {
     if (route.name !== 'library') return;
@@ -536,6 +539,7 @@ export default function App() {
             hasKey={!!lib.key}
             nextColor={lib.nextColor}
             defaultShared={tab === 'shelf'}
+            knownSeries={allSeries}
             onClose={() => setAdding(null)}
             onAdded={onAdded}
             onKey={lib.setKey}

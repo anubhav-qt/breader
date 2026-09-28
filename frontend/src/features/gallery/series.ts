@@ -93,3 +93,48 @@ export function matchSeries(all: SeriesName[], typed: string, limit = 6): Series
     .map((x) => x.s);
 }
 
+/* Finding a new book's series */
+
+export interface FoundSeries {
+  name: string;
+  index?: number;
+  /** Where it came from: the file's own details, or its title or file name. */
+  from: 'file' | 'title';
+}
+
+const NUM = String.raw`(\d{1,4}(?:\.\d+)?)`;
+const MARK = String.raw`(?:#|book|bk\.?|vol\.?|volume|part|no\.?|n\u00ba)`;
+/** Hyphen, en dash or em dash. */
+const DASH = String.raw`\-\u2013\u2014`;
+/** "(Mistborn #1)", "[Discworld, Book 5]", at the end of a title. */
+const TRAILING = new RegExp(String.raw`[(\[]\s*([^()\[\]]+?)\s*,?\s*${MARK}\s*${NUM}\s*[)\]]\s*$`, 'i');
+/** "Discworld Book 5: Sourcery", "Wheel of Time #3 - The Dragon Reborn". */
+const LEADING = new RegExp(String.raw`^\s*(.+?)\s*,?\s+${MARK}\s*${NUM}\s*[:.${DASH}]\s+\S`, 'i');
+/** "Discworld 05 - Sourcery": only trusted for a series the library already has. */
+const BARE = new RegExp(String.raw`^\s*(.+?)\s+${NUM}\s+[${DASH}]\s+\S`, 'i');
+
+/**
+ * The series a new book is in: what its file says, or failing that what its title or file name
+ * say, spelled the way the library already spells it.
+ */
+export function detectSeries(title: string, fileName: string | undefined, fromFile: { name: string; index?: number } | undefined, known: SeriesName[]): FoundSeries | null {
+  const spelled = (name: string) => known.find((s) => plain(s.name) === plain(name))?.name;
+  if (fromFile?.name.trim()) {
+    const name = fromFile.name.trim();
+    return { name: spelled(name) ?? name, index: fromFile.index, from: 'file' };
+  }
+  const stem = fileName?.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[_]+/g, ' ');
+  for (const text of [title, stem]) {
+    if (!text) continue;
+    for (const re of [TRAILING, LEADING, BARE]) {
+      const m = re.exec(text);
+      if (!m) continue;
+      const name = m[1].trim();
+      const known = spelled(name);
+      if (re === BARE && !known) continue;
+      if (name.length < 2 || /^\d+$/.test(name)) continue;
+      return { name: known ?? name, index: Number(m[2]), from: 'title' };
+    }
+  }
+  return null;
+}
