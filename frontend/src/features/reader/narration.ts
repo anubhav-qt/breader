@@ -359,6 +359,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (why) {
         await pause(80);
         if (why === 'moved') {
+          // From the top of where the reader went, not again from the sentence before.
+          last.current = null;
           ({ list, i } = await fresh());
           clips = new Map();
         }
