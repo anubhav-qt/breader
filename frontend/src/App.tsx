@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { Header, type Tab } from './components/Header';
@@ -296,9 +297,11 @@ export default function App() {
         const host = hostRef.current;
         void (host ? closeReader(host, closing.id, reduced) : Promise.resolve()).then(() => {
           if (!live) return;
-          host?.removeAttribute('style');
-          host?.querySelectorAll<HTMLElement>('.rd-body').forEach((el) => { el.style.opacity = ''; });
-          setClosing(null);
+          // Gone before its styles are undone, or it shows whole for a frame over the library.
+          flushSync(() => setClosing(null));
+          if (!host?.isConnected) return;
+          host.removeAttribute('style');
+          host.querySelectorAll<HTMLElement>('.rd-body').forEach((el) => { el.style.opacity = ''; });
         });
       });
     });
