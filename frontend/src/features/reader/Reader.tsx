@@ -187,12 +187,12 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     void shown(f.s).then(() => flash(view.current?.listen.range?.(f.s) ?? null, body.current));
   };
   const readAll = useCallback((onRead?: (done: number, of: number) => void) => readBook(book, view.current!.listen, onRead), [book]);
-  /** Back to a checkpoint: the voice reads on from there, or waits there (lit, in Immersive) for play. */
+  /** Back to a checkpoint: the voice reads on from there, or waits there, lit, for play. */
   const backTo = (s: Sentence) => {
     openPanel(null);
     const reading = narration.playing;
     narration.jump(s);
-    if (immersive && !reading) void shown(s).then(() => pacing.hold(s));
+    if (!reading) void shown(s).then(() => (immersive ? pacing.hold(s) : view.current?.listen.show(s, 0)));
   };
   /** A tap on the page: on what's lit, it carries on; elsewhere it starts there, or at the paragraph's start when nothing's lit yet. */
   const tapped = (s: Sentence) => {

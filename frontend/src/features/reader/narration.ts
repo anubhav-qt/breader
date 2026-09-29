@@ -215,16 +215,18 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
   const listen = () => view.current?.listen;
 
-  const stop = useCallback(() => {
+  /** Goes quiet. A pause (`keep`) leaves the sentence it stopped in lit, to carry on from. */
+  const end = useCallback((keep: boolean) => {
     run.current++;
     spot.current = null;
     player.current?.stop();
     player.current = null;
     cut.current = null;
-    view.current?.listen?.clear();
+    if (!keep) view.current?.listen?.clear();
     hold(false);
     setPlaying(false);
   }, [view]);
+  const stop = useCallback(() => end(false), [end]);
 
   /** Brings the page to the voice, and lights where it is. */
   const catchUp = async (s: Sentence, at: number) => {
@@ -371,7 +373,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         const volume = sleep?.current.before(s) ?? 1;
         if (volume <= 0) {
           last.current = s;
-          stop();
+          end(true);
           return;
         }
         const marks = wordMarks(s.text, respell(s.text).swaps);
@@ -427,13 +429,13 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (how === 'paused') {
         // Paused from outside (a call, headphones out, the lock screen): carry on from here.
         last.current = s;
-        stop();
+        end(true);
         return;
       }
       if (how === 'refused') {
         // The browser wouldn't play it: say so, rather than going quiet. Play tries again from here.
         last.current = s;
-        stop();
+        end(true);
         failed(`This browser wouldn’t play the voice (${refusal}). Tap Read aloud to try again.`);
         openSheet();
         return;
@@ -479,10 +481,10 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     void loop(gen);
   };
 
-  /** Stops, to carry on from this sentence next time. */
+  /** Pauses, to carry on from this sentence next time. It stays lit meanwhile. */
   const halt = () => {
     const s = spot.current;
-    stop();
+    end(true);
     if (s) last.current = s.s;
   };
 
@@ -543,6 +545,13 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.mode, picked, speed]);
+  // Paused, the lit sentence goes out with a change of mode, which lights its own way.
+  const modeAt = useRef(prefs.mode);
+  useEffect(() => {
+    if (modeAt.current !== prefs.mode && !playingRef.current) listen()?.clear();
+    modeAt.current = prefs.mode;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs.mode]);
 
   // Play and pause from outside the page: the lock screen, a headset's button, a keyboard's media
   // keys. Some browsers send a key both as a key press (Reader.tsx) and to the media session, so a
