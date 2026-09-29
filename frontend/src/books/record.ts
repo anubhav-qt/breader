@@ -8,6 +8,18 @@ const SMALL_PRINT = /©|\bcopyright\b|all rights reserved|\bisbn\b|translated by
 
 const flat = (el: Element) => (el.textContent ?? '').replace(/\s+/g, ' ').trim();
 const sentence = (text: string) => (text.match(/^.{1,240}?[.!?…](?=["”’)]*(\s|$))["”’)]*/)?.[0] ?? text.slice(0, 200)).trim();
+const BLOCKS = 'p, div, li, blockquote';
+/**
+ * A block's prose. A heading set above a line break (or in a block of its own) isn't glued to the
+ * text after it: "The Three-Fingered Man" and "Before recording…" stay apart, and the heading goes.
+ */
+function prose(el: Element) {
+  const c = el.cloneNode(true) as Element;
+  c.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+  const lines = (c.textContent ?? '').split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  while (lines.length > 1 && lines[0].split(' ').length < 6 && !/[.!?…]["”’)]*$/.test(lines[0])) lines.shift();
+  return lines.join(' ');
+}
 
 /**
  * The first real sentence in a run of sections: skips covers, contents, credits and other front
@@ -24,15 +36,18 @@ export function firstSentence(sections: Section[], from = 0): string {
     if (!text || linked > text.length / 2) continue;
     doc.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => h.remove());
     for (const p of Array.from(doc.querySelectorAll('p'))) {
-      const line = flat(p);
+      const line = prose(p);
       if (line.split(' ').length >= 6 && !SMALL_PRINT.test(line)) return sentence(line);
     }
     docs.push(doc);
   }
-  // No paragraphs (some files set text in plain divs): the first text that reads like a sentence.
+  // No paragraphs (some files set text in plain divs): the first block that reads like a sentence.
   for (const doc of docs) {
-    const text = flat(doc.body);
-    if (/[.!?…]/.test(text) && !SMALL_PRINT.test(text.slice(0, 240))) return sentence(text);
+    const leaves = Array.from(doc.body.querySelectorAll(BLOCKS)).filter((el) => !el.querySelector(BLOCKS));
+    for (const el of [...leaves, doc.body]) {
+      const text = prose(el);
+      if (text.split(' ').length >= 6 && /[.!?…]/.test(text) && !SMALL_PRINT.test(text.slice(0, 240))) return sentence(text);
+    }
   }
   return '';
 }
