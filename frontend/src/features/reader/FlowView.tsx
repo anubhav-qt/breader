@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { animate } from 'motion';
+import { printOf } from '@breader/shared/ai';
 import type { FlowBook, Position } from '../../books/types';
 import { countWords } from '../../lib/format';
 import { glide, stopGlide } from '../../lib/glide';
@@ -496,6 +497,12 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       return out;
     },
     reach: (sn, at) => goSection(sn.section, { kind: 'pos', block: sn.block, offset: sn.start + at }),
+    print: async (i) => {
+      const html = book.sections[i]?.html;
+      if (html === undefined) return null;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      return printOf(collectBlocks(doc.body).map((el) => el.textContent ?? ''));
+    },
     paragraphs: () => {
       const out: Paragraph[] = [];
       blocks.current.forEach((el, b) => {

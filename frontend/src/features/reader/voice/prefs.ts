@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { readLocal, writeLocal } from '../../../lib/store';
 import { BUILT_IN, DEFAULT_VOICE, fromListed, hasGpu, type Engine, type Mode, type VoiceInfo } from './catalog';
 import { listedVoices } from './list';
+import type { Two } from './two';
 
 /*
  * How this device reads aloud: Normal or Immersive, the voice picked for each, and how fast. Kept
@@ -23,6 +24,12 @@ export interface VoicePrefs {
   pace: number;
   /** A pace was kept from the page, where it's asked the first time; after that it's set in the sheet. */
   paceKept: boolean;
+  /** 1 voice, or 2 (a woman's and a man's) for books an AI has marked, in each mode. */
+  count: Record<Mode, 1 | 2>;
+  /** 2 voices: her voice and his in each mode. Both of one kind: Normal, or heavy. */
+  pair: Record<Mode, Record<Two, string>>;
+  /** 2 voices: who reads narration that isn't anyone's point of view. */
+  noPov: Two;
 }
 
 const KEY = 'breader.voice.v3';
@@ -42,6 +49,15 @@ export const rateOf = (p: VoicePrefs) => (p.mode === 'immersive' ? Math.min(RATE
 /** Phones and tablets, where the heavy voices can hang the browser. */
 export const handheld = () => typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
 
+/** 2 voices' first pair in each mode. A phone's Immersive starts on Normal's, like its one voice. */
+const DEFAULT_PAIR: Record<Mode, Record<Two, string>> = {
+  normal: { F: 'piper:kristin', M: 'piper:norman' },
+  immersive: { F: 'kokoro:af_heart', M: 'kokoro:am_michael' },
+};
+const defaultPair = (m: Mode) => (m === 'immersive' && handheld() ? DEFAULT_PAIR.normal : DEFAULT_PAIR[m]);
+/** The first pair of one kind. */
+const pairOfKind = (e: Engine) => DEFAULT_PAIR[e === 'kokoro' ? 'immersive' : 'normal'];
+
 function fromOld(old: Partial<VoicePrefs>): Partial<VoicePrefs> {
   if (!handheld() || !old.voice) return old;
   // Its Immersive voice could only be a heavy one then; a phone forgets it.
@@ -57,7 +73,17 @@ if (hung) writeLocal(STARTING, null);
 const stored = readLocal<Partial<VoicePrefs> | null>(KEY, null) ?? fromOld(readLocal<Partial<VoicePrefs>>(OLD, {}));
 const normal = stored.voice?.normal ?? DEFAULT_VOICE.normal;
 const voice = { normal, immersive: handheld() ? normal : DEFAULT_VOICE.immersive, ...stored.voice };
-let prefs: VoicePrefs = { mode: stored.mode ?? 'normal', rate: stored.rate ?? 1, pace: stored.pace ?? PACE.start, paceKept: stored.paceKept ?? false, voice };
+const pair = { normal: { ...defaultPair('normal'), ...stored.pair?.normal }, immersive: { ...defaultPair('immersive'), ...stored.pair?.immersive } };
+let prefs: VoicePrefs = {
+  mode: stored.mode ?? 'normal',
+  rate: stored.rate ?? 1,
+  pace: stored.pace ?? PACE.start,
+  paceKept: stored.paceKept ?? false,
+  voice,
+  count: { normal: 1, immersive: 1, ...stored.count },
+  pair,
+  noPov: stored.noPov ?? 'F',
+};
 if (hung && voice.immersive === hung) {
   voice.immersive = normal;
   writeLocal(KEY, prefs);
@@ -96,6 +122,44 @@ export function voiceFor(mode: Mode): VoiceInfo {
   if (mode === 'normal') return normal;
   const v = find(prefs.voice.immersive, ['piper', 'kokoro']) ?? (handheld() ? normal : find(DEFAULT_VOICE.immersive, ['kokoro'])!);
   return v.engine === 'kokoro' && !hasGpu() ? normal : v;
+}
+
+/*
+ * 2 voices. Each pair is two of one kind, so one engine reads both: Normal's (about 64 MB more for
+ * the second) or the heavy ones (half a megabyte more, as they share one model).
+ */
+
+/** A voice can read one side of 2 voices if it's a woman's or a man's. */
+export const sideOf = (v: VoiceInfo): Two | null => v.gender ?? null;
+
+/**
+ * The voices 2 voices reads with in a mode: the pair picked, or the default where one has gone,
+ * or isn't a woman's or a man's any more. Heavy voices where the graphics chip can't run them
+ * read with Normal's pair instead.
+ */
+export function pairFor(mode: Mode): Record<Two, VoiceInfo> {
+  const pick = (m: Mode, g: Two, engines: Engine[]) => {
+    const v = find(prefs.pair[m][g], engines);
+    return v && sideOf(v) === g ? v : find(defaultPair(m)[g], engines)!;
+  };
+  const normal = { F: pick('normal', 'F', ['piper']), M: pick('normal', 'M', ['piper']) };
+  if (mode === 'normal') return normal;
+  const F = pick('immersive', 'F', ['piper', 'kokoro']);
+  let M = pick('immersive', 'M', ['piper', 'kokoro']);
+  // Never one of each kind: his follows hers.
+  if (M.engine !== F.engine) M = find(pairOfKind(F.engine).M, [F.engine])!;
+  return F.engine === 'kokoro' && !hasGpu() ? normal : { F, M };
+}
+
+/** Picks a woman's or a man's voice for her side or his. The other side keeps to the same kind. */
+export function pickSide(mode: Mode, v: VoiceInfo) {
+  const g = sideOf(v);
+  if (!g) return;
+  const other: Two = g === 'F' ? 'M' : 'F';
+  const now = pairFor(mode)[other];
+  const next = { ...prefs.pair[mode], [g]: v.key };
+  if (now.engine !== v.engine) next[other] = pairOfKind(v.engine)[other];
+  setVoicePrefs({ pair: { ...prefs.pair, [mode]: next } });
 }
 
 /*

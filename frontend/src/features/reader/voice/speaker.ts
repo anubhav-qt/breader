@@ -10,8 +10,8 @@ import type { Reply, Request } from './tts.worker';
  * got, and playing what comes back.
  *
  * A worker holds a lot while it runs (about 300 MB for a Normal voice, 760 MB and the graphics
- * chip's memory for a heavy one), so it holds one voice at a time, and goes when the book closes
- * or nothing has been said for five minutes. Starting again takes a second or two, from the cache.
+ * chip's memory for a heavy one), so it holds one voice at a time (two for 2 voices), and goes
+ * when the book closes or nothing has been said for five minutes. Starting again takes a second or two, from the cache.
  */
 
 export interface Clip {
@@ -144,13 +144,17 @@ export async function missing(v: VoiceInfo) {
   return { files: out, bytes: weight(out) };
 }
 
-/** Starts the voice's engine and loads the voice, showing progress while files arrive. */
-export function prepare(v: VoiceInfo): Promise<void> {
+/**
+ * Starts the voice's engine and loads the voice, showing progress while files arrive. Other
+ * voices go, but those in `keep`: 2 voices keeps its other one.
+ */
+export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
   const r = runner(v.engine);
   const ready = r.voices.get(v.key);
   if (ready) return ready;
-  // One voice at a time: another one loaded alongside would need its room too.
+  // One voice at a time (two for 2 voices): another one loaded alongside would need its room too.
   for (const k of r.voices.keys()) {
+    if (keep.includes(k)) continue;
     r.voices.delete(k);
     void r.call({ type: 'forget', key: k }).catch(() => {});
   }
@@ -195,8 +199,8 @@ export function prepare(v: VoiceInfo): Promise<void> {
   return p;
 }
 
-export async function synth(v: VoiceInfo, text: string, speed: number): Promise<Clip> {
-  await prepare(v);
+export async function synth(v: VoiceInfo, text: string, speed: number, keep: string[] = []): Promise<Clip> {
+  await prepare(v, keep);
   // Not a new engine: this one was let go while the voice was being readied.
   const r = runners[v.engine];
   if (!r) throw new Error('Stopped');

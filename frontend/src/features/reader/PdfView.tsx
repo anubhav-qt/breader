@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import type { RenderTask } from 'pdfjs-dist';
+import { printOf } from '@breader/shared/ai';
 import type { PdfBook } from '../../books/types';
 import { WORDS_PER_PDF_PAGE } from '../../books/pdf';
 import { glide } from '../../lib/glide';
@@ -49,13 +50,18 @@ async function draw(book: PdfBook, index: number, canvas: HTMLCanvasElement, pic
   };
 }
 
-/** A page's text as sentences to read aloud. */
-async function sentencesOn(book: PdfBook, page: number): Promise<Sentence[]> {
+/** A page's text, as one paragraph. */
+async function textOn(book: PdfBook, page: number): Promise<string> {
   const content = await (await book.doc.getPage(page + 1)).getTextContent();
   let text = '';
   for (const it of content.items) if ('str' in it) text += it.str + (it.hasEOL ? '\n' : '');
   // Words broken across lines join up again.
-  text = text.replace(/-\n(?=\p{Ll})/gu, '').replace(/\s+/g, ' ');
+  return text.replace(/-\n(?=\p{Ll})/gu, '').replace(/\s+/g, ' ');
+}
+
+/** A page's text as sentences to read aloud. */
+async function sentencesOn(book: PdfBook, page: number): Promise<Sentence[]> {
+  const text = await textOn(book, page);
   return sentencesIn(text, 0).map(([start, end]) => ({ section: page, block: 0, start, end, text: text.slice(start, end) }));
 }
 
@@ -195,6 +201,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
       onScreen: (sn) => sn.section === page,
       clear: () => {},
       section: async (i) => (i >= 0 && i < total ? sentencesOn(book, i) : null),
+      print: async (i) => (i >= 0 && i < total ? printOf([await textOn(book, i)]) : null),
       reach: (sn) => goTo(sn.section),
     },
   }), [book, goTo, layout, page, total]);

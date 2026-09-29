@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Loc, ViewHandle } from './FlowView';
-import { checkGpu, type VoiceInfo } from './voice/catalog';
+import { checkGpu, type Mode, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
-import { askFirst, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import { askFirst, pairFor, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { failed, hold, letGoKeys, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
+import { inTwo, type Marks, type Two } from './voice/two';
 
 /*
  * Reading aloud with voices that run on this device (voice/): from the top of the page on screen,
@@ -27,6 +28,8 @@ export interface Sentence {
   start: number;
   end: number;
   text: string;
+  /** 2 voices: hers or his (voice/two.ts). */
+  g?: Two;
 }
 
 export interface Listen {
@@ -53,6 +56,8 @@ export interface Listen {
   paragraphs?: () => Paragraph[];
   /** A sentence's words on the page, when its chapter is the one on screen: to point at them. */
   range?: (s: Sentence) => Range | null;
+  /** A chapter's fingerprint (shared printOf), to tell it's the text 2 voices' marks were made from. */
+  print?: (i: number) => Promise<string | null>;
 }
 
 /** A paragraph by its number in the chapter, and its first sentence. */
@@ -106,6 +111,11 @@ export function sentencesIn(text: string, from: number): Array<[number, number]>
 
 const HIGHLIGHT = 'narrate';
 const SAID = 'narrate-said';
+/** 2 voices lights her lines and his in their own colours: `narrate-her`, `narrate-said-his`… */
+const TONES = { F: '-her', M: '-his' } as const;
+let tone: Two | null = null;
+/** Whose voice the sentence lit next is in, for its colour; null for one voice. */
+export const setTone = (g: Two | null) => { tone = g; };
 type Highlights = { set: (name: string, h: unknown) => void; delete: (name: string) => void };
 const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
 
@@ -138,13 +148,18 @@ export function light(range: Range | null, said: Range | null = null) {
   const was = litIn;
   litIn = range ? [holder(range)].filter((el): el is Element => !!el) : [];
   repaint([...was, ...litIn]);
-  if (!range) { highlights.delete(HIGHLIGHT); highlights.delete(SAID); return; }
+  for (const sfx of ['', ...Object.values(TONES)]) {
+    highlights.delete(HIGHLIGHT + sfx);
+    highlights.delete(SAID + sfx);
+  }
+  if (!range) return;
+  const sfx = tone ? TONES[tone] : '';
   const H = (globalThis as unknown as { Highlight: new (...r: Range[]) => { priority: number } }).Highlight;
-  highlights.set(HIGHLIGHT, new H(range));
-  if (!said) { highlights.delete(SAID); return; }
+  highlights.set(HIGHLIGHT + sfx, new H(range));
+  if (!said) return;
   const h = new H(said);
   h.priority = 1;
-  highlights.set(SAID, h);
+  highlights.set(SAID + sfx, h);
 }
 
 /* Timing */
@@ -183,6 +198,12 @@ const AHEAD = 900;
 /** Immersive keeps a scrolled page's sentence near the middle of the screen. */
 const centred = () => voicePrefs().mode === 'immersive';
 
+/** 2 voices' pair, hers first. */
+const both = (m: Mode) => {
+  const p = pairFor(m);
+  return [p.F, p.M];
+};
+
 const keyOf = (s: Sentence) => `${s.section}.${s.block}.${s.start}`;
 const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && s.block === r.block && s.start <= r.start && r.start < s.end;
 
@@ -191,12 +212,15 @@ const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && s.blo
  * by hand while it reads moves the voice there too. `openSheet` shows the voice sheet: for a
  * download to agree to, or something gone wrong. `about` names the book for the lock screen.
  * `sleep` watches for a reader who fell asleep to it (sleep.ts). `here` is where a press from
- * outside the page carries on from (Immersive's light).
+ * outside the page carries on from (Immersive's light). `two` is the book's 2 voices marks, when
+ * it has them (voice/two.ts).
  */
-export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }, sleep?: RefObject<SleepWatch>, here?: () => Sentence | undefined) {
+export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }, sleep?: RefObject<SleepWatch>, here?: () => Sentence | undefined, two: Marks | null = null) {
   const [playing, setPlaying] = useState(false);
   const playingRef = useRef(playing);
   playingRef.current = playing;
+  const marks = useRef(two);
+  marks.current = two;
   const run = useRef(0);
   /** The sentence being said and how far in, for following the reader's own turns. */
   const spot = useRef<{ s: Sentence; at: number } | null>(null);
@@ -223,6 +247,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     player.current = null;
     cut.current = null;
     if (!keep) view.current?.listen?.clear();
+    setTone(null);
     hold(false);
     setPlaying(false);
   }, [view]);
@@ -242,6 +267,31 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
   const loop = async (gen: number) => {
     const live = () => run.current === gen;
+
+    /*
+     * 2 voices, when the book has marks and the reader picked it: sentences are cut where lines
+     * start and end (voice/two.ts). `shape` says how the list is cut, so a change re-cuts it.
+     * A chapter parsed differently from the text the marks were made from reads in one voice.
+     */
+    let pairFailed = false;
+    const shapeNow = () => {
+      const p = voicePrefs();
+      const m = marks.current;
+      return m && !pairFailed && p.count[p.mode] === 2 ? `2:${p.noPov}:${m.made}` : '1';
+    };
+    let shape = shapeNow();
+    const same = new Map<number, boolean>();
+    const shaped = async (raw: Sentence[]) => {
+      const m = marks.current;
+      if (shape === '1' || !m) return raw;
+      for (const sec of new Set(raw.map((s) => s.section))) {
+        if (same.has(sec)) continue;
+        const print = await listen()?.print?.(sec);
+        same.set(sec, !!print && print === m.prints[sec]);
+      }
+      return inTwo(raw, m, voicePrefs().noPov, (sec) => same.get(sec) ?? false);
+    };
+
     const fresh = async () => {
       const l = listen()!;
       const r = last.current;
@@ -249,12 +299,15 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       last.current = null;
       jumped.current = false;
       // Behind the voice, the page on screen isn't where to carry on from.
-      const list = (r && (behind.current || jump) ? await l.section(r.section) : await l.from()) ?? [];
+      const list = await shaped((r && (behind.current || jump) ? await l.section(r.section) : await l.from()) ?? []);
       const i = r ? list.findIndex(holds(r)) : -1;
       return { list, i: Math.max(0, i) };
     };
 
-    let voice = null as VoiceInfo | null;
+    /** The voices reading: one, or 2 voices' hers and his. */
+    let voices: VoiceInfo[] = [];
+    const keys = () => voices.map((v) => v.key);
+    const voiceOf = (s: Sentence) => (voices.length > 1 && s.g === 'M' ? voices[1] : voices[0]);
     let rate = 1;
     /** Sound for sentences made ahead, by where they start, until they're said. */
     let clips = new Map<string, Promise<Clip>>();
@@ -262,7 +315,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       const k = keyOf(s);
       let c = clips.get(k);
       if (!c) {
-        c = synth(voice!, respell(s.text).said, rate);
+        c = synth(voiceOf(s), respell(s.text).said, rate, keys());
         c.catch(() => {});
         clips.set(k, c);
       }
@@ -280,7 +333,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
           for (let sec = (target[target.length - 1]?.section ?? listen()?.at() ?? 0) + 1; ; sec++) {
             const more = await listen()?.section(sec);
             if (!more || !live()) return false;
-            if (more.length) { target.push(...more); return true; }
+            if (more.length) { target.push(...(await shaped(more))); return live(); }
           }
         })();
         growing.set(target, p);
@@ -313,28 +366,49 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
     let failures = 0;
     let lastError = '';
+    let toldPair = false;
     while (live()) {
       // A new voice or speed reads from here on.
       const p = voicePrefs();
       // Immersive reads with Normal's voices where the GPU can't run its own.
       if (p.mode === 'immersive') await checkGpu();
       if (!live()) return;
-      const want = voiceFor(p.mode);
-      if (want.key !== voice?.key || rateOf(p) !== rate) {
+      // 1 voice or 2, or a new pick for no point of view: cut again from the sentence it's on.
+      const now = shapeNow();
+      if (now !== shape) {
+        shape = now;
+        const s = list[i] ?? last.current;
+        if (s) { last.current = s; jumped.current = true; }
+        ({ list, i } = await fresh());
+        clips = new Map();
+        if (!live()) return;
+      }
+      const want = shape === '1' ? [voiceFor(p.mode)] : both(p.mode);
+      const wantKeys = want.map((v) => v.key).join('|');
+      if (wantKeys !== keys().join('|') || rateOf(p) !== rate) {
         clips = new Map();
         rate = rateOf(p);
-        if (want.key !== voice?.key) {
-          const first = !voice;
-          voice = null;
-          if (!first && (await missing(want)).bytes > 0 && askFirst()) { openSheet(); break; }
+        if (wantKeys !== keys().join('|')) {
+          const first = !voices.length;
+          voices = [];
+          let bytes = 0;
+          for (const v of want) bytes += (await missing(v)).bytes;
+          if (!first && bytes > 0 && askFirst()) { openSheet(); break; }
           try {
-            await prepare(want);
+            for (const v of want) await prepare(v, want.map((w) => w.key));
           } catch {
-            if (live()) openSheet();
+            if (!live()) return;
+            // Two wouldn't start (a phone short of memory, most likely): one voice, and the sheet says so.
+            if (want.length > 1) { pairFailed = true; continue; }
+            openSheet();
             break;
           }
           if (!live()) return;
-          voice = want;
+          voices = want;
+          if (pairFailed && !toldPair) {
+            toldPair = true;
+            failed('2 voices couldn’t start on this device just now, so this reads in one voice.');
+          }
         }
       }
       const l = listen();
@@ -346,6 +420,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       }
       const s = list[i];
       spot.current = { s, at: 0 };
+      setTone(voices.length > 1 ? s.g ?? null : null);
       // Into the next chapter: the page follows as soon as it's seen.
       if (s.section !== l.at()) behind.current = true;
       ahead();
@@ -449,7 +524,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       } else {
         failures = 0;
         // Past a hundred words in someone else's voice, the reader keeps it.
-        if (voice?.upload && !voice.upload.mine) heardWords(voice.upload.id, wordsIn(s.text));
+        const said = voiceOf(s);
+        if (said?.upload && !said.upload.mine) heardWords(said.upload.id, wordsIn(s.text));
       }
       // Said: its sound goes, or an hour of listening keeps an hour of it, about 300 MB.
       clips.delete(keyOf(s));
@@ -497,8 +573,9 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     // Sound can only start in the tap itself.
     unlock();
     if (p.mode === 'immersive') await checkGpu();
-    const m = await missing(voiceFor(p.mode));
-    if (m.bytes > 0 && !agreed && askFirst()) { openSheet(); return false; }
+    let bytes = 0;
+    for (const v of marks.current && p.count[p.mode] === 2 ? both(p.mode) : [voiceFor(p.mode)]) bytes += (await missing(v)).bytes;
+    if (bytes > 0 && !agreed && askFirst()) { openSheet(); return false; }
     actions.current.start(from);
     return true;
   };
@@ -541,10 +618,13 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const prefs = useVoicePrefs();
   const picked = voiceFor(prefs.mode).key;
   const speed = rateOf(prefs);
+  // 2 voices: on or off, the pair, and who reads with no point of view, as the loop sees them.
+  const twoOn = !!two && prefs.count[prefs.mode] === 2;
+  const pair = twoOn ? both(prefs.mode).map((v) => v.key).join('|') : '';
   useEffect(() => {
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.mode, picked, speed]);
+  }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made]);
   // Paused, the lit sentence goes out with a change of mode, which lights its own way.
   const modeAt = useRef(prefs.mode);
   useEffect(() => {

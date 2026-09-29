@@ -163,3 +163,18 @@ export interface AiVoicesResponse {
   /** Every line spoken by a woman or a man: [section, block, start, end, 'F' | 'M']. */
   spans: Array<[number, number, number, number, 'F' | 'M']>;
 }
+
+/**
+ * A section's fingerprint, "blocks:hash": how many paragraphs it has, and FNV-1a over UTF-16 of
+ * their text. The same as ai/tools/lib.ts `fingerprint`, so the app can tell a chapter it parsed
+ * is the very text the AI read (AiFile.sections).
+ */
+export function printOf(texts: string[]): string {
+  const text = texts.join('\u0001');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${texts.length}:${(h >>> 0).toString(16).padStart(8, '0')}`;
+}

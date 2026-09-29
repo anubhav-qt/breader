@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AiFile, aiProblems } from '@breader/shared';
+import { AiFile, aiProblems, printOf } from '@breader/shared';
 import { cutAt, revisitFor, voicesFor } from '../src/lib/ai.ts';
 import { aiFile } from './ai-fixture.ts';
 
@@ -80,5 +80,14 @@ describe('voice marks', () => {
     expect(v.sections).toEqual(f.sections);
     const sent = JSON.stringify(v);
     for (const name of ['Anna', 'Tomas', 'stranger', 'anna']) expect(sent).not.toContain(name);
+  });
+});
+
+describe('a section’s fingerprint', () => {
+  it('is the one the AI tools write, so the app knows the text is the same', () => {
+    // Values from ai/tools/lib.ts fingerprint.
+    expect(printOf([])).toBe('0:811c9dc5');
+    expect(printOf(['One.'])).toBe('1:ccbaa073');
+    expect(printOf(['“Hello,” she said.', 'Chapter 2', 'Ünïcödé \u2014 and more…'])).toBe('3:db98d78f');
   });
 });

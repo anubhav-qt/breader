@@ -3,6 +3,7 @@ import type { AiStatus, AiVoicesResponse, RevisitResponse } from '@breader/share
 import { flush, hasKey } from '../../data/sync';
 import { api } from '../../lib/api';
 import { readLocal, writeLocal } from '../../lib/store';
+import { marksOf, type Marks } from './voice/two';
 
 /*
  * What an AI made of the open book, when the reader said yes to it (the book's AI switch):
@@ -78,4 +79,16 @@ export async function loadVoiceMarks(bookId: string, made: string): Promise<AiVo
   } catch {
     return have;
   }
+}
+
+/** The open book's 2 voices marks, once it has them. */
+export function useVoiceMarks(bookId: string, status: AiStatus): Marks | null {
+  const [marks, setMarks] = useState<Marks | null>(null);
+  useEffect(() => {
+    if (!status.voices || !status.made) { setMarks(null); return; }
+    let live = true;
+    void loadVoiceMarks(bookId, status.made).then((r) => { if (live) setMarks(r?.spans.length ? marksOf(r) : null); });
+    return () => { live = false; };
+  }, [bookId, status.voices, status.made]);
+  return marks;
 }
