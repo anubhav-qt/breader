@@ -112,6 +112,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
 
   const pending = useRef<Target | null>(init.target);
   const loc = useRef({ block: 0, offset: 0 });
+  /** The word lit last (narration.ts), until the light goes out. */
+  const lit = useRef<{ section: number; block: number; offset: number } | null>(null);
   const pageRef = useRef(0);
   const pagesRef = useRef(1);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -304,19 +306,37 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   };
 
   // Numbers on the paragraphs, drawn by CSS from an attribute so the text's own offsets don't
-  // move. They widen the first lines a little, so paged, the page on screen is found again.
+  // move. They widen the first lines a little, which moves everything after them, so coming or
+  // going they leave what the reader is looking at where it was: the lit words, or else the top
+  // of the page. Paged, that's the page it's now on.
   const wasNumbered = useRef(false);
   useLayoutEffect(() => {
     const flow = flowRef.current;
     if (!flow) return;
+    const toggled = wasNumbered.current !== numbered;
+    wasNumbered.current = numbered;
+    const l = lit.current;
+    const onLit = !!l && l.section === section && placeOf(l.block, l.offset) === 'here';
+    const at = toggled && size.w && taggedFor.current === section ? (onLit ? l! : loc.current) : null;
+    const yOf = () => (at && blocks.current[at.block] ? charRect(blocks.current[at.block], at.offset)?.top : undefined);
+    const y = !pagesMode ? yOf() : undefined;
     let n = 0;
     for (const el of collectBlocks(flow)) {
       if (numbered && isParagraph(el)) el.dataset.para = pad2(++n);
       else delete el.dataset.para;
     }
-    const toggled = wasNumbered.current !== numbered;
-    wasNumbered.current = numbered;
-    if (toggled && pagesMode && size.w && taggedFor.current === section) land({ kind: 'pos', ...loc.current });
+    if (!at) return;
+    if (pagesMode) {
+      land({ kind: 'pos', block: at.block, offset: at.offset });
+      // The top of the page it landed on stays the reader's place, not the lit words.
+      if (onLit) { loc.current = locateNow(); report(); }
+      return;
+    }
+    const now = yOf();
+    if (y === undefined || now === undefined) return;
+    const v = viewRef.current!;
+    stopGlide(v);
+    v.scrollTop += now - y;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numbered, section]);
 
@@ -443,6 +463,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     show: (sn, at, centre) => {
       if (sn.section !== section) return false;
       const el = blocks.current[sn.block];
+      lit.current = { section, block: sn.block, offset: sn.start + at };
       light(el ? rangeOf(el, sn.start, sn.end) : null, el && at > 0 ? rangeOf(el, sn.start, sn.start + at) : null);
       const place = placeOf(sn.block, sn.start + at);
       if (pagesMode) {
@@ -458,7 +479,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       return place !== 'away';
     },
     onScreen: (sn, at) => sn.section === section && (steered() || placeOf(sn.block, sn.start + at) === 'here'),
-    clear: () => light(null),
+    clear: () => { lit.current = null; light(null); },
     section: async (i) => {
       const html = book.sections[i]?.html;
       if (html === undefined) return null;
