@@ -467,6 +467,28 @@
 @keyframes vs-blink { 50% { opacity: 0.2; } }
 @media (prefers-reduced-motion: reduce) { .vs-prog-dots i.is-now { animation: none; } }
 
+/* 2 voices, before a book is ready for it: a small card in the middle, made like the drops. */
+.vs-soon-scrim { position: absolute; inset: 0; z-index: 9; background: color-mix(in srgb, var(--r-bg) 55%, transparent); }
+.vs-soon {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(340px, calc(100% - 32px));
+  max-height: calc(100% - 48px);
+  overflow-y: auto;
+  padding: 22px 20px 20px;
+  background: var(--r-bg);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
+}
+.vs-soon .pnl-h { margin-bottom: 12px; }
+.vs-soon-t { margin: 0 32px 14px 0; font-family: var(--read); font-size: 28px; line-height: 0.95; color: var(--book-mark); }
+.vs-soon .p-note { margin: 0 0 10px; font-size: 13px; color: var(--r-fg); }
+.vs-soon .p-note:last-of-type { color: var(--r-mu); }
+.vs-soon .vs-go { width: 100%; margin-top: 18px; }
+
 /* Adding a voice (chrome/AddVoice.tsx). */
 .vs-add { display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 0 10px; border-radius: 9px; font: var(--ui-w) 12.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); transition: color 140ms ease, background-color 140ms ease; }
 .vs-add .i3-dots-icon { font-size: 11px; }

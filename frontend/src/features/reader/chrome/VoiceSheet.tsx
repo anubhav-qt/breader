@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { hasKey } from '../../../data/sync';
 import { api } from '../../../lib/api';
+import { springs } from '../../../lib/springs';
 import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, fromListed, useGpu, type Engine, type Mode, type SamplePart, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
@@ -8,7 +11,7 @@ import { hung, PACE, RATES, setVoicePrefs, stepPace, useVoicePrefs, voiceFor } f
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { AddVoice } from './AddVoice';
 import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
-import { DotIcon } from './parts';
+import { CloseDots, DotIcon } from './parts';
 
 /*
  * The voice sheet, from the button beside play: Normal or Immersive, the voice, and the speed.
@@ -29,6 +32,15 @@ const NO_VOICES: Record<Mode, string> = {
   immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. This browser can’t run voices, so it stays quiet.',
 };
 const HUNG = 'A heavy voice stopped this browser last time, so Immersive reads with a Normal voice now. The heavy ones are best on a computer.';
+
+/*
+ * Two voices, a woman's and a man's, need the book read through first to know who says each line
+ * (ai/procedure.md). No book has that yet, so 2 looks off and a tap on it says why, warmly.
+ */
+const COUNTS = [
+  { v: 1, label: '1 voice' },
+  { v: 2, label: '2 voices', muted: true },
+];
 
 const PARTS: Array<{ v: SamplePart; label: string }> = [
   { v: 'greeting', label: 'Greeting' },
@@ -65,6 +77,10 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
   const [part, setPart] = useState(lastPart);
   const heard = useRef<VoiceInfo | null>(null);
   const [adding, setAdding] = useState(false);
+  // The note about two voices sits in the middle of the reader, outside the drop, which clips.
+  const [page, setPage] = useState<HTMLElement | null>(null);
+  const onRoot = useCallback((el: HTMLDivElement | null) => { if (el) setPage(el.closest<HTMLElement>('.rd')); }, []);
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => { void refreshVoices(); }, []);
   // Whether Immersive can run here, asked before it offers a download.
@@ -154,12 +170,13 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
   const loading = load.key !== null;
 
   return (
-    <div className="pnl vs">
+    <div className="pnl vs" ref={onRoot}>
       <div className="pnl-h">Read aloud</div>
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
       <p className="p-note vs-about">{fallback ? FALLBACK : ABOUT[mode]}</p>
       {hung && mode === 'immersive' && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
+      <Segmented label="Voices" value={1} onChange={(n) => { if (n === 2) setWaiting(true); }} options={COUNTS} />
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
       <div className="vs-lists" role="radiogroup" aria-label="Voice">
         <div className="vs-list">{BUILT_IN.normal.map((v) => row(v))}</div>
@@ -201,7 +218,54 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
           <span>{playing ? (loading ? 'Cancel' : 'Stop') : bytes ? `Download ${mb(bytes)} and read` : 'Read aloud'}</span>
         </button>
       </div>
+      {page && createPortal(<AnimatePresence>{waiting && <TwoVoicesSoon onClose={() => setWaiting(false)} />}</AnimatePresence>, page)}
     </div>
+  );
+}
+
+/** Why 2 voices can't be picked yet: a small card in the middle, over the sheet. */
+function TwoVoicesSoon({ onClose }: { onClose: () => void }) {
+  const ok = useRef<HTMLButtonElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    ok.current?.focus();
+    // Escape closes the card, not the sheet under it (or the book).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      close.current();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      before?.focus?.();
+    };
+  }, []);
+  return (
+    <>
+      <motion.div className="vs-soon-scrim" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
+      <motion.div
+        className="vs-soon"
+        data-panel
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="vs-soon-t"
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97, y: 4, transition: { duration: 0.15 } }}
+        transition={springs.snappy}
+      >
+        <CloseDots onClick={onClose} />
+        <div className="pnl-h">Two voices</div>
+        <p className="vs-soon-t" id="vs-soon-t">Not quite yet</p>
+        <p className="p-note">Soon a book can be read by two voices, a woman’s and a man’s, so every conversation sounds like people talking.</p>
+        <p className="p-note">To get each line right, the whole book is read first, noting who says what. That takes a while, and this book isn’t ready yet. Sorry for the wait, and thank you for bearing with us.</p>
+        <p className="p-note">Once it’s ready, 2 voices turns on here by itself.</p>
+        <button type="button" className="vs-go" ref={ok} onClick={onClose}>I’ll wait</button>
+      </motion.div>
+    </>
   );
 }
 
