@@ -7,6 +7,7 @@ import { clientIp, sameOriginWrites } from './lib/http.ts';
 import { log } from './log.ts';
 import { accountRoutes } from './routes/account.ts';
 import { adminRoutes } from './routes/admin.ts';
+import { aiRoutes } from './routes/ai.ts';
 import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
 import { libraryRoutes } from './routes/libraries.ts';
@@ -55,6 +56,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', fileRoutes(deps));
   app.route('/v1', shelfRoutes(deps));
   app.route('/v1', voiceRoutes(deps));
+  app.route('/v1', aiRoutes(deps));
 
   app.notFound((c) => c.json({ code: 'not_found', message: 'No such endpoint.' }, 404));
   app.onError(onError);

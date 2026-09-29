@@ -113,3 +113,53 @@ export function aiProblems(f: AiFile): string[] {
   }
   return out;
 }
+
+/* ---- What the server hands a reader (server/src/routes/ai.ts) ---- */
+
+/** [section, block]: a paragraph. */
+export type AiAt = [number, number];
+
+/** Whether a book has anything from the AI for this reader: its switch is on and the AI has read its file. */
+export interface AiStatus {
+  /** When the notes were made, or null when there are none. */
+  made: string | null;
+  revisit: boolean;
+  voices: boolean;
+}
+
+/** A person, place or word, as far as the reader has read and no further. */
+export interface RevisitEntry {
+  /** Tells entries apart; says nothing about them. */
+  key: number;
+  /** What the book calls them by now, and what it called them before. */
+  name: string;
+  also: string[];
+  about: string;
+  /** What's happened, in order: [section, block, what]. */
+  events: Array<[number, number, string]>;
+  /** Where they came in, and where they were last seen. */
+  first: AiAt;
+  last: AiAt;
+  /** Every section they're in. */
+  seen: number[];
+}
+
+export interface RevisitResponse {
+  made: string;
+  /** The paragraph the notes go up to, or null when the reader has read the book through. */
+  upTo: AiAt | null;
+  people: RevisitEntry[];
+  places: RevisitEntry[];
+  terms: RevisitEntry[];
+}
+
+/** Who reads what in 2 voices. No names: nobody sees these, they only pick a voice. */
+export interface AiVoicesResponse {
+  made: string;
+  /** Each section's "blocks:hash", so the app can tell it parsed the same text the AI read. */
+  sections: string[];
+  /** From each paragraph on, whose voice the narration is in: her, his, or null for the reader's pick. */
+  narration: Array<[number, number, 'F' | 'M' | null]>;
+  /** Every line spoken by a woman or a man: [section, block, start, end, 'F' | 'M']. */
+  spans: Array<[number, number, number, number, 'F' | 'M']>;
+}
