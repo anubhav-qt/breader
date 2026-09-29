@@ -7,6 +7,7 @@
     "books": "tsx tools/books.ts",
     "fetch": "tsx tools/fetch.ts",
     "check": "tsx tools/check.ts",
+    "mark": "tsx tools/mark.ts",
     "audit": "tsx tools/audit.ts",
     "pack": "tsx tools/pack.ts",
     "import": "tsx tools/import.ts",
