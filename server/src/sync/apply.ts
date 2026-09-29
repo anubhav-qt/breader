@@ -143,6 +143,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
       if (m.edit.favorite !== undefined) set.favorite = m.edit.favorite;
       if (m.edit.series !== undefined) set.editSeries = m.edit.series === null ? null : m.edit.series.trim();
       if (m.edit.seriesIndex !== undefined) set.editSeriesIndex = m.edit.seriesIndex;
+      if (m.edit.ai !== undefined) set.ai = m.edit.ai;
       const done = await tx.update(libraryItems).set(set).where(item(libraryId, m.bookId)).returning({ id: libraryItems.bookId });
       if (!done.length) throw notFound();
       return;

@@ -20,6 +20,8 @@ export interface ShelfItem extends BookRecord {
   /** Opened in the reader at least once. */
   opened: boolean;
   favorite: boolean;
+  /** Lets an AI read along (BookEdit.ai). */
+  ai: boolean;
 }
 
 /** A removed book, kept in memory so it can be put back. */
@@ -197,6 +199,7 @@ const editToWire = (patch: BookEdit): Edit => ({
   ...('favorite' in patch ? { favorite: !!patch.favorite } : {}),
   ...('series' in patch ? { series: patch.series === undefined ? null : patch.series.trim() } : {}),
   ...('seriesIndex' in patch ? { seriesIndex: patch.seriesIndex ?? null } : {}),
+  ...('ai' in patch ? { ai: !!patch.ai } : {}),
 });
 
 /** Merges what other browsers did. Changes the server hasn't seen yet (`pending`) win. */
@@ -237,6 +240,7 @@ function mergePull(d: LibraryData, pull: PullResponse, pending: Mutation[]): { n
     if (mine?.favorite !== undefined) edit.favorite = mine.favorite;
     if (mine?.series !== undefined) edit.series = mine.series ?? undefined;
     if (mine?.seriesIndex !== undefined) edit.seriesIndex = mine.seriesIndex ?? undefined;
+    if (mine?.ai !== undefined) edit.ai = mine.ai;
     for (const k of Object.keys(edit) as Array<keyof BookEdit>) if (edit[k] === undefined || edit[k] === false) delete edit[k];
     if (Object.keys(edit).length) edits[b.id] = edit;
     else delete edits[b.id];
@@ -565,6 +569,7 @@ export function withReading(
     seriesIndex: series ? e.seriesIndex ?? rec.seriesIndex : undefined,
     color: normColor(e.color ?? rec.color, rec.title),
     favorite: !!e.favorite,
+    ai: !!e.ai,
     opened: !!r,
     coverUrl: covers[rec.id],
     // How far it's really read, not a page jumped ahead to (books/mark.ts).

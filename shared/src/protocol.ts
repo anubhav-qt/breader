@@ -61,6 +61,8 @@ export const Edit = z.object({
   favorite: z.boolean().optional(),
   series: z.string().max(300).nullable().optional(),
   seriesIndex: SeriesIndex.nullable().optional(),
+  /** The reader lets an AI read the book along with them, for Revisit and 2 voices. */
+  ai: z.boolean().optional(),
 });
 export type Edit = z.infer<typeof Edit>;
 

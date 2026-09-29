@@ -90,6 +90,8 @@ export interface BookEdit {
   /** The reader's own series for it; '' takes it out of the one its file names. */
   series?: string;
   seriesIndex?: number;
+  /** Lets an AI read along, for Revisit and 2 voices. */
+  ai?: boolean;
 }
 
 export interface ReadState {
