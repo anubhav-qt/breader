@@ -92,6 +92,12 @@ Learn enough about the book to attribute every line with confidence, without let
 
 When the web and the book disagree, the book wins. When sources disagree and the book hasn't settled it yet, keep reading. Decide when the book does, and mark the earlier lines `?` if they're still open.
 
+**Research only.** When the owner asks for research only, a script (`mark`, which the owner runs) does steps 3 to 5 with another model. That model gets the whole book, `research.md` and `cast.json`, but none of your searching. So:
+- do Step 1 and Step 2, and nothing else: no marks, no notes, no ledger;
+- in `research.md`, give it what the web taught you: the narration, the cast table with every name, nickname and title the book uses for each person, the traps, and any identity the book hides and where it's revealed;
+- put everyone you found into `cast.json`, each with evidence;
+- run `check`, fix any errors, and tell the owner the book is ready for `mark`.
+
 ### Step 3: Read and mark, part by part
 
 For each part, in order:
@@ -422,6 +428,7 @@ Every command starts `npm --prefix ai run`, from the repository root.
 | `audit -- <key> cast` | Everyone, with their voice, their lines and the evidence |
 | `audit -- <key> notes <s:b>` | Revisit as a reader at that paragraph sees it |
 | `pack -- <key> --by "<model>"` | Final check, then writes the book's file for the server |
+| `mark -- <key>` | The owner's, not yours: after research only, marks every part with Kimi K3 through NVIDIA, then packs |
 
 `<key>` can also be the book's rank in `books`, or the first letters of its key.
 
