@@ -13,6 +13,8 @@ import { curves, runTurn, swaps, type TurnStyle } from './turn';
 
 /** Gap between columns (and between page views). */
 export const GAP = 80;
+/** The lines of controls above and below the text (instrument.css), which cover a scrolled page's edges. */
+export const BAR = 76;
 
 export interface Loc {
   section: number;
@@ -71,6 +73,8 @@ interface Props {
   onTurn?: (e: TurnEvent) => void;
   /** Each paragraph shows its number, for Immersive's choosing where to begin. */
   numbered?: boolean;
+  /** The line of controls above the text is showing, over the top of a scrolled page. */
+  head?: boolean;
 }
 
 const PAGE_SPRING = { type: 'spring', stiffness: 158, damping: 25.1, mass: 1 } as const;
@@ -98,7 +102,7 @@ function resolveStart(book: FlowBook, starts: number[], start: Start): { section
   return { section: s, target: { kind: 'words', value: w - starts[s] } };
 }
 
-export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, style, s, start, turnStyle, onLocation, onWidth, onTurn, numbered = false }, ref) {
+export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, style, s, start, turnStyle, onLocation, onWidth, onTurn, numbered = false, head = true }, ref) {
   const n = book.sections.length;
   const starts = useMemo(() => {
     let acc = 0;
@@ -417,7 +421,10 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       const v = viewRef.current!;
       if (dir > 0 && v.scrollTop + v.clientHeight >= v.scrollHeight - 4) { if (section < n - 1) goSection(section + 1, { kind: 'start' }, 1); return; }
       if (dir < 0 && v.scrollTop <= 0) { if (section > 0) goSection(section - 1, { kind: 'end' }, -1); return; }
-      glide(v, dir * (v.clientHeight - s.size * s.lh * 2));
+      // What can be seen between the lines of controls, less two lines to read on from, so none
+      // go by unseen under them.
+      const lines = s.size * s.lh * 2;
+      glide(v, dir * Math.max(lines, v.clientHeight - (head ? BAR : 0) - BAR - lines));
       return;
     }
     const np = pageRef.current + dir;

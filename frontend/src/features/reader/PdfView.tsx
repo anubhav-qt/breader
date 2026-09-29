@@ -4,7 +4,7 @@ import type { RenderTask } from 'pdfjs-dist';
 import type { PdfBook } from '../../books/types';
 import { WORDS_PER_PDF_PAGE } from '../../books/pdf';
 import { glide } from '../../lib/glide';
-import type { Loc, Start, TurnEvent, ViewHandle } from './FlowView';
+import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
 import { sentencesIn, type Sentence } from './narration';
 import { findPictures, keepPictures } from './pictures';
 import type { Layout } from './settings';
@@ -182,8 +182,9 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
     goToFraction: (f) => goTo(Math.floor(Math.max(0, Math.min(0.999, f)) * total)),
     turn: (dir) => {
       if (layout === 'scroll') {
+        // Less what the lines of controls cover, so no part of a page goes by unseen under them.
         const r = scrollRef.current!;
-        glide(r, dir * (r.clientHeight - 80));
+        glide(r, dir * Math.max(80, r.clientHeight - 2 * BAR - 80));
       } else goTo(page + dir);
     },
     // Read aloud a page at a time. The text sits in the drawing, so nothing lights up.
