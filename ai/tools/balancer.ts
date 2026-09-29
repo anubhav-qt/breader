@@ -89,6 +89,8 @@ export class Balancer {
     if (e.kind === 'gone') { s.gone = true; return; }
     const [base, cap] = COOL[e.kind];
     if (!base) return;
+    // Calls already in flight when the model started cooling fail together: that's one strike.
+    if (s.coolUntil > Date.now()) return;
     s.strikes++;
     const secs = e.retryAfterS ?? Math.min(cap, base * 2 ** (s.strikes - 1));
     s.coolUntil = Date.now() + secs * 1000;
