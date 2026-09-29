@@ -114,11 +114,6 @@
 }
 .t-author { font: var(--ui-w) 12.5px/1.3 var(--ui); opacity: 0.75; margin-top: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-meta { font: var(--ui-w) 12.5px/1.2 var(--ui); opacity: 0.78; white-space: nowrap; }
-.t-sub { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 6px; }
-.t-sub .t-author { margin-top: 0; min-width: 0; }
-.t-sub .t-meta { flex: none; }
-.t-title.t-push { margin-top: auto; }
-.t-big { font: var(--ui-w-strong) 30px/1 var(--ui); }
 /* The line where the reader stopped: one style on every card that shows it. */
 .t-line {
   max-width: 100%;
@@ -134,7 +129,17 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.t-push ~ .t-line { margin-top: 10px; }
+.t-subtitle {
+  max-width: 100%;
+  margin-top: 2px;
+  font-family: var(--read);
+  font-size: clamp(19px, 3.6cqw, 28px);
+  line-height: 1.05;
+  opacity: 0.72;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .t-foot { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 18px; }
 .t-cta { margin-left: auto; padding: 11px 16px; border-radius: 999px; font: var(--ui-w) 13px/1 var(--ui); white-space: nowrap; background: var(--ink); color: var(--canvas); }
 .is-ink .t-cta { background: var(--bc-ink); color: var(--bc); }
@@ -147,11 +152,89 @@
 .tile-small .t-title { font-size: clamp(19px, 12cqw, 26px); }
 .tile-cover .t-title { font-size: clamp(19px, 14cqw, 30px); }
 
-/* Wide cards read left to right: title and author, then the line. */
-.tile-wide > .tile-face { flex-direction: row; align-items: stretch; gap: 28px; }
-.t-col { display: flex; flex-direction: column; align-items: flex-start; width: 44%; flex: none; min-width: 0; }
-.tile-face > .t-col:first-child { padding-right: 0; }
-.tile-wide .t-line { flex: 1; min-width: 0; align-self: flex-end; margin-top: 0; }
+/*
+ * Cards without a cover beside them are set like one: the author, a big dotted mark (the volume's
+ * number, or the title's first letter) in the book's colour, the title at the foot, and how far.
+ */
+.tile:not(.has-art) > .tile-face {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "by" "mark" "name" "foot";
+  justify-items: start;
+}
+.c-by {
+  grid-area: by;
+  max-width: 100%;
+  font: var(--ui-w) 11px/1.2 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-mark { grid-area: mark; margin-top: 6px; font: 900 min(30cqh, 40cqw) / 0.82 var(--ui); letter-spacing: -0.02em; color: var(--bc); }
+.is-ink .c-mark { color: var(--bc-ink); }
+.c-name { grid-area: name; align-self: end; max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; }
+.c-sub {
+  max-width: 100%;
+  margin-top: 3px;
+  font-family: var(--read);
+  font-size: clamp(17px, 7cqw, 22px);
+  line-height: 1.02;
+  opacity: 0.72;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.c-foot {
+  grid-area: foot;
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 9px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  font: var(--ui-w) 11px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+.c-foot > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.c-short { display: none; }
+.tile-square:not(.has-art) .t-title { font-size: clamp(24px, 7cqw, 36px); }
+.tile-cover .c-mark { font-size: min(26cqh, 48cqw); }
+/* Small cards: the mark, the title, and how far under it. */
+.tile-small:not(.has-art) > .tile-face { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "mark" "name" "foot"; }
+.tile-small .c-by, .tile-small .c-sub, .tile-small .c-foot > :nth-child(2) { display: none; }
+.tile-small > .tile-face > .c-mark { margin-top: 0; font-size: min(22cqh, 30cqw); }
+.tile-small > .tile-face .t-title { -webkit-line-clamp: 2; font-size: clamp(18px, 9cqw, 22px); }
+.tile-small .c-foot { margin-top: 4px; padding: 0; border: 0; }
+/* Wide cards: the mark at the left, the rest beside it. */
+.tile-wide:not(.has-art) > .tile-face {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "mark by" "mark name" "mark foot";
+  gap: 0 24px;
+}
+.tile-wide .c-mark { margin: 0; align-self: center; font-size: min(66cqh, 22cqw); }
+.tile-wide .c-name .t-title { font-size: clamp(19px, min(4.2cqw, 18cqh), 30px); -webkit-line-clamp: 2; }
+/* Shorter cards keep the subtitle for the ones with room, and short squares (a phone's wall) are set out like the small ones. */
+@container (max-height: 299px) {
+  .tile:not(.tile-hero) .c-sub { display: none; }
+}
+@container (max-height: 199px) {
+  .tile:is(.tile-square, .tile-cover):not(.has-art) > .tile-face { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "mark" "name" "foot"; }
+  .tile:is(.tile-square, .tile-cover) :is(.c-by, .c-foot > :nth-child(2), .c-long) { display: none; }
+  .tile-square .c-short { display: inline; }
+  .tile:is(.tile-square, .tile-cover) > .tile-face > .c-mark { margin-top: 0; font-size: min(22cqh, 30cqw); }
+  .tile-square:not(.has-art) > .tile-face .t-title { -webkit-line-clamp: 2; font-size: clamp(18px, 10cqw, 22px); }
+  .tile:is(.tile-square, .tile-cover) .c-foot { margin-top: 4px; padding: 0; border: 0; }
+}
 
 /* Narrow heroes (phones) give the text more of the card. */
 @container (max-width: 420px) {
@@ -165,12 +248,8 @@
 @container (max-width: 229px) {
   .t-line { display: none; }
 }
-/* Tall panoramas on the wall have room for more of the line. */
-@container (min-height: 220px) {
-  .tile-wide .t-line { -webkit-line-clamp: 4; }
-}
 @container (max-height: 199px) {
-  .tile-square .t-line, .tile-tall .t-line, .tile-small .t-line, .tile-cover .t-line { display: none; }
+  .tile-square .t-line { display: none; }
 }
 
 /*
@@ -196,8 +275,33 @@
   }
   .tile.has-art > .tile-face { padding-right: calc(var(--pad-x) + var(--art-w) + 28px); }
   .tile-hero.has-art .t-title { font-size: clamp(34px, 5.4cqw, 50px); }
+  /* The cover drawn for a recent book without one: its colour, author, mark and title. */
+  .tile.has-art > .tile-art.is-made {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: calc(var(--art-w) * 0.08);
+    background: var(--bc);
+    color: var(--bc-ink);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bc-ink) 14%, transparent);
+  }
 }
 .tile-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile.has-art .t-foot { margin-top: 14px; }
+.mc-by { max-width: 100%; font: var(--ui-w) 10px/1.2 var(--ui); text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-mark { margin-top: 8px; font: 900 calc(var(--art-w) * 0.42) / 0.82 var(--ui); letter-spacing: -0.02em; }
+.mc-title {
+  margin-top: auto;
+  font-family: var(--read);
+  font-weight: 700;
+  font-size: calc(var(--art-w) * 0.15);
+  line-height: 1.02;
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
 
 /* The full title, after the pointer rests on a shortened one. */
 .title-hint {
@@ -220,7 +324,7 @@
 /* Phones: a narrower gutter, and card details as strong as the rest of the interface. */
 @media (max-width: 720px) {
   .gallery { padding: 0 16px 120px; }
-  .t-eyebrow, .t-author, .t-meta { opacity: 0.9; }
+  .t-eyebrow, .t-author, .t-meta, .c-by, .c-foot { opacity: 0.9; }
 }
 
 /* Recent: bento. Positioned, so a card being removed can fade out where it stood. */

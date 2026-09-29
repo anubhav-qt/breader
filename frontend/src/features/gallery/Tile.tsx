@@ -4,7 +4,8 @@ import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
 import { IconMore, IconStar } from '../../components/icons';
 import { blotsFor, maskFor, radiiFor } from './blots';
-import { actionLabel, progressText, shortProgress, when } from './text';
+import { cardNames } from './names';
+import { actionLabel, progressText, shortProgress, timeLeft, when } from './text';
 import type { GalleryItem } from './types';
 import { useSize } from './useSize';
 import { bookVars } from './vars';
@@ -65,8 +66,6 @@ function setMask(el: HTMLElement | null, mask: string) {
  */
 export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, ref: slotRef, onOpen, onEdit }: TileProps) {
   const b = item.book;
-  // A card in a series row leads with its number.
-  const meta = number !== undefined ? `Book ${number}` : undefined;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
@@ -90,7 +89,10 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   useEffect(() => grow.on('change', apply));
   useLayoutEffect(() => { apply(grow.get()); });
 
-  const hasArt = art && !!b.coverUrl && (variant === 'hero' || variant === 'square');
+  const roomy = variant === 'hero' || variant === 'square';
+  const hasArt = art && !!b.coverUrl && roomy;
+  // A recent book without a cover gets one drawn.
+  const made = art && !b.coverUrl && roomy;
   const started = b.progress > 0;
   useLayoutEffect(() => fitTitle(ref.current), [ref, size.w, size.h, b.title, variant, hasArt, artRatio, started]);
   useEffect(() => {
@@ -114,7 +116,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
     >
       <div
         ref={ref}
-        className={`tile tile-${variant}${hasArt ? ' has-art' : ''}`}
+        className={`tile tile-${variant}${hasArt || made ? ' has-art' : ''}`}
         style={{ ...bookVars(b), ...(hasArt ? { '--art-ratio': artRatio } : null) } as CSSProperties}
         onContextMenu={(e) => {
           if (!moreRef.current) return;
@@ -122,10 +124,10 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           if (!open) onEdit(b, moreRef.current);
         }}
       >
-        <div className="tile-face"><TileContent book={b} variant={variant} now={now} meta={meta} /></div>
+        <div className="tile-face"><Face book={b} variant={variant} now={now} number={number} beside={hasArt || made} /></div>
         {started && (
           <div ref={inkRef} className="tile-face is-ink" aria-hidden="true">
-            <TileContent book={b} variant={variant} now={now} meta={meta} />
+            <Face book={b} variant={variant} now={now} number={number} beside={hasArt || made} />
           </div>
         )}
         <button
@@ -135,6 +137,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           aria-label={`${b.title}, ${progressText(b)}`}
           onClick={(e) => onOpen(b, (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect())}
         />
+        {made && <MadeCover book={b} number={number} />}
         {hasArt && (
           <span className="tile-art">
             <img
@@ -168,84 +171,68 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   );
 }
 
-/**
- * Every card that is wide enough ends on the same thing: the line where the reader stopped (the
- * opening line for a new book), in one style. CSS hides it on cards too narrow or short for it.
- */
-const Line = ({ book }: { book: ShelfItem }) => (book.line ? <span className="t-line">{book.line}</span> : null);
+const join = (...parts: Array<string | false | undefined | 0>) => parts.filter(Boolean).join(' · ');
 
-function TileContent({ book: b, variant, now, meta }: { book: ShelfItem; variant: Variant; now: number; meta?: string }): ReactNode {
-  const title = <span className="t-title">{b.title}</span>;
-  const top = when(b, now);
-  const by = b.author;
-  const short = meta ? `${meta} · ${shortProgress(b)}` : shortProgress(b);
-  const push = <span className="t-title t-push">{b.title}</span>;
-  switch (variant) {
-    case 'hero':
-      return (
-        <>
-          <span className="t-eyebrow">{top}</span>
-          {title}
-          <span className="t-author">{by}</span>
-          <Line book={b} />
-          <span className="t-foot">
-            <span className="t-meta">{progressText(b)}</span>
-            <span className="t-cta">{actionLabel(b)} ›</span>
-          </span>
-        </>
-      );
-    case 'square':
-      return (
-        <>
-          <span className="t-eyebrow">{top}</span>
-          {title}
-          <span className="t-sub">
-            <span className="t-author">{by}</span>
-            <span className="t-meta">{short}</span>
-          </span>
-          <Line book={b} />
-        </>
-      );
-    case 'wide':
-      return (
-        <>
-          <span className="t-col">
-            <span className="t-eyebrow">{top}</span>
-            {title}
-            <span className="t-sub">
-              <span className="t-author">{by}</span>
-              <span className="t-meta">{short}</span>
-            </span>
-          </span>
-          <Line book={b} />
-        </>
-      );
-    // Narrow cards keep the top for progress, beside the corner button, and set the title below.
-    case 'tall':
-      return (
-        <>
-          <span className="t-big">{shortProgress(b)}</span>
-          {push}
-          <span className="t-author">{by}</span>
-          <Line book={b} />
-        </>
-      );
-    case 'small':
-      return (
-        <>
-          <span className="t-meta">{short}</span>
-          {push}
-          <Line book={b} />
-        </>
-      );
-    case 'cover':
-      return (
-        <>
-          <span className="t-meta">{short}</span>
-          {push}
-          <span className="t-author">{by}</span>
-          <Line book={b} />
-        </>
-      );
+/** A cover's big dotted mark: the volume's number, or the title's first letter past "The". */
+function markFor(title: string, vol?: number) {
+  if (vol) return String(vol).padStart(2, '0');
+  const word = title.replace(/^(the|a|an|le|la|les|el|der|die|das)\s+/i, '');
+  return (word.match(/[\p{L}\p{N}]/u)?.[0] ?? '·').toUpperCase();
+}
+
+/**
+ * Each card is set like a cover: the author, a big dotted mark (the volume's number, or the title's
+ * first letter), the title, and how far. Names are tidied from what the file says (names.ts). Beside
+ * a cover, real or drawn, the text is a column that ends on the line where the reader stopped (the
+ * opening line for a new book); CSS hides it on cards too narrow or short for it.
+ */
+function Face({ book: b, variant, now, number, beside }: { book: ShelfItem; variant: Variant; now: number; number?: number; beside: boolean }): ReactNode {
+  const n = cardNames(b);
+  // A card in a series row goes by its number there.
+  const vol = number ?? n.vol;
+  if (beside) {
+    return (
+      <>
+        <span className="t-eyebrow">{join(vol && `Vol. ${vol}`, when(b, now))}</span>
+        <span className="t-title">{n.title}</span>
+        {n.sub && <span className="t-subtitle">{n.sub}</span>}
+        {n.author && <span className="t-author">{n.author}</span>}
+        {b.line && <span className="t-line">{b.line}</span>}
+        <span className="t-foot">
+          <span className="t-meta">{variant === 'hero' ? progressText(b) : timeLeft(b)}</span>
+          {variant === 'hero' && <span className="t-cta">{actionLabel(b)} ›</span>}
+        </span>
+      </>
+    );
   }
+  return (
+    <>
+      <span className="c-by">{n.author || '\u00a0'}</span>
+      <span className="c-mark" aria-hidden="true">{markFor(n.title, vol)}</span>
+      <span className="c-name">
+        <span className="t-title">{n.title}</span>
+        {n.sub && <span className="c-sub">{n.sub}</span>}
+      </span>
+      <span className="c-foot">
+        {variant === 'square' || variant === 'wide' ? (
+          <span><span className="c-long">{timeLeft(b)}</span><span className="c-short">{shortProgress(b)}</span></span>
+        ) : (
+          <span>{shortProgress(b)}</span>
+        )}
+        {vol ? <span>Vol. {vol}</span> : null}
+      </span>
+    </>
+  );
+}
+
+/** The cover drawn for a recent book without one: its colour, its author, its mark and its title. */
+function MadeCover({ book: b, number }: { book: ShelfItem; number?: number }) {
+  const n = cardNames(b);
+  return (
+    <span className="tile-art is-made" aria-hidden="true">
+      <span className="mc-by">{n.author}</span>
+      <span className="mc-mark">{markFor(n.title, number ?? n.vol)}</span>
+      <span className="mc-title">{n.title}</span>
+    </span>
+  );
 }

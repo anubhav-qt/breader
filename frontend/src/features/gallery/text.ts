@@ -20,6 +20,13 @@ export function progressText(b: ShelfItem) {
   return `${Math.round(b.progress * 100)}% · ${left} left`;
 }
 
+/** How much is left, in one short phrase. */
+export function timeLeft(b: ShelfItem) {
+  if (isDone(b)) return 'Finished';
+  const m = duration(minutesFor(b.words * (1 - b.progress)));
+  return isNew(b) ? `${m} read` : `${Math.round(b.progress * 100)}% · ${m} left`;
+}
+
 export const shortProgress = (b: ShelfItem) => (isDone(b) ? 'Finished' : isNew(b) ? 'New' : `${Math.round(b.progress * 100)}%`);
 
 
