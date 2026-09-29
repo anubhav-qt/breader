@@ -4,7 +4,7 @@ import { SAY_AS } from '@breader/shared/limits';
 import { springs } from '../../../lib/springs';
 import { readLocal, writeLocal } from '../../../lib/store';
 import { caretAt } from '../dom';
-import { voiceFor, voicePrefs } from '../voice/prefs';
+import { rateOf, voiceFor, voicePrefs } from '../voice/prefs';
 import { sayAsFor, setSayAs } from '../voice/sayas';
 import { play, synth, unlock, type Playing } from '../voice/speaker';
 import { PLAY, STOP } from './icons';
@@ -292,7 +292,7 @@ function Card({ at, area, onDone }: { at: Picked; area: RefObject<HTMLDivElement
     setHearing('making');
     try {
       const p = voicePrefs();
-      const clip = await synth(voiceFor(p.mode), words, p.rate);
+      const clip = await synth(voiceFor(p.mode), words, rateOf(p));
       if (g !== s.gen) return;
       const now = play(clip);
       s.player = now;

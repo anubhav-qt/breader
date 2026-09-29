@@ -5,8 +5,8 @@ import { listedVoices } from './list';
 
 /*
  * How this device reads aloud: Normal or Immersive, the voice picked for each, and how fast. Kept
- * on this device, like the voices' files. Immersive without a voice lights the words at a pace of
- * its own (pacing.ts).
+ * on this device, like the voices' files. Immersive has one pace, in words a minute, for the light
+ * (pacing.ts) and the voice alike.
  *
  * Normal reads with Normal's voices. Immersive reads with any: Normal's, or the heavy ones, which
  * only a computer runs well. On a phone they can hang the whole browser, so phones start Immersive
@@ -17,8 +17,9 @@ export interface VoicePrefs {
   mode: Mode;
   /** The voice picked for each mode (catalog.ts keys). Immersive's can be any voice. */
   voice: Record<Mode, string>;
+  /** Normal's voice speed. */
   rate: number;
-  /** Immersive without a voice: words a minute. */
+  /** Immersive's words a minute, for the light and the voice. */
   pace: number;
   /** A pace was kept from the page, where it's asked the first time; after that it's set in the sheet. */
   paceKept: boolean;
@@ -32,6 +33,11 @@ const STARTING = 'breader.voice.starting';
 export const RATES = [0.8, 1, 1.25, 1.5, 2];
 /** Words a minute. A little under most people's silent reading, to start with. */
 export const PACE = { min: 80, max: 600, step: 20, start: 200 };
+/** About how many words a minute a voice says at 1×. */
+const SPOKEN = 170;
+
+/** How fast a voice reads: Normal at its speed, Immersive at its pace, as near as a voice goes (RATES). */
+export const rateOf = (p: VoicePrefs) => (p.mode === 'immersive' ? Math.min(RATES[RATES.length - 1], Math.max(RATES[0], p.pace / SPOKEN)) : p.rate);
 
 /** Phones and tablets, where the heavy voices can hang the browser. */
 export const handheld = () => typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;

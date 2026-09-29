@@ -12,17 +12,17 @@ import { DotIcon } from './parts';
 
 /*
  * The voice sheet, from the button beside play: Normal or Immersive, the voice, and the speed.
- * Immersive lights the words without a voice at a pace set here; play adds a voice, the Normal
+ * Immersive lights the words at a pace set here, and play adds a voice that keeps to it, the Normal
  * ones first, then the heavy ones, which are for computers. Each voice has lines to hear before
  * anything downloads: a greeting, a bit of a story and a question, one at a time.
  */
 
 const ABOUT: Record<Mode, string> = {
   normal: 'Voices that run on this device’s processor, fine on any phone or laptop. Each one downloads once, about 66 MB, and then reads offline.',
-  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead, from where you pick, until Immersive is off: any Normal voice, or on a computer, one of the richer heavy ones below.',
+  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, from where you pick, until Immersive is off: any Normal voice, or on a computer, one of the richer heavy ones below.',
 };
 const HEAVY = 'Richer, and much heavier: one download of about 330 MB for all five, run on the graphics chip. Use them on a computer. On a phone they can hang the browser.';
-const FALLBACK = 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead with a Normal voice, each about 66 MB. The heavy ones need a newer computer with a recent Chrome, Edge or Safari.';
+const FALLBACK = 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, with a Normal voice, each about 66 MB. The heavy ones need a newer computer with a recent Chrome, Edge or Safari.';
 /** A browser that can't run any voice still has Immersive. */
 const NO_VOICES: Record<Mode, string> = {
   normal: 'This browser can’t run voices. Immersive still works without one.',
@@ -105,7 +105,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
     }
   };
 
-  const pace = mode === 'immersive' && canPace && <Pace />;
+  const pace = mode === 'immersive' && <Pace />;
 
   if (!onStart || !onStop) {
     return (
@@ -113,7 +113,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
         <div className="pnl-h">Read aloud</div>
         <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
         <p className="p-note vs-about">{NO_VOICES[mode]}</p>
-        {pace}
+        {canPace && pace}
       </div>
     );
   }
@@ -189,7 +189,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
           )}
         </div>
       </div>
-      <Segmented label={mode === 'immersive' ? 'Voice speed' : 'Speed'} value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />
+      {mode === 'normal' && <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />}
       <div className="vs-foot">
         {loading ? (
           <Progress loaded={load.loaded} total={load.total} />
@@ -205,12 +205,12 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
   );
 }
 
-/** How fast the words light up without a voice, in words a minute. */
+/** Immersive's pace in words a minute: how fast the words light up, and how fast a voice reads them. */
 function Pace() {
   const { pace } = useVoicePrefs();
   return (
     <div className="ctl">
-      <div className="clbl">Pace without a voice</div>
+      <div className="clbl">Pace</div>
       <div className="stp">
         <button type="button" aria-label="Slower" disabled={pace <= PACE.min} onClick={() => stepPace(-1)}>−</button>
         <span className="stp-v" aria-live="polite">{pace} wpm</span>

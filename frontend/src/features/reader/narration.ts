@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { Loc, ViewHandle } from './FlowView';
 import { checkGpu, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
-import { askFirst, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import { askFirst, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { failed, hold, letGoKeys, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
@@ -318,9 +318,9 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (p.mode === 'immersive') await checkGpu();
       if (!live()) return;
       const want = voiceFor(p.mode);
-      if (want.key !== voice?.key || p.rate !== rate) {
+      if (want.key !== voice?.key || rateOf(p) !== rate) {
         clips = new Map();
-        rate = p.rate;
+        rate = rateOf(p);
         if (want.key !== voice?.key) {
           const first = !voice;
           voice = null;
@@ -538,10 +538,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   // A new voice or speed takes over mid-sentence.
   const prefs = useVoicePrefs();
   const picked = voiceFor(prefs.mode).key;
+  const speed = rateOf(prefs);
   useEffect(() => {
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.mode, picked, prefs.rate]);
+  }, [prefs.mode, picked, speed]);
 
   // Play and pause from outside the page: the lock screen, a headset's button, a keyboard's media
   // keys. Some browsers send a key both as a key press (Reader.tsx) and to the media session, so a
