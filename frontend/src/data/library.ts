@@ -107,6 +107,58 @@ const SERIES_PREVIEW: Array<{ name: string; books: Array<[string, number, number
   { name: 'Anne of Green Gables', books: [['Anne of Green Gables', 200, 0], ['Anne of Avonlea', 200, 0]] },
 ];
 
+/*
+ * A library as it arrives from real files, for previewing the cards: titles with imprints and
+ * volumes, illustrators and translators credited as authors, a PDF named after its file. Invented
+ * books with invented lines, and public-domain ones with their real opening lines.
+ * [series, number] where the file names one; `cover` draws one for the book.
+ */
+const MIXED: Array<Seed & { hoursAgo: number; progress: number; series?: [string, number]; cover?: [string, string] }> = [
+  { title: 'The Hollow Lantern and the Seventh Girl, Vol. 1', author: 'Ren Mikado and 402', words: 52000, hoursAgo: 1, progress: 0.19, series: ['The Hollow Lantern', 1], cover: ['#1d2340', '#f3c969'],
+    line: 'Nobody at Kiriyama High remembers the day the lantern first went out, except me.' },
+  { title: 'The Paper Crane Murders (Harbour Noir)', author: 'Kenji Oyama, Emma Hale (Translator)', words: 61000, hoursAgo: 3, progress: 0,
+    line: 'Before I set down the strange history that follows, I walked the village once more to be sure of the distances.' },
+  { title: 'Kagami no Mori no Tanteidan - Volume 1', author: 'Aoi Hoshino', words: 48000, hoursAgo: 6, progress: 0.02,
+    line: 'The mirror in the forest showed a girl who was not there, and she was waving.' },
+  { title: 'The Unlikely Knight of Lantern Academy, Vol. 2: Entrance Exam Arc, Part II', author: 'Sora Miyazawa and Kei Ishida', words: 64000, hoursAgo: 8, progress: 0, series: ['The Unlikely Knight of Lantern Academy', 2],
+    line: 'An unremarkable older brother and a remarkable younger sister walked through the gate together.' },
+  { title: 'Frankenstein; or, The Modern Prometheus', author: 'Shelley, Mary', words: 75000, hoursAgo: 20, progress: 0.41,
+    line: 'You will rejoice to hear that no disaster has accompanied the commencement of an enterprise which you have regarded with such evil forebodings.' },
+  { title: 'Salt & Stone: A History of the World in Twelve Harbours', author: 'Maya Okafor', words: 120000, hoursAgo: 30, progress: 0.63,
+    line: 'Every harbour begins as an argument between the land and the sea, and most of them are still arguing.' },
+  { title: 'Botchan', author: 'Natsume Sōseki, Yasotaro Morri (Translator)', words: 52000, hoursAgo: 44, progress: 0.88,
+    line: 'Because of an hereditary recklessness, I have been playing always a losing game since my childhood.' },
+  { title: 'Microsoft Word - field_notes_on_estuary_birds.docx', author: '', format: 'PDF', words: 9000, hoursAgo: 70, progress: 0, line: 'Page 1 of 48' },
+  { title: 'The Hollow Lantern and the Seventh Girl, Vol. 2', author: 'Ren Mikado and 402', words: 55000, hoursAgo: 90, progress: 0, series: ['The Hollow Lantern', 2],
+    line: 'The second time the lantern went out, I was ready for it, and it did not help at all.' },
+  { title: 'The Art of War (Classic Edition)', author: 'Sun Tzu; Lionel Giles (Translator)', words: 12000, hoursAgo: 130, progress: 1,
+    line: 'Sun Tzu said: The art of war is of vital importance to the State.' },
+  { title: 'Quiet Hours: Notes on Attention, Boredom and the Art of Reading Slowly', author: 'Tomas Lind', words: 70000, hoursAgo: 160, progress: 0.07,
+    line: 'I lost the ability to read a long book somewhere between my second phone and my third.' },
+  { title: 'Death on the Night Ferry: A Detective Inspector Moreau Mystery (Harbour Noir)', author: 'Claire Dumont, Emma Hale (Translator)', words: 83000, hoursAgo: 200, progress: 0,
+    line: 'The ferry left Calais at eleven, and by midnight one of its passengers had stopped breathing.' },
+  { title: 'The Winter Anthology: Twelve New Voices', author: 'Various Authors; edited by Hana Moss', words: 90000, hoursAgo: 260, progress: 0.3,
+    line: 'Snow came to the valley the way news does, first as a rumour and then all at once.' },
+  { title: 'Twenty Thousand Leagues Under the Sea (Illustrated)', author: 'Verne, Jules', words: 101000, hoursAgo: 320, progress: 1,
+    line: 'The year 1866 was signalised by a remarkable incident, a mysterious and puzzling phenomenon, which doubtless no one has yet forgotten.' },
+  { title: 'Meditations', author: 'Marcus Aurelius, George Long (Translator)', words: 60000, hoursAgo: 400, progress: 0.15,
+    line: 'From my grandfather Verus I learned good morals and the government of my temper.' },
+  { title: 'The Unlikely Knight of Lantern Academy, Vol. 1: Entrance Exam Arc, Part I', author: 'Sora Miyazawa and Kei Ishida', words: 62000, hoursAgo: 500, progress: 1, series: ['The Unlikely Knight of Lantern Academy', 1],
+    line: 'On the morning of the entrance exam, my sister was the best in the country and I was the worst.' },
+  { title: 'The Pocket Atlas of Clouds (Illustrated Edition)', author: 'Priya Raman; illustrated by Jonah Wells', words: 30000, hoursAgo: 600, progress: 0,
+    line: 'Look up: the sky has been writing to you all day.' },
+  { title: 'Treasure Island', author: 'Robert Louis Stevenson', words: 67000, hoursAgo: 800, progress: 0.52,
+    line: 'Squire Trelawney, Dr. Livesey, and the rest of these gentlemen having asked me to write down the whole particulars about Treasure Island, from the beginning to the end, keeping nothing back but the bearings of the island, and that only because there is treasure not yet lifted, I take up my pen in the year of grace 17— and go back to the time when my father kept the Admiral Benbow inn and the brown old seaman with the sabre cut first took up his lodging under our roof.' },
+  { title: 'The Moonstone: A Romance (Lantern Classics)', author: 'Wilkie Collins', words: 196000, hoursAgo: 1100, progress: 0.09,
+    line: 'I address these lines—written in India—to my relatives in England.' },
+  { title: 'Witch of the Salt Road (Light Novel) Vol. 4', author: 'Hiro Tanabe, Yuu Kurosaki (Illustrator)', words: 45000, hoursAgo: 1500, progress: 0.7, series: ['Witch of the Salt Road', 4],
+    line: 'The salt merchants say a witch can’t cross running water, which is why I bought a boat.' },
+  { title: 'Witch of the Salt Road (Light Novel) Vol. 3', author: 'Hiro Tanabe, Yuu Kurosaki (Illustrator)', words: 44000, hoursAgo: 1600, progress: 1, series: ['Witch of the Salt Road', 3],
+    line: 'Three towns, two lies and one very expensive cart of salt.' },
+  { title: 'Ghost Stories of an Antiquary', author: 'M. R. James', words: 45000, hoursAgo: 2400, progress: 0,
+    line: 'St. Bertrand de Comminges is a decayed town on the spurs of the Pyrenees, not very far from Toulouse, and still nearer to Bagnères-de-Luchon.' },
+];
+
 /** Placeholder books that belong to a series, by title: [series, number]. */
 const SERIES: Record<string, [string, number]> = {
   'The Wonderful Wizard of Oz': ['The Land of Oz', 1],
@@ -177,6 +229,30 @@ export function seriesRecords(now: number): BookRecord[] {
   );
 }
 
+export function mixedRecords(now: number): BookRecord[] {
+  return MIXED.map((p, j) => ({
+    id: `mx-${slug(p.title)}`, title: p.title, author: p.author, format: p.format ?? FORMAT_MIX[j % FORMAT_MIX.length], source: 'placeholder', shared: false,
+    addedAt: now - (p.hoursAgo + 24) * HOUR, words: p.words, color: colorKeyFor(p.title), progress: p.progress, line: p.line, lastOpened: now - p.hoursAgo * HOUR,
+    ...(p.series ? { series: p.series[0], seriesIndex: p.series[1] } : {}),
+  }));
+}
+
+/** Drawn covers for the mixed library's books that have one, by id. */
+export function mixedCovers(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of MIXED) {
+    if (!p.cover) continue;
+    const [bg, fg] = p.cover;
+    const words = p.title.replace(/,.*$/, '').split(' ');
+    const lines = [words.slice(0, 2).join(' '), words.slice(2, 4).join(' '), words.slice(4).join(' ')].filter(Boolean);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600"><rect width="400" height="600" fill="${bg}"/><circle cx="200" cy="230" r="120" fill="${fg}" opacity="0.9"/><circle cx="200" cy="230" r="70" fill="${bg}"/>${lines
+      .map((l, i) => `<text x="200" y="${440 + i * 44}" font-family="Georgia, serif" font-size="36" text-anchor="middle" fill="${fg}">${l}</text>`)
+      .join('')}</svg>`;
+    out[`mx-${slug(p.title)}`] = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+  return out;
+}
+
 /** What other people have put on the shared shelf, for previews. */
 export function shelfRecords(now: number): BookRecord[] {
   return PLACEHOLDERS.slice(19, 33).map((p, j) => ({
@@ -192,7 +268,7 @@ export const canShare = (rec: BookRecord) => rec.source === 'file' && !rec.origi
 /** Books other people put on the shared shelf are theirs to take off, not yours. */
 export const canRemove = (rec: BookRecord) => rec.source !== 'shelf' && !(rec.shared && rec.source === 'placeholder');
 
-export type PreviewMode = 'live' | 'empty' | 'one' | 'few' | 'many' | 'series';
+export type PreviewMode = 'live' | 'empty' | 'one' | 'few' | 'many' | 'series' | 'mixed';
 
 export const PREVIEW_MODES: Array<{ id: PreviewMode; label: string }> = [
   { id: 'live', label: 'Live' },
@@ -201,4 +277,5 @@ export const PREVIEW_MODES: Array<{ id: PreviewMode; label: string }> = [
   { id: 'few', label: '6 books' },
   { id: 'many', label: '50 books' },
   { id: 'series', label: '5 series' },
+  { id: 'mixed', label: 'Real mix' },
 ];
