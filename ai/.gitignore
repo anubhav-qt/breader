@@ -1,0 +1,4 @@
+# Books, their text, notes and marks are private: they never go into git.
+work/
+out/
+node_modules/
