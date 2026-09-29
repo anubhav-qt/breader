@@ -9,6 +9,7 @@ import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useBarAsk, useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
+import { loadRevisit, useAiStatus } from './ai';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
 import { overlaps, usePacing } from './pacing';
 import { PdfView } from './PdfView';
@@ -37,13 +38,15 @@ interface Props {
   /** Seconds spent reading, counted while the book is on screen and being read. */
   onReadTime?: (seconds: number) => void;
   onRemove?: () => void;
+  /** The reader lets an AI read the book along with them: Revisit and 2 voices, once it has. */
+  ai?: boolean;
 }
 
 const noTime = () => {};
 
 const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
 
-export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove }: Props) {
+export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false }: Props) {
   const [settings, update] = useReaderSettings();
   const [panel, setPanel] = useState<PanelName | null>(null);
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
@@ -265,6 +268,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const [marker] = useState(() =>
     markTracker(initial?.mark ?? (initial ? { pos: initial.pos ?? { section: 0, block: 0, offset: 0 }, progress: initial.progress, line: initial.line } : undefined), book.words),
   );
+  const aiStatus = useAiStatus(record.id, ai);
+  const loadNotes = useCallback(() => loadRevisit(record.id), [record.id]);
   /** Opened well past the mark: the way back to it, offered until taken, closed, or not needed. */
   const [away, setAway] = useState<ReadMark | null>(null);
   const onLocation = useCallback((l: Loc) => {
@@ -424,6 +429,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       // Awake: the voice carries on, from where it stopped if it faded out.
       awake: () => { openPanel(null); if (asked.stopped && !narration.playing && canNarrate) narration.start(); },
     } : null,
+    revisit: aiStatus.revisit ? { read: marker.get()?.progress ?? 0, load: loadNotes } : null,
   };
   const vars = {
     '--book': `var(--bc-${color})`,

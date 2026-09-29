@@ -556,6 +556,7 @@ export default function App() {
             onSave={onSave}
             onReadTime={(seconds) => lib.addReadTime(shown.id, seconds)}
             onRemove={canRemove(shownRec) ? removeOpen : undefined}
+            ai={!!lib.edits[shown.id]?.ai}
           />
         </div>
       )}

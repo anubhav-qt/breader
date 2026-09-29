@@ -177,7 +177,7 @@
 
 /* Phones: the readouts and the back button take less room, so the chapter and the dots get it. */
 @media (max-width: 520px) {
-  .i3-foot { grid-template-columns: 60px minmax(0, 1fr) 60px; gap: 10px; }
+  .i3-foot { grid-template-columns: 72px minmax(0, 1fr) 72px; gap: 10px; }
   .i3-back-word { display: none; }
   .i3-mid { max-width: min(560px, calc(var(--pw) - 100px)); }
 }
@@ -258,7 +258,7 @@
 .rd.is-immersed:not(.is-aloud) .fv-flow { cursor: pointer; }
 
 .rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }
-.rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-read { opacity: 0; }
+.rd:is(.is-listening, .is-pacing):not(.is-awake) :is(.i3-read, .i3-rv) { opacity: 0; }
 .i3-read { transition: opacity 260ms ease; }
 /* Left on its own, the bar asks above itself whether to go too; hidden, it's back when you wake the
    controls, or when the voice or the light stops. */
@@ -595,3 +595,92 @@
 .sa-tip.is-touch { left: 50%; bottom: 52px; translate: -50% 0; }
 /* The top buttons' tips sit over the bar they come from. */
 .sa-tip.is-head { z-index: 10; }
+
+
+/* ------------------------------------------------------------------ */
+/* Revisit (chrome/Revisit.tsx): under the percentage read, a word that opens a drop up of how far
+   back to go, and then a window in the middle of who's who, where's where and the words to know.
+   Only for books an AI has read (reader/ai.ts). */
+
+.i3-left { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-width: 0; }
+.i3-rv {
+  margin: -6px -8px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 7px;
+  font: var(--ui-w) 11px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--r-mu);
+  transition: color 140ms ease, background-color 140ms ease, opacity 260ms ease;
+}
+.i3-rv .i3-caret { opacity: 1; font-size: 8px; }
+.i3-rv.is-open { color: var(--r-fg); background: var(--r-fill); }
+.i3-rv.is-open .i3-caret { transform: rotate(180deg); }
+@media (hover: hover) { .i3-rv:hover { color: var(--r-fg); background: var(--r-fill); } }
+
+.i3-drop.is-revisit { top: auto; bottom: 66px; left: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(320px, calc(100% - 24px)); }
+.rv-about { margin: -6px 0 0; }
+.rv-scopes { margin-top: 14px; }
+.rd .rv-scope { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
+.rd .rv-scope::before { margin-top: 7px; }
+.rv-scope-t { display: grid; gap: 7px; min-width: 0; text-align: left; }
+.rv-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+
+.i3-scrim.is-dim { background: color-mix(in srgb, var(--r-bg) 55%, transparent); animation: rv-dim 200ms ease both; }
+@keyframes rv-dim { from { opacity: 0; } }
+.rv {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(560px, calc(100% - 24px));
+  height: min(640px, calc(100% - 200px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--r-bg);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
+}
+.rv-pnl { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 0; }
+.rv-head { flex: none; padding-bottom: 12px; box-shadow: 0 1px var(--r-line); }
+.rv-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; margin: -6px 40px 14px 0; }
+.rv-title span { flex: none; font-family: var(--read); font-size: 28px; line-height: 1; color: var(--r-fg); }
+.rv-title small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 11.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.rv .vs-input::-webkit-search-cancel-button { display: none; }
+.rv-find { margin-bottom: 10px; }
+.seg.rv-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.rv-tabs small { font: var(--ui-w) 11px/1 var(--ui); color: var(--r-mu); font-variant-numeric: tabular-nums; }
+.rv-status { display: grid; gap: 8px; margin-top: 12px; }
+.rv-status .p-note { margin: 0; }
+.rv-again {
+  justify-self: start;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font: var(--ui-w-strong) 12px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-fg);
+  background: var(--r-fill);
+}
+.rv-list { flex: 1; min-height: 0; margin: 0 -20px; padding: 4px 20px 24px; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+.rv-item { padding: 16px 10px; }
+.rv-item + .rv-item { box-shadow: 0 -1px var(--r-line); }
+.rv-name { font-family: var(--read); font-size: 26px; line-height: 1; color: var(--r-fg); overflow-wrap: anywhere; }
+.rv-term { color: var(--book-mark); }
+.rv-aka { margin-top: 7px; font: var(--ui-w) 11px/1.35 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.rv-text { margin: 8px 0 0; font: 20px/1.12 var(--read); color: var(--r-fg); }
+.rv-did { color: var(--r-mu); }
+.rv-ch { display: block; margin-bottom: 5px; font: var(--ui-w) 10.5px/1.3 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--book-mark); }
+.rv-more { margin-top: 6px; padding: 6px 0; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); transition: color 140ms ease; }
+.rv-more:hover { color: var(--r-fg); }
+.rv-empty { padding: 16px 10px; }
+@media (max-width: 520px) {
+  .rv { height: calc(100% - 184px); }
+}

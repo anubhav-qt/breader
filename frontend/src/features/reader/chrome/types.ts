@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import type { RevisitResponse } from '@breader/shared/ai';
 import type { LoadedBook, TocItem } from '../../../books/types';
 import type { Chapter } from '../chapters';
 import type { Loc } from '../FlowView';
@@ -8,7 +9,8 @@ import type { Block, Found } from '../search';
 import type { Asleep } from '../sleep';
 import type { ReaderSettings } from '../settings';
 
-export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find';
+/** `revisit` is the drop up from the bottom line; `recap` the window it opens (chrome/Revisit.tsx). */
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
@@ -80,6 +82,8 @@ export interface ChromeProps {
   search: { read: (onRead?: (done: number, of: number) => void) => Promise<Block[]>; go: (f: Found) => void } | null;
   /** Did you sleep? What's being asked, going back to a checkpoint, and carrying on (sleep.ts). */
   sleep: { asked: Asleep; back: (s: Sentence) => void; awake: () => void } | null;
+  /** Revisit, once an AI has read the book (ai.ts): how far the reader has really read, and the notes up to there. */
+  revisit: { read: number; load: () => Promise<{ notes: RevisitResponse; offline: boolean }> } | null;
 }
 
 export const toItem = (c: Chapter): TocItem => ({ title: c.title, section: c.section, anchor: c.anchor, level: 0 });
