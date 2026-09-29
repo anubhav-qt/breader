@@ -161,33 +161,45 @@ function linesIn(book: Book, n: number): string {
   return `${spans.length} lines, ${spans.filter((s) => s.unsure).length} unsure`;
 }
 
+/** Who made part n's marks, saved as soon as they're written, so a stopped run picks up where it was. */
+function stamp(book: Book, n: number, model: string, secs: number, fresh: boolean) {
+  const l = ledger(book);
+  const d = fresh ? undefined : l[n];
+  writeJson(ledgerFile(book), { ...l, [n]: { model, rounds: (d?.rounds ?? 0) + 1, secs: Math.round((d?.secs ?? 0) + secs), at: new Date().toISOString() } });
+}
+
 /**
- * Marks parts all at once, a call each. Then one call for every part check found errors in, with
- * their marks and the errors, to fix them together, and another if some are left (ROUNDS calls
- * in all, at most). Returns what each clean part took, and the parts that failed: no answer, or
- * errors still. A failed part's marks file is left as it is, for the caller to deal with.
+ * Marks parts all at once, a call each, then fixes every part with errors together (fixParts),
+ * along with any in `alsoFix` (parts a stopped run left with errors). Returns the parts that
+ * failed: no answer, or errors still. A failed part's marks file is left as it is, for the caller.
  */
-async function markParts(book: Book, ns: number[], lb: Balancer): Promise<{ done: Map<number, Done>; failed: number[] }> {
-  const done = new Map<number, Done>();
-  const stamp = (n: number, model: string, secs: number) => {
-    const d = done.get(n);
-    done.set(n, { model, rounds: (d?.rounds ?? 0) + 1, secs: Math.round((d?.secs ?? 0) + secs), at: new Date().toISOString() });
-  };
+async function markParts(book: Book, ns: number[], lb: Balancer, alsoFix: number[] = []): Promise<number[]> {
+  const answered: number[] = [];
   const answers = await Promise.allSettled(ns.map(async (n) => {
     const { reply, rung } = await lb.chat(partPrompt(book, n), { book: book.key, part: n, round: 1 });
     const { marks, cast } = split(reply.text);
     writeFileSync(marksFile(book, n), marks);
     const merged = mergeCast(book, cast, rung.name);
-    stamp(n, rung.name, reply.secs);
+    stamp(book, n, rung.name, reply.secs, true);
+    answered.push(n);
     console.log(`  part ${n}: ${rung.name}, ${mins(reply.secs)} (${mins(reply.firstS)} before the first token), ${count(reply.promptTokens)} tokens in, ${count(reply.outTokens)} out; ${linesIn(book, n)}, ${merged.added} new in the cast${merged.notes.length ? ` (${merged.notes.join('; ')})` : ''}, ${errorsFor(book, n).length} errors`);
   }));
   answers.forEach((a, i) => {
     if (a.status === 'rejected') console.log(`  part ${ns[i]}: no answer (${a.reason instanceof Error ? a.reason.message : String(a.reason)})`);
   });
+  const all = [...new Set([...alsoFix, ...answered])].sort((a, b) => a - b);
+  await fixParts(book, all, lb);
+  return [...ns, ...alsoFix].filter((n) => !all.includes(n) || errorsFor(book, n).length);
+}
 
+/**
+ * One call for every part check found errors in, with their marks and the errors, to fix them
+ * together, and another if some are left (ROUNDS calls in all, counting the first).
+ */
+async function fixParts(book: Book, ns: number[], lb: Balancer) {
   for (let round = 2; round <= ROUNDS; round++) {
-    const bad = ns.filter((n) => done.has(n) && errorsFor(book, n).length);
-    if (!bad.length) break;
+    const bad = ns.filter((n) => errorsFor(book, n).length);
+    if (!bad.length) return;
     const sections = bad.map((n) => {
       const errors = errorsFor(book, n);
       return `## Part ${n}\n\nIts marks:\n${readFileSync(marksFile(book, n), 'utf8').trim()}\n\ncheck's ${errors.length === 1 ? 'error' : `${errors.length} errors`}:\n${errors.slice(0, 80).join('\n')}`;
@@ -202,7 +214,7 @@ async function markParts(book: Book, ns: number[], lb: Balancer): Promise<{ done
       answer = await lb.chat([{ role: 'system', content: SYSTEM }, { role: 'user', content: user }], { book: book.key, fix: bad.join(','), round });
     } catch (e) {
       console.log(`  fix, round ${round}: no answer (${e instanceof Error ? e.message : String(e)})`);
-      break;
+      return;
     }
     const { reply, rung } = answer;
     const byPart = new Map<number, string[]>();
@@ -218,14 +230,11 @@ async function markParts(book: Book, ns: number[], lb: Balancer): Promise<{ done
     for (const [n, body] of byPart) {
       if (!bad.includes(n)) continue;
       writeFileSync(marksFile(book, n), split(body.join('\n')).marks);
-      stamp(n, rung.name, reply.secs);
+      stamp(book, n, rung.name, reply.secs, false);
     }
     mergeCast(book, castLines, rung.name);
     console.log(`  fix, round ${round}: ${rung.name}, ${mins(reply.secs)}, parts ${bad.join(', ')}; errors left: ${bad.map((n) => `part ${n} ${errorsFor(book, n).length}`).join(', ')}`);
   }
-  const failed = ns.filter((n) => !done.has(n) || errorsFor(book, n).length);
-  for (const n of failed) done.delete(n);
-  return { done, failed };
 }
 
 /** Every line marked "?", read again against the whole book in one call. */
@@ -299,18 +308,20 @@ function byLine(book: Book): string {
 async function runBook(key: string, lb: Balancer, flags: Record<string, string | true>) {
   const book = loadBook(key);
   const tag = book.title;
-  // A part that failed last time leaves a gap, which check calls skipped: that one is fine here.
-  const start = validate(book, false).errors.filter((e) => !e.startsWith('parts skipped'));
+  // Parts a stopped run left with errors go straight to the fix. A part that failed for good last
+  // time leaves a gap, which check calls skipped: both are fine here.
+  const broken = Object.keys(ledger(book)).map(Number).filter((n) => existsSync(marksFile(book, n)) && errorsFor(book, n).length);
+  const mine = new Set(broken.map((n) => `marks/${partName(n)}.txt`));
+  const start = validate(book, false).errors.filter((e) => !e.startsWith('parts skipped') && ![...mine].some((m) => e.includes(m)));
   if (start.length) throw new Error(`${tag}: check has ${start.length} errors before marking; fix them first. The first: ${start[0]}`);
-  const record = (done: Map<number, Done>) => writeJson(ledgerFile(book), { ...ledger(book), ...Object.fromEntries(done) });
 
   if (!flags.settle) {
     const to = typeof flags.to === 'string' ? Number(flags.to) : Infinity;
     const todo = validate(book, false).todo.filter((n) => n <= to);
-    if (todo.length) {
-      console.log(`${tag}: marking parts ${todo.join(', ')}, all at once`);
-      const { done, failed } = await markParts(book, todo, lb);
-      record(done);
+    if (todo.length || broken.length) {
+      if (broken.length) console.log(`${tag}: parts ${broken.join(', ')} have errors from last time, and get fixed with the rest`);
+      if (todo.length) console.log(`${tag}: marking parts ${todo.join(', ')}, all at once`);
+      const failed = await markParts(book, todo, lb, broken);
       if (failed.length) {
         const dir = join(bookDir(book.key), 'failed');
         mkdirSync(dir, { recursive: true });
@@ -325,11 +336,14 @@ async function runBook(key: string, lb: Balancer, flags: Record<string, string |
     if (redo.length) {
       console.log(`${tag}: parts ${redo.join(', ')} again, with ${TOP.name}`);
       const old = new Map(redo.map((n) => [n, readFileSync(marksFile(book, n), 'utf8')]));
+      const oldLedger = ledger(book);
       const top = new Balancer([TOP], { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 40 });
-      const { done, failed } = await markParts(book, redo, top);
-      record(done);
+      const failed = await markParts(book, redo, top);
       for (const n of failed) writeFileSync(marksFile(book, n), old.get(n)!);
-      if (failed.length) throw new Error(`${tag}: ${TOP.name} couldn't redo parts ${failed.join(', ')}; they keep the fallback's marks. Run mark again to retry.`);
+      if (failed.length) {
+        writeJson(ledgerFile(book), { ...ledger(book), ...Object.fromEntries(failed.map((n) => [n, oldLedger[n]])) });
+        throw new Error(`${tag}: ${TOP.name} couldn't redo parts ${failed.join(', ')}; they keep the fallback's marks. Run mark again to retry.`);
+      }
     }
   }
 
@@ -361,6 +375,7 @@ async function tryPart(key: string, n: number, lb: Balancer) {
   const castFile = join(dir, 'cast.json');
   copyFileSync(file, join(trial, `${partName(n)}.before.txt`));
   copyFileSync(castFile, join(trial, 'cast.before.json'));
+  const ledgerBefore = existsSync(ledgerFile(book)) ? readFileSync(ledgerFile(book), 'utf8') : null;
   const part = book.parts[n - 1];
   const view = () => {
     const c = validate(book, false);
@@ -372,14 +387,15 @@ async function tryPart(key: string, n: number, lb: Balancer) {
   let done: Done;
   rmSync(file);
   try {
-    const r = await markParts(book, [n], lb);
-    if (r.failed.length) throw new Error(`Part ${n} failed; the book's marks are as they were.`);
-    done = r.done.get(n)!;
+    if ((await markParts(book, [n], lb)).length) throw new Error(`Part ${n} failed; the book's marks are as they were.`);
+    done = ledger(book)[n];
     after = view();
     copyFileSync(file, join(trial, `${partName(n)}.${done.model}.txt`));
   } finally {
     copyFileSync(join(trial, `${partName(n)}.before.txt`), file);
     copyFileSync(join(trial, 'cast.before.json'), castFile);
+    if (ledgerBefore === null) rmSync(ledgerFile(book), { force: true });
+    else writeFileSync(ledgerFile(book), ledgerBefore);
   }
 
   const key2 = (s: { s: number; b: number; start: number; end: number }) => `${s.s}:${s.b}:${s.start}:${s.end}`;
