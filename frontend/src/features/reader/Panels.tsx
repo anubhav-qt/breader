@@ -96,7 +96,8 @@ interface LookProps {
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
   label: string;
   value: T;
-  options: Array<{ v: T; label: string; content?: React.ReactNode }>;
+  /** `muted`: not ready yet. It looks off, and a tap still reaches onChange, which says why. */
+  options: Array<{ v: T; label: string; content?: React.ReactNode; muted?: boolean }>;
   onChange: (v: T) => void;
 }) {
   return (
@@ -109,9 +110,10 @@ export function Segmented<T extends string | number>({ label, value, options, on
             type="button"
             role="radio"
             aria-checked={value === o.v}
+            aria-disabled={o.muted || undefined}
             aria-label={o.content ? o.label : undefined}
             title={o.content ? o.label : undefined}
-            className={value === o.v ? 'is-on' : ''}
+            className={value === o.v ? 'is-on' : o.muted ? 'is-muted' : ''}
             onClick={() => onChange(o.v)}
           >
             {o.content ?? o.label}
