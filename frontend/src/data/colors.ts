@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-/** Solid book colours. Each has a light and a dark shade in tokens.css, plus a legible ink. */
+/** Solid book colours. Each has a deeper shade for light pages and a brighter one for dark pages in tokens.css, each with a legible ink. */
 export const BOOK_COLORS = [
   { key: 'rose', label: 'Rose' },
   { key: 'clay', label: 'Clay' },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
 import type { BookRecord, LoadedBook, ReadMark, ReadState, TocItem } from '../../books/types';
 import { markTracker, screenWords } from '../../books/mark';
 import { Toast, type ToastMessage } from '../../components/Toast';
@@ -39,17 +39,6 @@ interface Props {
   onRemove?: () => void;
 }
 
-const hex = (v: string) => {
-  const m = v.trim().match(/^#([0-9a-f]{6})$/i);
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-};
-const luminance = (rgb: number[]) => {
-  const [r, g, b] = rgb.map((c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-};
-
 const noTime = () => {};
 
 const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
@@ -60,7 +49,6 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
   const [loc, setLoc] = useState<Loc | null>(null);
   const [pageW, setPageW] = useState(0);
-  const [lowContrast, setLowContrast] = useState(false);
   const view = useRef<ViewHandle>(null);
   const body = useRef<HTMLDivElement>(null);
   const chapters = useMemo(() => chaptersOf(book), [book]);
@@ -381,20 +369,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     };
   }, [panel, choosing, settings, book.kind, onBack, openPanel, closing]);
 
-  // Thin marks in a book colour close to the page (graphite on Night, sand on Day) lean toward the ink.
-  const theme: ThemeName = settings.theme;
-  useLayoutEffect(() => {
-    const el = body.current;
-    if (!el) return;
-    const cs = getComputedStyle(el);
-    const a = hex(cs.getPropertyValue('--book'));
-    const b = hex(cs.getPropertyValue('--r-bg'));
-    if (!a || !b) { setLowContrast(false); return; }
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    setLowContrast((hi + 0.05) / (lo + 0.05) < 1.8);
-  }, [color, theme]);
-
   // The phone's status bar takes the page's colour while the book is open.
+  const theme: ThemeName = settings.theme;
   useEffect(() => {
     const bg = body.current && getComputedStyle(body.current).getPropertyValue('--r-bg').trim();
     if (!bg || closing) return;
@@ -454,7 +430,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   } as CSSProperties;
 
   return (
-    <div className={`rd t-${settings.theme} st-${style}${lowContrast ? ' bk-low' : ''}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
+    <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
           {book.kind === 'flow' ? (

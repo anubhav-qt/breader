@@ -9,8 +9,6 @@
   --book-mark: var(--book);
   --book-soft: color-mix(in srgb, var(--book) 16%, transparent);
 }
-/* A colour too close to the page (graphite on Night, sand on Day) leans toward the ink for thin marks. */
-.rd.bk-low { --book-mark: color-mix(in oklab, var(--book) 45%, var(--r-fg)); }
 .rd ::selection { background: color-mix(in srgb, var(--book) 34%, transparent); }
 .rd .p-bar i { background: var(--book-mark); }
 .rd .p-item.is-now { background: var(--book-soft); }

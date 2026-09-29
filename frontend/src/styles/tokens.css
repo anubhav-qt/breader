@@ -23,22 +23,6 @@
   --tile-border: rgba(0, 0, 0, 0.12);
   --tile-border-hover: rgba(0, 0, 0, 0.32);
 
-  /* Book colours: solid, and AA-legible with their ink. Dark mode shifts a few shades. */
-  --bc-rose: #AE5462; --bc-rose-ink: #FFFFFF;
-  --bc-clay: #A8573A; --bc-clay-ink: #FFFFFF;
-  --bc-ochre: #D4A23C; --bc-ochre-ink: #2A2210;
-  --bc-sand: #DCCFB4; --bc-sand-ink: #3A3020;
-  --bc-sage: #9FB293; --bc-sage-ink: #1F2B1A;
-  --bc-moss: #556F3F; --bc-moss-ink: #FFFFFF;
-  --bc-green: #236F57; --bc-green-ink: #FFFFFF;
-  --bc-teal: #2C6668; --bc-teal-ink: #FFFFFF;
-  --bc-sky: #3E739F; --bc-sky-ink: #FFFFFF;
-  --bc-indigo: #33437A; --bc-indigo-ink: #FFFFFF;
-  --bc-lilac: #74659E; --bc-lilac-ink: #FFFFFF;
-  --bc-plum: #6B3858; --bc-plum-ink: #FFFFFF;
-  --bc-blush: #E4B2AA; --bc-blush-ink: #3F1F1B;
-  --bc-graphite: #2B2F35; --bc-graphite-ink: #FFFFFF;
-
   --ui: "Doto", ui-monospace, Menlo, Consolas, monospace;
   /* Doto's weight is the size of its dots: phones get the heaviest, or small text turns faint. */
   --ui-w: 700;
@@ -71,9 +55,6 @@
     --scrim: rgba(0, 0, 0, 0.6);
     --tile-border: rgba(255, 255, 255, 0.14);
     --tile-border-hover: rgba(255, 255, 255, 0.36);
-    --bc-rose: #A94F5B; --bc-clay: #9C5033; --bc-ochre: #C49434; --bc-sand: #C9BB9C; --bc-sage: #8A9E7E;
-    --bc-moss: #51693C; --bc-green: #237459; --bc-teal: #2A6264; --bc-sky: #41749C; --bc-indigo: #3B4C88;
-    --bc-lilac: #6E609A; --bc-plum: #774264; --bc-blush: #D49D95; --bc-graphite: #3A3F47;
   }
 }
 
@@ -97,9 +78,59 @@
   --scrim: rgba(0, 0, 0, 0.6);
   --tile-border: rgba(255, 255, 255, 0.14);
   --tile-border-hover: rgba(255, 255, 255, 0.36);
-  --bc-rose: #A94F5B; --bc-clay: #9C5033; --bc-ochre: #C49434; --bc-sand: #C9BB9C; --bc-sage: #8A9E7E;
-  --bc-moss: #51693C; --bc-green: #237459; --bc-teal: #2A6264; --bc-sky: #41749C; --bc-indigo: #3B4C88;
-  --bc-lilac: #6E609A; --bc-plum: #774264; --bc-blush: #D49D95; --bc-graphite: #3A3F47;
+}
+
+/* Book colours: solid, and AA-legible with their ink. Light pages get a deeper set, dark pages a
+   brighter one. The reading themes pick by their own page, so a Night book glows in a light app. */
+:root, .t-day, .t-warm {
+  --bc-rose: #942F44; --bc-rose-ink: #FFFFFF;
+  --bc-clay: #8E330C; --bc-clay-ink: #FFFFFF;
+  --bc-ochre: #AC7D02; --bc-ochre-ink: #2A1D01;
+  --bc-sand: #938567; --bc-sand-ink: #291D02;
+  --bc-sage: #798E6B; --bc-sage-ink: #142506;
+  --bc-moss: #37541B; --bc-moss-ink: #FFFFFF;
+  --bc-green: #00523D; --bc-green-ink: #FFFFFF;
+  --bc-teal: #004A4D; --bc-teal-ink: #FFFFFF;
+  --bc-sky: #115687; --bc-sky-ink: #FFFFFF;
+  --bc-indigo: #223170; --bc-indigo-ink: #FFFFFF;
+  --bc-lilac: #594685; --bc-lilac-ink: #FFFFFF;
+  --bc-plum: #581F45; --bc-plum-ink: #FFFFFF;
+  --bc-blush: #AC776E; --bc-blush-ink: #37120D;
+  --bc-graphite: #2A2E34; --bc-graphite-ink: #FFFFFF;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bc-rose: #FFA8B2; --bc-rose-ink: #310C13;
+    --bc-clay: #FEAA8D; --bc-clay-ink: #310E03;
+    --bc-ochre: #FFD078; --bc-ochre-ink: #251801;
+    --bc-sand: #E6D6B4; --bc-sand-ink: #241900;
+    --bc-sage: #C8E1B8; --bc-sage-ink: #0F2001;
+    --bc-moss: #A7CB8A; --bc-moss-ink: #102000;
+    --bc-green: #72D1AF; --bc-green-ink: #002117;
+    --bc-teal: #7DC9CC; --bc-teal-ink: #012021;
+    --bc-sky: #8AC8FE; --bc-sky-ink: #001C33;
+    --bc-indigo: #94AEFE; --bc-indigo-ink: #101836;
+    --bc-lilac: #C7B4FF; --bc-lilac-ink: #1D1333;
+    --bc-plum: #E399C5; --bc-plum-ink: #2D0D22;
+    --bc-blush: #FEC9C0; --bc-blush-ink: #310D09;
+    --bc-graphite: #A5ABB4; --bc-graphite-ink: #161B21;
+  }
+}
+:root[data-theme="dark"], .t-dusk, .t-night {
+  --bc-rose: #FFA8B2; --bc-rose-ink: #310C13;
+  --bc-clay: #FEAA8D; --bc-clay-ink: #310E03;
+  --bc-ochre: #FFD078; --bc-ochre-ink: #251801;
+  --bc-sand: #E6D6B4; --bc-sand-ink: #241900;
+  --bc-sage: #C8E1B8; --bc-sage-ink: #0F2001;
+  --bc-moss: #A7CB8A; --bc-moss-ink: #102000;
+  --bc-green: #72D1AF; --bc-green-ink: #002117;
+  --bc-teal: #7DC9CC; --bc-teal-ink: #012021;
+  --bc-sky: #8AC8FE; --bc-sky-ink: #001C33;
+  --bc-indigo: #94AEFE; --bc-indigo-ink: #101836;
+  --bc-lilac: #C7B4FF; --bc-lilac-ink: #1D1333;
+  --bc-plum: #E399C5; --bc-plum-ink: #2D0D22;
+  --bc-blush: #FEC9C0; --bc-blush-ink: #310D09;
+  --bc-graphite: #A5ABB4; --bc-graphite-ink: #161B21;
 }
 
 /* Phones: heavier dots and a stronger grey, so the small interface text stays readable. */
