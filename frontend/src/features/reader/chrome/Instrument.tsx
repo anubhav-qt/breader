@@ -173,6 +173,28 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         <div className="i3-hint" role="status"><Typed text={`${tap} a paragraph, or type its number`} /></div>
       )}
 
+      {/* The voice bar left on its own asks, for a moment, whether to go too (focus.ts). */}
+      <AnimatePresence>
+        {focus.ask && !panel && (
+          <Drop
+            key="bar-ask"
+            className="i3-hint is-ask"
+            role="group"
+            aria-label="Hide the voice bar"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={springs.snappy}
+            onPointerEnter={() => focus.ask?.hold(true)}
+            onPointerLeave={() => focus.ask?.hold(false)}
+          >
+            <Typed text="Hide this bar too?" />
+            <button type="button" className="i3-begin" onClick={focus.ask.hide}>Hide</button>
+            {focus.ask.always && <button type="button" className="i3-para" onClick={focus.ask.hideAlways}>Always hide</button>}
+          </Drop>
+        )}
+      </AnimatePresence>
+
       {/* Clear, so nothing to fade: it goes with the tap that closes the drop, never left over the page. */}
       {panel && <div className="i3-scrim" onClick={() => openPanel(null)} />}
       <AnimatePresence>

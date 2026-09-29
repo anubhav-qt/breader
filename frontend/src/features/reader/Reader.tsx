@@ -7,7 +7,7 @@ import { chapterAt, chapterName, chaptersOf } from './chapters';
 import { InstrumentChrome } from './chrome/Instrument';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
-import { useFocusMode, useWake } from './focus';
+import { useBarAsk, useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
 import { overlaps, usePacing } from './pacing';
@@ -96,6 +96,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const listening = canNarrate && narration.playing && voice.mode === 'immersive' && load.key === null;
   const hush = focus || listening || pacing.running;
   useEffect(() => { if (listening || pacing.running) wake(1800); }, [listening, pacing.running, wake]);
+  // The voice bar stays as the rest sleeps, and asks whether to go too; not over the pace's own question.
+  const bar = useBarAsk(listening || pacing.running, !awake && !panel && !(pacing.running && !voice.paceKept));
 
   // A voice takes over from the light, and leaves it lit where it stopped.
   const voiced = useRef(false);
@@ -414,7 +416,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       nowAt,
       pick: (p: Paragraph) => beginAt(p.s),
     } : null,
-    focus: { on: focus, toggle: toggleFocus },
+    focus: { on: focus, toggle: toggleFocus, ask: bar.ask },
     search: { read: readAll, go: goFound },
     sleep: asked ? {
       asked,
@@ -430,7 +432,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   } as CSSProperties;
 
   return (
-    <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
+    <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${bar.hidden ? ' is-barless' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
           {book.kind === 'flow' ? (

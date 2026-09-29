@@ -260,6 +260,11 @@
 .rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }
 .rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-read { opacity: 0; }
 .i3-read { transition: opacity 260ms ease; }
+/* Left on its own, the bar asks above itself whether to go too; hidden, it's back when you wake the
+   controls, or when the voice or the light stops. */
+.rd.is-barless:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot:not(.is-setting) { opacity: 0; }
+.rd-chrome > .i3-hint.is-ask { display: flex; align-items: center; gap: 8px; padding: 5px 5px 5px 12px; pointer-events: auto; }
+.i3-hint.is-ask .i3-para { text-transform: uppercase; }
 
 /* The bottom line asks where to begin, and the first time the light moves, how fast: slower,
    faster, and Keep, after which the pace is in the voice sheet. */

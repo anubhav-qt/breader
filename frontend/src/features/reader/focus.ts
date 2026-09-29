@@ -100,3 +100,88 @@ export function useWake(active: boolean) {
 
   return { awake, still, wake, sleep };
 }
+
+/*
+ * Immersive's voice bar: the dot row that stays while a voice or the light goes on and the rest of
+ * the controls sleep. Each time it's left on its own, a question above it asks for a few seconds
+ * whether to hide it too. Hidden, it's gone until the voice or the light stops, and the next time
+ * it asks again. From the second time it's asked, Always hide too, which Appearance undoes. Kept
+ * per device, like focus mode.
+ */
+
+const BAR_KEY = 'breader.focus.bar.v1';
+/** How long the question stays, and again after the pointer leaves it. */
+const ASK_MS = 3500;
+const ASK_AGAIN_MS = 1500;
+/** The controls' fade, before it asks. */
+const SETTLE_MS = 400;
+
+let bar = readLocal<{ always: boolean; asked: number }>(BAR_KEY, { always: false, asked: 0 });
+const setBar = (patch: Partial<typeof bar>) => {
+  bar = { ...bar, ...patch };
+  writeLocal(BAR_KEY, bar);
+  subscribers.forEach((s) => s());
+};
+
+/** Always hide the voice bar, from the question or Appearance. */
+export function useBarHidden() {
+  const always = useSyncExternalStore(subscribe, () => bar.always);
+  return [always, useCallback((on: boolean) => setBar({ always: on }), [])] as const;
+}
+
+export interface BarAsk {
+  /** Always hide is offered too. */
+  always: boolean;
+  hide: () => void;
+  hideAlways: () => void;
+  /** The pointer is on the question: it waits. */
+  hold: (on: boolean) => void;
+}
+
+/** `shown`: the bar is up, a voice or the light going. `alone`: the rest of the controls asleep. */
+export function useBarAsk(shown: boolean, alone: boolean) {
+  const [always] = useBarHidden();
+  const [hidden, setHidden] = useState(false);
+  const [asking, setAsking] = useState<{ always: boolean } | null>(null);
+  const asked = useRef(false);
+  const timer = useRef(0);
+
+  const closeIn = useCallback((ms: number) => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setAsking(null), ms);
+  }, []);
+  const close = useCallback(() => {
+    window.clearTimeout(timer.current);
+    setAsking(null);
+  }, []);
+
+  // Stopped: the bar comes back, and the next time asks again.
+  useEffect(() => {
+    if (shown) return;
+    asked.current = false;
+    setHidden(false);
+    close();
+  }, [shown, close]);
+
+  // Once the rest has faded, not in the moment before the controls wake for a start.
+  useEffect(() => {
+    if (!shown || !alone || always || asked.current) return;
+    const t = window.setTimeout(() => {
+      asked.current = true;
+      setAsking({ always: bar.asked > 0 });
+      setBar({ asked: bar.asked + 1 });
+      closeIn(ASK_MS);
+    }, SETTLE_MS);
+    return () => window.clearTimeout(t);
+  }, [shown, alone, always, closeIn]);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const ask: BarAsk | null = asking && {
+    always: asking.always,
+    hide: () => { close(); setHidden(true); },
+    hideAlways: () => { close(); setBar({ always: true }); },
+    hold: (on) => { if (on) window.clearTimeout(timer.current); else closeIn(ASK_AGAIN_MS); },
+  };
+  return { hidden: always || hidden, ask };
+}

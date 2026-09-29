@@ -2,6 +2,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import type { LoadedBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
+import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, type ReaderSettings, type StyleSettings } from './settings';
 
@@ -134,6 +135,8 @@ const margins = (inset: number) => (
 export function AppearancePanel({ settings, isPdf, update }: LookProps) {
   const cur = settings[settings.style];
   const set = (patch: Partial<StyleSettings>) => update((s) => ({ ...s, [s.style]: { ...s[s.style], ...patch } }));
+  // Immersive's voice bar, as the rest of the controls sleep (focus.ts).
+  const [barHidden, setBarHidden] = useBarHidden();
 
   return (
     <div className="pnl">
@@ -213,6 +216,10 @@ export function AppearancePanel({ settings, isPdf, update }: LookProps) {
           </div>
         </>
       )}
+      <div className="ctl tgrow">
+        <span className="clbl">Always hide the voice bar</span>
+        <button type="button" className="tg" role="switch" aria-checked={barHidden} aria-label="Always hide the voice bar in focus" onClick={() => setBarHidden(!barHidden)} />
+      </div>
     </div>
   );
 }
