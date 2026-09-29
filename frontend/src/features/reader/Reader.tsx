@@ -194,11 +194,11 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     narration.jump(s);
     if (!reading) void shown(s).then(() => (immersive ? pacing.hold(s) : view.current?.listen.show(s, 0)));
   };
-  /** A tap on the page: on what's lit, it carries on; elsewhere it starts there, or at the paragraph's start when nothing's lit yet. */
+  /** A tap on the page: on what's lit, it carries on; elsewhere it starts at the start of the paragraph tapped. */
   const tapped = (s: Sentence) => {
     const h = pacing.lit ? pacing.current() : null;
     if (h && overlaps(h.s, s)) carryOn();
-    else beginAt(h ? s : view.current?.listen.paragraphs?.().find((p) => p.s.block === s.block)?.s ?? s);
+    else beginAt(view.current?.listen.paragraphs?.().find((p) => p.s.block === s.block)?.s ?? s);
   };
   /** The light stops at a tap anywhere: it moves on too quickly to aim at. Controls hidden in focus mode come back. */
   const pauseLight = () => {
