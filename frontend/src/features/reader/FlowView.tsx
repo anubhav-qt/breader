@@ -467,9 +467,9 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       const p = Math.floor((r.left - flowLeft() + 1) / step);
       return p === pageRef.current ? 'here' : p === pageRef.current + 1 ? 'next' : 'away';
     }
-    // Not under the bottom line of controls, which covers the last few lines of a scrolled page.
+    // Not under the lines of controls, which cover the first and last few lines of a scrolled page.
     const v = viewRef.current!.getBoundingClientRect();
-    if (r.top >= v.top - 1 && r.bottom <= v.bottom - 84) return 'here';
+    if (r.top >= v.top + (head ? BAR : 0) - 1 && r.bottom <= v.bottom - BAR - 8) return 'here';
     return r.top > v.top && r.top < v.bottom + v.height ? 'next' : 'away';
   };
 
@@ -477,7 +477,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     at: () => section,
     from: async () => {
       const out: Sentence[] = [];
-      const { block, offset } = loc.current;
+      // Scrolled, from the first line that can be seen, not one under the controls.
+      const { block, offset } = pagesMode ? loc.current : locate(head ? BAR : 8);
       blocks.current.forEach((el, i) => {
         if (i < block) return;
         const text = el.textContent ?? '';
