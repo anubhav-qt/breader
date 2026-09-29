@@ -9,6 +9,7 @@
     "check": "tsx tools/check.ts",
     "audit": "tsx tools/audit.ts",
     "pack": "tsx tools/pack.ts",
+    "import": "tsx tools/import.ts",
     "selftest": "tsx tools/selftest.ts",
     "typecheck": "tsc -p ."
   },

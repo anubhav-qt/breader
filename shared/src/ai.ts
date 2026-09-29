@@ -1,0 +1,115 @@
+import { z } from 'zod';
+
+/*
+ * What an AI made from one book file, read through once offline (ai/procedure.md): Revisit notes
+ * and voice marks, as ai/tools/pack.ts writes ai/out/<sha256>.json. `npm --prefix ai run import`
+ * checks each file against this and loads it whole into ai_notes. The server then gives each
+ * reader only what's safe for them: the notes up to their mark, and voice marks with no names.
+ *
+ * A position is [section, block], the numbers the reader gives a chapter and its paragraphs
+ * (reader/dom.ts collectBlocks). A span counts characters [start, end) of that block's text.
+ */
+
+const N = z.number().int().nonnegative();
+export const AiGender = z.enum(['M', 'F', 'N']);
+export type AiGender = z.infer<typeof AiGender>;
+const Text = z.string().min(1).max(2000);
+
+/** [section, block, what]: from that paragraph on. */
+const Pinned = z.tuple([N, N, Text]);
+
+export const AiEntry = z.strictObject({
+  id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  /** The name the book uses from each point on; the first is where the entry appears. */
+  names: z.array(Pinned).min(1),
+  /** What's known from each point on; the latest at or before the reader wins. */
+  about: z.array(Pinned).min(1),
+  /** What happens there (people, mostly). */
+  events: z.array(Pinned),
+  /** From there on this entry is another one: [section, block, that entry's id]. */
+  merge: z.tuple([N, N, z.string().min(1)]).optional(),
+});
+export type AiEntry = z.infer<typeof AiEntry>;
+
+export const AI_KINDS = ['people', 'places', 'terms'] as const;
+export type AiKind = (typeof AI_KINDS)[number];
+
+export const AiFile = z.strictObject({
+  v: z.literal(1),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  title: z.string(),
+  author: z.string(),
+  format: z.string(),
+  words: N,
+  /** When it was packed, and by which model. */
+  made: z.iso.datetime(),
+  by: z.string().min(1).max(200),
+  /** Each chapter's block count and text hash ("count:fnv1a"), to tell the app parsed the same text. */
+  sections: z.array(z.string().regex(/^\d+:[0-9a-f]{8}$/)),
+  revisit: z.strictObject({ people: z.array(AiEntry), places: z.array(AiEntry), terms: z.array(AiEntry) }),
+  voices: z.strictObject({
+    cast: z.array(z.strictObject({
+      id: z.string().min(1),
+      name: z.string(),
+      g: AiGender,
+      /** How they sound from a reveal on. */
+      changes: z.array(z.tuple([N, N, AiGender])).optional(),
+    })),
+    /** From each paragraph on: the narrator (a cast index, or -1 for third person) and whose eyes (-1 for nobody's). */
+    narration: z.array(z.tuple([N, N, z.number().int().min(-1), z.number().int().min(-1)])),
+    /** Every spoken line: [section, block, start, end, voice, speaker (cast index), a thought 1 or 0]. */
+    spans: z.array(z.tuple([N, N, N, N, AiGender, N, z.union([z.literal(0), z.literal(1)])])),
+  }),
+});
+export type AiFile = z.infer<typeof AiFile>;
+
+/** Dashes that don't belong in Revisit notes: em, en, and a hyphen standing in for one. */
+const DASHES = /[\u2014\u2013]| - /;
+
+/**
+ * What the schema can't say: every position is a real paragraph, every index points at someone,
+ * spans sit inside their paragraph in order, merges land on an entry, and notes have no dashes.
+ * Returns the problems found, none when it's sound.
+ */
+export function aiProblems(f: AiFile): string[] {
+  const out: string[] = [];
+  const blocks = f.sections.map((s) => Number(s.split(':')[0]));
+  const real = (s: number, b: number) => s < blocks.length && b < blocks[s];
+  const where = (s: number, b: number) => `${s}:${b}`;
+
+  for (const kind of AI_KINDS) {
+    const ids = new Set<string>();
+    for (const e of f.revisit[kind]) {
+      if (ids.has(e.id)) out.push(`${kind} ${e.id}: listed twice`);
+      ids.add(e.id);
+      for (const [label, list] of [['names', e.names], ['about', e.about], ['events', e.events]] as const) {
+        for (const [s, b, text] of list) {
+          if (!real(s, b)) out.push(`${kind} ${e.id}: ${label} at ${where(s, b)}, which isn’t a paragraph`);
+          if (DASHES.test(text)) out.push(`${kind} ${e.id}: ${label} at ${where(s, b)} has a dash`);
+        }
+      }
+      if (e.merge && !real(e.merge[0], e.merge[1])) out.push(`${kind} ${e.id}: merges at ${where(e.merge[0], e.merge[1])}, which isn’t a paragraph`);
+    }
+    for (const e of f.revisit[kind]) {
+      if (e.merge && (!ids.has(e.merge[2]) || e.merge[2] === e.id)) out.push(`${kind} ${e.id}: merges into ${e.merge[2]}, which isn’t another ${kind} entry`);
+    }
+  }
+
+  const cast = f.voices.cast.length;
+  for (const [i, c] of f.voices.cast.entries()) {
+    for (const [s, b] of c.changes ?? []) if (!real(s, b)) out.push(`cast ${i}: changes at ${where(s, b)}, which isn’t a paragraph`);
+  }
+  for (const [s, b, who, pov] of f.voices.narration) {
+    if (!real(s, b)) out.push(`narration at ${where(s, b)}, which isn’t a paragraph`);
+    if (who >= cast || pov >= cast) out.push(`narration at ${where(s, b)}: no one in the cast by that number`);
+  }
+  let last: [number, number, number] = [-1, -1, -1];
+  for (const [s, b, start, end, , who] of f.voices.spans) {
+    if (!real(s, b)) out.push(`a line at ${where(s, b)}, which isn’t a paragraph`);
+    if (end <= start) out.push(`a line at ${where(s, b)} ends before it starts`);
+    if (who >= cast) out.push(`a line at ${where(s, b)}: no one in the cast by that number`);
+    if (s < last[0] || (s === last[0] && (b < last[1] || (b === last[1] && start < last[2])))) out.push(`a line at ${where(s, b)} is out of order`);
+    last = [s, b, end];
+  }
+  return out;
+}

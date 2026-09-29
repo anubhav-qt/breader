@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./ai": "./src/ai.ts",
     "./key": "./src/key.ts",
     "./limits": "./src/limits.ts",
     "./protocol": "./src/protocol.ts",

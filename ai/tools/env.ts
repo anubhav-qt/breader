@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import pg from 'pg';
 import { ROOT } from './lib.ts';
 
 /*
@@ -54,4 +55,28 @@ export function prodEnv(): Record<string, string> {
   }
   if (!env.PRIMARY_SESSION_URL && !env.PRIMARY_URL) throw new Error(`No database address (PRIMARY_SESSION_URL) in ${file}.`);
   return env;
+}
+
+/**
+ * A connected client for the production database, named so it's easy to spot in the server's list.
+ * If it can't connect, the error says which setting it used and what kind of failure it was, but
+ * never the address, user or password (pg's own messages can carry them).
+ */
+export async function prodClient(name: string): Promise<pg.Client> {
+  const env = prodEnv();
+  const key = env.PRIMARY_SESSION_URL ? 'PRIMARY_SESSION_URL' : 'PRIMARY_URL';
+  const client = new pg.Client({
+    connectionString: env[key],
+    // Supabase's pooler presents a certificate for its own domain; the connection is still encrypted.
+    ssl: env.PRIMARY_SSL === 'require' ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: 15_000,
+    application_name: name,
+  });
+  try {
+    await client.connect();
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    throw new Error(`Couldn’t reach the production database with ${key}${code ? ` (${code})` : ''}. Check that setting, or the network.`);
+  }
+  return client;
 }
