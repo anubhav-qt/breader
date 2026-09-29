@@ -199,6 +199,9 @@ export const count = (n: number) => n.toLocaleString('en-GB');
 /** "1 line", "2 lines". */
 export const plural = (n: number, one = 'line', many = `${one}s`) => `${count(n)} ${n === 1 ? one : many}`;
 
+/** Flags that take the next argument as their value, as well as --flag=value. */
+const VALUED = new Set(['by', 'to', 'try']);
+
 /** Arguments after the command, and --flags with or without values. */
 export function args(): { rest: string[]; flags: Record<string, string | true> } {
   const rest: string[] = [];
@@ -209,7 +212,7 @@ export function args(): { rest: string[]; flags: Record<string, string | true> }
     if (!a.startsWith('--')) { rest.push(a); continue; }
     const [k, v] = a.slice(2).split('=', 2);
     if (v !== undefined) flags[k] = v;
-    else if (argv[i + 1] && !argv[i + 1].startsWith('--') && k === 'by') flags[k] = argv[++i];
+    else if (argv[i + 1] && !argv[i + 1].startsWith('--') && VALUED.has(k)) flags[k] = argv[++i];
     else flags[k] = true;
   }
   return { rest, flags };
