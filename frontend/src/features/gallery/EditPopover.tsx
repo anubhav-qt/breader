@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
+import { AI_LABEL, AI_WHY } from '../../books/ai';
 import type { BookEdit } from '../../books/types';
 import { BOOK_COLORS, colorVars } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
@@ -29,8 +30,8 @@ const COLS = 7;
 const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLS, ArrowUp: -COLS };
 
 /**
- * A small popover beside the card's corner button: rename, put in a series, recolour, share,
- * favourite or remove.
+ * A small popover beside the card's corner button: rename, put in a series, recolour, share, let
+ * an AI read along, favourite or remove.
  */
 export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onShare, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -189,6 +190,11 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
           <button type="button" className="switch" role="switch" aria-checked={!!book.shared} aria-labelledby="ep-share" onClick={() => onShare(!book.shared)} />
         </div>
       )}
+      <div className="ep-share">
+        <span className="ep-label" id="ep-ai">{AI_LABEL}</span>
+        <button type="button" className="switch" role="switch" aria-checked={book.ai} aria-labelledby="ep-ai" aria-describedby="ep-ai-why" onClick={() => onChange({ ai: !book.ai })} />
+      </div>
+      <p className="ep-note" id="ep-ai-why">{AI_WHY}</p>
       <div className="ep-actions">
         <button
           type="button"

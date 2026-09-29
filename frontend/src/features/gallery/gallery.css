@@ -396,6 +396,7 @@
 .ep-sw svg { width: 14px; height: 14px; }
 .ep-share { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
 .ep-share .ep-label { margin: 0; }
+.ep-note { margin: -4px 0 0; font: var(--ui-w) 11.5px/1.35 var(--ui); color: var(--ink-2); }
 .ep-actions { display: flex; gap: 8px; margin-top: 4px; }
 .ep-act {
   flex: 1 1 0;

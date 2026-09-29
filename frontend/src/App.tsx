@@ -446,8 +446,9 @@ export default function App() {
     };
   }, [route.name, adding, addFiles]);
 
-  const onAdded = useCallback(async (rec: BookRecord, data: Blob | string, cover?: Blob) => {
+  const onAdded = useCallback(async (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean }) => {
     await lib.addBook(rec, data, cover);
+    if (opts?.ai) lib.editBook(rec.id, { ai: true });
     setPreview('live');
     setTab(rec.shared ? 'shelf' : 'mine');
     say(`Added “${rec.title}” to ${rec.shared ? 'the Shared Library' : 'My books'}`);

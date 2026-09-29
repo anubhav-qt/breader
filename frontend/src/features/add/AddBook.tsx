@@ -8,6 +8,7 @@ import { colorVars } from '../../data/colors';
 import { recordFromBook } from '../../books/record';
 import { newLibraryKey } from '../../lib/key';
 import { springs } from '../../lib/springs';
+import { AI_LABEL, AI_WHY } from '../../books/ai';
 import { detectSeries, type FoundSeries, type SeriesName } from '../gallery/series';
 import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
 import { FreshKey } from './FreshKey';
@@ -32,7 +33,8 @@ interface Props {
   /** Every series in either library, offered as a series name is typed. */
   knownSeries: SeriesName[];
   onClose: () => void;
-  onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob) => Promise<void>;
+  /** `ai`: the reader let an AI read along with them (books/ai.ts). */
+  onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean }) => Promise<void>;
   onKey: (key: string) => Promise<void>;
   /** Logged out: the new key's step offers to log in instead. */
   onLogin?: () => void;
@@ -45,6 +47,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
   const [step, setStep] = useState<Step>(initialMode === 'paste' ? { kind: 'paste' } : { kind: 'choose' });
   const [shared, setShared] = useState(defaultShared);
   const [inSeries, setInSeries] = useState(false);
+  const [readAlong, setReadAlong] = useState(false);
   const [series, setSeries] = useState<SeriesValue>({ name: '', num: '' });
   const [dragging, setDragging] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
@@ -104,7 +107,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     }
     const cover = await coverOf(book);
     book.cleanup?.();
-    await onAdded(rec, data, cover);
+    await onAdded(rec, data, cover, { ai: readAlong });
     // Shared books need a key too: it's how they reach the server, and so the Shared Library.
     if (!hasKey) {
       const key = newLibraryKey();
@@ -221,6 +224,11 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                   </motion.div>
                 )}
               </AnimatePresence>
+              <div className="add-switch">
+                <span className="add-label" id="add-ai">{AI_LABEL}</span>
+                <button type="button" className="switch" role="switch" aria-checked={readAlong} aria-labelledby="add-ai" aria-describedby="add-ai-why" onClick={() => setReadAlong(!readAlong)} />
+              </div>
+              <p className="add-found add-ai" id="add-ai-why">{AI_WHY}</p>
               <p className="add-local">Saved in this browser first, then synced, so your key or account opens it anywhere.</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep({ kind: 'choose' })}>Choose another</button>
