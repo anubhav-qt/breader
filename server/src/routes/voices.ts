@@ -16,6 +16,7 @@ type Row = {
   config_id: string | null;
   sample_id: string | null;
   is_public: boolean;
+  gender: 'F' | 'M' | 'N' | null;
   created_at: Date;
   mine: boolean;
   words: number;
@@ -39,7 +40,7 @@ export function voiceRoutes(deps: Deps) {
     const words = id ? sql`coalesce((SELECT u.words FROM voice_uses u WHERE u.library_id = ${id} AND u.voice_id = v.id), 0)` : sql`0`;
     const mine = id ? sql`coalesce(v.library_id = ${id}, false)` : sql`false`;
     const { rows } = await db.execute<Row>(sql`
-      SELECT v.id, v.name, v.engine, v.lang, v.file_id, v.config_id, v.sample_id, v.is_public, v.created_at,
+      SELECT v.id, v.name, v.engine, v.lang, v.file_id, v.config_id, v.sample_id, v.is_public, v.gender, v.created_at,
              ${mine} AS mine, ${words}::int AS words, v.removed_at IS NOT NULL AS removed,
              (SELECT b.size FROM blobs b WHERE b.id = v.file_id) AS file_size
       FROM voices v
@@ -56,6 +57,7 @@ export function voiceRoutes(deps: Deps) {
       configId: v.config_id,
       sampleId: v.sample_id,
       public: v.is_public,
+      ...(v.gender ? { gender: v.gender } : {}),
       addedAt: new Date(v.created_at).getTime(),
       fileSize: Number(v.file_size),
       mine: v.mine,

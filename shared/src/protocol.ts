@@ -117,6 +117,8 @@ export const Voice = z.object({
   configId: Id.nullish(),
   sampleId: Id.nullish(),
   public: z.boolean(),
+  /** Whose voice it sounds like, a woman's, a man's or neither, so 2 voices can read with it. Left out, it stays as it was. */
+  gender: z.enum(['F', 'M', 'N']).optional(),
 });
 export type Voice = z.infer<typeof Voice>;
 

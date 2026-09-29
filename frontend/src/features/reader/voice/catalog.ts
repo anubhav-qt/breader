@@ -30,6 +30,8 @@ export interface VoiceInfo {
   sample?: { parts: Record<SamplePart, string> } | { fileId: string };
   /** Kokoro only: says words the British way. */
   british?: boolean;
+  /** A woman's voice or a man's, for 2 voices; neither for an upload not tagged either. */
+  gender?: 'F' | 'M';
   /** Uploaded voices. */
   upload?: ListedVoice;
 }
@@ -53,23 +55,23 @@ const clip = (key: string) => ({
   parts: Object.fromEntries(SAMPLE_PARTS.map((p) => [p, `/voices/${key.replace(':', '-')}-${p}.m4a`])) as Record<SamplePart, string>,
 });
 
-const piper = (id: string, name: string, accent: string): VoiceInfo => ({ key: `piper:${id}`, engine: 'piper', name, accent, sample: clip(`piper:${id}`) });
-const kokoro = (id: string, name: string, accent: string): VoiceInfo => ({ key: `kokoro:${id}`, engine: 'kokoro', name, accent, british: accent === 'UK', sample: clip(`kokoro:${id}`) });
+const piper = (id: string, name: string, accent: string, gender: 'F' | 'M'): VoiceInfo => ({ key: `piper:${id}`, engine: 'piper', name, accent, gender, sample: clip(`piper:${id}`) });
+const kokoro = (id: string, name: string, accent: string, gender: 'F' | 'M'): VoiceInfo => ({ key: `kokoro:${id}`, engine: 'kokoro', name, accent, gender, british: accent === 'UK', sample: clip(`kokoro:${id}`) });
 
 export const BUILT_IN: Record<Mode, VoiceInfo[]> = {
   normal: [
-    piper('kristin', 'Kristin', 'US'),
-    piper('norman', 'Norman', 'US'),
-    piper('cori', 'Cori', 'UK'),
-    piper('northern', 'Northern', 'UK'),
-    piper('ljspeech', 'Linda', 'US'),
+    piper('kristin', 'Kristin', 'US', 'F'),
+    piper('norman', 'Norman', 'US', 'M'),
+    piper('cori', 'Cori', 'UK', 'F'),
+    piper('northern', 'Northern', 'UK', 'M'),
+    piper('ljspeech', 'Linda', 'US', 'F'),
   ],
   immersive: [
-    kokoro('af_heart', 'Heart', 'US'),
-    kokoro('am_michael', 'Michael', 'US'),
-    kokoro('bf_emma', 'Emma', 'UK'),
-    kokoro('bm_george', 'George', 'UK'),
-    kokoro('af_bella', 'Bella', 'US'),
+    kokoro('af_heart', 'Heart', 'US', 'F'),
+    kokoro('am_michael', 'Michael', 'US', 'M'),
+    kokoro('bf_emma', 'Emma', 'UK', 'F'),
+    kokoro('bm_george', 'George', 'UK', 'M'),
+    kokoro('af_bella', 'Bella', 'US', 'F'),
   ],
 };
 
@@ -85,6 +87,7 @@ export function fromListed(v: ListedVoice): VoiceInfo {
     name: v.name,
     accent: accentOf(v.lang),
     british: v.engine === 'kokoro' && accentOf(v.lang) === 'UK',
+    ...(v.gender === 'F' || v.gender === 'M' ? { gender: v.gender } : {}),
     sample: v.sampleId ? { fileId: v.sampleId } : undefined,
     upload: v,
   };

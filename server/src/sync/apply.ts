@@ -238,6 +238,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           configId: v.configId ?? null,
           sampleId: v.sampleId ?? null,
           isPublic: v.public,
+          gender: v.gender ?? null,
         })
         .onConflictDoUpdate({
           target: voices.id,
@@ -246,6 +247,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             lang: sql`excluded.lang`,
             sampleId: sql`coalesce(excluded.sample_id, ${voices.sampleId})`,
             isPublic: sql`excluded.is_public`,
+            gender: sql`coalesce(excluded.gender, ${voices.gender})`,
             updatedAt: sql`now()`,
           },
         });

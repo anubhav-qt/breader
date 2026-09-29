@@ -2,9 +2,15 @@ import { useRef, useState, type DragEvent } from 'react';
 import { KEEP_WORDS } from '@breader/shared/limits';
 import { Segmented } from '../Panels';
 import type { Mode } from '../voice/catalog';
-import { readVoice, uploadVoice, type Accent, type Draft, type Step } from '../voice/upload';
+import { readVoice, uploadVoice, type Accent, type Draft, type Sounds, type Step } from '../voice/upload';
 import { PLUS } from './icons';
 import { DotIcon } from './parts';
+
+const SOUNDS: Array<{ v: Sounds; label: string }> = [
+  { v: 'F', label: 'A woman' },
+  { v: 'M', label: 'A man' },
+  { v: 'N', label: 'Neither' },
+];
 
 const mb = (n: number) => (n < 1e6 ? `${Math.max(1, Math.round(n / 1e3))} KB` : `${Math.round(n / 1e6)} MB`);
 
@@ -13,6 +19,7 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
   const [draft, setDraft] = useState<Draft | null>(null);
   const [name, setName] = useState('');
   const [accent, setAccent] = useState<Accent>('US');
+  const [gender, setGender] = useState<Sounds>('N');
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +51,7 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
     // Trying it can take the engine that's reading aloud.
     onBusy();
     try {
-      const key = await uploadVoice(draft, { name, accent, open }, setStep);
+      const key = await uploadVoice(draft, { name, accent, open, gender }, setStep);
       onDone({ key, mode: draft.engine === 'kokoro' ? 'immersive' : 'normal' });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -87,6 +94,8 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
             <input id="vs-name" className="vs-input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} disabled={!!step} />
           </div>
           <Segmented label="Accent" value={accent} onChange={setAccent} options={[{ v: 'US', label: 'US' }, { v: 'UK', label: 'UK' }]} />
+          <Segmented label="Sounds like" value={gender} onChange={setGender} options={SOUNDS} />
+          <p className="p-note vs-about">A woman’s voice or a man’s can read in 2 voices too.</p>
           <div className="ctl tgrow vs-share">
             <span className="clbl">Share with every reader</span>
             <button type="button" className="tg" role="switch" aria-checked={open} aria-label="Share with every reader" onClick={() => setOpen(!open)} disabled={!!step} />

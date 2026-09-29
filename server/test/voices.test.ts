@@ -139,4 +139,19 @@ describe('voices', () => {
     expect(await since(lonely.voice.fileId)).not.toBeNull();
     expect(await since(loved.voice.fileId)).toBeNull();
   });
+
+  it('keeps the tag its owner gave it, for 2 voices', async () => {
+    const { b, voice } = await owner(false);
+    const gender = async () => ((await listed(b)).find((v) => v.id === voice.id) as { gender?: string } | undefined)?.gender;
+    expect(await gender()).toBeUndefined();
+    await b.post('/v1/sync/push', push('g', { type: 'voice.put', voice: { ...voice, gender: 'F' } }));
+    expect(await gender()).toBe('F');
+    // A device that doesn't know about tags yet renames it: the tag stays.
+    await b.post('/v1/sync/push', push('g', { type: 'voice.put', voice: { ...voice, name: 'Mum again' } }));
+    expect(await gender()).toBe('F');
+    await b.post('/v1/sync/push', push('g', { type: 'voice.put', voice: { ...voice, gender: 'N' } }));
+    expect(await gender()).toBe('N');
+    const bad = await b.post('/v1/sync/push', push('g', { type: 'voice.put', voice: { ...voice, gender: 'X' } }));
+    expect(bad.status).toBe(400);
+  });
 });

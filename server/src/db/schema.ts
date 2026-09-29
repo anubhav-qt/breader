@@ -228,6 +228,8 @@ export const voices = pgTable(
     configId: text('config_id').references(() => blobs.id),
     sampleId: text('sample_id').references(() => blobs.id),
     isPublic: boolean('is_public').notNull().default(false),
+    /** F, M or N (neither), as its owner tagged it, for 2 voices; null if never tagged. */
+    gender: text('gender'),
     createdAt: at('created_at').notNull().defaultNow(),
     updatedAt: at('updated_at').notNull().defaultNow(),
     removedAt: at('removed_at'),

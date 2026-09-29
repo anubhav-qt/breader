@@ -14,6 +14,8 @@ import type { PiperConfig } from './tts.worker';
  */
 
 export type Accent = 'US' | 'UK';
+/** Whose voice it sounds like: a woman's, a man's, or neither. */
+export type Sounds = 'F' | 'M' | 'N';
 
 export interface Draft {
   engine: Engine;
@@ -82,9 +84,9 @@ export type Step = 'trying' | 'uploading';
  * key. A Kokoro pack is only tried where Immersive already runs; elsewhere it goes up without a
  * sample.
  */
-export async function uploadVoice(d: Draft, as: { name: string; accent: Accent; open: boolean }, onStep: (s: Step) => void): Promise<string> {
+export async function uploadVoice(d: Draft, as: { name: string; accent: Accent; open: boolean; gender: Sounds }, onStep: (s: Step) => void): Promise<string> {
   const lang = as.accent === 'US' ? 'en-us' : d.espeak && !d.espeak.startsWith('en-us') ? d.espeak : 'en-gb';
-  const base = { name: as.name.trim().slice(0, 60) || 'My voice', engine: d.engine, lang, public: as.open, addedAt: Date.now(), fileSize: d.model.byteLength, mine: true, words: 0 };
+  const base = { name: as.name.trim().slice(0, 60) || 'My voice', engine: d.engine, lang, public: as.open, gender: as.gender, addedAt: Date.now(), fileSize: d.model.byteLength, mine: true, words: 0 };
 
   onStep('trying');
   const tmp = `try-${crypto.randomUUID()}`;

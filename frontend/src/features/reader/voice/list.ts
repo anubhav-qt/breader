@@ -44,8 +44,8 @@ export function refreshVoices(now = false) {
 /** One of this library's voices, added or changed: shown at once, sent with the next sync. */
 export function putVoice(v: ListedVoice) {
   set([v, ...voices.filter((x) => x.id !== v.id)]);
-  const { id, name, engine, lang, fileId, configId, sampleId, public: open } = v;
-  record({ type: 'voice.put', voice: { id, name, engine, lang, fileId, configId, sampleId, public: open } });
+  const { id, name, engine, lang, fileId, configId, sampleId, public: open, gender } = v;
+  record({ type: 'voice.put', voice: { id, name, engine, lang, fileId, configId, sampleId, public: open, ...(gender ? { gender } : {}) } });
 }
 
 export function removeVoice(id: string) {

@@ -324,8 +324,19 @@ function Own({ v }: { v: VoiceInfo }) {
     }
     removeVoice(u.id);
   };
+  const sounds = u.gender === 'F' ? 'Her' : u.gender === 'M' ? 'His' : 'Neither';
+  const said = u.gender === 'F' ? 'a woman' : u.gender === 'M' ? 'a man' : 'neither a woman nor a man';
   return (
     <>
+      <button
+        type="button"
+        className="vs-sounds"
+        title="Whose voice it sounds like, for 2 voices"
+        aria-label={`${v.name} sounds like ${said}. Change it`}
+        onClick={() => putVoice({ ...u, gender: u.gender === 'F' ? 'M' : u.gender === 'M' ? 'N' : 'F' })}
+      >
+        {sounds}
+      </button>
       <button
         type="button"
         className="tg vs-public"

@@ -439,6 +439,8 @@
 .vs-hear.is-on { color: var(--book-mark); }
 .vs-remove.is-sure { width: auto; padding: 0 9px; font: var(--ui-w) 11.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-fg); background: var(--r-bg); box-shadow: 0 0 0 1px var(--r-line); }
 .vs-public { flex: none; margin: 0 4px; scale: 0.78; }
+.vs-sounds { flex: none; height: 24px; padding: 0 7px; border-radius: 7px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); box-shadow: 0 0 0 1px var(--r-line); transition: color 140ms ease, background-color 140ms ease; }
+.vs-sounds:hover { color: var(--r-fg); background: var(--r-bg); }
 /* The button stays in reach on a phone, where the sheet scrolls. */
 .vs-foot { position: sticky; bottom: 0; display: grid; gap: 12px; padding: 12px 0; background: var(--r-bg); }
 .vs-err { margin: 0; color: var(--r-fg); }
