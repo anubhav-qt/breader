@@ -7,9 +7,9 @@ import type { Msg } from './nim.ts';
 import { validate, type Cast } from './validate.ts';
 
 /*
- * npm --prefix ai run mark -- <book> [<book>…]   Marks every part not marked yet, in order, then
- *                                                 remarks any part a fallback model made, settles
- *                                                 the unsure lines and packs the book.
+ * npm --prefix ai run mark -- <book> [<book>…]   Marks every part not marked yet, all at once,
+ *                                                 then remarks any part a fallback model made,
+ *                                                 settles the unsure lines and packs the book.
  *   --to <n>        stop after part n
  *   --try <n>       mark part n again beside the marks it has and compare them; changes nothing
  *   --settle        only settle the unsure lines
@@ -17,16 +17,17 @@ import { validate, type Cast } from './validate.ts';
  *
  * The same work as procedure.md, part 4, steps 3 to 5, done by a model through NVIDIA's free API,
  * after research (step 2) is done by hand in Antigravity. Each call gets the rules, the whole book,
- * research.md, the cast so far and the previous part's marks, and answers with a part's marks
- * plus any new people. check runs after every answer, and its errors go back to the model until
- * the part is clean. Kimi K3 marks; Nemotron 3 Ultra takes over only while Kimi is down, and its
+ * research.md, the cast so far and the previous part's marks if there are any, and answers with
+ * a part's marks plus any new people. Every part goes at once, since the whole book is there to
+ * read. Then check, and one call to fix every part with errors together. Kimi K3 marks; Nemotron 3 Ultra takes over only while Kimi is down, and its
  * parts are marked again by Kimi before the book is packed. Who marked each part is kept in
  * marked-by.json. Nothing it prints has the book's text in it.
  */
 
+// A book's parts all go at once, so each model takes as many calls as a long book has parts.
 const LADDER: Rung[] = [
-  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 32_000, maxInFlight: 2 },
-  { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 32_000, maxInFlight: 2 },
+  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 32_000, maxInFlight: 24 },
+  { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 32_000, maxInFlight: 24 },
 ];
 const TOP = LADDER[0];
 const ROUNDS = 3;
@@ -140,8 +141,8 @@ function errorsFor(book: Book, n: number): string[] {
   return validate(book, false).errors.filter((e) => e.startsWith(name) || e.startsWith('cast.json') || (e.startsWith('not in cast.json') && e.includes(name)));
 }
 
-/** Marks one part, with check after every answer, until it's clean. */
-async function markPart(book: Book, n: number, lb: Balancer): Promise<Done> {
+/** What the model gets to mark part n. */
+function partPrompt(book: Book, n: number): Msg[] {
   const part = book.parts[n - 1];
   const quotes = book.segs.filter((g) => inPart(part, [g.s, g.b])).length;
   const prev = n > 1 && existsSync(marksFile(book, n - 1)) ? readFileSync(marksFile(book, n - 1), 'utf8').trim() : '';
@@ -151,28 +152,80 @@ async function markPart(book: Book, n: number, lb: Balancer): Promise<Done> {
     prev ? `# Marks of part ${n - 1} (done already)\n\n${prev}` : '',
     `# Mark part ${n}\n\nPart ${n} is paragraphs ${posText(part.from)} to ${posText(part.to)}, with ${quotes} numbered quotes. Here it is again:\n\n${text(book, n)}`,
   ].filter(Boolean).join('\n\n');
-  const messages: Msg[] = [{ role: 'system', content: SYSTEM }, { role: 'user', content: user }];
-  let secs = 0;
-  for (let round = 1; round <= ROUNDS; round++) {
-    const { reply, rung } = await lb.chat(messages, { book: book.key, part: n, round });
-    secs += reply.secs;
+  return [{ role: 'system', content: SYSTEM }, { role: 'user', content: user }];
+}
+
+function linesIn(book: Book, n: number): string {
+  const part = book.parts[n - 1];
+  const spans = validate(book, false).marks.spans.filter((sp) => inPart(part, [sp.s, sp.b]));
+  return `${spans.length} lines, ${spans.filter((s) => s.unsure).length} unsure`;
+}
+
+/**
+ * Marks parts all at once, a call each. Then one call for every part check found errors in, with
+ * their marks and the errors, to fix them together, and another if some are left (ROUNDS calls
+ * in all, at most). Returns what each clean part took, and the parts that failed: no answer, or
+ * errors still. A failed part's marks file is left as it is, for the caller to deal with.
+ */
+async function markParts(book: Book, ns: number[], lb: Balancer): Promise<{ done: Map<number, Done>; failed: number[] }> {
+  const done = new Map<number, Done>();
+  const stamp = (n: number, model: string, secs: number) => {
+    const d = done.get(n);
+    done.set(n, { model, rounds: (d?.rounds ?? 0) + 1, secs: Math.round((d?.secs ?? 0) + secs), at: new Date().toISOString() });
+  };
+  const answers = await Promise.allSettled(ns.map(async (n) => {
+    const { reply, rung } = await lb.chat(partPrompt(book, n), { book: book.key, part: n, round: 1 });
     const { marks, cast } = split(reply.text);
     writeFileSync(marksFile(book, n), marks);
     const merged = mergeCast(book, cast, rung.name);
-    const errors = errorsFor(book, n);
-    const c = validate(book, false);
-    const mine = c.marks.spans.filter((sp) => inPart(part, [sp.s, sp.b]));
-    console.log(`  part ${n}, round ${round}: ${rung.name}, ${mins(reply.secs)} (${mins(reply.firstS)} before the first token), ${count(reply.promptTokens)} tokens in, ${count(reply.outTokens)} out; ${mine.length} lines, ${mine.filter((s) => s.unsure).length} unsure, ${merged.added} new in the cast${merged.notes.length ? ` (${merged.notes.join('; ')})` : ''}, ${errors.length} errors`);
-    if (!errors.length) return { model: rung.name, rounds: round, secs: Math.round(secs), at: new Date().toISOString() };
-    messages.push(
-      { role: 'assistant', content: reply.text },
-      { role: 'user', content: `check found ${errors.length} error${errors.length > 1 ? 's' : ''} in that:\n\n${errors.slice(0, 80).join('\n')}\n\nFix them and send the whole answer again: the full marks file for part ${n}, then the cast lines.` },
-    );
+    stamp(n, rung.name, reply.secs);
+    console.log(`  part ${n}: ${rung.name}, ${mins(reply.secs)} (${mins(reply.firstS)} before the first token), ${count(reply.promptTokens)} tokens in, ${count(reply.outTokens)} out; ${linesIn(book, n)}, ${merged.added} new in the cast${merged.notes.length ? ` (${merged.notes.join('; ')})` : ''}, ${errorsFor(book, n).length} errors`);
+  }));
+  answers.forEach((a, i) => {
+    if (a.status === 'rejected') console.log(`  part ${ns[i]}: no answer (${a.reason instanceof Error ? a.reason.message : String(a.reason)})`);
+  });
+
+  for (let round = 2; round <= ROUNDS; round++) {
+    const bad = ns.filter((n) => done.has(n) && errorsFor(book, n).length);
+    if (!bad.length) break;
+    const sections = bad.map((n) => {
+      const errors = errorsFor(book, n);
+      return `## Part ${n}\n\nIts marks:\n${readFileSync(marksFile(book, n), 'utf8').trim()}\n\ncheck's ${errors.length === 1 ? 'error' : `${errors.length} errors`}:\n${errors.slice(0, 80).join('\n')}`;
+    });
+    const user = [
+      context(book),
+      `# The cast so far (id | voice | name | role)\n\n${castText(book)}`,
+      `# Fix these\n\ncheck found errors in the marks of ${bad.length === 1 ? 'this part' : `these ${bad.length} parts`}. Fix them, and send back the whole fixed marks file for each part, each starting with a line like:\n=== part ${bad[0]} ===\nThen the cast lines for anyone new.\n\n${sections.join('\n\n')}`,
+    ].join('\n\n');
+    let answer;
+    try {
+      answer = await lb.chat([{ role: 'system', content: SYSTEM }, { role: 'user', content: user }], { book: book.key, fix: bad.join(','), round });
+    } catch (e) {
+      console.log(`  fix, round ${round}: no answer (${e instanceof Error ? e.message : String(e)})`);
+      break;
+    }
+    const { reply, rung } = answer;
+    const byPart = new Map<number, string[]>();
+    const castLines: string[] = [];
+    let at: number | null = null;
+    for (const raw of reply.text.split(/\r?\n/)) {
+      const t = raw.trim();
+      const h = t.match(/^=+\s*part\s+(\d+)\s*=+$/i);
+      if (h) { at = Number(h[1]); byPart.set(at, []); }
+      else if (/^(cast|change)\s/.test(t)) castLines.push(t);
+      else if (at !== null) byPart.get(at)!.push(raw);
+    }
+    for (const [n, body] of byPart) {
+      if (!bad.includes(n)) continue;
+      writeFileSync(marksFile(book, n), split(body.join('\n')).marks);
+      stamp(n, rung.name, reply.secs);
+    }
+    mergeCast(book, castLines, rung.name);
+    console.log(`  fix, round ${round}: ${rung.name}, ${mins(reply.secs)}, parts ${bad.join(', ')}; errors left: ${bad.map((n) => `part ${n} ${errorsFor(book, n).length}`).join(', ')}`);
   }
-  const failed = join(bookDir(book.key), 'failed');
-  mkdirSync(failed, { recursive: true });
-  renameSync(marksFile(book, n), join(failed, `${partName(n)}.txt`));
-  throw new Error(`Part ${n} still has errors after ${ROUNDS} rounds. The last answer is in failed/${partName(n)}.txt; run check to see them.`);
+  const failed = ns.filter((n) => !done.has(n) || errorsFor(book, n).length);
+  for (const n of failed) done.delete(n);
+  return { done, failed };
 }
 
 /** Every line marked "?", read again against the whole book in one call. */
@@ -246,34 +299,37 @@ function byLine(book: Book): string {
 async function runBook(key: string, lb: Balancer, flags: Record<string, string | true>) {
   const book = loadBook(key);
   const tag = book.title;
-  const start = validate(book, false).errors;
+  // A part that failed last time leaves a gap, which check calls skipped: that one is fine here.
+  const start = validate(book, false).errors.filter((e) => !e.startsWith('parts skipped'));
   if (start.length) throw new Error(`${tag}: check has ${start.length} errors before marking; fix them first. The first: ${start[0]}`);
+  const record = (done: Map<number, Done>) => writeJson(ledgerFile(book), { ...ledger(book), ...Object.fromEntries(done) });
 
   if (!flags.settle) {
     const to = typeof flags.to === 'string' ? Number(flags.to) : Infinity;
-    for (let c = validate(book, false); c.todo.length && c.todo[0] <= to; c = validate(book, false)) {
-      const n = c.todo[0];
-      console.log(`${tag}: part ${n} of ${book.parts.length}`);
-      const done = await markPart(book, n, lb);
-      writeJson(ledgerFile(book), { ...ledger(book), [n]: done });
+    const todo = validate(book, false).todo.filter((n) => n <= to);
+    if (todo.length) {
+      console.log(`${tag}: marking parts ${todo.join(', ')}, all at once`);
+      const { done, failed } = await markParts(book, todo, lb);
+      record(done);
+      if (failed.length) {
+        const dir = join(bookDir(book.key), 'failed');
+        mkdirSync(dir, { recursive: true });
+        for (const n of failed) if (existsSync(marksFile(book, n))) renameSync(marksFile(book, n), join(dir, `${partName(n)}.txt`));
+        throw new Error(`${tag}: parts ${failed.join(', ')} failed (their last answers are in failed/). Run mark again to retry just those.`);
+      }
     }
     if (validate(book, false).todo.length) return console.log(`${tag}: stopped after part ${to}.`);
 
     // Parts a fallback model made, marked again by the top one (which is waited for, however long).
     const redo = Object.entries(ledger(book)).filter(([, d]) => d.model !== TOP.name).map(([n]) => Number(n));
     if (redo.length) {
+      console.log(`${tag}: parts ${redo.join(', ')} again, with ${TOP.name}`);
+      const old = new Map(redo.map((n) => [n, readFileSync(marksFile(book, n), 'utf8')]));
       const top = new Balancer([TOP], { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 40 });
-      for (const n of redo) {
-        console.log(`${tag}: part ${n} again, with ${TOP.name} (${ledger(book)[n].model} made it)`);
-        const old = readFileSync(marksFile(book, n), 'utf8');
-        try {
-          const done = await markPart(book, n, top);
-          writeJson(ledgerFile(book), { ...ledger(book), [n]: done });
-        } catch (e) {
-          writeFileSync(marksFile(book, n), old);
-          throw e;
-        }
-      }
+      const { done, failed } = await markParts(book, redo, top);
+      record(done);
+      for (const n of failed) writeFileSync(marksFile(book, n), old.get(n)!);
+      if (failed.length) throw new Error(`${tag}: ${TOP.name} couldn't redo parts ${failed.join(', ')}; they keep the fallback's marks. Run mark again to retry.`);
     }
   }
 
@@ -316,7 +372,9 @@ async function tryPart(key: string, n: number, lb: Balancer) {
   let done: Done;
   rmSync(file);
   try {
-    done = await markPart(book, n, lb);
+    const r = await markParts(book, [n], lb);
+    if (r.failed.length) throw new Error(`Part ${n} failed; the book's marks are as they were.`);
+    done = r.done.get(n)!;
     after = view();
     copyFileSync(file, join(trial, `${partName(n)}.${done.model}.txt`));
   } finally {
