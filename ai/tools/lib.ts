@@ -56,6 +56,8 @@ export interface Queue {
   books: QueueBook[];
   /** Books that couldn't be listed, and why (a file that never finished uploading). */
   skipped: string[];
+  /** True while the server has no AI switch yet, so every book is listed, not just the ones that said yes. */
+  everyBook?: boolean;
 }
 
 /** A paragraph-level element of a chapter: its tag and its exact text (textContent). */

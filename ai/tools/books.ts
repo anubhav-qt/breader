@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import pg from 'pg';
-import { prodEnv } from './env.ts';
+import { prodClient } from './env.ts';
 import {
   bookDir,
   isFetched,
@@ -22,10 +21,12 @@ import {
 /*
  * npm --prefix ai run books
  *
- * Every book in every library on the production server, one entry per distinct file (the same file
- * in two libraries is one book), in the order to work on them: books someone has started, the most
- * recently read first, then the rest. Read only: the connection can't change anything.
- * Writes ai/work/queue.json and prints where each book stands.
+ * Every book on the production server whose AI switch is on, one entry per distinct file (the same
+ * file in two libraries is one book), in the order to work on them: books someone has started, the
+ * most recently read first, then the rest. A book whose switch is off in every library isn't listed:
+ * nobody said yes to it. Until the app update with the switch is live, it lists them all and says so.
+ * Read only: the connection can't change anything. Writes ai/work/queue.json and prints where each
+ * book stands.
  */
 
 interface Row {
@@ -59,20 +60,18 @@ const SQL = `
     left join reading_states rs on rs.library_id = li.library_id and rs.book_id = li.book_id
    where li.removed_at is null and l.retired_at is null`;
 
+/** Whether the AI switch is on the server yet (it comes with the app update for Revisit). */
+const HAS_SWITCH = `select exists (select 1 from information_schema.columns
+  where table_schema = 'public' and table_name = 'library_items' and column_name = 'ai') as ok`;
+
 export async function listBooks(): Promise<Queue> {
-  const env = prodEnv();
-  const client = new pg.Client({
-    connectionString: env.PRIMARY_SESSION_URL || env.PRIMARY_URL,
-    // Supabase's pooler presents a certificate for its own domain; the connection is still encrypted.
-    ssl: env.PRIMARY_SSL === 'require' ? { rejectUnauthorized: false } : undefined,
-    connectionTimeoutMillis: 15_000,
-    application_name: 'breader-ai-read-only',
-  });
-  await client.connect();
+  const client = await prodClient('breader-ai-read-only');
   let rows: Row[];
+  let switchLive: boolean;
   try {
     await client.query('begin read only');
-    rows = (await client.query<Row>(SQL)).rows;
+    switchLive = (await client.query<{ ok: boolean }>(HAS_SWITCH)).rows[0].ok;
+    rows = (await client.query<Row>(switchLive ? `${SQL} and li.ai` : SQL)).rows;
     await client.query('rollback');
   } finally {
     await client.end();
@@ -121,7 +120,7 @@ export async function listBooks(): Promise<Queue> {
     };
   });
   books.sort((a, b) => Number(b.started) - Number(a.started) || b.lastRead.localeCompare(a.lastRead));
-  return { made: new Date().toISOString(), books: books.map((b, i) => ({ rank: i + 1, ...b })), skipped };
+  return { made: new Date().toISOString(), books: books.map((b, i) => ({ rank: i + 1, ...b })), skipped, ...(switchLive ? {} : { everyBook: true }) };
 }
 
 export function status(b: QueueBook): string {
@@ -137,7 +136,9 @@ main(async () => {
   const q = await listBooks();
   writeJson(QUEUE, q);
   const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s).padEnd(n);
-  console.log(`${q.books.length} books, most recently read first. Saved to ai/work/queue.json.\n`);
+  console.log(`${q.books.length} books${q.everyBook ? '' : ' with the AI switch on'}, most recently read first. Saved to ai/work/queue.json.`);
+  if (q.everyBook) console.log('The server has no AI switch yet (the app update isn’t live), so this lists every book. Import will still only load the ones whose switch is on.');
+  console.log('');
   console.log(`${'#'.padStart(3)}  ${'status'.padEnd(14)} ${'title'.padEnd(44)} ${'format'.padEnd(6)} ${'read'.padStart(4)}  ${'last read'.padEnd(10)}  key`);
   for (const b of q.books) {
     const read = b.started ? `${Math.round(b.progress * 100)}%` : '-';
