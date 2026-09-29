@@ -307,18 +307,23 @@
   white-space: nowrap;
   pointer-events: none;
 }
-/* The numbers, in the book's colour before each paragraph's first word. Drawn from an attribute
-   (FlowView), so the book's text and its offsets stay as they are. No drop cap meanwhile. */
+/* The numbers, in the book's colour, hung in the margin beside each paragraph's first line. Drawn
+   from an attribute (FlowView), so the book's text and its offsets stay as they are, and out of the
+   flow, so no line moves when they come or go. A list's hang past its bullets. */
+.rd .fv-flow [data-para] { position: relative; }
 .rd .fv-flow [data-para]::before {
   content: attr(data-para);
-  display: inline-block;
-  margin-right: 0.6em;
+  position: absolute;
+  top: 0;
+  right: 100%;
+  margin-right: 10px;
   font: var(--ui-w-strong) 12px/1 var(--ui);
+  line-height: calc(var(--rs) * var(--rl));
   letter-spacing: 0.06em;
   text-indent: 0;
   color: var(--book-mark);
 }
-.rd .fv-flow [data-para]::first-letter { -webkit-initial-letter: normal; initial-letter: normal; font-weight: inherit; margin-right: 0; }
+.rd .fv-flow li[data-para]::before { right: calc(100% + 1.4 * var(--rs)); }
 /* Did you sleep? (sleep.ts): the last touch and the checkpoints, each a time, its chapter and the
    sentence it had got to. */
 .i3-drop.is-sleep { left: max(12px, calc(50% - 180px)); width: min(360px, calc(100% - 24px)); }

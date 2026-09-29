@@ -152,13 +152,16 @@ label.clbl { display: block; }
    nor zooms: a stray pinch would leave it sliding off both sides. PDFs can still be zoomed. */
 .fv.is-pages { touch-action: none; }
 .fv.is-scroll { touch-action: pan-y; }
+/* The window onto the strip of pages, with room either side (--hang) for the paragraph numbers
+   that hang in the margin. */
 .fv.is-pages .fv-view {
   position: absolute;
   top: 76px;
   bottom: 76px;
   left: 50%;
-  width: var(--vw);
-  margin-left: calc(var(--vw) / -2);
+  width: calc(var(--vw) + 2 * var(--hang));
+  margin-left: calc(var(--vw) / -2 - var(--hang));
+  padding: 0 var(--hang);
   overflow: hidden;
 }
 .fv.is-scroll .fv-view { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: thin; }
