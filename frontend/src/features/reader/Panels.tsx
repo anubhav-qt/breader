@@ -4,7 +4,8 @@ import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
-import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, type ReaderSettings, type StyleSettings } from './settings';
+import { BOOK_COLORS } from '../../data/colors';
+import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
 
@@ -91,6 +92,8 @@ interface LookProps {
   settings: ReaderSettings;
   isPdf: boolean;
   update: (fn: (s: ReaderSettings) => ReaderSettings) => void;
+  /** The book can read in 2 voices, so their colours can be picked. */
+  two?: boolean;
 }
 
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
@@ -134,7 +137,7 @@ const margins = (inset: number) => (
   </svg>
 );
 
-export function AppearancePanel({ settings, isPdf, update }: LookProps) {
+export function AppearancePanel({ settings, isPdf, update, two = false }: LookProps) {
   const cur = settings[settings.style];
   const set = (patch: Partial<StyleSettings>) => update((s) => ({ ...s, [s.style]: { ...s[s.style], ...patch } }));
   // Immersive's voice bar, as the rest of the controls sleep (focus.ts).
@@ -222,6 +225,39 @@ export function AppearancePanel({ settings, isPdf, update }: LookProps) {
         <span className="clbl">Always hide the voice bar</span>
         <button type="button" className="tg" role="switch" aria-checked={barHidden} aria-label="Always hide the voice bar in focus" onClick={() => setBarHidden(!barHidden)} />
       </div>
+      {two && <TwoColors settings={settings} update={update} />}
+    </div>
+  );
+}
+
+/** 2 voices: the colour her lines light up in, and his. */
+function TwoColors({ settings, update }: Pick<LookProps, 'settings' | 'update'>) {
+  const now = settings.twoColors ?? TWO_COLORS;
+  return (
+    <div className="two">
+      {(['F', 'M'] as const).map((g) => {
+        const label = g === 'F' ? 'Her lines' : 'His lines';
+        return (
+          <div key={g} className="ctl">
+            <div className="clbl">{label}</div>
+            <div className="vc-sws" role="radiogroup" aria-label={label}>
+              {BOOK_COLORS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={now[g] === c.key}
+                  aria-label={c.label}
+                  title={c.label}
+                  className={`vc-sw${now[g] === c.key ? ' is-on' : ''}`}
+                  style={{ background: `var(--bc-${c.key})` }}
+                  onClick={() => update((s) => ({ ...s, twoColors: { ...(s.twoColors ?? TWO_COLORS), [g]: c.key } }))}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

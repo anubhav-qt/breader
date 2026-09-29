@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { record } from '../../data/sync';
+import type { BookColor } from '../../data/colors';
 import { readLocal, writeLocal } from '../../lib/store';
 
 export type Style = 'book' | 'modern';
@@ -22,6 +23,8 @@ export interface ReaderSettings {
   book: StyleSettings;
   modern: StyleSettings;
   pdfLayout: Layout;
+  /** 2 voices: the colour her lines light in, and his (book colours, data/colors.ts). */
+  twoColors?: { F: BookColor; M: BookColor };
   /** Which of the changes below (loadSettings) these have been through. */
   v?: number;
 }
@@ -55,6 +58,9 @@ export const MEASURES = [
   { v: 620, label: 'Medium margins' },
   { v: 540, label: 'Wide margins' },
 ];
+
+/** Light pink and light blue on dark pages; their deeper shades on light ones. */
+export const TWO_COLORS: { F: BookColor; M: BookColor } = { F: 'rose', M: 'sky' };
 
 const DEFAULTS: ReaderSettings = {
   style: 'book',

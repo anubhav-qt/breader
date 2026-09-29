@@ -84,6 +84,8 @@ export interface ChromeProps {
   sleep: { asked: Asleep; back: (s: Sentence) => void; awake: () => void } | null;
   /** Revisit, once an AI has read the book (ai.ts): how far the reader has really read, and the notes up to there. */
   revisit: { read: number; load: () => Promise<{ notes: RevisitResponse; offline: boolean }> } | null;
+  /** 2 voices for this book: ready (an AI marked who says what), soon (its switch is on), or off. */
+  two: 'ready' | 'soon' | 'off';
 }
 
 export const toItem = (c: Chapter): TocItem => ({ title: c.title, section: c.section, anchor: c.anchor, level: 0 });

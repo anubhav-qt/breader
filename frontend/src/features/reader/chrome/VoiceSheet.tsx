@@ -7,7 +7,7 @@ import { springs } from '../../../lib/springs';
 import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, fromListed, useGpu, type Engine, type Mode, type SamplePart, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
-import { hung, PACE, RATES, setVoicePrefs, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
+import { hung, PACE, pairFor, pickSide, RATES, setVoicePrefs, sideOf, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { AddVoice } from './AddVoice';
 import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
@@ -35,11 +35,15 @@ const HUNG = 'A heavy voice stopped this browser last time, so Immersive reads w
 
 /*
  * Two voices, a woman's and a man's, need the book read through first to know who says each line
- * (ai/procedure.md). No book has that yet, so 2 looks off and a tap on it says why, warmly.
+ * (ai/procedure.md). Until this book has been, 2 looks off and a tap on it says why, warmly.
  */
-const COUNTS = [
-  { v: 1, label: '1 voice' },
-  { v: 2, label: '2 voices', muted: true },
+const counts = (ready: boolean) => [
+  { v: 1 as const, label: '1 voice' },
+  { v: 2 as const, label: '2 voices', muted: !ready },
+];
+const SIDES = [
+  { v: 'F' as const, label: 'Her' },
+  { v: 'M' as const, label: 'His' },
 ];
 
 const PARTS: Array<{ v: SamplePart; label: string }> = [
@@ -59,9 +63,11 @@ interface Props {
   onStop?: () => void;
   /** The book's words can light up without a voice (not a PDF's). */
   canPace: boolean;
+  /** 2 voices for this book: ready, soon (an AI will read it), or off (its AI switch is off). */
+  two: 'ready' | 'soon' | 'off';
 }
 
-export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
+export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
   const prefs = useVoicePrefs();
   const listed = useListedVoices();
   const load = useLoadState();
@@ -72,6 +78,9 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
   const voices: Mode = fallback ? 'normal' : mode;
   const engines: Engine[] = voices === 'immersive' ? ['piper', 'kokoro'] : ['piper'];
   const current = voiceFor(mode);
+  // 2 voices: one list as ever, her pick and his lit in their colours.
+  const paired = two === 'ready' && prefs.count[mode] === 2;
+  const pair = pairFor(mode);
   const [bytes, setBytes] = useState<number | null>(null);
   const [hearing, setHearing] = useState<string | null>(null);
   const [part, setPart] = useState(lastPart);
@@ -89,11 +98,19 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
   // What the picked voice still has to download; again once a download ends.
   useEffect(() => {
     let on = true;
-    void missing(current).then((m) => { if (on) setBytes(m.bytes); });
+    void Promise.all((paired ? [pair.F, pair.M] : [current]).map(missing)).then((ms) => { if (on) setBytes(ms.reduce((n, m) => n + m.bytes, 0)); });
     return () => { on = false; };
-  }, [current, load.key]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current.key, paired, pair.F.key, pair.M.key, load.key]);
 
-  const pick = (key: string) => setVoicePrefs({ voice: { ...prefs.voice, [voices]: key } });
+  const pick = (v: VoiceInfo) => {
+    if (paired) pickSide(voices, v);
+    else setVoicePrefs({ voice: { ...prefs.voice, [voices]: v.key } });
+  };
+  const setCount = (n: 1 | 2) => {
+    if (n === 2 && two !== 'ready') { setWaiting(true); return; }
+    setVoicePrefs({ count: { ...prefs.count, [mode]: n } });
+  };
   const setMode = (m: Mode) => setVoicePrefs({ mode: m });
 
   const toggleHear = (v: VoiceInfo) => {
@@ -160,9 +177,10 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
       key={v.key}
       v={v}
       heavy={engines.length > 1 && v.engine === 'kokoro' && !!v.upload}
-      on={current.key === v.key}
+      on={paired ? pair.F.key === v.key || pair.M.key === v.key : current.key === v.key}
+      side={paired ? sideOf(v) ?? 'none' : null}
       hearing={hearing === v.key}
-      onPick={() => pick(v.key)}
+      onPick={() => pick(v)}
       onHear={() => toggleHear(v)}
       extra={extra}
     />
@@ -176,9 +194,10 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
       <p className="p-note vs-about">{fallback ? FALLBACK : ABOUT[mode]}</p>
       {hung && mode === 'immersive' && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
-      <Segmented label="Voices" value={1} onChange={(n) => { if (n === 2) setWaiting(true); }} options={COUNTS} />
+      <Segmented label="Voices" value={two === 'ready' ? prefs.count[mode] : 1} onChange={setCount} options={counts(two === 'ready')} />
+      {paired && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
-      <div className="vs-lists" role="radiogroup" aria-label="Voice">
+      <div className="vs-lists" role={paired ? 'group' : 'radiogroup'} aria-label={paired ? 'Her voice and his' : 'Voice'}>
         <div className="vs-list">{BUILT_IN.normal.map((v) => row(v))}</div>
         {engines.includes('kokoro') && (
           <>
@@ -218,13 +237,13 @@ export function VoiceSheet({ playing, onStart, onStop, canPace }: Props) {
           <span>{playing ? (loading ? 'Cancel' : 'Stop') : bytes ? `Download ${mb(bytes)} and read` : 'Read aloud'}</span>
         </button>
       </div>
-      {page && createPortal(<AnimatePresence>{waiting && <TwoVoicesSoon onClose={() => setWaiting(false)} />}</AnimatePresence>, page)}
+      {page && createPortal(<AnimatePresence>{waiting && <TwoVoicesSoon off={two === 'off'} onClose={() => setWaiting(false)} />}</AnimatePresence>, page)}
     </div>
   );
 }
 
-/** Why 2 voices can't be picked yet: a small card in the middle, over the sheet. */
-function TwoVoicesSoon({ onClose }: { onClose: () => void }) {
+/** Why 2 voices can't be picked yet: a small card in the middle, over the sheet. `off`: the book's AI switch is. */
+function TwoVoicesSoon({ off, onClose }: { off: boolean; onClose: () => void }) {
   const ok = useRef<HTMLButtonElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -262,6 +281,7 @@ function TwoVoicesSoon({ onClose }: { onClose: () => void }) {
         <p className="vs-soon-t" id="vs-soon-t">Not quite yet</p>
         <p className="p-note">Soon a book can be read by two voices, a woman’s and a man’s, so every conversation sounds like people talking.</p>
         <p className="p-note">To get each line right, the whole book is read first, noting who says what. That takes a while, and this book isn’t ready yet. Sorry for the wait, and thank you for bearing with us.</p>
+        {off && <p className="p-note">This book hasn’t let an AI read along yet. Turn that on from its ⋯ in your library, and it joins the queue.</p>}
         <p className="p-note">Once it’s ready, 2 voices turns on here by itself.</p>
         <button type="button" className="vs-go" ref={ok} onClick={onClose}>I’ll wait</button>
       </motion.div>
@@ -284,21 +304,25 @@ function Pace() {
   );
 }
 
-function Row({ v, heavy, on, hearing, onPick, onHear, extra }: {
+function Row({ v, heavy, on, side, hearing, onPick, onHear, extra }: {
   v: VoiceInfo;
   /** A reader's heavy voice, among Normal ones. */
   heavy: boolean;
   on: boolean;
+  /** 2 voices: whose side it can read, or none (neither a woman's nor a man's). Null in 1 voice. */
+  side: 'F' | 'M' | 'none' | null;
   hearing: boolean;
   onPick: () => void;
   onHear: () => void;
   extra?: React.ReactNode;
 }) {
+  const tag = [v.accent, heavy && 'Heavy', side === 'F' ? 'Her' : side === 'M' ? 'His' : null].filter(Boolean).join(' · ');
+  const tone = side === 'F' ? ' is-her' : side === 'M' ? ' is-his' : '';
   return (
-    <div className={`vs-row${on ? ' is-on' : ''}`}>
-      <button type="button" role="radio" aria-checked={on} className="vs-pick" onClick={onPick}>
+    <div className={`vs-row${on ? ' is-on' : ''}${on ? tone : ''}${side === 'none' ? ' is-out' : ''}`}>
+      <button type="button" role={side ? 'checkbox' : 'radio'} aria-checked={on} className="vs-pick" onClick={onPick} disabled={side === 'none'}>
         <span className="vs-name">{v.name}</span>
-        <span className="vs-tag">{heavy ? `${v.accent} · Heavy` : v.accent}</span>
+        <span className="vs-tag">{tag}</span>
       </button>
       {extra}
       {v.sample && (

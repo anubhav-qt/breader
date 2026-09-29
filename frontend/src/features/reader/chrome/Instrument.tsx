@@ -30,7 +30,7 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit, two }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
@@ -228,7 +228,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               {panel === 'toc' ? (
                 <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
               ) : panel === 'voice' && (narration || immersion) ? (
-                <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} />
+                <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} two={two} />
               ) : panel === 'sleep' && sleep ? (
                 <SleepPanel asked={sleep.asked} chapters={chapters} playing={!!narration?.playing} onBack={sleep.back} onAwake={sleep.awake} />
               ) : panel === 'find' && search ? (
@@ -238,7 +238,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
-                <AppearancePanel settings={settings} isPdf={isPdf} update={update} />
+                <AppearancePanel settings={settings} isPdf={isPdf} update={update} two={two === 'ready'} />
               )}
             </div>
             <CloseDots onClick={() => openPanel(null)} />

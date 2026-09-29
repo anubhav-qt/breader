@@ -9,14 +9,14 @@ import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useBarAsk, useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
-import { loadRevisit, useAiStatus } from './ai';
+import { loadRevisit, useAiStatus, useVoiceMarks } from './ai';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
 import { overlaps, usePacing } from './pacing';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
 import { useVoicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
-import { useReaderSettings, type ThemeName } from './settings';
+import { TWO_COLORS, useReaderSettings, type ThemeName } from './settings';
 import { flash, readBook, type Found } from './search';
 import { useSleepWatch } from './sleep';
 import { useReadingClock } from './useReadingClock';
@@ -67,7 +67,11 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const slept = useSleepWatch(record.id, !closing, () => saying.current());
   // A headset's press carries on from Immersive's light, which comes later.
   const lightAt = useRef<() => Sentence | undefined>(() => undefined);
-  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current());
+  // What an AI made of the book, if the reader let one read along: Revisit's notes, 2 voices' marks (ai.ts).
+  const aiStatus = useAiStatus(record.id, ai);
+  const loadNotes = useCallback(() => loadRevisit(record.id), [record.id]);
+  const marks = useVoiceMarks(record.id, aiStatus);
+  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current(), marks);
   saying.current = narration.current;
   const { asked, done: sleptDone } = slept;
   useEffect(() => { if (asked) openPanel('sleep'); }, [asked, openPanel]);
@@ -268,8 +272,6 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const [marker] = useState(() =>
     markTracker(initial?.mark ?? (initial ? { pos: initial.pos ?? { section: 0, block: 0, offset: 0 }, progress: initial.progress, line: initial.line } : undefined), book.words),
   );
-  const aiStatus = useAiStatus(record.id, ai);
-  const loadNotes = useCallback(() => loadRevisit(record.id), [record.id]);
   /** Opened well past the mark: the way back to it, offered until taken, closed, or not needed. */
   const [away, setAway] = useState<ReadMark | null>(null);
   const onLocation = useCallback((l: Loc) => {
@@ -430,10 +432,14 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       awake: () => { openPanel(null); if (asked.stopped && !narration.playing && canNarrate) narration.start(); },
     } : null,
     revisit: aiStatus.revisit ? { read: marker.get()?.progress ?? 0, load: loadNotes } : null,
+    two: marks ? 'ready' : ai ? 'soon' : 'off',
   };
+  const tones = settings.twoColors ?? TWO_COLORS;
   const vars = {
     '--book': `var(--bc-${color})`,
     '--book-ink': `var(--bc-${color}-ink)`,
+    '--her-mark': `var(--bc-${tones.F})`,
+    '--his-mark': `var(--bc-${tones.M})`,
     '--pw': `${pageW}px`,
   } as CSSProperties;
 

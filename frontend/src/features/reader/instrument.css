@@ -123,6 +123,9 @@
 /* While it reads aloud the button stays in sight, and the sentence being read turns the book's colour. */
 .i3-head .i3-listen.is-playing { opacity: 1; transform: none; color: var(--book-mark); }
 .rd ::highlight(narrate) { color: var(--book-mark); }
+/* 2 voices: her lines and his in their own colours (Aa), deeper on light pages like the book's. */
+.rd ::highlight(narrate-her) { color: var(--her-mark); }
+.rd ::highlight(narrate-his) { color: var(--his-mark); }
 /* Nothing to see: a change that makes Safari draw a paragraph again when its lit words move (narration.ts). */
 .rd .hl-paint { outline-color: rgba(255, 255, 255, 0); }
 /* The word a tap is asking about (chrome/SayAs.tsx), lit like a selection. */
@@ -255,6 +258,10 @@
 .rd.is-immersed .fv-flow :is(img, svg) { opacity: 0.3; }
 .rd.is-immersed ::highlight(narrate) { color: var(--r-fg); }
 .rd.is-immersed ::highlight(narrate-said) { color: var(--book-mark); }
+.rd.is-immersed ::highlight(narrate-her),
+.rd.is-immersed ::highlight(narrate-his) { color: var(--r-fg); }
+.rd.is-immersed ::highlight(narrate-said-her) { color: var(--her-mark); }
+.rd.is-immersed ::highlight(narrate-said-his) { color: var(--his-mark); }
 .rd.is-immersed:not(.is-aloud) .fv-flow { cursor: pointer; }
 
 .rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }
@@ -432,6 +439,12 @@
 .vs-pick { flex: 1; min-width: 0; height: 38px; display: flex; align-items: center; gap: 12px; text-align: left; }
 .vs-pick::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 1.5px; box-shadow: inset 0 0 0 1.5px var(--r-line); }
 .vs-row.is-on .vs-pick::before { background: var(--book-mark); box-shadow: none; }
+/* 2 voices: her pick lit in her colour, his in his; a voice that's neither sits out. */
+.vs-row.is-on.is-her { background: color-mix(in srgb, var(--her-mark) 16%, transparent); }
+.vs-row.is-on.is-her .vs-pick::before { background: var(--her-mark); }
+.vs-row.is-on.is-his { background: color-mix(in srgb, var(--his-mark) 16%, transparent); }
+.vs-row.is-on.is-his .vs-pick::before { background: var(--his-mark); }
+.vs-row.is-out .vs-pick { opacity: 0.45; cursor: default; }
 .vs-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 22px; line-height: 1; }
 .vs-tag { margin-left: auto; padding-left: 8px; font: var(--ui-w) 11.5px/1 var(--ui); letter-spacing: 0.06em; color: var(--r-mu); }
 .vs-hear, .vs-remove { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; font-size: 12px; color: var(--r-mu); transition: color 140ms ease, background-color 140ms ease; }
