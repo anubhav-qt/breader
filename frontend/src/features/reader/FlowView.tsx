@@ -50,7 +50,8 @@ export interface TurnEvent {
 type Target =
   | { kind: 'start' }
   | { kind: 'end' }
-  | { kind: 'pos'; block: number; offset: number }
+  /** `y`: scrolled, how far down the view to put it (just under the top line of controls, if not said). */
+  | { kind: 'pos'; block: number; offset: number; y?: number }
   | { kind: 'words'; value: number }
   | { kind: 'text'; needle: string }
   | { kind: 'anchor'; id: string };
@@ -112,6 +113,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
 
   const pending = useRef<Target | null>(init.target);
   const loc = useRef({ block: 0, offset: 0 });
+  /** Scrolled: how far down the view the reader's place is, to put it back there after a change of size or font. */
+  const locY = useRef<number | null>(null);
   /** The word lit last (narration.ts), until the light goes out. */
   const lit = useRef<{ section: number; block: number; offset: number } | null>(null);
   const pageRef = useRef(0);
@@ -175,7 +178,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     return Math.max(0, Math.min(pagesRef.current - 1, Math.floor((r.left - flowLeft() + 1) / step)));
   };
 
-  const locateNow = (): { block: number; offset: number } => {
+  /** The first character on screen (scrolled: from `below` pixels down the view), and how far down it is. */
+  const locate = (below = 8): { block: number; offset: number; y?: number } => {
     const bl = blocks.current;
     if (!bl.length) return { block: 0, offset: 0 };
     if (pagesMode) {
@@ -195,14 +199,23 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       }
       return { block: bl.length - 1, offset: 0 };
     }
-    const top = viewRef.current!.getBoundingClientRect().top + 8;
+    const box = viewRef.current!.getBoundingClientRect().top;
+    const top = box + below;
     for (let i = 0; i < bl.length; i++) {
       const r = bl[i].getBoundingClientRect();
       if (r.bottom <= top) continue;
-      if (r.top >= top - 1) return { block: i, offset: 0 };
-      return { block: i, offset: firstCharWhere(bl[i], (c) => c.top >= top - 1) };
+      if (r.top >= top - 1) return { block: i, offset: 0, y: r.top - box };
+      const offset = firstCharWhere(bl[i], (c) => c.top >= top - 1);
+      return { block: i, offset, y: (charRect(bl[i], offset)?.top ?? top) - box };
     }
     return { block: bl.length - 1, offset: 0 };
+  };
+
+  /** The reader's place: the first character on screen. */
+  const locateNow = () => {
+    const { block, offset, y } = locate();
+    locY.current = y ?? null;
+    return { block, offset };
   };
 
   /** The sentence to show on the library card; headings and images defer to the next real text. */
@@ -294,14 +307,18 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       else if (t.kind === 'end') v.scrollTop = v.scrollHeight;
       else {
         const r = bl[block] ? charRect(bl[block], offset) : null;
-        if (r) v.scrollTop += r.top - v.getBoundingClientRect().top - 88;
+        if (r) v.scrollTop += r.top - v.getBoundingClientRect().top - (t.kind === 'pos' ? t.y ?? 88 : 88);
       }
       pagesRef.current = 1;
       setPages(1);
       pageRef.current = 0;
       setPage(0);
     }
-    loc.current = precise ? { block, offset } : locateNow();
+    if (precise) {
+      loc.current = { block, offset };
+      const r = !pagesMode && bl[block] ? charRect(bl[block], offset) : null;
+      locY.current = r ? r.top - viewRef.current!.getBoundingClientRect().top : null;
+    } else loc.current = locateNow();
     report();
   };
 
@@ -351,7 +368,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       taggedFor.current = section;
     }
     if (!pagesMode) { animate(flow, { x: 0 }, { duration: 0 }); flow.style.transform = ''; }
-    const t = pending.current ?? { kind: 'pos', block: loc.current.block, offset: loc.current.offset };
+    // Nowhere new to go: the place stays where it was on screen.
+    const t = pending.current ?? { kind: 'pos', block: loc.current.block, offset: loc.current.offset, y: locY.current ?? undefined };
     pending.current = null;
     land(t);
     const dir = arriving.current;
