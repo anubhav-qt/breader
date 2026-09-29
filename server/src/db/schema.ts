@@ -147,6 +147,8 @@ export const libraryItems = pgTable(
     /** The reader's own series for it: '' for none, null to go by the file. */
     editSeries: text('edit_series'),
     editSeriesIndex: doublePrecision('edit_series_index'),
+    /** The reader lets an AI read the book along with them, for Revisit and 2 voices (ai_notes). */
+    ai: boolean('ai').notNull().default(false),
     removedAt: at('removed_at'),
     rev: big('rev').notNull(),
     version: version(),
@@ -251,6 +253,21 @@ export const voiceUses = pgTable(
   },
   (t) => [primaryKey({ columns: [t.libraryId, t.voiceId] }), index('voice_uses_voice_idx').on(t.voiceId)],
 );
+
+/**
+ * What an AI made from a book's file, read through once offline (ai/procedure.md) and loaded by
+ * `npm --prefix ai run import`: Revisit notes and voice marks, as ai/out/<sha256>.json has them.
+ * By the file's SHA-256, so every library holding that file shares it, and each reader gets only
+ * what's before their mark (lib/ai.ts). `made` and `by` say when and by which model. Fed.
+ */
+export const aiNotes = pgTable('ai_notes', {
+  sha256: text('sha256').primaryKey(),
+  data: jsonb('data').notNull(),
+  made: at('made').notNull(),
+  by: text('by').notNull(),
+  importedAt: at('imported_at').notNull().defaultNow(),
+  version: version(),
+});
 
 /** Reading style, typeface, size and theme, so they follow the reader between browsers. Fed. */
 export const librarySettings = pgTable('library_settings', {
@@ -415,5 +432,6 @@ export const FED_TABLES = {
   reading_time: ['library_id', 'book_id', 'day', 'device'],
   voices: ['id'],
   voice_uses: ['library_id', 'voice_id'],
+  ai_notes: ['sha256'],
 } as const;
 export type FedTable = keyof typeof FED_TABLES;
