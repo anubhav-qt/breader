@@ -1,10 +1,11 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { Balancer, type Rung } from './balancer.ts';
-import { AI, args, bookDir, cmp, count, inPart, loadBook, main, parsePos, partName, posText, readJson, writeJson, type Book, type Gender, type Pos } from './lib.ts';
+import { Balancer } from './balancer.ts';
+import { castText, context, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, text, TOP, type Done } from './kimi.ts';
+import { AI, args, bookDir, count, inPart, loadBook, main, partName, posText, writeJson, type Book, type Gender, type Pos } from './lib.ts';
 import type { Msg } from './nim.ts';
-import { validate, type Cast } from './validate.ts';
+import { validate } from './validate.ts';
 
 /*
  * npm --prefix ai run mark -- <book> [<book>…]   Marks every part not marked yet, all at once,
@@ -24,12 +25,6 @@ import { validate, type Cast } from './validate.ts';
  * marked-by.json. Nothing it prints has the book's text in it.
  */
 
-// A book's parts all go at once, so each model takes as many calls as a long book has parts.
-const LADDER: Rung[] = [
-  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 32_000, maxInFlight: 24 },
-  { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 32_000, maxInFlight: 24 },
-];
-const TOP = LADDER[0];
 const ROUNDS = 3;
 
 const PROC = readFileSync(join(AI, 'procedure.md'), 'utf8');
@@ -52,75 +47,7 @@ You can't write research.md, so where the rules say to write why you're unsure, 
 
 ${RULES}`;
 
-const ID = '[a-z0-9]+(?:-[a-z0-9]+)*';
-const CAST = new RegExp(`^cast\\s+(${ID})\\s+([MFN])(\\s+minor)?\\s*(?:\\|(.*))?$`);
-const CHANGE = new RegExp(`^change\\s+(${ID})\\s+(\\d+:\\d+)\\s+([MFN])\\s*(?:\\|(.*))?$`);
-
-interface Done {
-  model: string;
-  rounds: number;
-  secs: number;
-  at: string;
-}
-type Ledger = Record<string, Done>;
-
-const text = (book: Book, n: number) => readFileSync(join(bookDir(book.key), 'text', `${partName(n)}.md`), 'utf8').trim();
 const marksFile = (book: Book, n: number) => join(bookDir(book.key), 'marks', `${partName(n)}.txt`);
-const ledgerFile = (book: Book) => join(bookDir(book.key), 'marked-by.json');
-const ledger = (book: Book): Ledger => (existsSync(ledgerFile(book)) ? readJson<Ledger>(ledgerFile(book)) : {});
-const castOf = (book: Book): Cast => readJson<Cast>(join(bookDir(book.key), 'cast.json'));
-const mins = (s: number) => `${(s / 60).toFixed(1)} min`;
-
-function context(book: Book): string {
-  const dir = bookDir(book.key);
-  const whole = book.parts.filter((p) => p.words > 0).map((p) => text(book, p.n)).join('\n\n');
-  const research = existsSync(join(dir, 'research.md')) ? readFileSync(join(dir, 'research.md'), 'utf8').trim() : '(none)';
-  return `# The whole book\n\n${whole}\n\n# Research notes\n\n${research}`;
-}
-
-function castText(book: Book): string {
-  return castOf(book).people.map((p) => {
-    const changes = p.changes?.length ? ` (${p.changes.map((c) => `${c.gender} from ${c.at}`).join(', ')})` : '';
-    return `${p.id} | ${p.gender}${changes} | ${p.name}${p.role ? ` | ${p.role}` : ''}`;
-  }).join('\n');
-}
-
-/** The model's cast and change lines, into cast.json. Returns what it did, for the log. */
-function mergeCast(book: Book, lines: string[], by: string): { added: number; notes: string[] } {
-  const file = join(bookDir(book.key), 'cast.json');
-  const cast = castOf(book);
-  const byId = new Map(cast.people.map((p) => [p.id, p]));
-  const notes: string[] = [];
-  let added = 0;
-  for (const line of lines) {
-    let m = line.match(CAST);
-    if (m) {
-      const [name, role, evidence] = (m[4] ?? '').split('|').map((s) => s.trim());
-      const gender = m[2] as Gender;
-      const had = byId.get(m[1]);
-      if (!had) {
-        const p = { id: m[1], name: name || m[1], gender, ...(role ? { role } : {}), evidence: evidence || `${by}, no paragraph given`, ...(m[3] ? { minor: true } : {}) };
-        cast.people.push(p);
-        byId.set(p.id, p);
-        added++;
-      } else if (had.gender === 'N' && !had.generic && gender !== 'N') {
-        notes.push(`${had.id} N -> ${gender}`);
-        had.gender = gender;
-        if (evidence) had.evidence = evidence;
-      } else if (had.gender !== gender) {
-        notes.push(`${had.id} kept ${had.gender} (the model said ${gender})`);
-      }
-    } else if ((m = line.match(CHANGE))) {
-      const p = byId.get(m[1]);
-      const at = parsePos(m[2])!;
-      if (!p || p.changes?.some((c) => c.at === m![2])) continue;
-      p.changes = [...(p.changes ?? []), { at: m[2], gender: m[3] as Gender, why: m[4]?.trim() || `A reveal, by ${by}.` }].sort((a, b) => cmp(parsePos(a.at)!, parsePos(b.at)!));
-      notes.push(`${p.id} changes to ${m[3]} at ${posText(at)}`);
-    }
-  }
-  writeJson(file, cast);
-  return { added, notes };
-}
 
 /** An answer split into the marks file and the cast lines. */
 function split(answer: string) {
@@ -289,22 +216,6 @@ async function settle(book: Book, lb: Balancer) {
   console.log(`  ${rung.name} settled ${settled} of ${items.length} unsure lines, ${changed} of them changed, in ${mins(reply.secs)}.`);
 }
 
-/** The pack's "by": who marked which parts. */
-function byLine(book: Book): string {
-  const l = ledger(book);
-  const groups = new Map<string, number[]>();
-  for (const p of book.parts.filter((x) => x.words > 0)) {
-    const who = l[p.n]?.model ?? 'Antigravity';
-    groups.set(who, [...(groups.get(who) ?? []), p.n]);
-  }
-  const ranges = (ns: number[]) => ns.reduce<string[]>((out, n, i) => {
-    if (i && ns[i - 1] === n - 1) out[out.length - 1] = `${out[out.length - 1].split('-')[0]}-${n}`;
-    else out.push(String(n));
-    return out;
-  }, []).join(', ');
-  return [...groups].map(([who, ns]) => `${who === TOP.name ? 'Kimi K3 (reasoning high, NVIDIA)' : who} parts ${ranges(ns)}`).join('; ') + '; research by Antigravity';
-}
-
 async function runBook(key: string, lb: Balancer, flags: Record<string, string | true>) {
   const book = loadBook(key);
   const tag = book.title;
@@ -350,18 +261,18 @@ async function runBook(key: string, lb: Balancer, flags: Record<string, string |
   console.log(`${tag}: settling unsure lines`);
   await settle(book, lb);
   if (flags['no-pack']) return;
-  // Revisit notes come later, for every book at once. Notes that stop partway would show a Revisit
-  // that knows only the start, so they wait in notes.partial.json and the book packs without any.
+  // Revisit notes come from notes, for the whole book. Other notes that stop partway would show a
+  // Revisit that knows only the start, so they wait in notes.partial.json and the book packs without any.
   const notes = join(bookDir(book.key), 'notes.json');
   const partial = validate(book, false).notes;
-  if (Object.keys(ledger(book)).length && partial && partial.people.length + partial.places.length + partial.terms.length) {
+  if (Object.keys(ledger(book)).length && !notesDone(book) && partial && partial.people.length + partial.places.length + partial.terms.length) {
     renameSync(notes, join(bookDir(book.key), 'notes.partial.json'));
     console.log(`${tag}: its Revisit notes stop partway, so they're kept in notes.partial.json and left out of the pack.`);
   }
   if (!existsSync(notes)) writeJson(notes, { people: [], places: [], terms: [] });
   const final = validate(book, true);
   if (final.errors.length) throw new Error(`${tag}: check --final has ${final.errors.length} errors; not packing. The first: ${final.errors[0]}`);
-  execFileSync('npm', ['--prefix', AI, 'run', '--silent', 'pack', '--', book.key, '--by', byLine(book)], { stdio: 'inherit' });
+  execFileSync('npm', ['--prefix', AI, 'run', '--silent', 'pack', '--', book.key, '--by', packBy(book)], { stdio: 'inherit' });
 }
 
 /** Marks part n again beside the marks it has, compares, and puts everything back. */
