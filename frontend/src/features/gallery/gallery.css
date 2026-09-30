@@ -145,12 +145,12 @@
 .is-ink .t-cta { background: var(--bc-ink); color: var(--bc); }
 
 /*
- * Titles: a size for each kind of card, a step smaller where the card is narrow. The fitting
- * (fit.ts) then gives each title the lines its card has room for, and cuts what still won't fit.
+ * Titles: a size for each kind of card, a step smaller where the card is narrow, and a square's
+ * bigger beside its cover. The fitting (fit.ts) then gives each title the lines its card has room
+ * for, and cuts what still won't fit.
  */
 .tile-hero .t-title { font-size: 40px; }
-.tile-square .t-title { font-size: 38px; }
-.tile-square:not(.has-art) .t-title { font-size: 32px; }
+.tile-square .t-title { font-size: 32px; }
 .tile-wide .t-title { font-size: 22px; }
 .tile-tall .t-title { font-size: 28px; }
 .tile-small .t-title { font-size: 20px; }
@@ -158,15 +158,18 @@
 @container (min-width: 800px) {
   .tile-hero .t-title { font-size: 48px; }
 }
+/* Where the cover shows (see Covers, below). */
+@container (min-width: 440px) {
+  .tile-square.has-art .t-title { font-size: 38px; }
+}
 @container (max-width: 599px) {
   .tile-hero .t-title { font-size: 36px; }
 }
 @container (max-width: 469px) {
-  .tile-square .t-title { font-size: 28px; }
   .t-subtitle { font-size: 20px; }
 }
 @container (max-width: 379px) {
-  .tile-square:not(.has-art) .t-title { font-size: 26px; }
+  .tile-square .t-title { font-size: 26px; }
 }
 @container (max-width: 229px) {
   .c-name .c-sub { font-size: 17px; }
@@ -270,7 +273,6 @@
   .tile:is(.tile-square, .tile-cover) :is(.c-by, .c-foot > :nth-child(2), .c-long) { display: none; }
   .tile-square .c-short { display: inline; }
   .tile:is(.tile-square, .tile-cover) > .tile-face > .c-mark { margin-top: 0; font-size: min(22cqh, 30cqw); }
-  .tile-square:not(.has-art) > .tile-face .t-title { -webkit-line-clamp: 2; font-size: 20px; }
   .tile:is(.tile-square, .tile-cover) .c-foot { margin-top: 4px; padding: 0; border: 0; }
 }
 
