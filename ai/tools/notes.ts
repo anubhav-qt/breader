@@ -686,9 +686,16 @@ main(async () => {
     runs.set(b.key, (async () => {
       if (before.length) {
         console.log(`${b.title}: waits for ${before.map((o) => o.title).join(', ')}`);
-        await Promise.allSettled(before.map((o) => runs.get(o.key) ?? Promise.resolve()));
+        const done = await Promise.allSettled(before.map((o) => runs.get(o.key) ?? Promise.resolve()));
+        const failed = before.filter((_, i) => done[i].status === 'rejected');
+        if (failed.length) throw new Error(`${b.title}: not started, since ${failed.map((o) => o.title).join(', ')} failed first and its notes are what this one builds on. Run notes again.`);
       }
-      await runBook(b.key, lb, flags);
+      try {
+        await runBook(b.key, lb, flags);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(msg.startsWith(b.title) ? msg : `${b.title}: ${msg}`);
+      }
     })());
   }
   const results = await Promise.allSettled([...runs.values()]);
