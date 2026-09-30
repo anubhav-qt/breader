@@ -5,7 +5,7 @@ import { readLocal, writeLocal } from '../../lib/store';
 import { springs } from '../../lib/springs';
 import { IconBack, IconChevron } from '../../components/icons';
 import { finishedIn, type Series } from './series';
-import { VIEWS, byDate, byGenre, bySeries, isView, type Shelf, type View } from './shelves';
+import { VIEWS, byDate, byGenre, bySeries, isView, type Shelf, type View } from './shelving';
 import { Tile } from './Tile';
 import './shelves.css';
 

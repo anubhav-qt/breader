@@ -11,7 +11,7 @@ import { cardAuthor, cardAuthors } from './names';
 import { findSeries, seriesAuthors, type SeriesName } from './series';
 import { SeriesDialog } from './SeriesDialog';
 import { Shelves } from './Shelves';
-import type { View } from './shelves';
+import type { View } from './shelving';
 import { TitleHint } from './TitleHint';
 import type { GalleryItem } from './types';
 import './gallery.css';
