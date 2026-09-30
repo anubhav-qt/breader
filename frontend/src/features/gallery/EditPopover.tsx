@@ -9,6 +9,7 @@ import { springs } from '../../lib/springs';
 import { IconCheck, IconClose, IconStar, IconTrash } from '../../components/icons';
 import type { SeriesName } from './series';
 import { SeriesField, type SeriesValue } from './SeriesField';
+import { genreIds, joinGenres } from '@breader/shared/genres';
 import { GenreField } from './GenreField';
 
 interface Props {
@@ -16,7 +17,10 @@ interface Props {
   /** Series in either library, offered as the name is typed. */
   seriesNames: SeriesName[];
   anchor: HTMLElement;
+  /** The rest of its series in the reader's library, which a genre can go on all at once. */
+  others?: ShelfItem[];
   onChange: (patch: BookEdit) => void;
+  onChangeOther?: (book: ShelfItem, patch: BookEdit) => void;
   /** Absent for books someone else shared: only they can take them off the shelf. */
   onRemove?: (fromKeyboard: boolean) => void;
   /** Puts the book on the Shared Library or takes it off. Only for the reader's own uploads. */
@@ -31,10 +35,19 @@ const COLS = 7;
 const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLS, ArrowUp: -COLS };
 
 /**
+ * Files a book under these genres, or nothing when they're what it already has. The ones it came
+ * with (a sharer's picks) are its own again when picked exactly.
+ */
+function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
+  if (genres === joinGenres(genreIds(b.genre))) return undefined;
+  return { genre: genres === joinGenres(genreIds(b.addedGenre)) ? undefined : genres };
+}
+
+/**
  * A small popover beside the card's corner button: rename, put in a series, file under a genre,
  * recolour, share, let an AI read along, favourite or remove.
  */
-export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onShare, onClose }: Props) {
+export function EditPopover({ book, seriesNames, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(book.title);
   const numText = book.seriesIndex !== undefined ? String(book.seriesIndex) : '';
@@ -168,14 +181,24 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
       />
       <label className="ep-label" htmlFor="ep-series">Series</label>
       <SeriesField id="ep-series" value={series} known={seriesNames} inputClass="ep-input" onChange={setSeries} onDone={commitSeries} />
-      <label className="ep-label" htmlFor="ep-genre">Genre</label>
+      <label className="ep-label" htmlFor="ep-genre">Genres</label>
       <GenreField
         id="ep-genre"
         value={book.genre}
         className="ep-input"
-        // A copy of a shared book comes with the sharer's genre; picking it again goes back to theirs.
-        added={book.origin || book.source === 'shelf' ? { id: book.addedGenre, label: 'Sharer’s pick' } : undefined}
-        onPick={(g) => { if (g !== (book.genre ?? '')) onChange({ genre: g === (book.addedGenre ?? '') ? undefined : g }); }}
+        // A copy of a shared book comes with the sharer's genres; picking them again goes back to theirs.
+        added={book.origin || book.source === 'shelf' ? { genres: book.addedGenre, label: 'Sharer’s pick' } : undefined}
+        others={others.map((b) => b.genre)}
+        onPick={(g) => { const patch = genreEdit(book, g); if (patch) onChange(patch); }}
+        onSeries={(g, on) => {
+          for (const b of [book, ...others]) {
+            const ids: string[] = genreIds(b.genre);
+            const patch = genreEdit(b, joinGenres(on ? [...ids, g] : ids.filter((x) => x !== g)));
+            if (!patch) continue;
+            if (b === book) onChange(patch);
+            else onChangeOther?.(b, patch);
+          }
+        }}
       />
       <div className="ep-label" id="ep-colour">Colour</div>
       <div className="ep-swatches" role="radiogroup" aria-labelledby="ep-colour" onKeyDown={onSwatchKey}>

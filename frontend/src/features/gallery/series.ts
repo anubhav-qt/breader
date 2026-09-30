@@ -1,8 +1,9 @@
+import { genreIds } from '@breader/shared/genres';
 import type { ShelfItem } from '../../data/useLibrary';
 
 /*
  * Series in the library. Books keep their own cards in Recent; below it, a series is one card among
- * its genre's books, and a row of its books in order among the series.
+ * each of its genres' books, and a row of its books in order among the series.
  */
 export interface Series {
   key: string;
@@ -52,8 +53,19 @@ function most(values: Array<string | undefined>, tie?: string): string | undefin
   return best;
 }
 
-/** The genre a series is filed under: the one most of its books have. */
-export const seriesGenre = (s: Series) => most(s.books.map((b) => b.genre), nextIn(s).genre);
+/**
+ * The genres a series is filed under: every one at least half its books have, or else the one most
+ * of them have.
+ */
+export function seriesGenres(s: Series): string[] {
+  const lists = s.books.map((b) => genreIds(b.genre));
+  const counts = new Map<string, number>();
+  for (const l of lists) for (const g of l) counts.set(g, (counts.get(g) ?? 0) + 1);
+  const half = [...counts].filter(([, n]) => n * 2 >= s.books.length).map(([g]) => g);
+  if (half.length) return half;
+  const top = most(lists.flat(), genreIds(nextIn(s).genre)[0]);
+  return top ? [top] : [];
+}
 
 /**
  * The name a series' cards go by, when files credit different people first ("Tetsuo 415, Eiji

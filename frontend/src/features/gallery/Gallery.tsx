@@ -79,6 +79,9 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
   }, []);
   const closeEdit = useCallback(() => setEditing(null), []);
   const editingBook = editing ? books.find((b) => (b.key ?? b.id) === editing.id) : undefined;
+  // The rest of its series in the reader's library: a genre can go on all of them. Shared books not
+  // started are left be, since editing one adds it to the library.
+  const editingOthers = editingBook ? series.get(editingBook.id)?.books.filter((b) => b !== editingBook && b.source !== 'shelf') : undefined;
 
   const panel = { id, role: 'tabpanel', 'aria-labelledby': labelledBy, hidden } as const;
 
@@ -123,7 +126,10 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             book={editingBook}
             seriesNames={seriesNames}
             anchor={editing.anchor}
-            onChange={(patch) => onEdit(editing.id, patch)}
+            others={editingOthers}
+            // By the book's own id: a started shared book's card goes by the sharer's, its copy by its own.
+            onChange={(patch) => onEdit(editingBook.id, patch)}
+            onChangeOther={(b, patch) => onEdit(b.id, patch)}
             onRemove={canRemove(editingBook) ? (fromKeyboard) => { setEditing(null); onRemove(editingBook, fromKeyboard); } : undefined}
             onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
             onClose={closeEdit}

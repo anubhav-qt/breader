@@ -50,7 +50,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
   const [inSeries, setInSeries] = useState(false);
   const [readAlong, setReadAlong] = useState(false);
   const [series, setSeries] = useState<SeriesValue>({ name: '', num: '' });
-  /** '' is unset: the genre every reader of a shared copy starts with. */
+  /** Genre ids joined by commas, '' for none: the genres every reader of a shared copy starts with. */
   const [genre, setGenre] = useState('');
   const [dragging, setDragging] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
@@ -206,9 +206,9 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                   <i className="add-radio" />
                 </button>
               </div>
-              <label className="add-label" htmlFor="add-genre">Genre</label>
+              <label className="add-label" htmlFor="add-genre">Genres</label>
               <GenreField id="add-genre" value={genre} className="add-input" onPick={setGenre} />
-              {shared && <span className="add-found">Readers on the Shared Library start with your genre, and can pick their own.</span>}
+              {shared && <span className="add-found">Readers on the Shared Library start with your genres, and can pick their own.</span>}
               <div className="add-switch">
                 <span className="add-label" id="add-series">Part of a series</span>
                 <button type="button" className="switch" role="switch" aria-checked={inSeries} aria-labelledby="add-series" onClick={() => setInSeries(!inSeries)} />

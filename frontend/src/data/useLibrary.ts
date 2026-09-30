@@ -22,7 +22,7 @@ export interface ShelfItem extends BookRecord {
   favorite: boolean;
   /** Lets an AI read along (BookEdit.ai). */
   ai: boolean;
-  /** The genre it was added with, under the reader's own pick (`genre` is the one it's filed under). */
+  /** The genres it was added with, under the reader's own picks (`genre` is what it's filed under). */
   addedGenre?: string;
 }
 

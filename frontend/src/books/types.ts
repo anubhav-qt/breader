@@ -80,7 +80,7 @@ export interface BookRecord {
   /** The series its file names, and its number in it. */
   series?: string;
   seriesIndex?: number;
-  /** The genre it was added with (shared genres.ts): the uploader's pick. Unset when absent. */
+  /** The genres it was added with (shared genres.ts), joined by commas: the uploader's picks. */
   genre?: string;
 }
 
@@ -92,7 +92,7 @@ export interface BookEdit {
   /** The reader's own series for it; '' takes it out of the one its file names. */
   series?: string;
   seriesIndex?: number;
-  /** The reader's own genre for it; '' files it under none, whatever it was added with. */
+  /** The reader's own genres for it; '' files it under none, whatever it was added with. */
   genre?: string;
   /** Lets an AI read along, for Revisit and 2 voices. */
   ai?: boolean;

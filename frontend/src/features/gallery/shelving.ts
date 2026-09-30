@@ -1,6 +1,6 @@
-import { UNSET_GENRE, genreName } from '@breader/shared/genres';
+import { UNSET_GENRE, genreIds, genreName } from '@breader/shared/genres';
 import type { ShelfItem } from '../../data/useLibrary';
-import { finishedIn, nextIn, numberOf, seriesGenre, shelfName, type Series } from './series';
+import { finishedIn, nextIn, numberOf, seriesGenres, shelfName, type Series } from './series';
 
 /*
  * Below Recent, the whole library again, shelved one of three ways: by genre, by series or by
@@ -38,33 +38,36 @@ export interface Shelf {
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const bookEntry = (b: ShelfItem): Entry => ({ key: b.key ?? b.id, book: b });
 
-/** A genre this build knows, or '' for unset. */
-const known = (id: string | undefined) => (genreName(id) ? id! : '');
+/** The shelves a book with these genres stands on: one for each, or unset's ('') for none. */
+const shelvesOf = (ids: string[]) => (ids.length ? ids : ['']);
 
 /**
- * Every genre with a book in it, by name, unset last. A series is one card, filed where most of
- * its books are; books keep the order they came in (most recent first).
+ * Every genre with a book in it, by name, unset last. A book stands on each of its genres' shelves;
+ * a series is one card, on each genre at least half its books have. Books keep the order they came
+ * in (most recent first).
  */
 export function byGenre(books: ShelfItem[], series: Map<string, Series>): Shelf[] {
   const shelves = new Map<string, { entries: Entry[]; series: number; books: number }>();
-  const put = (genre: string, e: Entry, books: number) => {
-    const s = shelves.get(genre) ?? { entries: [], series: 0, books: 0 };
-    s.entries.push(e);
-    s.books += books;
-    if (e.stack) s.series++;
-    shelves.set(genre, s);
+  const put = (genres: string[], e: Entry, books: number) => {
+    for (const genre of shelvesOf(genres)) {
+      const s = shelves.get(genre) ?? { entries: [], series: 0, books: 0 };
+      s.entries.push(e);
+      s.books += books;
+      if (e.stack) s.series++;
+      shelves.set(genre, s);
+    }
   };
   const placed = new Set<Series>();
   for (const b of books) {
     const s = series.get(b.id);
     if (!s) {
-      put(known(b.genre), bookEntry(b), 1);
+      put(genreIds(b.genre), bookEntry(b), 1);
       continue;
     }
     if (placed.has(s)) continue;
     placed.add(s);
     const next = nextIn(s);
-    put(known(seriesGenre(s)), { key: s.key, book: next, number: numberOf(s, next), stack: s }, s.books.length);
+    put(seriesGenres(s), { key: s.key, book: next, number: numberOf(s, next), stack: s }, s.books.length);
   }
   return [...shelves]
     .map(([id, s]) => ({
