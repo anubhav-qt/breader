@@ -1,4 +1,4 @@
-/* Gallery scroller: Recent (bento) on top, the wall below */
+/* Gallery scroller: Recent (bento) on top, the shelves below (shelves.css) */
 .gallery {
   position: relative;
   flex: 1;
@@ -14,7 +14,7 @@
 .gallery-add { height: 50px; padding: 0 22px; border-radius: 14px; font-size: 15px; }
 .gallery-add svg { width: 18px; height: 18px; }
 
-.gallery-head, .wall-head {
+.gallery-head {
   position: sticky;
   top: 0;
   z-index: 6;
@@ -329,24 +329,6 @@
 
 /* Recent: bento. Positioned, so a card being removed can fade out where it stood. */
 .bento { position: relative; display: grid; grid-auto-rows: 132px; gap: 14px; }
-
-/* Everything else: the wall */
-.wall { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; margin-top: 30px; }
-.wall-count { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); }
-.wall-rows { position: relative; display: flex; flex-wrap: wrap; gap: 14px; }
-
-/* Below Recent, two halves side by side: a row per series on the left, the rest by time on the
-   right. Nothing but space between them, as between Recent's cards. Narrower windows stack them. */
-.halves { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px 36px; margin-top: 30px; align-items: start; }
-@media (min-width: 1000px) {
-  .halves.is-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-}
-.halves > .wall, .halves > .srows { margin-top: 0; }
-
-/* Series: each gets a row of its books, in order. */
-.srows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; margin-top: 30px; }
-.srow { position: relative; display: flex; gap: 14px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 6px; }
-.srow-tile { flex: none; }
 
 /* Edit popover: name, colour, favourite, remove */
 .ep {

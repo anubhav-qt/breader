@@ -524,6 +524,9 @@ export default function App() {
               key={`${t}-${preview}`}
               books={t === 'mine' ? items.mine : items.shelf}
               seriesNames={allSeries}
+              place={t}
+              // The Shared Library is browsed by genre; one's own books, by series.
+              view={t === 'shelf' ? 'genre' : 'series'}
               now={now}
               id={`library-${t}`}
               labelledBy={`tab-${t}`}

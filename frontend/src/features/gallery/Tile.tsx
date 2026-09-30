@@ -124,6 +124,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           className="tile-hit"
           data-id={b.id}
           aria-label={stack ? `${stack.name}, a series of ${stack.count} books, ${stack.finished} finished` : `${b.title}, ${progressText(b)}`}
+          aria-haspopup={stack ? 'dialog' : undefined}
           onClick={(e) => onOpen(b, (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect())}
         />
         {made && <MadeCover book={b} number={number} author={item.author} />}
@@ -140,7 +141,8 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
             />
           </span>
         )}
-        <div className="tile-tools">
+        {/* A series' card opens the series; its books are edited there. */}
+        {!stack && <div className="tile-tools">
           {b.favorite && <span className="tile-fav" title="Favourite"><IconStar /></span>}
           <button
             ref={moreRef}
@@ -154,7 +156,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           >
             <IconMore />
           </button>
-        </div>
+        </div>}
       </div>
     </motion.div>
   );

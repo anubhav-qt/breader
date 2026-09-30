@@ -1,8 +1,8 @@
 import type { ShelfItem } from '../../data/useLibrary';
 
 /*
- * Series in the library. Books keep their own cards in Recent; below it, each series gets a row of
- * its books in order.
+ * Series in the library. Books keep their own cards in Recent; below it, a series is one card among
+ * its genre's books, and a row of its books in order among the series.
  */
 export interface Series {
   key: string;
@@ -14,8 +14,8 @@ export interface Series {
 const inOrder = (a: ShelfItem, b: ShelfItem) =>
   (a.seriesIndex ?? Infinity) - (b.seriesIndex ?? Infinity) || a.addedAt - b.addedAt || a.title.localeCompare(b.title);
 
-/** The series with at least two books in `books` (newest first), by book id. */
-export function findSeries(books: ShelfItem[]): Map<string, Series> {
+/** The series with at least `min` books in `books` (newest first), by book id. */
+export function findSeries(books: ShelfItem[], min = 2): Map<string, Series> {
   const groups = new Map<string, ShelfItem[]>();
   for (const b of books) {
     const name = b.series?.trim().toLowerCase();
@@ -23,13 +23,16 @@ export function findSeries(books: ShelfItem[]): Map<string, Series> {
   }
   const out = new Map<string, Series>();
   for (const [name, newest] of groups) {
-    if (newest.length < 2) continue;
+    if (newest.length < min) continue;
     const ordered = [...newest].sort(inOrder);
     const s: Series = { key: `series:${name}`, name: ordered[0].series!.trim(), books: ordered };
     for (const b of newest) out.set(b.id, s);
   }
   return out;
 }
+
+/** A series' name as it's shelved: "The Wheel of Time" goes under W. */
+export const shelfName = (name: string) => name.replace(/^(the|a|an)\s+/i, '');
 
 /** "Book 2", or the book's place in the list when it has no number. */
 export const numberOf = (s: Series, b: ShelfItem) => b.seriesIndex ?? s.books.indexOf(b) + 1;
