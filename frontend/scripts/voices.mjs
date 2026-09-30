@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Fetches the files reading aloud needs (src/features/reader/voice/files.json) into public/tts,
+ * Fetches the files reading aloud needs (shared/src/voice-files.json) into public/tts,
  * checks each against its SHA-256, and splits the big ones into parts under Cloudflare Pages' 25 MiB
  * limit. They're about 480 MB, so they stay out of git.
  *
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pub = join(root, 'public');
-const manifest = JSON.parse(await readFile(join(root, 'src/features/reader/voice/files.json'), 'utf8'));
+const manifest = JSON.parse(await readFile(join(root, '../shared/src/voice-files.json'), 'utf8'));
 
 if (process.argv.includes('--if-pages') && !process.env.CF_PAGES) {
   console.log('voices: not a Pages build, skipped (npm run voices fetches them)');

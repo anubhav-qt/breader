@@ -40,6 +40,8 @@ services:
       MIRROR_URL: *mirror-url
       # Every request arrives through the tunnel, and Cloudflare sets this header itself.
       CLIENT_IP_HEADER: cf-connecting-ip
+    # The server voice's files (SPEECH_EMAILS in .env turns it on), downloaded once.
+    volumes: ["voices:/data/voices"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
   worker:
@@ -66,3 +68,4 @@ volumes:
   mirror: {}
   files: {}
   backups: {}
+  voices: {}

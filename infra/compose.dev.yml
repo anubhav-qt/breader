@@ -54,7 +54,10 @@ services:
       S3_PUBLIC_ENDPOINT: "http://localhost:9000"
       # Where Google sends readers back after logging in; account emails print their links in the logs.
       PUBLIC_URL: "http://localhost:8787"
+      # The server voice, for these accounts: SPEECH_EMAILS=you@example.com npm run stack
+      SPEECH_EMAILS: "${SPEECH_EMAILS:-}"
     ports: ["8787:8787"]
+    volumes: ["voices:/data/voices"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
   # The Render copy: same image, no mirror. Stop "api" to watch the app fail over to it.
@@ -83,3 +86,4 @@ volumes:
   s3: {}
   files: {}
   backups: {}
+  voices: {}

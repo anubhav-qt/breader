@@ -14,6 +14,7 @@ import { canNarrate, useNarration, type Paragraph, type Sentence } from './narra
 import { overlaps, usePacing } from './pacing';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
+import { refreshSpeech } from './voice/server';
 import { useVoicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
 import { TWO_COLORS, useReaderSettings, type ThemeName } from './settings';
@@ -86,8 +87,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const voice = useVoicePrefs();
   const immersive = voice.mode === 'immersive' && book.kind === 'flow';
   const pacing = usePacing(view, immersive && !closing, loc);
-  // Voices readers uploaded, so the one picked last time is known.
-  useEffect(() => { if (canNarrate) void refreshVoices(); }, []);
+  // Voices readers uploaded, so the one picked last time is known, and whether the server reads for this account.
+  useEffect(() => { if (canNarrate) { void refreshVoices(); void refreshSpeech(); } }, []);
   const { busy: speaking, media } = narration;
   const { busy: lighting } = pacing;
   const busy = useCallback(() => speaking() || lighting(), [speaking, lighting]);

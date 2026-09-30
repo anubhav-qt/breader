@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { GenreKey } from './genres.ts';
-import { PREFS_CHARS, SYNC } from './limits.ts';
+import { PREFS_CHARS, SPEECH_CHARS, SYNC } from './limits.ts';
 
 /*
  * The wire format between the app and the server. Both sides validate with these schemas, so a
@@ -249,6 +249,30 @@ export type ListedVoice = z.infer<typeof ListedVoice>;
 
 export const VoicesResponse = z.object({ voices: z.array(ListedVoice) });
 export type VoicesResponse = z.infer<typeof VoicesResponse>;
+
+/* ---- The server voice ---- */
+
+/** Whether this account may read aloud with the server's voices, and which voices those are. */
+export const SpeechState = z.object({ allowed: z.boolean(), voices: z.array(z.string()) });
+export type SpeechState = z.infer<typeof SpeechState>;
+
+/** A voice by its key in the app's catalog (piper:kristin). */
+const SpeechVoice = z.string().min(1).max(64);
+
+export const SpeechReadyRequest = z.object({ voice: SpeechVoice });
+export type SpeechReadyRequest = z.infer<typeof SpeechReadyRequest>;
+
+/** A voice being made ready on the server: its files arriving there, in bytes, then loading. */
+export const SpeechReady = z.object({ ready: z.boolean(), loaded: z.number(), total: z.number() });
+export type SpeechReady = z.infer<typeof SpeechReady>;
+
+/** Something to say. The answer is MP3, with its length in samples and its rate in x-samples and x-rate. */
+export const SpeechRequest = z.object({
+  voice: SpeechVoice,
+  text: z.string().min(1).max(SPEECH_CHARS),
+  speed: z.number().min(0.5).max(2.5),
+});
+export type SpeechRequest = z.infer<typeof SpeechRequest>;
 
 /* ---- Libraries ---- */
 

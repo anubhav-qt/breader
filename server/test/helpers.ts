@@ -11,15 +11,15 @@ const rand = () => Math.floor(Math.random() * 256);
 export const env = loadEnv();
 export const primary = connectPrimary(env);
 export const mirror = connectMirror(env)!;
-export const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db) };
+export const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech: null };
 export const app = makeApp(deps);
 
-/** A browser: keeps its cookies between requests, like fetch with credentials. */
-export function browser(ip = `10.${rand()}.${rand()}.${rand()}`) {
+/** A browser: keeps its cookies between requests, like fetch with credentials. `to` is another app to talk to. */
+export function browser(ip = `10.${rand()}.${rand()}.${rand()}`, to = app) {
   const jar = new Map<string, string>();
   const call = async (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) => {
     const cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
-    const res = await app.request(path, {
+    const res = await to.request(path, {
       method,
       headers: { origin: ORIGIN, 'x-forwarded-for': ip, ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}), ...headers },
       body: body !== undefined ? JSON.stringify(body) : undefined,

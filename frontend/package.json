@@ -19,7 +19,6 @@
     "motion": "^13.4.4",
     "onnxruntime-web": "1.30.0",
     "pdfjs-dist": "^4.8.69",
-    "phonemizer": "1.2.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

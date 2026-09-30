@@ -4,6 +4,7 @@ import type { Db } from './db/client.ts';
 import type { libraries } from './db/schema.ts';
 import type { Env } from './env.ts';
 import type { Storage } from './lib/storage.ts';
+import type { Speech } from './speech/index.ts';
 
 export interface Deps {
   env: Env;
@@ -14,6 +15,8 @@ export interface Deps {
   storage: Storage;
   /** Accounts (auth.ts). */
   auth: Auth;
+  /** The server voice (speech/); null where it's off, as on the fallback. */
+  speech: Speech | null;
 }
 
 export type LibraryRow = typeof libraries.$inferSelect;

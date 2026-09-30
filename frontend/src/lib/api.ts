@@ -86,7 +86,45 @@ async function request<T>(method: string, path: string, body?: unknown, timeout 
   return data as T;
 }
 
+/*
+ * The server voice speaks from the laptop alone (the fallback is too small to), so what it's asked
+ * goes there and nowhere else, and a slow answer doesn't move the app to the fallback. A gateway
+ * error here is the laptop being off; the server's own errors say what they are.
+ */
+const LAPTOP_GATEWAY = new Set([502, 504, 530]);
+async function laptop(path: string, body: unknown, timeout: number): Promise<Response> {
+  if (navigator.onLine === false) throw new OfflineError();
+  const ctrl = new AbortController();
+  const t = window.setTimeout(() => ctrl.abort(), timeout);
+  let res: Response;
+  try {
+    res = await fetch(BASES.primary + path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: 'include',
+      signal: ctrl.signal,
+    });
+  } catch {
+    res = new Response(null, { status: 504 });
+  } finally {
+    window.clearTimeout(t);
+  }
+  if (res.ok) return res;
+  const data = await res.json().catch(() => null);
+  if (!data?.code && LAPTOP_GATEWAY.has(res.status)) {
+    throw new ApiError(503, 'laptop_off', 'Breader’s own computer, which reads aloud for this device, can’t be reached just now. Turn off Read on the server to read with this device’s voice.');
+  }
+  throw new ApiError(res.status, data?.code ?? 'error', data?.message ?? `The server answered ${res.status}.`);
+}
+
 export const api = {
+  /** The laptop alone, for the server voice: JSON, or the response itself for its sound. */
+  laptop: {
+    get: async <T>(path: string, timeout = TIMEOUT) => (await laptop(path, undefined, timeout)).json() as Promise<T>,
+    post: async <T>(path: string, body: unknown, timeout = TIMEOUT) => (await laptop(path, body, timeout)).json() as Promise<T>,
+    raw: (path: string, body: unknown, timeout = TIMEOUT) => laptop(path, body, timeout),
+  },
   get: <T>(path: string, timeout?: number) => request<T>('GET', path, undefined, timeout),
   post: <T>(path: string, body: unknown = {}, timeout?: number) => request<T>('POST', path, body, timeout),
   del: <T>(path: string) => request<T>('DELETE', path),

@@ -1,9 +1,10 @@
 import { phonemize } from 'phonemizer';
 
 /*
- * Text to the sounds a voice model reads (IPA, from eSpeak NG). The clean-up of numbers, money and
- * titles, and Kokoro's corrections to eSpeak, are kokoro.js's (github.com/hexgrad/kokoro, Apache
- * License 2.0, © hexgrad), trimmed to English.
+ * Text to the sounds a voice model reads (IPA, from eSpeak NG), for the voices in the browser
+ * (frontend voice/tts.worker.ts) and the laptop's own (server speech/), so both say a word alike.
+ * The clean-up of numbers, money and titles, and Kokoro's corrections to eSpeak, are kokoro.js's
+ * (github.com/hexgrad/kokoro, Apache License 2.0, © hexgrad), trimmed to English.
  */
 
 function splitNum(match: string) {
@@ -104,4 +105,29 @@ export async function kokoroPhonemes(text: string, british: boolean) {
 /** For Piper: eSpeak as the voice was trained on it, one sound per code point. */
 export async function piperPhonemes(text: string, espeak: string) {
   return [...(await withPunctuation(normalize(text), espeak.toLowerCase())).trim().normalize('NFD')];
+}
+
+/** A Piper voice's settings: its .onnx.json. */
+export interface PiperConfig {
+  audio: { sample_rate: number };
+  espeak: { voice: string };
+  inference: { noise_scale: number; length_scale: number; noise_w: number };
+  phoneme_id_map: Record<string, number[]>;
+  num_speakers?: number;
+}
+
+/**
+ * What a Piper model is given to say `text` at `speed`: its sounds as the ids the voice knows,
+ * each followed by a pause, between a start and an end; and how much it varies them.
+ */
+export async function piperInput(text: string, cfg: PiperConfig, speed: number) {
+  const map = cfg.phoneme_id_map;
+  const ids = [...map['^'], ...map['_']];
+  for (const p of await piperPhonemes(text, cfg.espeak?.voice || 'en-us')) {
+    if (!map[p]) continue;
+    ids.push(...map[p], ...map['_']);
+  }
+  ids.push(...map['$']);
+  const inf = cfg.inference ?? { noise_scale: 0.667, length_scale: 1, noise_w: 0.8 };
+  return { ids, scales: [inf.noise_scale, inf.length_scale / speed, inf.noise_w], speakers: cfg.num_speakers ?? 1 };
 }

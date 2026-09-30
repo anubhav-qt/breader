@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { readLocal, writeLocal } from '../../../lib/store';
 import { BUILT_IN, DEFAULT_VOICE, fromListed, hasGpu, type Engine, type Mode, type VoiceInfo } from './catalog';
 import { listedVoices } from './list';
+import { serverHas, speechAllowed } from './server';
 import type { Two } from './two';
 
 /*
@@ -30,6 +31,8 @@ export interface VoicePrefs {
   pair: Record<Mode, Record<Two, string>>;
   /** 2 voices: who reads narration that isn't anyone's point of view. */
   noPov: Two;
+  /** Read with the server's voices (server.ts), for accounts it's open to. */
+  server: boolean;
 }
 
 const KEY = 'breader.voice.v3';
@@ -83,6 +86,7 @@ let prefs: VoicePrefs = {
   count: { normal: 1, immersive: 1, ...stored.count },
   pair,
   noPov: stored.noPov ?? 'F',
+  server: stored.server ?? false,
 };
 if (hung && voice.immersive === hung) {
   voice.immersive = normal;
@@ -105,6 +109,9 @@ export const useVoicePrefs = () => useSyncExternalStore(
   () => prefs,
 );
 
+/** Reading with the server's voices: picked, and open to this account. */
+export const onServer = () => prefs.server && speechAllowed();
+
 /** A voice by its key, of these engines, if it's still there. */
 function find(key: string, engines: Engine[]): VoiceInfo | undefined {
   const built = [...BUILT_IN.normal, ...BUILT_IN.immersive].find((v) => v.key === key);
@@ -115,10 +122,12 @@ function find(key: string, engines: Engine[]): VoiceInfo | undefined {
 
 /**
  * The voice a mode reads with: the one picked, or the default when that one has gone. A heavy
- * voice where the graphics chip can't run it reads with Normal's pick instead.
+ * voice where the graphics chip can't run it reads with Normal's pick instead. The server reads
+ * with its own voices, the Normal ones: the mode's pick, or Normal's, if it has them.
  */
 export function voiceFor(mode: Mode): VoiceInfo {
   const normal = find(prefs.voice.normal, ['piper']) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
+  if (onServer()) return [find(prefs.voice[mode], ['piper']), normal].find(serverHas) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
   if (mode === 'normal') return normal;
   const v = find(prefs.voice.immersive, ['piper', 'kokoro']) ?? (handheld() ? normal : find(DEFAULT_VOICE.immersive, ['kokoro'])!);
   return v.engine === 'kokoro' && !hasGpu() ? normal : v;
@@ -142,6 +151,10 @@ export function pairFor(mode: Mode): Record<Two, VoiceInfo> {
     const v = find(prefs.pair[m][g], engines);
     return v && sideOf(v) === g ? v : find(defaultPair(m)[g], engines)!;
   };
+  if (onServer()) {
+    const side = (g: Two) => [pick(mode, g, ['piper']), pick('normal', g, ['piper'])].find(serverHas) ?? find(DEFAULT_PAIR.normal[g], ['piper'])!;
+    return { F: side('F'), M: side('M') };
+  }
   const normal = { F: pick('normal', 'F', ['piper']), M: pick('normal', 'M', ['piper']) };
   if (mode === 'normal') return normal;
   const F = pick('immersive', 'F', ['piper', 'kokoro']);

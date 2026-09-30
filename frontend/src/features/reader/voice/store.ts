@@ -1,4 +1,4 @@
-import manifest from './files.json';
+import manifest from '@breader/shared/voice-files.json';
 
 /*
  * The files reading aloud needs, kept in Cache Storage so voices work offline once fetched. Big
@@ -63,7 +63,7 @@ async function stash(c: Box, key: string, bytes: Uint8Array) {
   }
 }
 
-/** One of the files the app hosts (files.json). */
+/** One of the files the app hosts (shared voice-files.json). */
 export function hosted(name: HostedName): Want {
   const f = files[name];
   if (f.url) return { name, size: f.size, sha256: f.sha256, keys: [f.url] };

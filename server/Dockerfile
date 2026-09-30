@@ -17,7 +17,7 @@ RUN npm run build -w server
 FROM node:24-alpine
 # pg_dump for backups (must be at least the copy's major version), tini to forward signals.
 RUN apk add --no-cache postgresql17-client tini tzdata \
-  && mkdir -p /data/files /data/backups && chown -R node:node /data
+  && mkdir -p /data/files /data/backups /data/voices && chown -R node:node /data
 WORKDIR /app
 ENV NODE_ENV=production
 # The commit, shown by /health, so you can see which version each server runs.
@@ -25,6 +25,8 @@ ARG RELEASE=dev
 ENV RELEASE=$RELEASE
 COPY --from=build /app/server/dist ./dist
 COPY --from=build /app/server/drizzle ./drizzle
+# The server voice's MP3 encoder sits beside the bundle rather than in it (build.mjs).
+COPY --from=build /app/node_modules/@breezystack/lamejs ./node_modules/@breezystack/lamejs
 USER node
 EXPOSE 8787
 ENTRYPOINT ["/sbin/tini", "--"]

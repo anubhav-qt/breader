@@ -1,5 +1,5 @@
 {
-  "$comment": "Files reading aloud needs. `from` files are fetched at build time (scripts/voices.mjs) into public/, split into parts under Cloudflare Pages' 25 MiB limit; `url` files come straight from their CDN. Sizes are unpacked bytes; `transfer` is what a compressed download weighs.",
+  "$comment": "Files reading aloud needs. `from` files are fetched at build time (frontend/scripts/voices.mjs) into frontend/public/, and by the laptop's server for its own voice (server/src/speech/files.ts), split into parts under Cloudflare Pages' 25 MiB limit; `url` files come straight from their CDN. Sizes are unpacked bytes; `transfer` is what a compressed download weighs.",
   "partBytes": 25165824,
   "files": {
     "ort-cpu": {

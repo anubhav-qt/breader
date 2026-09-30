@@ -74,6 +74,17 @@ const Env = z.object({
   BACKUP_RECIPIENT: z.string().optional(),
   /** Uptime monitor heartbeat URL. The worker calls it every 5 minutes while the copy is current. */
   HEARTBEAT_URL: z.string().url().optional(),
+
+  /**
+   * The server voice (src/speech/): the laptop reads aloud for phones that can't run a voice
+   * themselves. Only for these accounts, by email, once the address is confirmed. Off while
+   * empty, and always off on the fallback, which is too small to speak.
+   */
+  SPEECH_EMAILS: list.transform((l) => l.map((e) => e.toLowerCase())).default([]),
+  /** Where the laptop keeps the voices' files once downloaded. */
+  SPEECH_DIR: z.string().default('/data/voices'),
+  /** Processor threads the voice may use. Defaults to 4, or fewer on a smaller machine. */
+  SPEECH_THREADS: z.coerce.number().int().min(1).max(16).optional(),
 });
 
 export type Env = z.infer<typeof Env>;

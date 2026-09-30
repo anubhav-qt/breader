@@ -10,12 +10,15 @@
     "./key": "./src/key.ts",
     "./limits": "./src/limits.ts",
     "./protocol": "./src/protocol.ts",
-    "./report": "./src/report.ts"
+    "./report": "./src/report.ts",
+    "./speech": "./src/speech.ts",
+    "./voice-files.json": "./src/voice-files.json"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "phonemizer": "1.2.1",
     "zod": "^4.6.5"
   }
 }

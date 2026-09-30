@@ -12,6 +12,7 @@ import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
 import { libraryRoutes } from './routes/libraries.ts';
 import { shelfRoutes } from './routes/shelf.ts';
+import { speechRoutes } from './routes/speech.ts';
 import { syncRoutes } from './routes/sync.ts';
 import { voiceRoutes } from './routes/voices.ts';
 
@@ -34,6 +35,8 @@ export function makeApp(deps: Deps) {
       credentials: true,
       allowMethods: ['GET', 'POST', 'DELETE'],
       allowHeaders: ['content-type'],
+      // The server voice's sound says how long it is (routes/speech.ts).
+      exposeHeaders: ['x-samples', 'x-rate'],
       maxAge: 600,
     }),
   );
@@ -57,6 +60,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', shelfRoutes(deps));
   app.route('/v1', voiceRoutes(deps));
   app.route('/v1', aiRoutes(deps));
+  app.route('/v1', speechRoutes(deps));
 
   app.notFound((c) => c.json({ code: 'not_found', message: 'No such endpoint.' }, 404));
   app.onError(onError);

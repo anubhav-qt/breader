@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { ListedVoice } from '@breader/shared/protocol';
-import manifest from './files.json';
+import manifest from '@breader/shared/voice-files.json';
 import { hosted, uploaded, type HostedName, type Want } from './store';
 
 /*

@@ -2,14 +2,16 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { Loc, ViewHandle } from './FlowView';
 import { checkGpu, type Mode, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
-import { askFirst, pairFor, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
+import { useSpeech } from './voice/server';
 import { failed, hold, letGoKeys, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
 import { inTwo, type Marks, type Two } from './voice/two';
 
 /*
- * Reading aloud with voices that run on this device (voice/): from the top of the page on screen,
+ * Reading aloud with voices that run on this device (voice/), or on Breader's own computer for the
+ * accounts it's open to (voice/server.ts): from the top of the page on screen,
  * a sentence at a time, with sound made up to a minute ahead. The sentence being read is lit in
  * the book's colour, and pages and chapters turn as the voice reaches them. Turn the page or jump
  * to a chapter while it reads, and it carries on from there.
@@ -306,6 +308,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
 
     /** The voices reading: one, or 2 voices' hers and his. */
     let voices: VoiceInfo[] = [];
+    /** Where they read: on the server, or here. */
+    let where = '';
     const keys = () => voices.map((v) => v.key);
     const voiceOf = (s: Sentence) => (voices.length > 1 && s.g === 'M' ? voices[1] : voices[0]);
     let rate = 1;
@@ -385,10 +389,12 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       }
       const want = shape === '1' ? [voiceFor(p.mode)] : both(p.mode);
       const wantKeys = want.map((v) => v.key).join('|');
-      if (wantKeys !== keys().join('|') || rateOf(p) !== rate) {
+      const wantWhere = onServer() ? 'server' : 'here';
+      if (wantKeys !== keys().join('|') || wantWhere !== where || rateOf(p) !== rate) {
         clips = new Map();
         rate = rateOf(p);
-        if (wantKeys !== keys().join('|')) {
+        if (wantKeys !== keys().join('|') || wantWhere !== where) {
+          where = wantWhere;
           const first = !voices.length;
           voices = [];
           let bytes = 0;
@@ -614,8 +620,10 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // A new voice or speed takes over mid-sentence.
+  // A new voice or speed takes over mid-sentence, and so does the server's voice or this device's.
   const prefs = useVoicePrefs();
+  const speech = useSpeech();
+  const server = prefs.server && speech.allowed;
   const picked = voiceFor(prefs.mode).key;
   const speed = rateOf(prefs);
   // 2 voices: on or off, the pair, and who reads with no point of view, as the loop sees them.
@@ -624,7 +632,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   useEffect(() => {
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made]);
+  }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made, server]);
   // Paused, the lit sentence goes out with a change of mode, which lights its own way.
   const modeAt = useRef(prefs.mode);
   useEffect(() => {

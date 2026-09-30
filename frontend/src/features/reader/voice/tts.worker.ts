@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import type { InferenceSession, Tensor } from 'onnxruntime-web';
-import { kokoroPhonemes, piperPhonemes } from './phonemes';
+import { kokoroPhonemes, piperInput, type PiperConfig } from '@breader/shared/speech';
 import { hosted, load, type Want } from './store';
 
 /*
@@ -14,13 +14,7 @@ import { hosted, load, type Want } from './store';
 
 type Ort = typeof import('onnxruntime-web');
 
-export interface PiperConfig {
-  audio: { sample_rate: number };
-  espeak: { voice: string };
-  inference: { noise_scale: number; length_scale: number; noise_w: number };
-  phoneme_id_map: Record<string, number[]>;
-  num_speakers?: number;
-}
+export type { PiperConfig };
 
 export type Request =
   | { type: 'start'; engine: 'piper' | 'kokoro' }
@@ -113,20 +107,13 @@ async function say(m: Extract<Request, { type: 'say' }>): Promise<{ audio: Float
     return { audio: new Float32Array((out.waveform as Tensor).data as Float32Array), rate: KOKORO_RATE };
   }
   const cfg = v.config!;
-  const map = cfg.phoneme_id_map;
-  const ids = [...map['^'], ...map['_']];
-  for (const p of await piperPhonemes(m.text, cfg.espeak?.voice || 'en-us')) {
-    if (!map[p]) continue;
-    ids.push(...map[p], ...map['_']);
-  }
-  ids.push(...map['$']);
-  const inf = cfg.inference ?? { noise_scale: 0.667, length_scale: 1, noise_w: 0.8 };
+  const { ids, scales, speakers } = await piperInput(m.text, cfg, m.speed);
   const feeds: Record<string, Tensor> = {
     input: new T('int64', int64(ids), [1, ids.length]),
     input_lengths: new T('int64', int64([ids.length]), [1]),
-    scales: new T('float32', new Float32Array([inf.noise_scale, inf.length_scale / m.speed, inf.noise_w]), [3]),
+    scales: new T('float32', new Float32Array(scales), [3]),
   };
-  if ((cfg.num_speakers ?? 1) > 1) feeds.sid = new T('int64', int64([0]), [1]);
+  if (speakers > 1) feeds.sid = new T('int64', int64([0]), [1]);
   const out = await v.session!.run(feeds);
   // A copy: the result may sit in memory the engine reuses, which can't be handed to the page.
   return { audio: new Float32Array((out[v.session!.outputNames[0]] as Tensor).data as Float32Array), rate: cfg.audio.sample_rate };

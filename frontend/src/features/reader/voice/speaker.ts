@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from 'react';
 import { api } from '../../../lib/api';
 import { engineFiles, filesOf, noGpu, weight, type Engine, type VoiceInfo } from './catalog';
-import { startingHeavy } from './prefs';
+import { onServer, startingHeavy } from './prefs';
+import { readyOnServer, sayOnServer } from './server';
 import { has, type Want } from './store';
 import type { Reply, Request } from './tts.worker';
 
 /*
- * The page's side of speech: a worker per engine (tts.worker.ts), what's loading and how far it's
- * got, and playing what comes back.
+ * The page's side of speech: a worker per engine (tts.worker.ts), or the server's voice
+ * (server.ts), what's loading and how far it's got, and playing what comes back.
  *
  * A worker holds a lot while it runs (about 300 MB for a Normal voice, 760 MB and the graphics
  * chip's memory for a heavy one), so it holds one voice at a time (two for 2 voices), and goes
@@ -135,8 +136,9 @@ async function linked(w: Want | undefined, fileId: string | null | undefined): P
   return { ...w, from: [url] };
 }
 
-/** Everything this voice still has to download, and roughly how many bytes that is. */
+/** Everything this voice still has to download, and roughly how many bytes that is. None for the server's. */
 export async function missing(v: VoiceInfo) {
+  if (onServer()) return { files: [] as Want[], bytes: 0 };
   const f = filesOf(v);
   const all = [...engineFiles(v.engine), f.model, f.config, f.pack].filter((w): w is Want => !!w);
   const out: Want[] = [];
@@ -149,6 +151,7 @@ export async function missing(v: VoiceInfo) {
  * voices go, but those in `keep`: 2 voices keeps its other one.
  */
 export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
+  if (onServer()) return prepareOnServer(v);
   const r = runner(v.engine);
   const ready = r.voices.get(v.key);
   if (ready) return ready;
@@ -199,7 +202,31 @@ export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
   return p;
 }
 
+/** Voices the server has made ready, or is making ready. */
+const onServerReady = new Map<string, Promise<void>>();
+
+/** Readies a voice on the server, showing its files arriving there the first time. */
+function prepareOnServer(v: VoiceInfo): Promise<void> {
+  const ready = onServerReady.get(v.key);
+  if (ready) return ready;
+  const f = filesOf(v);
+  const p = (async () => {
+    setLoad({ key: v.key, loaded: 0, total: (f.model?.size ?? 0) + (f.config?.size ?? 0), error: null, gpu: false });
+    try {
+      await readyOnServer(v, (loaded, total) => setLoad({ loaded, total }));
+      setLoad({ key: null });
+    } catch (e) {
+      onServerReady.delete(v.key);
+      setLoad({ key: null, error: (e as Error).message, gpu: false });
+      throw e;
+    }
+  })();
+  onServerReady.set(v.key, p);
+  return p;
+}
+
 export async function synth(v: VoiceInfo, text: string, speed: number, keep: string[] = []): Promise<Clip> {
+  if (onServer()) return sayOnServer(v, text, speed);
   await prepare(v, keep);
   // Not a new engine: this one was let go while the voice was being readied.
   const r = runners[v.engine];

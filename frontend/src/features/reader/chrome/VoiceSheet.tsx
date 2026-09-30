@@ -8,6 +8,7 @@ import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, fromListed, useGpu, type Engine, type Mode, type SamplePart, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
 import { hung, PACE, pairFor, pickSide, RATES, setVoicePrefs, sideOf, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
+import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { AddVoice } from './AddVoice';
 import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
@@ -17,7 +18,8 @@ import { CloseDots, DotIcon } from './parts';
  * The voice sheet, from the button beside play: Normal or Immersive, the voice, and the speed.
  * Immersive lights the words at a pace set here, and play adds a voice that keeps to it, the Normal
  * ones first, then the heavy ones, which are for computers. Each voice has lines to hear before
- * anything downloads: a greeting, a bit of a story and a question, one at a time.
+ * anything downloads: a greeting, a bit of a story and a question, one at a time. For the accounts
+ * it's open to, the server can read instead (voice/server.ts).
  */
 
 const ABOUT: Record<Mode, string> = {
@@ -32,6 +34,11 @@ const NO_VOICES: Record<Mode, string> = {
   immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. This browser can’t run voices, so it stays quiet.',
 };
 const HUNG = 'A heavy voice stopped this browser last time, so Immersive reads with a Normal voice now. The heavy ones are best on a computer.';
+/** Read on the server: what each mode does then. */
+const SERVER: Record<Mode, string> = {
+  normal: 'Breader’s own computer reads aloud and sends the sound here, for a phone that’s slow with voices of its own. Nothing downloads, but it needs a connection.',
+  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, from where you pick, until Immersive is off, with a voice from Breader’s own computer.',
+};
 
 /*
  * Two voices, a woman's and a man's, need the book read through first to know who says each line
@@ -72,11 +79,13 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
   const listed = useListedVoices();
   const load = useLoadState();
   const mode = prefs.mode;
+  const speech = useSpeech();
+  const server = speech.allowed && prefs.server;
   // Immersive where the GPU can't run the heavy voices offers only the Normal ones (prefs.ts, voiceFor).
   const gpu = useGpu();
   const fallback = mode === 'immersive' && gpu === false;
   const voices: Mode = fallback ? 'normal' : mode;
-  const engines: Engine[] = voices === 'immersive' ? ['piper', 'kokoro'] : ['piper'];
+  const engines: Engine[] = voices === 'immersive' && !server ? ['piper', 'kokoro'] : ['piper'];
   const current = voiceFor(mode);
   // 2 voices: one list as ever, her pick and his lit in their colours.
   const paired = two === 'ready' && prefs.count[mode] === 2;
@@ -91,7 +100,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
   const onRoot = useCallback((el: HTMLDivElement | null) => { if (el) setPage(el.closest<HTMLElement>('.rd')); }, []);
   const [waiting, setWaiting] = useState(false);
 
-  useEffect(() => { void refreshVoices(); }, []);
+  useEffect(() => { void refreshVoices(); void refreshSpeech(); }, []);
   // Whether Immersive can run here, asked before it offers a download.
   useEffect(() => { if (mode === 'immersive') void checkGpu(); }, [mode]);
   useEffect(() => stopSample, []);
@@ -101,7 +110,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
     void Promise.all((paired ? [pair.F, pair.M] : [current]).map(missing)).then((ms) => { if (on) setBytes(ms.reduce((n, m) => n + m.bytes, 0)); });
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current.key, paired, pair.F.key, pair.M.key, load.key]);
+  }, [current.key, paired, pair.F.key, pair.M.key, load.key, server]);
 
   const pick = (v: VoiceInfo) => {
     if (paired) pickSide(voices, v);
@@ -191,39 +200,50 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
     <div className="pnl vs" ref={onRoot}>
       <div className="pnl-h">Read aloud</div>
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
-      <p className="p-note vs-about">{fallback ? FALLBACK : ABOUT[mode]}</p>
-      {hung && mode === 'immersive' && <p className="p-note vs-about vs-err">{HUNG}</p>}
+      {speech.allowed && (
+        <div className="ctl tgrow">
+          <span className="clbl">Read on the server</span>
+          <button type="button" className="tg" role="switch" aria-checked={prefs.server} aria-label="Read aloud on Breader’s own computer" onClick={() => setVoicePrefs({ server: !prefs.server })} />
+        </div>
+      )}
+      <p className="p-note vs-about">{server ? SERVER[mode] : fallback ? FALLBACK : ABOUT[mode]}</p>
+      {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
       <Segmented label="Voices" value={two === 'ready' ? prefs.count[mode] : 1} onChange={setCount} options={counts(two === 'ready')} />
       {paired && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
       <div className="vs-lists" role={paired ? 'group' : 'radiogroup'} aria-label={paired ? 'Her voice and his' : 'Voice'}>
-        <div className="vs-list">{BUILT_IN.normal.map((v) => row(v))}</div>
-        {engines.includes('kokoro') && (
+        <div className="vs-list">{(server ? BUILT_IN.normal.filter(serverHas) : BUILT_IN.normal).map((v) => row(v))}</div>
+        {/* The server has the five Normal voices and no others. */}
+        {!server && engines.includes('kokoro') && (
           <>
             <div className="clbl vs-sub">Heavy voices</div>
             <p className="p-note vs-heavy">{HEAVY}</p>
             <div className="vs-list">{BUILT_IN.immersive.map((v) => row(v))}</div>
           </>
         )}
-        {others.length > 0 && (
+        {!server && others.length > 0 && (
           <>
             <div className="clbl vs-sub">Shared by readers</div>
             <div className="vs-list">{others.map((v) => row(v))}</div>
           </>
         )}
-        <div className="clbl vs-sub">Yours</div>
-        <div className="vs-list">
-          {yours.map((v) => row(v, <Own v={v} />))}
-          {hasKey() ? (
-            <button type="button" className="vs-add" onClick={() => { stopSample(); setAdding(true); }}>
-              <DotIcon rows={PLUS} />
-              <span>Add a voice</span>
-            </button>
-          ) : (
-            <p className="p-note vs-sub-note">Once this library has a key, you can add voices of your own.</p>
-          )}
-        </div>
+        {!server && (
+          <>
+            <div className="clbl vs-sub">Yours</div>
+            <div className="vs-list">
+              {yours.map((v) => row(v, <Own v={v} />))}
+              {hasKey() ? (
+                <button type="button" className="vs-add" onClick={() => { stopSample(); setAdding(true); }}>
+                  <DotIcon rows={PLUS} />
+                  <span>Add a voice</span>
+                </button>
+              ) : (
+                <p className="p-note vs-sub-note">Once this library has a key, you can add voices of your own.</p>
+              )}
+            </div>
+          </>
+        )}
       </div>
       {mode === 'normal' && <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />}
       <div className="vs-foot">
