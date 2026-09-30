@@ -54,6 +54,8 @@ function cut(el: HTMLElement, full: string): string {
   node.nodeValue = full;
   if (!over(el)) return full;
   const words = full.split(/\s+/);
+  // One word has nothing to cut: an ellipsis after it only makes it wider.
+  if (words.length < 2) return full;
   const at = (k: number) => `${words.slice(0, k).join(' ').replace(/[\s,;:.\-\u2013\u2014]+$/, '')}…`;
   let lo = 1;
   let hi = words.length - 1;
@@ -120,11 +122,16 @@ function fitTitles(titles: HTMLElement[]) {
   const t = titles[0];
   const set = (px: number) => titles.forEach((el) => el.style.setProperty('font-size', `${Math.floor(px * 10) / 10}px`));
   const base = parseFloat(getComputedStyle(t).fontSize);
+  // Measured to the fraction of a pixel, as over() measures: client and scroll widths round, and a
+  // title half a pixel wider than its card fits by them.
   for (let i = 0; i < 3; i++) {
     const cs = getComputedStyle(t);
-    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-    const room = t.clientWidth - pad;
-    const need = t.scrollWidth - pad;
+    const box = t.getBoundingClientRect();
+    const left = box.left + parseFloat(cs.paddingLeft);
+    const room = box.right - parseFloat(cs.paddingRight) - left;
+    const range = document.createRange();
+    range.selectNodeContents(t);
+    const need = Math.max(left, ...Array.from(range.getClientRects(), (r) => r.right)) - left;
     if (need <= room + 0.5 || room <= 0) break;
     set(parseFloat(cs.fontSize) * (room / need));
   }
