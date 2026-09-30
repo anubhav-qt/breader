@@ -12,7 +12,28 @@ const TITLE_FLOOR = 0.8;
 /** The elements cut with an ellipsis, and the titles among them, which shrink first. */
 const CUT = '.t-title, .t-line, .c-sub, .mc-title';
 
-const over = (el: HTMLElement) => el.scrollHeight > el.clientHeight + 1;
+/**
+ * Whether `el`'s text runs to more lines than it shows. Its scroll height can't tell: the reading
+ * face's letters hang below their line box, so even one word seems to overflow. So the lines the
+ * text is laid out on are counted instead, clamped ones included.
+ */
+function over(el: HTMLElement): boolean {
+  const cs = getComputedStyle(el);
+  const lh = parseFloat(cs.lineHeight);
+  if (!lh) return el.scrollHeight > el.clientHeight + 1;
+  const shown = Math.round((el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / lh);
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const tops = Array.from(range.getClientRects(), (r) => r.top).sort((a, b) => a - b);
+  let lines = 0;
+  let last = -Infinity;
+  for (const top of tops) {
+    if (top - last <= lh / 2) continue;
+    lines++;
+    last = top;
+  }
+  return lines > shown;
+}
 
 function textNode(el: HTMLElement): Text | null {
   const t = el.firstChild;
