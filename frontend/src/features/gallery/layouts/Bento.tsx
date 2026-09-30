@@ -16,10 +16,7 @@ export function Bento({ items, now, enter, editingId, onOpen, onEdit }: SectionP
       <AnimatePresence mode="popLayout" initial={false}>
         {items.map((item, i) => {
           const [col, row, spanC, spanR, v] = slots[i];
-          // Six and four columns have their own arrangements; below that the grid flows.
-          const place = cols >= 4
-            ? { gridColumn: `${col + 1} / span ${spanC}`, gridRow: `${row + 1} / span ${spanR}` }
-            : { gridColumn: `span ${Math.min(spanC, cols)}`, gridRow: `span ${spanR}` };
+          const place = { gridColumn: `${col + 1} / span ${spanC}`, gridRow: `${row + 1} / span ${spanR}` };
           return (
             <Tile
               key={item.key}

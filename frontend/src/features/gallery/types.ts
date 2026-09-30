@@ -3,6 +3,8 @@ import type { ShelfItem } from '../../data/useLibrary';
 export interface GalleryItem {
   key: string;
   book: ShelfItem;
+  /** The name its series goes by, when its file credits someone else first. */
+  author?: string;
 }
 
 export interface SectionProps {

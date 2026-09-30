@@ -36,6 +36,36 @@ export const numberOf = (s: Series, b: ShelfItem) => b.seriesIndex ?? s.books.in
 
 export const finishedIn = (s: Series) => s.books.filter((b) => b.progress >= 1).length;
 
+/** The book a series stands for as one card: the first one not finished, or the last once all are. */
+export const nextIn = (s: Series) => s.books.find((b) => b.progress < 1) ?? s.books[s.books.length - 1];
+
+/** What most of its books have, or undefined when none does; the next book's breaks a tie. */
+function most(values: Array<string | undefined>, tie?: string): string | undefined {
+  const counts = new Map<string, number>();
+  for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+  let best: string | undefined;
+  let n = 0;
+  for (const [v, c] of counts) if (c > n || (c === n && v === tie)) { best = v; n = c; }
+  return best;
+}
+
+/** The genre a series is filed under: the one most of its books have. */
+export const seriesGenre = (s: Series) => most(s.books.map((b) => b.genre), nextIn(s).genre);
+
+/**
+ * The name a series' cards go by, when files credit different people first ("Tetsuo 415, Eiji
+ * Mikage"): the one most of its books name first. Keyed by book id, for books whose file names it.
+ */
+export function seriesAuthors(series: Map<string, Series>, first: (raw: string) => string, all: (raw: string) => string[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const s of new Set(series.values())) {
+    const name = most(s.books.map((b) => first(b.author)));
+    if (!name) continue;
+    for (const b of s.books) if (all(b.author).includes(name)) out.set(b.id, name);
+  }
+  return out;
+}
+
 /* Suggestions for the series field in the edit popover. */
 
 export interface SeriesName {

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../lib/springs';
+import { isCut } from './fit';
 
 /** How long the pointer must rest before the full title appears. */
 const REST_MS = 500;
@@ -10,13 +11,6 @@ const OFFSET_Y = 22;
 const MARGIN = 12;
 
 interface Hint { id: number; text: string; x: number; y: number }
-
-/** Whether a two-line title had to be cut short. Its hidden lines are still laid out. */
-function isCut(el: HTMLElement) {
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  return new Set(Array.from(range.getClientRects(), (r) => Math.round(r.top))).size > 2;
-}
 
 /**
  * The full name of a shortened card title. It appears beside the pointer once the pointer has
@@ -46,7 +40,7 @@ export function TitleHint({ root }: { root: RefObject<HTMLElement | null> }) {
       const r = title.getBoundingClientRect();
       const top = r.top + parseFloat(getComputedStyle(title).paddingTop);
       if (x < r.left || x > r.right || y < top || y > r.bottom) return;
-      setHint({ id: ++n, text: title.textContent ?? '', x, y });
+      setHint({ id: ++n, text: title.dataset.full ?? title.textContent ?? '', x, y });
     };
     const rest = () => {
       hide();

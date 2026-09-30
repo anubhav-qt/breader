@@ -47,8 +47,9 @@ export function cardTitle(raw: string, seriesIndex?: number) {
   return { title, sub: sub || undefined, vol: vol ?? seriesIndex };
 }
 
-export function cardAuthor(raw: string) {
-  const parts = raw
+/** Everyone a file credits, first as it names them, without "illustrated by" and the like. */
+export function cardAuthors(raw: string): string[] {
+  return raw
     .split(/\s*(?:;|&|\s\/\s|\band\b|\bwith\b)\s*/i)
     .flatMap((p) => {
       // "Tolkien, J. R. R." is one name, surname first; "Tsutomu Sato, Kana Ishida" is two.
@@ -56,8 +57,16 @@ export function cardAuthor(raw: string) {
       return c.length === 2 && !/\s/.test(c[0]) && !CREDIT.test(c[1]) ? [`${c[1]} ${c[0]}`] : c;
     })
     .map((p) => p.replace(CREDIT, '').trim())
-    .filter(Boolean);
+    .filter((p, i, all) => p && all.indexOf(p) === i);
+}
+
+export function cardAuthor(raw: string) {
+  const parts = cardAuthors(raw);
   return { author: parts[0] ?? '', more: Math.max(0, parts.length - 1) };
 }
 
-export const cardNames = (b: ShelfItem): CardNames => ({ ...cardTitle(b.title, b.seriesIndex), ...cardAuthor(b.author) });
+/** A card's names; `author` is the one its series goes by, when the file credits them too. */
+export const cardNames = (b: ShelfItem, author?: string): CardNames => {
+  const a = cardAuthor(b.author);
+  return { ...cardTitle(b.title, b.seriesIndex), ...a, author: author ?? a.author };
+};

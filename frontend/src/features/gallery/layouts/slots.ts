@@ -45,5 +45,37 @@ const BY_COUNT_4: Record<number, Slot[]> = {
   9: [HERO, ...trio(3), ...quad(5), [0, 7, 4, 1, 'wide']],
 };
 
+/*
+ * Two columns, for phones. The hero, then wide cards across and tall ones in pairs, so every
+ * row is full whatever the count.
+ */
+const PHONE_HERO: Slot = [0, 0, 2, 3, 'hero'];
+const PHONE_PATTERNS: Record<number, Array<'W' | 'TT'>> = {
+  1: [],
+  2: ['W'],
+  3: ['TT'],
+  4: ['W', 'TT'],
+  5: ['W', 'TT', 'W'],
+  6: ['TT', 'W', 'TT'],
+  7: ['W', 'TT', 'W', 'TT'],
+  8: ['W', 'TT', 'W', 'TT', 'W'],
+  9: ['W', 'TT', 'W', 'TT', 'TT'],
+};
+function phone(n: number): Slot[] {
+  const out: Slot[] = [PHONE_HERO];
+  let row = 3;
+  for (const p of PHONE_PATTERNS[n]) {
+    if (p === 'W') {
+      out.push([0, row, 2, 1, 'wide']);
+      row += 1;
+    } else {
+      out.push([0, row, 1, 2, 'tall'], [1, row, 1, 2, 'tall']);
+      row += 2;
+    }
+  }
+  return out;
+}
+const BY_COUNT_2: Record<number, Slot[]> = Object.fromEntries(Array.from({ length: RECENT }, (_, i) => [i + 1, phone(i + 1)]));
+
 export const slotsFor = (n: number, cols: number): Slot[] =>
-  (cols === 4 ? BY_COUNT_4 : BY_COUNT)[Math.max(1, Math.min(RECENT, n))];
+  (cols === 4 ? BY_COUNT_4 : cols === 2 ? BY_COUNT_2 : BY_COUNT)[Math.max(1, Math.min(RECENT, n))];
