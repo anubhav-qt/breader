@@ -22,6 +22,8 @@ export interface ShelfItem extends BookRecord {
   favorite: boolean;
   /** Lets an AI read along (BookEdit.ai). */
   ai: boolean;
+  /** The genre it was added with, under the reader's own pick (`genre` is the one it's filed under). */
+  addedGenre?: string;
 }
 
 /** A removed book, kept in memory so it can be put back. */
@@ -199,6 +201,7 @@ const editToWire = (patch: BookEdit): Edit => ({
   ...('favorite' in patch ? { favorite: !!patch.favorite } : {}),
   ...('series' in patch ? { series: patch.series === undefined ? null : patch.series.trim() } : {}),
   ...('seriesIndex' in patch ? { seriesIndex: patch.seriesIndex ?? null } : {}),
+  ...('genre' in patch ? { genre: patch.genre ?? null } : {}),
   ...('ai' in patch ? { ai: !!patch.ai } : {}),
 });
 
@@ -240,6 +243,7 @@ function mergePull(d: LibraryData, pull: PullResponse, pending: Mutation[]): { n
     if (mine?.favorite !== undefined) edit.favorite = mine.favorite;
     if (mine?.series !== undefined) edit.series = mine.series ?? undefined;
     if (mine?.seriesIndex !== undefined) edit.seriesIndex = mine.seriesIndex ?? undefined;
+    if (mine?.genre !== undefined) edit.genre = mine.genre ?? undefined;
     if (mine?.ai !== undefined) edit.ai = mine.ai;
     for (const k of Object.keys(edit) as Array<keyof BookEdit>) if (edit[k] === undefined || edit[k] === false) delete edit[k];
     if (Object.keys(edit).length) edits[b.id] = edit;
@@ -409,6 +413,8 @@ async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
     ...(entry.coverId ? { coverId: entry.coverId } : {}),
     origin: entry.id,
     ...(entry.series ? { series: entry.series, seriesIndex: entry.seriesIndex } : {}),
+    // The sharer's genre is the one it comes with; the reader can pick their own.
+    ...(entry.genre ? { genre: entry.genre } : {}),
   };
   if (cover) {
     await store.set(`cover:${copy.id}`, cover);
@@ -567,6 +573,8 @@ export function withReading(
     title,
     series,
     seriesIndex: series ? e.seriesIndex ?? rec.seriesIndex : undefined,
+    genre: e.genre !== undefined ? e.genre || undefined : rec.genre,
+    addedGenre: rec.genre,
     color: normColor(e.color ?? rec.color, rec.title),
     favorite: !!e.favorite,
     ai: !!e.ai,

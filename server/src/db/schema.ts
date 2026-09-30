@@ -141,12 +141,19 @@ export const libraryItems = pgTable(
     /** The series the book's file names, and its number in it. */
     series: text('series'),
     seriesIndex: doublePrecision('series_index'),
+    /**
+     * The genre it was added with (shared genres.ts): the uploader's pick, or for a copy of a shared
+     * book the sharer's. Null is unset. Kept apart from the reader's own, so it can be refiled here.
+     */
+    genre: text('genre'),
     editTitle: text('edit_title'),
     editColor: text('edit_color'),
     favorite: boolean('favorite').notNull().default(false),
     /** The reader's own series for it: '' for none, null to go by the file. */
     editSeries: text('edit_series'),
     editSeriesIndex: doublePrecision('edit_series_index'),
+    /** The reader's own genre for it: '' for unset, null to go by the one it was added with. */
+    editGenre: text('edit_genre'),
     /** The reader lets an AI read the book along with them, for Revisit and 2 voices (ai_notes). */
     ai: boolean('ai').notNull().default(false),
     removedAt: at('removed_at'),

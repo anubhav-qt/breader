@@ -84,7 +84,7 @@ describe('sync', () => {
     await b.post('/v1/sync/push', push('laptop', { type: 'book.put', book: a }));
     await b.post('/v1/sync/push', push('laptop', { type: 'edit.put', bookId: a.id, edit: { title: 'Renamed' } }));
     await b.post('/v1/sync/push', push('phone', { type: 'edit.put', bookId: a.id, edit: { color: 'teal' } }));
-    expect((await b.get('/v1/sync/pull?since=0')).body.books[0].edit).toEqual({ title: 'Renamed', color: 'teal', favorite: false, series: null, seriesIndex: null, ai: false });
+    expect((await b.get('/v1/sync/pull?since=0')).body.books[0].edit).toEqual({ title: 'Renamed', color: 'teal', favorite: false, series: null, seriesIndex: null, genre: null, ai: false });
     await b.post('/v1/sync/push', push('phone', { type: 'edit.put', bookId: a.id, edit: { title: null } }));
     expect((await b.get('/v1/sync/pull?since=0')).body.books[0].edit.title).toBeNull();
     // The AI switch rides with the edits, and another device's rename leaves it alone.

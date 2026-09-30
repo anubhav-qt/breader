@@ -33,6 +33,8 @@ export function shelfRoutes(deps: Deps) {
         // The sharer's own series wins over the file's; '' means they took it out of one.
         series: sql<string | null>`case when ${libraryItems.editSeries} is not null then nullif(${libraryItems.editSeries}, '') else ${libraryItems.series} end`,
         seriesIndex: sql<number | null>`coalesce(${libraryItems.editSeriesIndex}, ${libraryItems.seriesIndex})`,
+        // Likewise the genre: the sharer's own pick, '' for unset, over the one it was added with.
+        genre: sql<string | null>`case when ${libraryItems.editGenre} is not null then nullif(${libraryItems.editGenre}, '') else ${libraryItems.genre} end`,
       })
       .from(libraryItems)
       .innerJoin(libraries, eq(libraries.id, libraryItems.libraryId))

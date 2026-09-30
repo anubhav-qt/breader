@@ -1,0 +1,55 @@
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { book, browser, push, registered } from './helpers.ts';
+
+type Reader = Awaited<ReturnType<typeof registered>>['b'];
+const pulled = async (b: Reader, id: string) => (await b.get('/v1/sync/pull?since=0')).body.books.find((x: { id: string }) => x.id === id);
+
+describe('genre', () => {
+  it('keeps the genre a book was added with and the reader’s own apart', async () => {
+    const { b } = await registered();
+    const a = book({ genre: 'fantasy' });
+    const res = await b.post('/v1/sync/push', push('c', { type: 'book.put', book: a }));
+    expect(res.body.rejected).toEqual([]);
+    expect(await pulled(b, a.id)).toMatchObject({ genre: 'fantasy', edit: { genre: null } });
+
+    await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: a.id, edit: { genre: 'horror' } }));
+    expect(await pulled(b, a.id)).toMatchObject({ genre: 'fantasy', edit: { genre: 'horror' } });
+    // Unset on purpose, then back to the one it came with.
+    await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: a.id, edit: { genre: '' } }));
+    expect((await pulled(b, a.id)).edit.genre).toBe('');
+    await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: a.id, edit: { genre: null } }));
+    expect((await pulled(b, a.id)).edit.genre).toBeNull();
+  });
+
+  it('keeps the genre when an app that doesn’t know genres puts the book again', async () => {
+    const { b } = await registered();
+    const a = book({ genre: 'history' });
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: a }));
+    const { genre: _, ...older } = a;
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: { ...older, line: 'Further on.' } }));
+    expect(await pulled(b, a.id)).toMatchObject({ genre: 'history', line: 'Further on.' });
+  });
+
+  it('turns away a genre that isn’t an id', async () => {
+    const { b } = await registered();
+    const res = await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book({ genre: 'Science Fiction!' }) }));
+    expect(res.status).toBe(400);
+  });
+
+  it('shows a shared book’s genre on the Shared Library, the sharer’s own first', async () => {
+    const { b } = await registered();
+    const body = Buffer.from(`genre ${Math.random()}`);
+    const ask = await b.post('/v1/uploads', { sha256: createHash('sha256').update(body).digest('hex'), size: body.length, mime: 'application/epub+zip', kind: 'book' });
+    await fetch(ask.body.upload.url, { method: 'PUT', headers: ask.body.upload.headers, body });
+    await b.post(`/v1/uploads/${ask.body.fileId}/complete`);
+    const a = book({ shared: true, fileId: ask.body.fileId, genre: 'mystery' });
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: a }));
+    const entry = async () => (await browser().get('/v1/shelf')).body.books.find((x: { id: string }) => x.id === a.id);
+    expect(await entry()).toMatchObject({ genre: 'mystery' });
+    await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: a.id, edit: { genre: 'thriller' } }));
+    expect(await entry()).toMatchObject({ genre: 'thriller' });
+    await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: a.id, edit: { genre: '' } }));
+    expect((await entry()).genre).toBeNull();
+  });
+});

@@ -79,6 +79,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           origin: b.origin ?? null,
           series: b.series?.trim() || null,
           seriesIndex: b.seriesIndex ?? null,
+          genre: b.genre ?? null,
           rev,
         })
         .onConflictDoUpdate({
@@ -101,6 +102,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             origin: sql`coalesce(excluded.origin, ${libraryItems.origin})`,
             series: sql`excluded.series`,
             seriesIndex: sql`excluded.series_index`,
+            // Set when the book is added; a later put without one (an older app) keeps it.
+            genre: sql`coalesce(excluded.genre, ${libraryItems.genre})`,
             rev,
           },
         });
@@ -143,6 +146,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
       if (m.edit.favorite !== undefined) set.favorite = m.edit.favorite;
       if (m.edit.series !== undefined) set.editSeries = m.edit.series === null ? null : m.edit.series.trim();
       if (m.edit.seriesIndex !== undefined) set.editSeriesIndex = m.edit.seriesIndex;
+      if (m.edit.genre !== undefined) set.editGenre = m.edit.genre;
       if (m.edit.ai !== undefined) set.ai = m.edit.ai;
       const done = await tx.update(libraryItems).set(set).where(item(libraryId, m.bookId)).returning({ id: libraryItems.bookId });
       if (!done.length) throw notFound();

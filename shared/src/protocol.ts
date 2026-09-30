@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GenreKey } from './genres.ts';
 import { PREFS_CHARS, SYNC } from './limits.ts';
 
 /*
@@ -51,16 +52,22 @@ export const Book = z.object({
   /** The series it belongs to, as its file says, and its number in it. */
   series: z.string().max(300).nullish(),
   seriesIndex: SeriesIndex.nullish(),
+  /** The genre whoever added it filed it under (genres.ts); left out, it's unset. */
+  genre: GenreKey.nullish(),
 });
 export type Book = z.infer<typeof Book>;
 
-/** The reader's changes to a card. null clears a rename, colour or series; '' takes a book out of its series. */
+/**
+ * The reader's changes to a card. null clears a rename, colour, series or genre; '' takes a book out
+ * of its series, or files it under no genre whatever it came with.
+ */
 export const Edit = z.object({
   title: z.string().max(500).nullable().optional(),
   color: z.string().max(32).nullable().optional(),
   favorite: z.boolean().optional(),
   series: z.string().max(300).nullable().optional(),
   seriesIndex: SeriesIndex.nullable().optional(),
+  genre: z.union([GenreKey, z.literal('')]).nullable().optional(),
   /** The reader lets an AI read the book along with them, for Revisit and 2 voices. */
   ai: z.boolean().optional(),
 });
@@ -216,6 +223,8 @@ export const ShelfBook = z.object({
   coverId: Id.nullable(),
   series: z.string().nullish(),
   seriesIndex: z.number().nullish(),
+  /** The sharer's genre for it, their own pick over the one it was added with. */
+  genre: z.string().nullish(),
 });
 export type ShelfBook = z.infer<typeof ShelfBook>;
 

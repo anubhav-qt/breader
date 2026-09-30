@@ -95,6 +95,7 @@ export function shelfRecord(b: ShelfBook): BookRecord {
     ...(b.coverId ? { coverId: b.coverId } : {}),
     ...(b.series ? { series: b.series } : {}),
     ...(b.seriesIndex != null ? { seriesIndex: b.seriesIndex } : {}),
+    ...(b.genre ? { genre: b.genre } : {}),
   };
 }
 

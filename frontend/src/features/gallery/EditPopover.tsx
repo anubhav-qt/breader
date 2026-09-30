@@ -9,6 +9,7 @@ import { springs } from '../../lib/springs';
 import { IconCheck, IconClose, IconStar, IconTrash } from '../../components/icons';
 import type { SeriesName } from './series';
 import { SeriesField, type SeriesValue } from './SeriesField';
+import { GenreField } from './GenreField';
 
 interface Props {
   book: ShelfItem;
@@ -30,8 +31,8 @@ const COLS = 7;
 const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLS, ArrowUp: -COLS };
 
 /**
- * A small popover beside the card's corner button: rename, put in a series, recolour, share, let
- * an AI read along, favourite or remove.
+ * A small popover beside the card's corner button: rename, put in a series, file under a genre,
+ * recolour, share, let an AI read along, favourite or remove.
  */
 export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onShare, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -81,6 +82,8 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       if (ref.current?.contains(e.target as Node) || anchor.contains(e.target as Node)) return;
+      // The list of genres, opened from here.
+      if ((e.target as Element).closest?.('.gp-root')) return;
       onClose();
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -165,6 +168,15 @@ export function EditPopover({ book, seriesNames, anchor, onChange, onRemove, onS
       />
       <label className="ep-label" htmlFor="ep-series">Series</label>
       <SeriesField id="ep-series" value={series} known={seriesNames} inputClass="ep-input" onChange={setSeries} onDone={commitSeries} />
+      <label className="ep-label" htmlFor="ep-genre">Genre</label>
+      <GenreField
+        id="ep-genre"
+        value={book.genre}
+        className="ep-input"
+        // A copy of a shared book comes with the sharer's genre; picking it again goes back to theirs.
+        added={book.origin || book.source === 'shelf' ? { id: book.addedGenre, label: 'Sharer’s pick' } : undefined}
+        onPick={(g) => { if (g !== (book.genre ?? '')) onChange({ genre: g === (book.addedGenre ?? '') ? undefined : g }); }}
+      />
       <div className="ep-label" id="ep-colour">Colour</div>
       <div className="ep-swatches" role="radiogroup" aria-labelledby="ep-colour" onKeyDown={onSwatchKey}>
         {BOOK_COLORS.map((c, i) => (

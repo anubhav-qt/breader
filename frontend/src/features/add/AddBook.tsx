@@ -11,6 +11,7 @@ import { springs } from '../../lib/springs';
 import { AI_LABEL, AI_WHY } from '../../books/ai';
 import { detectSeries, type FoundSeries, type SeriesName } from '../gallery/series';
 import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
+import { GenreField } from '../gallery/GenreField';
 import { FreshKey } from './FreshKey';
 import './add.css';
 
@@ -49,6 +50,8 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
   const [inSeries, setInSeries] = useState(false);
   const [readAlong, setReadAlong] = useState(false);
   const [series, setSeries] = useState<SeriesValue>({ name: '', num: '' });
+  /** '' is unset: the genre every reader of a shared copy starts with. */
+  const [genre, setGenre] = useState('');
   const [dragging, setDragging] = useState(false);
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteText, setPasteText] = useState('');
@@ -59,6 +62,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     const found = detectSeries(book.title, fileName, book.kind === 'flow' ? book.series : undefined, knownSeries);
     setInSeries(!!found);
     setSeries({ name: found?.name ?? '', num: found?.index !== undefined ? String(found.index) : '' });
+    setGenre('');
     setStep({ kind: 'decide', book, data, format, name, size, color: nextColor(), found });
   };
 
@@ -105,6 +109,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
       rec.series = name;
       if (series.num.trim() && Number.isFinite(n) && n >= 0 && n <= 10_000) rec.seriesIndex = n;
     }
+    if (genre) rec.genre = genre;
     const cover = await coverOf(book);
     book.cleanup?.();
     await onAdded(rec, data, cover, { ai: readAlong });
@@ -201,6 +206,9 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                   <i className="add-radio" />
                 </button>
               </div>
+              <label className="add-label" htmlFor="add-genre">Genre</label>
+              <GenreField id="add-genre" value={genre} className="add-input" onPick={setGenre} />
+              {shared && <span className="add-found">Readers on the Shared Library start with your genre, and can pick their own.</span>}
               <div className="add-switch">
                 <span className="add-label" id="add-series">Part of a series</span>
                 <button type="button" className="switch" role="switch" aria-checked={inSeries} aria-labelledby="add-series" onClick={() => setInSeries(!inSeries)} />

@@ -173,6 +173,7 @@ export function toWire(r: BookRecord): Book {
     ...(r.origin ? { origin: r.origin } : {}),
     ...(r.series ? { series: clip(r.series, 300) } : {}),
     ...(r.seriesIndex !== undefined ? { seriesIndex: r.seriesIndex } : {}),
+    ...(r.genre ? { genre: r.genre } : {}),
   };
 }
 
@@ -199,6 +200,7 @@ export function fromWire(b: SyncedBook, local?: BookRecord): BookRecord {
     ...(b.origin ?? local?.origin ? { origin: b.origin ?? local?.origin } : {}),
     ...(b.series ? { series: b.series } : {}),
     ...(b.seriesIndex != null ? { seriesIndex: b.seriesIndex } : {}),
+    ...(b.genre ? { genre: b.genre } : {}),
   };
 }
 
@@ -209,6 +211,7 @@ export function editFromWire(e: SyncedBook['edit']): BookEdit | null {
   if (e.favorite) out.favorite = true;
   if (e.series != null) out.series = e.series;
   if (e.seriesIndex != null) out.seriesIndex = e.seriesIndex;
+  if (e.genre != null) out.genre = e.genre;
   if (e.ai) out.ai = true;
   return Object.keys(out).length ? out : null;
 }
@@ -302,7 +305,7 @@ async function queueSnapshotLocked() {
   const muts: NewMutation[] = mine.map((r) => ({ type: 'book.put', book: resend && !r.origin ? { ...toWire(r), fileId: null, coverId: null } : toWire(r) }));
   for (const [bookId, read] of Object.entries(reads)) if (ids.has(bookId)) muts.push({ type: 'read.put', bookId, read: readToWire(read) });
   for (const [bookId, e] of Object.entries(edits)) {
-    if (ids.has(bookId)) muts.push({ type: 'edit.put', bookId, edit: { title: e.title?.trim() || null, color: e.color ?? null, favorite: !!e.favorite, series: e.series ?? null, seriesIndex: e.seriesIndex ?? null, ai: !!e.ai } });
+    if (ids.has(bookId)) muts.push({ type: 'edit.put', bookId, edit: { title: e.title?.trim() || null, color: e.color ?? null, favorite: !!e.favorite, series: e.series ?? null, seriesIndex: e.seriesIndex ?? null, genre: e.genre ?? null, ai: !!e.ai } });
   }
   const prefs = readLocal<Record<string, unknown> | null>(SETTINGS, null);
   if (prefs) muts.push({ type: 'settings.put', prefs });

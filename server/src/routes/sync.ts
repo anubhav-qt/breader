@@ -116,7 +116,8 @@ export function syncRoutes(deps: Deps) {
             ...(i.origin ? { origin: i.origin } : {}),
             ...(i.series ? { series: i.series } : {}),
             ...(i.seriesIndex !== null ? { seriesIndex: i.seriesIndex } : {}),
-            edit: { title: i.editTitle, color: i.editColor, favorite: i.favorite, series: i.editSeries, seriesIndex: i.editSeriesIndex, ai: i.ai },
+            ...(i.genre ? { genre: i.genre } : {}),
+            edit: { title: i.editTitle, color: i.editColor, favorite: i.favorite, series: i.editSeries, seriesIndex: i.editSeriesIndex, genre: i.editGenre, ai: i.ai },
             removedAt: ms(i.removedAt),
           })),
           reads: reads.map((s) => ({
