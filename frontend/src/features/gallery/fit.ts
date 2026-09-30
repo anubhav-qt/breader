@@ -42,54 +42,6 @@ function over(el: HTMLElement): boolean {
   return lines > shown;
 }
 
-/*
- * Chrome sometimes draws a size far too big. Every face is scaled to one x-height (global.css), so
- * the reading face is drawn at about 5/3 of its size, and when that lands exactly on a size other
- * text already uses (a 19.2px title on the squares' 32px), Chrome's font cache hands back that
- * text's face, scaled already: the title is scaled twice and its lines pile up. So how tall a size
- * is drawn is checked against a size nothing else uses, and one drawn too big is set a tenth of a
- * pixel smaller. The sizes set here end in .x5 (23.95px): 5/3 of one is never a size set in whole
- * or tenths of a pixel, so a title set here never lands on the size of a heading, or of a title
- * the fitting left alone, and scales it twice.
- */
-const trueScale = new Map<string, number>();
-
-/** How tall `el`'s text is drawn for each pixel of its size. */
-function drawnScale(el: HTMLElement, size: number): number {
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const box = range.getClientRects()[0];
-  return box ? box.height / size : 0;
-}
-
-/** Whether `el`'s text is drawn well over its size's true height. */
-function swollen(el: HTMLElement): boolean {
-  const cs = getComputedStyle(el);
-  const face = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontFamily}`;
-  let scale = trueScale.get(face);
-  if (!scale) {
-    const probe = document.createElement('span');
-    probe.style.cssText = 'position: absolute; visibility: hidden; white-space: nowrap; font-size: 97.31px';
-    Object.assign(probe.style, { fontStyle: cs.fontStyle, fontWeight: cs.fontWeight, fontFamily: cs.fontFamily });
-    probe.textContent = 'Hx';
-    document.body.append(probe);
-    scale = drawnScale(probe, 97.31);
-    probe.remove();
-    // Only kept once the fonts are in: until then the probe may be drawn in a fallback face.
-    if (document.fonts.status === 'loaded') trueScale.set(face, scale);
-  }
-  return drawnScale(el, parseFloat(cs.fontSize)) > scale * 1.25;
-}
-
-/** Sets `els` to the .x5 size at or under `px`, a tenth of a pixel smaller while Chrome draws it too big. */
-function setSize(els: HTMLElement[], px: number) {
-  let size = Math.floor(px * 10 - 0.5) + 0.5;
-  for (let i = 0; i < 4; i++, size--) {
-    els.forEach((el) => el.style.setProperty('font-size', `${size / 10}px`));
-    if (!swollen(els[0])) return;
-  }
-}
-
 function textNode(el: HTMLElement): Text | null {
   const t = el.firstChild;
   return t && t.nodeType === Node.TEXT_NODE ? (t as Text) : null;
@@ -166,9 +118,8 @@ function underLines(el: HTMLElement): number {
  */
 function fitTitles(titles: HTMLElement[]) {
   const t = titles[0];
-  const set = (px: number) => setSize(titles, px);
+  const set = (px: number) => titles.forEach((el) => el.style.setProperty('font-size', `${Math.floor(px * 10) / 10}px`));
   const base = parseFloat(getComputedStyle(t).fontSize);
-  if (swollen(t)) set(base);
   for (let i = 0; i < 3; i++) {
     const cs = getComputedStyle(t);
     const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
@@ -202,11 +153,6 @@ export function fitCard(tile: HTMLElement | null) {
   }
   const titles = all.filter((el) => el.classList.contains('t-title') && el.offsetParent);
   if (titles.length) fitTitles(titles);
-  // The rest keep their size, unless Chrome draws it too big (see swollen).
-  for (const cls of ['t-line', 'c-sub', 'mc-title']) {
-    const els = all.filter((el) => el.classList.contains(cls) && el.offsetParent);
-    if (els.length && swollen(els[0])) setSize(els, parseFloat(getComputedStyle(els[0]).fontSize));
-  }
   // What sits under the title takes the lines left, measured on the first face that shows it.
   const under = new Map<string, number>();
   for (const el of all) {

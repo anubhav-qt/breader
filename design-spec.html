@@ -700,7 +700,7 @@ footer p { margin: 0; }
           <div class="spec r">Alice was beginning</div>
           <p style="margin:12px 0 0;font-size:26px;line-height:1.35">It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.</p>
           <ul>
-            <li>Dongle’s letters are small for their size, so every face is set with <code class="u" style="font-size:13px">font-size-adjust: 0.5</code>. A size of 20 means the same x-height in every typeface.</li>
+            <li>Dongle’s letters are small for their size, so every face is scaled to an x-height of half its size, with <code class="u" style="font-size:13px">size-adjust</code> in its <code class="u" style="font-size:13px">@font-face</code> (frontend/src/styles/fonts.css). A size of 20 means the same x-height in every typeface. Not <code class="u" style="font-size:13px">font-size-adjust</code>: Chrome draws some sizes twice scaled with it, and breaks drop caps.</li>
             <li>400 for text, 700 for titles, line height 1.3 to 1.65.</li>
             <li>Other faces in Appearance: Oxanium, Literata, EB Garamond and Atkinson Hyperlegible. The list grows as we add faces, and the panel scrolls.</li>
           </ul>

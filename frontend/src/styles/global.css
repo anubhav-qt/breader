@@ -1,9 +1,5 @@
 *, *::before, *::after { box-sizing: border-box; }
 
-/* Every face is normalised to one x-height, so Dongle (x-height 0.28) sits level with Doto (0.5)
-   and a text size means the same thing in every typeface. !important because `font` resets it. */
-* { font-size-adjust: 0.5 !important; }
-
 html, body, #root { height: 100%; }
 /* Taps show their own pressed states, so phones don't flash a grey box over what was tapped. */
 html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
