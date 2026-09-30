@@ -353,6 +353,8 @@
   position: fixed;
   z-index: 75;
   display: grid;
+  /* One column the popover's width: a long genre's name shortens rather than widening it. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 14px;
   border-radius: 16px;
