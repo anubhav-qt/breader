@@ -233,13 +233,17 @@ const audio = () => {
   return element;
 };
 
-/** 16-bit mono WAV. */
-export function wav(samples: Float32Array, rate: number): Blob {
-  const buf = new ArrayBuffer(44 + samples.length * 2);
+/**
+ * 16-bit mono WAV, after `lead` samples of the faintest sound 16 bits can make (one step either
+ * way, far below hearing): not silence, which some speakers and headphones turn themselves down for.
+ */
+export function wav(samples: Float32Array, rate: number, lead = 0): Blob {
+  const n = lead + samples.length;
+  const buf = new ArrayBuffer(44 + n * 2);
   const v = new DataView(buf);
   const text = (at: number, str: string) => { for (let i = 0; i < str.length; i++) v.setUint8(at + i, str.charCodeAt(i)); };
   text(0, 'RIFF');
-  v.setUint32(4, 36 + samples.length * 2, true);
+  v.setUint32(4, 36 + n * 2, true);
   text(8, 'WAVE');
   text(12, 'fmt ');
   v.setUint32(16, 16, true);
@@ -250,9 +254,27 @@ export function wav(samples: Float32Array, rate: number): Blob {
   v.setUint16(32, 2, true);
   v.setUint16(34, 16, true);
   text(36, 'data');
-  v.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true);
+  v.setUint32(40, n * 2, true);
+  for (let i = 0; i < lead; i++) v.setInt16(44 + i * 2, Math.random() < 0.5 ? -1 : 1, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + (lead + i) * 2, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true);
   return new Blob([buf], { type: 'audio/wav' });
+}
+
+/*
+ * The voices start speaking within a few thousandths of a second of their sound's start (some
+ * straight away), and a new sound can take longer than that to be heard: a phone or Safari
+ * starting it, or a speaker coming back up after the gap between two sentences. Whatever didn't
+ * make it was the sentence's first sounds. So every sentence gets at least this long before its
+ * first word.
+ */
+const LEAD = 0.15;
+
+/** How many samples to put before a sentence's sound for LEAD, counting the quiet it starts with. */
+export function leadOf(x: Float32Array, rate: number) {
+  const want = Math.round(LEAD * rate);
+  let i = 0;
+  while (i < want && i < x.length && Math.abs(x[i]) < 0.01) i++;
+  return want - i;
 }
 
 let silence: string | null = null;
@@ -276,6 +298,7 @@ export function unlock() {
  * Chrome and Firefox give the media keys, a headset's button and their own media controls only to
  * a page playing something longer than a few seconds (five, in Chrome), and many sentences are
  * shorter. So while it reads, a second element loops a few seconds of silence to keep hold of them.
+ * Near silence (wav's lead), so the speakers never hear nothing between two sentences either.
  * Safari gives them to the voice as it is, and an iPhone might let the silence cut the voice off,
  * so it's left out there (every browser on an iPhone is Safari underneath).
  */
@@ -290,7 +313,7 @@ export function hold(on: boolean) {
   if (safari) return;
   if (!on) { carrier?.pause(); return; }
   if (!carrier) {
-    quiet ??= URL.createObjectURL(wav(new Float32Array(8000 * 6), 8000));
+    quiet ??= URL.createObjectURL(wav(new Float32Array(0), 8000, 8000 * 6));
     carrier = new Audio(quiet);
     carrier.loop = true;
   }
@@ -306,14 +329,14 @@ export function letGoKeys() {
   carrier = null;
 }
 
-let current: { clip: Clip; a: HTMLAudioElement } | null = null;
+let current: { clip: Clip; a: HTMLAudioElement; lead: number } | null = null;
 
 /** How loud the voice is right now, 0 to 1, for things that move with it. */
 export function level() {
   const p = current;
   if (!p || p.a.paused) return 0;
   const { audio: x, rate } = p.clip;
-  const mid = Math.floor(p.a.currentTime * rate);
+  const mid = Math.floor(p.a.currentTime * rate) - p.lead;
   let sum = 0;
   let n = 0;
   for (let i = Math.max(0, mid - 512); i < Math.min(x.length, mid + 512); i++, n++) sum += x[i] * x[i];
@@ -335,14 +358,15 @@ export interface Playing {
 /** Plays a sentence's sound. `volume` below 1 is a fade (ignored by iPhones, which keep their own). */
 export function play(clip: Clip, volume = 1): Playing {
   const a = audio();
-  const url = URL.createObjectURL(wav(clip.audio, clip.rate));
+  const lead = leadOf(clip.audio, clip.rate);
+  const url = URL.createObjectURL(wav(clip.audio, clip.rate, lead));
   const length = clip.audio.length / clip.rate;
   let stopped = false;
   let started = false;
   a.src = url;
   a.volume = volume;
-  current = { clip, a };
-  const out: Playing = { done: null!, refusal: null, time: () => Math.min(1, a.currentTime / length), stop: () => {} };
+  current = { clip, a, lead };
+  const out: Playing = { done: null!, refusal: null, time: () => Math.max(0, Math.min(1, (a.currentTime - lead / clip.rate) / length)), stop: () => {} };
   out.done = new Promise((resolve) => {
     let settled = false;
     const finish = (how: 'ended' | 'stopped' | 'paused' | 'refused') => {
