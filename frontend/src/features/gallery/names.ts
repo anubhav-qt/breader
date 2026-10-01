@@ -15,7 +15,8 @@ export interface CardNames {
   more: number;
 }
 
-const VOL = /^(.+?)(?:\s*[,:(\-–—]\s*|\s+)(?:vol(?:ume)?\.?|book|part|no\.|#)\s*(\d{1,3})\)?(?:\s*[:\-–—.]\s*(.+))?$/i;
+/** "Name, Vol. 1 (light novel): Subtitle": a format's note may sit between the number and the rest. */
+const VOL = /^(.+?)(?:\s*[,:(\-–—]\s*|\s+)(?:vol(?:ume)?\.?|book|part|no\.|#)\s*(\d{1,3})\)?(?:\s*[([][^()[\]]*[)\]])*(?:\s*[:\-–—.]\s*(.+))?$/i;
 const TRAILING = /\s*[([]([^()[\]]+)[)\]]\s*$/;
 const SUBTITLE = /^(.+?)(?::\s+|;\s*or,?\s+|\s+[-–—]\s+)(.+)$/;
 const CREDIT = /\s*[([]?\b(?:illustrat(?:or|ed by|ions? by)|translat(?:or|ed by)|edit(?:or|ed by)|ed\.|trans\.|foreword)\b.*$/i;

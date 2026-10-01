@@ -22,6 +22,7 @@ import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
 import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesNames } from './features/gallery/series';
+import { fillGaps, genreFor } from './features/gallery/fill';
 import { Reader } from './features/reader/Reader';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
@@ -231,9 +232,12 @@ export default function App() {
       case 'mixed': mine = view(previewSets.mixed); break;
       default: mine = liveMine;
     }
-    return { mine, shelf: onShelf };
+    // Blank series, numbers and genres filled in from the rest of both libraries, and one name a series.
+    const filled = fillGaps([...mine, ...onShelf]);
+    return { mine: filled.slice(0, mine.length), shelf: filled.slice(mine.length) };
   }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, shelf.covers, sharedRecords, previewSets, preview, hidden]);
   const allSeries = useMemo(() => seriesNames([...items.mine, ...items.shelf]), [items]);
+  const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...items.mine, ...items.shelf], b), [items]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
   const finishOpen = useCallback((id: string) => {
@@ -400,6 +404,8 @@ export default function App() {
         // What the Add a book dialog would have filled in, taken as it is.
         const found = detectSeries(book.title, file.name, book.kind === 'flow' ? book.series : undefined, allSeries);
         if (found) Object.assign(rec, { series: found.name, seriesIndex: found.index });
+        const genre = guessGenre({ author: rec.author, series: found?.name, subjects: book.kind === 'flow' ? book.subjects : undefined });
+        if (genre) rec.genre = genre;
         const cover = await coverOf(book);
         book.cleanup?.();
         await lib.addBook(rec, file, cover);
@@ -417,7 +423,7 @@ export default function App() {
         say(`Breader couldn’t read “${file.name}”`);
       }
     }
-  }, [lib, say, allSeries]);
+  }, [lib, say, allSeries, guessGenre]);
 
   useEffect(() => {
     if (route.name !== 'library') return;
@@ -604,6 +610,7 @@ export default function App() {
             nextColor={lib.nextColor}
             defaultShared={tab === 'shelf'}
             knownSeries={allSeries}
+            genreFor={guessGenre}
             onClose={() => setAdding(null)}
             onAdded={onAdded}
             onKey={lib.setKey}

@@ -9,7 +9,7 @@ import { recordFromBook } from '../../books/record';
 import { newLibraryKey } from '../../lib/key';
 import { springs } from '../../lib/springs';
 import { AI_LABEL, AI_WHY } from '../../books/ai';
-import { detectSeries, type FoundSeries, type SeriesName } from '../gallery/series';
+import { detectSeries, spellSeries, type FoundSeries, type SeriesName } from '../gallery/series';
 import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
 import { GenreField } from '../gallery/GenreField';
 import { FreshKey } from './FreshKey';
@@ -33,6 +33,8 @@ interface Props {
   defaultShared?: boolean;
   /** Every series in either library, offered as a series name is typed. */
   knownSeries: SeriesName[];
+  /** The genres to start from: its series', its author's, or what its file says (gallery/fill.ts). */
+  genreFor: (book: { author: string; series?: string; subjects?: string[] }) => string;
   onClose: () => void;
   /** `ai`: the reader let an AI read along with them (books/ai.ts). */
   onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean }) => Promise<void>;
@@ -44,7 +46,7 @@ interface Props {
 const MB = 1024 * 1024;
 const sizeText = (b: number) => (b >= MB ? `${(b / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultShared = false, knownSeries, onClose, onAdded, onKey, onLogin }: Props) {
+export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultShared = false, knownSeries, genreFor, onClose, onAdded, onKey, onLogin }: Props) {
   const [step, setStep] = useState<Step>(initialMode === 'paste' ? { kind: 'paste' } : { kind: 'choose' });
   const [shared, setShared] = useState(defaultShared);
   const [inSeries, setInSeries] = useState(false);
@@ -57,12 +59,12 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
   const [pasteText, setPasteText] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
 
-  /** On to choosing who can read it, with the series found in the book already filled in. */
+  /** On to choosing who can read it, with the series and genres found for the book already filled in. */
   const decide = (book: LoadedBook, data: Blob | string, format: Format, name: string, size: number, fileName?: string) => {
     const found = detectSeries(book.title, fileName, book.kind === 'flow' ? book.series : undefined, knownSeries);
     setInSeries(!!found);
     setSeries({ name: found?.name ?? '', num: found?.index !== undefined ? String(found.index) : '' });
-    setGenre('');
+    setGenre(genreFor({ author: book.author, series: found?.name, subjects: book.kind === 'flow' ? book.subjects : undefined }));
     setStep({ kind: 'decide', book, data, format, name, size, color: nextColor(), found });
   };
 
@@ -101,7 +103,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     const { book, data, format, color } = step;
     const rec = recordFromBook(book, format, shared, color);
     // Standalone unless it's in a series, whatever its file says.
-    const name = inSeries ? series.name.trim() : '';
+    const name = inSeries ? spellSeries(series.name.trim(), knownSeries) : '';
     const n = Number(series.num.trim().replace(',', '.'));
     delete rec.series;
     delete rec.seriesIndex;

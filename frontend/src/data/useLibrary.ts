@@ -24,6 +24,10 @@ export interface ShelfItem extends BookRecord {
   ai: boolean;
   /** The genres it was added with, under the reader's own picks (`genre` is what it's filed under). */
   addedGenre?: string;
+  /** Set by the reader in the edit popover, which a guess never replaces. */
+  own?: { series?: boolean; genre?: boolean };
+  /** Filled in from its title and the books like it as it's shown (gallery/fill.ts), not saved. */
+  guessed?: { series?: boolean; index?: boolean; genre?: boolean };
 }
 
 /** A removed book, kept in memory so it can be put back. */
@@ -589,6 +593,7 @@ export function withReading(
     seriesIndex: series ? e.seriesIndex ?? rec.seriesIndex : undefined,
     genre: e.genre !== undefined ? e.genre || undefined : rec.genre,
     addedGenre: rec.genre,
+    ...(e.series !== undefined || e.genre !== undefined ? { own: { series: e.series !== undefined, genre: e.genre !== undefined } } : {}),
     color: normColor(e.color ?? rec.color, rec.title),
     favorite: !!e.favorite,
     ai: !!e.ai,

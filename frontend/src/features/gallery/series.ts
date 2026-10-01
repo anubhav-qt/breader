@@ -19,7 +19,7 @@ const inOrder = (a: ShelfItem, b: ShelfItem) =>
 export function findSeries(books: ShelfItem[], min = 2): Map<string, Series> {
   const groups = new Map<string, ShelfItem[]>();
   for (const b of books) {
-    const name = b.series?.trim().toLowerCase();
+    const name = b.series?.trim() && seriesKey(b.series);
     if (name) groups.set(name, [...(groups.get(name) ?? []), b]);
   }
   const out = new Map<string, Series>();
@@ -101,7 +101,7 @@ export function seriesNames(books: ShelfItem[]): SeriesName[] {
     const id = b.origin ?? b.id;
     if (!name || seen.has(id)) continue;
     seen.add(id);
-    const key = name.toLowerCase();
+    const key = seriesKey(name);
     const s = spellings.get(key) ?? new Map<string, number>();
     s.set(name, (s.get(name) ?? 0) + 1);
     spellings.set(key, s);
@@ -113,7 +113,30 @@ export function seriesNames(books: ShelfItem[]): SeriesName[] {
 }
 
 /** Lowercase, with accents set aside, so "Emile" finds "Émile". */
-const plain = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+export const plain = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+/** What a file adds after a series' name about its format: "(Light Novel)", "[Manga]". */
+const FORMAT = /\s*[([](?:light novels?|ln|novels?|manga|web novel|series)[)\]]\s*$/i;
+
+/** A series' name without the file's note on its format. */
+export const tidySeries = (name: string) => name.replace(FORMAT, '').trim() || name.trim();
+
+/**
+ * What tells one series from another, whoever spelled it: "The Wheel of Time", "Wheel of Time
+ * Series" and "wheel-of-time" are one.
+ */
+export function seriesKey(name: string) {
+  const key = plain(tidySeries(name))
+    .replace(/&/g, ' and ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .replace(/^(?:the|a|an) /, '')
+    .replace(/ (?:series|saga|trilogy|light novels?|novels?)$/, '');
+  return key || plain(name.trim());
+}
+
+/** A series' name as the library already spells it, for a book joining it. */
+export const spellSeries = (name: string, known: SeriesName[]) => known.find((s) => seriesKey(s.name) === seriesKey(name))?.name ?? name;
 
 /**
  * The series that match what's typed: names that start with it first, then those with a word that
@@ -157,24 +180,29 @@ const TRAILING = new RegExp(String.raw`[(\[]\s*([^()\[\]]+?)\s*,?\s*${MARK}\s*${
 const LEADING = new RegExp(String.raw`^\s*(.+?)\s*,?\s+${MARK}\s*${NUM}\s*[:.${DASH}]\s+\S`, 'i');
 /** "Discworld 05 - Sourcery": only trusted for a series the library already has. */
 const BARE = new RegExp(String.raw`^\s*(.+?)\s+${NUM}\s+[${DASH}]\s+\S`, 'i');
+/**
+ * "The Empty Box and Zeroth Maria, Vol. 5 (light novel)", "Mistborn #2", "Name, Book 3: Sub". A bare
+ * "Book 2" needs the comma, or "The Jungle Book 2" would be a series.
+ */
+const ENDING = new RegExp(String.raw`^\s*(.+?)(?:\s*,\s*${MARK}|\s+(?:#|vol\.?|volume))\s*${NUM}(?:\s*[(\[][^()\[\]]*[)\]])*\s*(?:[:.${DASH}]\s*\S.*)?$`, 'i');
 
 /**
  * The series a new book is in: what its file says, or failing that what its title or file name
  * say, spelled the way the library already spells it.
  */
 export function detectSeries(title: string, fileName: string | undefined, fromFile: { name: string; index?: number } | undefined, known: SeriesName[]): FoundSeries | null {
-  const spelled = (name: string) => known.find((s) => plain(s.name) === plain(name))?.name;
+  const spelled = (name: string) => known.find((s) => seriesKey(s.name) === seriesKey(name))?.name;
   if (fromFile?.name.trim()) {
-    const name = fromFile.name.trim();
+    const name = tidySeries(fromFile.name);
     return { name: spelled(name) ?? name, index: fromFile.index, from: 'file' };
   }
   const stem = fileName?.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[_]+/g, ' ');
   for (const text of [title, stem]) {
     if (!text) continue;
-    for (const re of [TRAILING, LEADING, BARE]) {
+    for (const re of [TRAILING, ENDING, LEADING, BARE]) {
       const m = re.exec(text);
       if (!m) continue;
-      const name = m[1].trim();
+      const name = tidySeries(m[1]);
       const known = spelled(name);
       if (re === BARE && !known) continue;
       if (name.length < 2 || /^\d+$/.test(name)) continue;

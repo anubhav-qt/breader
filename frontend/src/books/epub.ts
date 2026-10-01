@@ -218,6 +218,7 @@ export async function parseEpub(data: Blob | ArrayBuffer, fallbackTitle: string)
     words: sections.reduce((n, s) => n + s.words, 0),
     cover,
     series: seriesOf(opf),
+    subjects: byTag(opf, 'subject').flatMap((m) => m.textContent?.trim() || []),
     cleanup: () => urls.forEach((u) => URL.revokeObjectURL(u)),
   };
 }

@@ -7,7 +7,7 @@ import { BOOK_COLORS, colorVars } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
 import { IconCheck, IconClose, IconStar, IconTrash } from '../../components/icons';
-import type { SeriesName } from './series';
+import { seriesKey, spellSeries, type SeriesName } from './series';
 import { SeriesField, type SeriesValue } from './SeriesField';
 import { genreIds, joinGenres } from '@breader/shared/genres';
 import { GenreField } from './GenreField';
@@ -42,7 +42,8 @@ const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown:
  */
 function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
   if (genres === joinGenres(genreIds(b.genre))) return undefined;
-  return { genre: genres === joinGenres(genreIds(b.addedGenre)) ? undefined : genres };
+  // Over a guess (gallery/fill.ts), what's picked is kept, even nothing.
+  return { genre: !b.guessed?.genre && genres === joinGenres(genreIds(b.addedGenre)) ? undefined : genres };
 }
 
 /**
@@ -73,10 +74,13 @@ export function EditPopover({ book, seriesNames, anchor, others = [], onChange, 
     if (t && t !== book.title) onChange({ title: t });
     if (!t) setName(book.title);
   };
-  // An empty name takes the book out of its series; an empty number leaves it unnumbered.
+  // An empty name takes the book out of its series; an empty number leaves it unnumbered. A book
+  // joining a series takes the library's spelling of it; one already in it can spell it anew.
   const commitSeries = (v = series) => {
     if (removing.current) return;
-    const s = v.name.trim();
+    const typed = v.name.trim();
+    const s = !typed || seriesKey(typed) === seriesKey(book.series ?? '') ? typed : spellSeries(typed, seriesNames);
+    if (s !== typed) setSeries({ ...v, name: s });
     const n = v.num.trim() === '' ? undefined : Number(v.num.replace(',', '.'));
     const patch: BookEdit = {};
     if (s !== (book.series ?? '')) patch.series = s;
@@ -85,6 +89,8 @@ export function EditPopover({ book, seriesNames, anchor, others = [], onChange, 
     } else {
       setSeries({ ...v, num: numText });
     }
+    // A number only stays with a series that's saved, not one guessed from the title.
+    if (book.guessed?.series && 'seriesIndex' in patch && !('series' in patch)) patch.series = s;
     if (Object.keys(patch).length) onChange(patch);
   };
   // A rename in progress is kept however the popover closes.

@@ -26,6 +26,8 @@ export interface FlowBook {
   cover?: Blob;
   /** The series the file says it belongs to. */
   series?: { name: string; index?: number };
+  /** What the file says it's about, as a shop shelves it: "Fiction / Fantasy / Epic". */
+  subjects?: string[];
   cleanup?: () => void;
 }
 
