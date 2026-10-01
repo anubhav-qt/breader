@@ -4,7 +4,7 @@ import { COMMENT_CHARS, NAME_CHARS } from '@breader/shared/comments';
 import { ApiError } from '../../../lib/api';
 import { censorName, censorText, nameIsCensored } from '../../../lib/censor';
 import { springs } from '../../../lib/springs';
-import { chapterName, pad2, type Chapter } from '../chapters';
+import { chapterName, type Chapter } from '../chapters';
 import { ago, BOOK_THREAD, checkName, openThread, postComment, removeComment, type BookComment, type Talk } from '../comments';
 import { CloseDots, DotIcon } from './parts';
 import { TALK } from './icons';
@@ -24,10 +24,11 @@ export interface TalkView {
 }
 
 const many = (n: number) => (n === 1 ? '1 comment' : `${n} comments`);
-/** A short look at the newest comment, as cards and tails show it. */
+/** A short look at the newest comment, as cards and tails show it, in quotes unless it starts with its own. */
 const glimpse = (body: string) => {
   const t = censorText(body).replace(/\s+/g, ' ').trim();
-  return t.length > 90 ? `${t.slice(0, 88).trimEnd()}…` : t;
+  const short = t.length > 90 ? `${t.slice(0, 88).trimEnd()}…` : t;
+  return /^["“‘']/.test(short) ? short : `“${short}”`;
 };
 
 /** One thread: its comments, oldest first, and a place to add one. */
@@ -171,7 +172,7 @@ function Composer({ thread, talk, readTo, section }: TalkView & { section: numbe
             className={`vs-input cm-name${check && check.name === typed ? (check.free ? ' is-free' : ' is-taken') : ''}`}
             value={name}
             onChange={(e) => setName(e.target.value.slice(0, NAME_CHARS.max))}
-            placeholder="Your name"
+            placeholder="Name"
             autoComplete="nickname"
             spellCheck={false}
             aria-label="Your name for comments"
@@ -188,7 +189,7 @@ function Composer({ thread, talk, readTo, section }: TalkView & { section: numbe
           maxLength={COMMENT_CHARS}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={onKey}
-          placeholder={section === BOOK_THREAD ? 'Say something about the book' : 'Say something about this chapter'}
+          placeholder="Say something"
           enterKeyHint="send"
           aria-label="Your comment"
         />
@@ -280,7 +281,7 @@ export function PassingCard({ view, chapters, card, onOpen, onClose }: {
   }, [card, held, onClose]);
   const info = card ? view.talk.threads.get(card.section) : undefined;
   const i = card ? chapters.findIndex((c) => c.section === card.section) : -1;
-  const where = !card ? '' : card.section === BOOK_THREAD ? 'The whole book' : chapters.length > 1 ? `Ch. ${pad2(i + 1)}` : 'This chapter';
+  const where = !card ? '' : card.section === BOOK_THREAD ? 'The whole book' : chapters.length > 1 ? chapterName(chapters, i) : 'This chapter';
   return (
     <AnimatePresence>
       {card && view.talk.state === 'ready' && (
@@ -297,10 +298,11 @@ export function PassingCard({ view, chapters, card, onOpen, onClose }: {
           <button type="button" className="cm-card-b" onClick={() => onOpen(card.section)}>
             <span className="cm-card-h">
               <DotIcon rows={TALK} />
-              {where} · {info ? many(info.count) : 'no comments yet'}
+              <span className="cm-card-w">{where}</span>
+              <span className="cm-card-n">{info ? many(info.count) : 'no comments yet'}</span>
             </span>
             <span className="cm-card-t">
-              {info ? <>“{glimpse(info.last.body)}”<em> · {censorName(info.last.name)}</em></> : 'Be the first to say something.'}
+              {info ? <>{glimpse(info.last.body)}<em> · {censorName(info.last.name)}</em></> : 'Be the first to say something.'}
             </span>
           </button>
           {card.stay && <CloseDots onClick={onClose} />}
@@ -342,7 +344,7 @@ function TailLine({ view, section, label, open }: { view: TalkView; section: num
   const preview: ReactNode = !open
     ? 'Opens once you’ve read to the end of this chapter.'
     : info
-      ? <>“{glimpse(info.last.body)}”<em> · {censorName(info.last.name)}</em></>
+      ? <>{glimpse(info.last.body)}<em> · {censorName(info.last.name)}</em></>
       : 'Nothing yet. Be the first to say something.';
   return (
     <div className={`cm-tail-one${shown ? ' is-open' : ''}`}>

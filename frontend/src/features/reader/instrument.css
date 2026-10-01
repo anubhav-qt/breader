@@ -759,7 +759,7 @@
 .cm-say { position: sticky; bottom: 0; padding: 12px 0 2px; background: var(--r-bg); }
 .cm-say-row { display: flex; align-items: flex-end; gap: 6px; }
 .cm-say .vs-input { font-size: 20px; }
-.cm-name { flex: 0 1 34%; min-width: 84px; }
+.cm-name { flex: 0 1 26%; min-width: 72px; }
 .cm-name.is-free { box-shadow: inset 0 0 0 1.5px var(--book-mark); }
 .cm-name.is-taken { box-shadow: inset 0 0 0 1.5px var(--r-fg); }
 .cm-me { flex: 0 1 auto; max-width: 34%; height: 40px; display: flex; align-items: center; padding: 0 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 20px/1 var(--read); color: var(--book-mark); }
@@ -783,7 +783,9 @@
 .cm-card .i3-x { top: 6px; right: 6px; }
 .cm-card-b { width: 100%; display: grid; gap: 8px; padding: 13px 16px 15px; text-align: left; }
 .cm-card-h { display: flex; align-items: center; gap: 8px; padding-right: 28px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--book-mark); }
-.cm-card-h .i3-dots-icon { font-size: 13px; }
+.cm-card-h .i3-dots-icon { flex: none; font-size: 13px; }
+.cm-card-w { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-card-n { flex: none; margin-left: auto; color: var(--r-mu); }
 .cm-card-t { font: 20px/1.12 var(--read); color: var(--r-fg); overflow-wrap: anywhere; }
 .cm-card-t em, .cm-tail-p em { font-style: normal; color: var(--r-mu); }
 
@@ -802,6 +804,9 @@
 .cm-tail-p { font: 20px/1.15 var(--read); color: var(--r-mu); overflow-wrap: anywhere; }
 .cm-tail .cm-say { position: static; background: none; }
 .cm-tail .cm-c { padding: 10px 0; }
+/* In Immersive it steps back with the text, until it's pointed at or written in. */
+.fv-flow .fv-aside { transition: opacity 600ms ease; }
+.rd.is-immersed .fv-flow .fv-aside:not(:hover, :focus-within) { opacity: 0.5; }
 /* Paged, the turn zones keep to the margins while the tail is on the page, so it takes taps. */
 .fv.is-aside .fv-zone { width: max(44px, calc(50% - var(--vw) / 2)); }
 
