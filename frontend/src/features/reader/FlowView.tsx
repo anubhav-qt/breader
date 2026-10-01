@@ -1,5 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
-import { flushSync } from 'react-dom';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { printOf } from '@breader/shared/ai';
 import type { FlowBook, Position } from '../../books/types';
@@ -79,6 +79,11 @@ interface Props {
   numbered?: boolean;
   /** The line of controls above the text is showing, over the top of a scrolled page. */
   head?: boolean;
+  /**
+   * What goes after a chapter's text, on its page but not part of the book (comments): never
+   * read, lit or stopped at (dom.ts ASIDE). Null for none.
+   */
+  aside?: (section: number) => ReactNode;
 }
 
 const PAGE_SPRING = { type: 'spring', stiffness: 158, damping: 25.1, mass: 1 } as const;
@@ -133,7 +138,7 @@ function resolveStart(book: FlowBook, starts: number[], start: Start): { section
   return { section: s, target: { kind: 'words', value: w - starts[s] } };
 }
 
-export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, style, s, start, turnStyle, onLocation, onWidth, onTurn, numbered = false, head = true }, ref) {
+export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, style, s, start, turnStyle, onLocation, onWidth, onTurn, numbered = false, head = true, aside }, ref) {
   const n = book.sections.length;
   const starts = useMemo(() => {
     let acc = 0;
@@ -200,13 +205,26 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
 
   const html = useMemo(() => ({ __html: book.sections[section]?.html ?? '' }), [book, section]);
 
+  // The aside is drawn into a box kept at the end of the chapter's text, put back each time the
+  // text is replaced.
+  const asideNode = aside?.(section) ?? null;
+  const hasAside = !!asideNode;
+  const [host] = useState(() => {
+    const el = document.createElement('div');
+    el.className = 'fv-aside';
+    el.dataset.aside = '';
+    return el;
+  });
+  /** Paged, the aside is on the page on screen: the page-turn zones keep to the margins, off it. */
+  const [asideHere, setAsideHere] = useState(false);
+
   /* Geometry */
   const flowLeft = () => flowRef.current!.getBoundingClientRect().left;
 
   const measurePages = () => {
     const bl = blocks.current;
-    // The last block, or a picture after it.
-    const ends = [bl[bl.length - 1] ?? (flowRef.current!.lastElementChild as HTMLElement | null), pics.current[pics.current.length - 1]?.el].flatMap((el) => {
+    // The last block, or a picture after it, or the aside after them.
+    const ends = [bl[bl.length - 1] ?? (flowRef.current!.lastElementChild as HTMLElement | null), pics.current[pics.current.length - 1]?.el, host.isConnected ? host : null].flatMap((el) => {
       if (!el) return [];
       const rects = el.getClientRects();
       return [(rects[rects.length - 1] ?? el.getBoundingClientRect()).left];
@@ -307,6 +325,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       pages: pagesRef.current,
       screen: pagesMode ? secWords / pagesRef.current : (secWords * v.clientHeight) / Math.max(1, v.scrollHeight),
     });
+    const r = pagesMode && host.isConnected ? host.getClientRects()[0] : undefined;
+    setAsideHere(!!r && pageAt(r) <= pageRef.current);
   };
 
   const setX = (p: number, instant: boolean) => {
@@ -392,6 +412,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   useLayoutEffect(() => {
     const flow = flowRef.current;
     if (!flow || !size.w) return;
+    if (!hasAside) host.remove();
+    else if (host.parentNode !== flow) flow.appendChild(host);
     const newSection = taggedFor.current !== section;
     if (newSection) {
       blocks.current = collectBlocks(flow);
@@ -419,7 +441,24 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, size.w, size.h, pagesMode, viewW, colW, s.font, s.size, s.lh, s.justify, style, fontTick, drawn]);
+  }, [section, size.w, size.h, pagesMode, viewW, colW, s.font, s.size, s.lh, s.justify, style, fontTick, drawn, hasAside]);
+
+  // The aside growing (a thread opened, comments arriving) adds pages after the text: counted,
+  // without moving the page on screen.
+  const recount = useRef(() => {});
+  recount.current = () => {
+    if (!pagesMode || !host.isConnected || !blocks.current.length) return;
+    const total = measurePages();
+    if (total === pagesRef.current) return;
+    pagesRef.current = total;
+    setPages(total);
+    report();
+  };
+  useEffect(() => {
+    const ro = new ResizeObserver(() => recount.current());
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [host]);
 
   useEffect(() => {
     const flow = flowRef.current;
@@ -717,7 +756,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   return (
     <div
       ref={rootRef}
-      className={`fv ${pagesMode ? 'is-pages' : 'is-scroll'}${s.justify ? ' is-justified' : ''}${spread ? ' is-spread' : ''}`}
+      className={`fv ${pagesMode ? 'is-pages' : 'is-scroll'}${s.justify ? ' is-justified' : ''}${spread ? ' is-spread' : ''}${asideHere && pagesMode ? ' is-aside' : ''}`}
       style={cssVars}
     >
       {pagesMode && <div className="fv-rh">{style === 'book' ? title : ''}</div>}
@@ -728,6 +767,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
           </div>
         )}
         <div ref={flowRef} className="fv-flow" onClick={onFlowClick} dangerouslySetInnerHTML={html} />
+        {asideNode && createPortal(asideNode, host)}
         {!pagesMode && (
           <div className="fv-next">
             {section >= n - 1 ? (

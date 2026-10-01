@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { record } from '../../data/sync';
 import type { BookColor } from '../../data/colors';
 import { readLocal, writeLocal } from '../../lib/store';
+import type { CommentsLayout } from './comments';
 
 export type Style = 'book' | 'modern';
 export type ThemeName = 'auto' | 'day' | 'warm' | 'dusk' | 'night';
@@ -25,6 +26,8 @@ export interface ReaderSettings {
   pdfLayout: Layout;
   /** 2 voices: the colour her lines light in, and his (book colours, data/colors.ts). */
   twoColors?: { F: BookColor; M: BookColor };
+  /** Where comments sit (comments.ts): after each chapter, in a drop, on a passing card, or in the contents. */
+  comments?: CommentsLayout;
   /** Which of the changes below (loadSettings) these have been through. */
   v?: number;
 }

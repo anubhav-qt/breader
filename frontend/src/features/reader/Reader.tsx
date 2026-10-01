@@ -4,7 +4,9 @@ import { markTracker, screenWords } from '../../books/mark';
 import { Toast, type ToastMessage } from '../../components/Toast';
 import { paintBars } from '../../lib/bars';
 import { chapterAt, chapterName, chaptersOf } from './chapters';
+import { ChapterTail } from './chrome/Comments';
 import { InstrumentChrome } from './chrome/Instrument';
+import { BOOK_THREAD, opens, readTo, threadOf, useTalk } from './comments';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useBarAsk, useFocusMode, useWake } from './focus';
@@ -73,6 +75,9 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const aiStatus = useAiStatus(record.id, ai);
   const loadNotes = useCallback(() => loadRevisit(record.id), [record.id]);
   const marks = useVoiceMarks(record.id, aiStatus);
+  // Comments, in the shared book's threads for a copy of one (comments.ts).
+  const thread = threadOf(record);
+  const talk = useTalk(thread, !closing);
   const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current(), marks);
   saying.current = narration.current;
   const { asked, done: sleptDone } = slept;
@@ -384,6 +389,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       // A keyboard's media keys, where the browser passes them on: play and pause the voice.
       const key = MEDIA_KEYS[e.key];
       if (key) { mediaKey.current(key); e.preventDefault(); return; }
+      if (e.key === 'Escape' && (e.target as HTMLElement).closest?.('[data-aside] :is(input, textarea)')) { (e.target as HTMLElement).blur(); return; }
       if (e.key === 'Escape') { if (panel) openPanel(null); else if (choosing) setAsking(false); else onBack(); return; }
       // The browser's own find sees only the chapter on screen: this one reads the whole book.
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'f') { e.preventDefault(); openPanel('find'); return; }
@@ -421,6 +427,48 @@ export function Reader({ record, title, color, book, initial, closing = false, o
 
   const style = book.kind === 'pdf' ? 'modern' : settings.style;
 
+  /*
+   * Comments, where the reader put them (Appearance). A chapter's thread opens once its end has
+   * been read (comments.ts opens). Opening one stops the voice or the light: the reader is
+   * reading something else. Immersive itself never stops for them.
+   */
+  const talkLayout = settings.comments ?? 'tail';
+  const mark = marker.get();
+  const opened = opens(chapters, mark, loc);
+  const readUpTo = readTo(mark, loc);
+  const talkView = { thread, talk, readTo: readUpTo };
+  const [talkAt, setTalkAt] = useState<number | undefined>(undefined);
+  const openTalk = (section?: number) => {
+    if (pacing.running) pauseLight();
+    if (narration.playing) narration.stop();
+    setTalkAt(section);
+    openPanel('comments');
+  };
+  // The passing card: reading on into the next chapter, the one just finished passes by; at the
+  // end of the book, the whole book's stays until closed.
+  const [card, setCard] = useState<{ section: number; stay: boolean; n: number } | null>(null);
+  const wasAt = useRef(current);
+  const ended = !!loc && loc.bookWordsLeft === 0;
+  useEffect(() => {
+    const was = wasAt.current;
+    wasAt.current = current;
+    if (talkLayout !== 'card' || closing) return;
+    if (current === was + 1 && opened(was)) setCard((c) => ({ section: chapters[was].section, stay: false, n: (c?.n ?? 0) + 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
+  useEffect(() => {
+    if (ended && talkLayout === 'card' && !closing) setCard((c) => ({ section: BOOK_THREAD, stay: true, n: (c?.n ?? 0) + 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ended]);
+  const closeCard = useCallback(() => setCard(null), []);
+  /** The tail: after the last section of each chapter, and the whole book's after the last. */
+  const lastOf = (i: number) => (chapters[i + 1]?.section ?? (book.kind === 'flow' ? book.sections.length : 0)) - 1;
+  const tail = (section: number) => {
+    const i = chapters.findIndex((_, k) => lastOf(k) === section);
+    if (i < 0 || talk.state === 'off') return null;
+    return <ChapterTail key={i} view={talkView} chapters={chapters} i={i} open={opened(i)} last={i === chapters.length - 1} />;
+  };
+
   const chromeProps: ChromeProps = {
     book, title, loc, chapters, current, settings, update, isPdf: book.kind === 'pdf',
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
@@ -457,6 +505,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     } : null,
     revisit: aiStatus.revisit ? { read: marker.get()?.progress ?? 0, load: loadNotes } : null,
     two: marks ? 'ready' : ai ? 'soon' : 'off',
+    talk: { layout: talkLayout, view: talkView, opens: opened, at: talkAt, open: openTalk, card, closeCard },
   };
   const tones = settings.twoColors ?? TWO_COLORS;
   const vars = {
@@ -472,7 +521,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick} onContextMenu={(e) => { if (looking()) e.preventDefault(); }}>
           {book.kind === 'flow' ? (
-            <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} />
+            <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} aside={talkLayout === 'tail' ? tail : undefined} />
           ) : (
             <PdfView ref={view} book={book} layout={settings.pdfLayout} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           )}

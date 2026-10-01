@@ -18,3 +18,5 @@ export const CROSS = ['.....', 'x...x', '.x.x.', '..x..', '.x.x.', 'x...x', '...
 export const VOICES = ['..x....', '..x.x..', 'x.x.x.x', 'x.x.x.x', 'x.x.x.x', '..x.x..', '..x....'];
 /** Search: a magnifying glass. */
 export const SEARCH = ['.xxx...', 'x...x..', 'x...x..', 'x...x..', '.xxx...', '....xx.', '.....xx'];
+/** Comments: a speech bubble, with someone typing in it. */
+export const TALK = ['xxxxxxx', 'x.....x', 'x.x.x.x', 'x.....x', 'xxxxxxx', '.xx....', '.x.....'];

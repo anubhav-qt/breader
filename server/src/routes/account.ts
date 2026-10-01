@@ -114,9 +114,10 @@ const cols = (t: Parameters<typeof getTableConfig>[0]) =>
   getTableConfig(t).columns.map((c) => c.name).filter((n) => n !== 'version');
 
 /**
- * Moves a key library's books, reading places, voices and files into an account's library, in one
- * transaction, then retires the key library. Books and places are deleted and inserted rather than
- * re-keyed in place, so the change feed tells the laptop's copy about both ends of the move. A
+ * Moves a key library's books, reading places, voices, comments and files into an account's
+ * library, in one transaction, then retires the key library. Books, places and the comment name are
+ * deleted and inserted rather than re-keyed in place, so the change feed tells the laptop's copy
+ * about both ends of the move. A
  * file the account already stores is shared rather than stored twice; the key library's copy is
  * left unused, for clean-up. The retired row stays, owned by the account, so its key can tell
  * other browsers where the books went (routes/libraries.ts) and clean-up leaves it alone.
@@ -178,6 +179,16 @@ async function claim(pool: pg.Pool, fromId: string, toId: string, userId: string
       [fromId, toId],
     );
     await c.query('DELETE FROM voice_uses WHERE library_id = $1', [fromId]);
+
+    // Comments go with their writer, and so does the name they go by, unless the account has one.
+    await c.query('UPDATE comments SET library_id = $2 WHERE library_id = $1', [fromId, toId]);
+    const { rows: [named] } = await c.query('DELETE FROM commenters WHERE library_id = $1 RETURNING name, fold, created_at', [fromId]);
+    if (named) {
+      await c.query(
+        'INSERT INTO commenters (library_id, name, fold, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (library_id) DO NOTHING',
+        [toId, named.name, named.fold, named.created_at],
+      );
+    }
 
     await c.query('UPDATE libraries SET rev = $2, used_bytes = used_bytes + $3 WHERE id = $1', [toId, rev, moved]);
     await c.query(

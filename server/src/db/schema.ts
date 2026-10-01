@@ -278,6 +278,42 @@ export const aiNotes = pgTable('ai_notes', {
   version: version(),
 });
 
+/**
+ * The name a library comments under (shared comments.ts). `fold` is the name as foldName tells
+ * names apart, and no two libraries may share one. Fed.
+ */
+export const commenters = pgTable(
+  'commenters',
+  {
+    libraryId: text('library_id').primaryKey().references(() => libraries.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    fold: text('fold').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    version: version(),
+  },
+  (t) => [uniqueIndex('commenters_fold_idx').on(t.fold)],
+);
+
+/**
+ * What readers say about a book, for everyone on it: `book` is the shared book's id (a copy's
+ * origin), `section` the chapter's first section, or -1 for the whole book. `progress` is how far
+ * the writer had read. Stored as written; the app censors it when it shows it. Fed.
+ */
+export const comments = pgTable(
+  'comments',
+  {
+    id: text('id').primaryKey(),
+    book: text('book').notNull(),
+    section: integer('section').notNull(),
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    progress: doublePrecision('progress').notNull().default(0),
+    createdAt: at('created_at').notNull().defaultNow(),
+    version: version(),
+  },
+  (t) => [index('comments_book_idx').on(t.book, t.section, t.createdAt), index('comments_library_idx').on(t.libraryId)],
+);
+
 /** Reading style, typeface, size and theme, so they follow the reader between browsers. Fed. */
 export const librarySettings = pgTable('library_settings', {
   libraryId: text('library_id').primaryKey().references(() => libraries.id, { onDelete: 'cascade' }),
@@ -442,5 +478,7 @@ export const FED_TABLES = {
   voices: ['id'],
   voice_uses: ['library_id', 'voice_id'],
   ai_notes: ['sha256'],
+  commenters: ['library_id'],
+  comments: ['id'],
 } as const;
 export type FedTable = keyof typeof FED_TABLES;

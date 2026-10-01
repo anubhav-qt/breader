@@ -2,6 +2,8 @@ import type { RefObject } from 'react';
 import type { RevisitResponse } from '@breader/shared/ai';
 import type { LoadedBook, TocItem } from '../../../books/types';
 import type { Chapter } from '../chapters';
+import type { CommentsLayout } from '../comments';
+import type { TalkView } from './Comments';
 import type { Loc } from '../FlowView';
 import type { Paragraph, Sentence } from '../narration';
 import type { BarAsk } from '../focus';
@@ -10,7 +12,7 @@ import type { Asleep } from '../sleep';
 import type { ReaderSettings } from '../settings';
 
 /** `revisit` is the drop up from the bottom line; `recap` the window it opens (chrome/Revisit.tsx). */
-export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap';
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap' | 'comments';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
@@ -86,6 +88,20 @@ export interface ChromeProps {
   revisit: { read: number; load: () => Promise<{ notes: RevisitResponse; offline: boolean }> } | null;
   /** 2 voices for this book: ready (an AI marked who says what), soon (its switch is on), or off. */
   two: 'ready' | 'soon' | 'off';
+  /**
+   * Comments on the book (comments.ts), where the reader put them: `opens` says whether a chapter's
+   * thread is open to them yet, `at` is the thread the drop opens on (BOOK_THREAD, or a chapter's
+   * first section; the chapter being read if not said), and `card` the one passing by.
+   */
+  talk: {
+    layout: CommentsLayout;
+    view: TalkView;
+    opens: (i: number) => boolean;
+    at?: number;
+    open: (section?: number) => void;
+    card: { section: number; stay: boolean; n: number } | null;
+    closeCard: () => void;
+  };
 }
 
 export const toItem = (c: Chapter): TocItem => ({ title: c.title, section: c.section, anchor: c.anchor, level: 0 });

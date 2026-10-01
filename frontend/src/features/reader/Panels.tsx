@@ -1,10 +1,11 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import type { LoadedBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
+import { COMMENT_LAYOUTS } from './comments';
 import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -16,9 +17,12 @@ interface ContentsProps {
   canRemove: boolean;
   onGo: (item: TocItem) => void;
   onRemove: () => void;
+  /** Comments beside the chapters (chrome/Comments.tsx TalkContents): a chapter's, by the section it starts at, and the whole book's on top. */
+  chip?: (section: number) => ReactNode;
+  top?: ReactNode;
 }
 
-export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: ContentsProps) {
+export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove, chip, top }: ContentsProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const items: TocItem[] = book.toc.length
     ? book.toc
@@ -54,10 +58,12 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
         <span>{loc ? (loc.bookWordsLeft ? `${duration(minutesFor(loc.bookWordsLeft))} left` : 'Finished') : ''}</span>
       </div>
       <div className="p-list" ref={listRef}>
+        {top}
         {items.length === 0 && <p className="p-empty">This book has no table of contents.</p>}
         {items.map((it, i) => {
           const state = i < current ? 'done' : i === current ? 'now' : 'next';
-          return (
+          const talk = chip && it.level === 0 && items.findIndex((x) => x.section === it.section) === i ? chip(it.section) : null;
+          const row = (
             <button
               key={`${it.section}-${it.anchor ?? ''}-${i}`}
               type="button"
@@ -77,6 +83,7 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
               </span>
             </button>
           );
+          return talk ? <div key={`${it.section}-${it.anchor ?? ''}-${i}`} className="cm-row">{row}{talk}</div> : row;
         })}
       </div>
       {canRemove && (
@@ -226,6 +233,16 @@ export function AppearancePanel({ settings, isPdf, update, two = false }: LookPr
         <button type="button" className="tg" role="switch" aria-checked={barHidden} aria-label="Always hide the voice bar in focus" onClick={() => setBarHidden(!barHidden)} />
       </div>
       {two && <TwoColors settings={settings} update={update} />}
+      <Segmented
+        label="Comments"
+        value={settings.comments ?? 'tail'}
+        onChange={(v) => update((s) => ({ ...s, comments: v }))}
+        options={COMMENT_LAYOUTS.map((o) => ({ v: o.v, label: o.label }))}
+      />
+      <p className="p-note cm-about">
+        {COMMENT_LAYOUTS.find((o) => o.v === (settings.comments ?? 'tail'))?.about}
+        {isPdf && (settings.comments ?? 'tail') === 'tail' ? ' A PDF’s pages can’t take it, so the speech bubble up top has them.' : ''}
+      </p>
     </div>
   );
 }

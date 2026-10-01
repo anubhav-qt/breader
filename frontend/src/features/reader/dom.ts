@@ -6,9 +6,12 @@
 const BLOCKS = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, figure, table, dt, dd, hr, div';
 const INNER = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, figure, table, dt, dd, div';
 
+/** What the reader adds to a chapter's page that isn't the book (comments after it): never read, lit or stopped at. */
+export const ASIDE = '[data-aside]';
+
 /** Leaf-level block elements in reading order. */
 export function collectBlocks(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(BLOCKS)).filter((el) => !el.querySelector(INNER));
+  return Array.from(root.querySelectorAll<HTMLElement>(BLOCKS)).filter((el) => !el.querySelector(INNER) && !el.closest(ASIDE));
 }
 
 /** A picture Immersive stops at, and the block it's in, or else the last one before it (-1: none). */
@@ -28,7 +31,7 @@ export function picturesIn(root: HTMLElement, blocks: HTMLElement[]): Pic[] {
   const out: Pic[] = [];
   let before = -1;
   for (const el of Array.from(root.querySelectorAll('img, svg'))) {
-    if (el.parentElement?.closest('svg')) continue;
+    if (el.parentElement?.closest('svg') || el.closest(ASIDE)) continue;
     while (before + 1 < blocks.length && blocks[before + 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && !blocks[before + 1].contains(el)) before++;
     const host = blocks[before + 1];
     if (host?.contains(el)) {
