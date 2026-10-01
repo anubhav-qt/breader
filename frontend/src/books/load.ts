@@ -66,10 +66,18 @@ export async function coverOf(book: LoadedBook): Promise<Blob | undefined> {
 }
 
 const cache = new Map<string, LoadedBook>();
+/** Books still opening: asked again meanwhile, it's the same book, with its pictures at the same URLs. */
+const opening = new Map<string, Promise<LoadedBook>>();
 
 export async function loadRecord(rec: BookRecord): Promise<LoadedBook> {
-  const hit = cache.get(rec.id);
+  const hit = cache.get(rec.id) ?? opening.get(rec.id);
   if (hit) return hit;
+  const going = openRecord(rec).finally(() => opening.delete(rec.id));
+  opening.set(rec.id, going);
+  return going;
+}
+
+async function openRecord(rec: BookRecord): Promise<LoadedBook> {
   let book: LoadedBook;
   if (rec.source === 'placeholder') {
     book = placeholderBook(rec);
