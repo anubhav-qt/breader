@@ -420,7 +420,7 @@
 .ep-share { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
 .ep-share .ep-label { margin: 0; }
 .ep-note { margin: -4px 0 0; font: var(--ui-w) 11.5px/1.35 var(--ui); color: var(--ink-2); }
-.ep-actions { display: flex; gap: 8px; margin-top: 4px; }
+.ep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .ep-act {
   flex: 1 1 0;
   min-width: 0;
@@ -441,6 +441,10 @@
 .ep-fav.is-on { color: var(--ink); }
 .ep-fav.is-on svg { fill: currentColor; }
 .ep-remove { background: var(--danger-soft); color: var(--danger); }
+/* Finished: a row of its own, in the book's colour once it is, as its card is. */
+.ep-done { flex-basis: 100%; background: var(--fill); color: var(--ink-2); }
+.ep-done:hover { color: var(--ink); background: var(--line); }
+.ep-done.is-on, .ep-done.is-on:hover { background: var(--bc); color: var(--bc-ink); }
 .ep-remove:hover { background: var(--danger-soft-2); }
 
 /* Removing a book that's in both places */

@@ -25,6 +25,8 @@ interface Props {
   onRemove?: (fromKeyboard: boolean) => void;
   /** Puts the book on the Shared Library or takes it off. Only for the reader's own uploads. */
   onShare?: (shared: boolean) => void;
+  /** Marks it read to the end, or takes that back. Absent for a shared book not started. */
+  onFinish?: (finished: boolean) => void;
   onClose: () => void;
 }
 
@@ -45,15 +47,16 @@ function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
 
 /**
  * A small popover beside the card's corner button: rename, put in a series, file under a genre,
- * recolour, share, let an AI read along, favourite or remove.
+ * recolour, share, let an AI read along, mark finished, favourite or remove.
  */
-export function EditPopover({ book, seriesNames, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onClose }: Props) {
+export function EditPopover({ book, seriesNames, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(book.title);
   const numText = book.seriesIndex !== undefined ? String(book.seriesIndex) : '';
   const [series, setSeries] = useState<SeriesValue>({ name: book.series ?? '', num: numText });
   const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
   const removing = useRef(false);
+  const finished = book.progress >= 1;
 
   useLayoutEffect(() => {
     const a = anchor.getBoundingClientRect();
@@ -231,6 +234,19 @@ export function EditPopover({ book, seriesNames, anchor, others = [], onChange, 
       </div>
       <p className="ep-note" id="ep-ai-why">{AI_WHY}</p>
       <div className="ep-actions">
+        {onFinish && (
+          <button
+            type="button"
+            className={`ep-act ep-done${finished ? ' is-on' : ''}`}
+            aria-pressed={finished}
+            title={finished ? 'Not finished after all' : 'Mark as finished'}
+            style={colorVars(book.color)}
+            onClick={() => onFinish(!finished)}
+          >
+            <IconCheck />
+            {finished ? 'Finished' : 'Mark as finished'}
+          </button>
+        )}
         <button
           type="button"
           className={`ep-act ep-fav${book.favorite ? ' is-on' : ''}`}

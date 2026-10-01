@@ -35,6 +35,7 @@ interface Props {
   onEdit: (id: string, patch: BookEdit) => void;
   onRemove: (book: ShelfItem, fromKeyboard: boolean) => void;
   onShare: (book: ShelfItem, shared: boolean) => void;
+  onFinish: (book: ShelfItem, finished: boolean) => void;
 }
 
 /** The cards rise in and their colour grows only the first time a library appears after the page loads. */
@@ -44,7 +45,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare }: Props) {
+export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -132,6 +133,8 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             onChangeOther={(b, patch) => onEdit(b.id, patch)}
             onRemove={canRemove(editingBook) ? (fromKeyboard) => { setEditing(null); onRemove(editingBook, fromKeyboard); } : undefined}
             onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
+            // A shared book not started has no reading of the reader's own to finish.
+            onFinish={editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
             onClose={closeEdit}
           />
         )}

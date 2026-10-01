@@ -485,6 +485,20 @@ function saveRead(id: string, read: ReadState) {
 }
 
 /**
+ * Marks a book read to the end, or takes it back. The mark moves (books/mark.ts), not the place
+ * it's open at, so it still opens where it was left, and keeps its place among the others. A mark
+ * only goes forward, on every device, so taking it back is a new reading, from where it's open.
+ * `card` is what its card shows, for a book never opened here.
+ */
+function setFinished(id: string, finished: boolean, card: Pick<ReadState, 'progress' | 'line' | 'lastOpened'>) {
+  const r: ReadState = view.reads[id] ?? { progress: card.progress, line: card.line, lastOpened: card.lastOpened };
+  const at = { pos: r.pos ?? { section: 0, block: 0, offset: 0 }, progress: r.progress, line: r.line };
+  const n = r.mark?.n ?? 0;
+  const mark = finished ? { ...at, progress: 1, line: r.mark?.line ?? at.line, ...(n ? { n } : {}) } : { ...at, n: n + 1 };
+  saveRead(id, { ...r, mark });
+}
+
+/**
  * Puts one of the reader's own books on the Shared Library, or takes it off. It stays in My books
  * either way, and anyone who read far enough into it (KEEP_WORDS) keeps their copy.
  */
@@ -550,7 +564,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, addReadTime, editBook, setShared, setSharedOnly, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, setFinished, addReadTime, editBook, setShared, setSharedOnly, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

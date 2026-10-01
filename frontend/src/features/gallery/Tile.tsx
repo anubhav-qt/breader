@@ -61,11 +61,21 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
-  const done = b.progress >= 1;
+  const progress = b.progress >= 1 ? 1 : b.progress;
   const blots = useMemo(() => blotsFor(b.id), [b.id]);
-  const radii = useMemo(() => radiiFor(blots, done ? 1 : b.progress, size.w, size.h), [blots, done, b.progress, size.w, size.h]);
-  const radiiRef = useRef(radii);
-  radiiRef.current = radii;
+  // The colour shown: a new amount (a book marked finished) grows in rather than jumping there.
+  const fill = useMotionValue(progress);
+  useEffect(() => {
+    if (fill.get() === progress) return;
+    const run = animate(fill, progress, springs.smooth);
+    return () => run.stop();
+  }, [fill, progress]);
+  const sized = useRef({ p: -1, w: 0, h: 0, radii: [] as number[] });
+  const radiiAt = (p: number) => {
+    const c = sized.current;
+    if (c.p !== p || c.w !== size.w || c.h !== size.h) sized.current = { p, w: size.w, h: size.h, radii: radiiFor(blots, p, size.w, size.h) };
+    return sized.current.radii;
+  };
   // The cover keeps its own proportions, so it is never cropped.
   const [artRatio, setArtRatio] = useState(2 / 3);
 
@@ -77,8 +87,12 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
     return () => run.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const apply = (k: number) => setMask(inkRef.current, done && k > 0.995 ? 'none' : maskFor(blots, radiiRef.current, k));
+  const apply = (k = grow.get()) => {
+    const p = fill.get();
+    setMask(inkRef.current, p >= 1 && k > 0.995 ? 'none' : maskFor(blots, radiiAt(p), k));
+  };
   useEffect(() => grow.on('change', apply));
+  useEffect(() => fill.on('change', () => apply()));
   useLayoutEffect(() => { apply(grow.get()); });
 
   const roomy = variant === 'hero' || variant === 'square';

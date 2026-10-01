@@ -534,6 +534,7 @@ export default function App() {
               onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={() => setAdding({ mode: 'file' })}
               onEdit={(id, patch) => void editBook(id, patch)}
+              onFinish={(b, finished) => lib.setFinished(b.id, finished, b)}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
                 // Out of their books already: off the Shared Library too, it's nowhere, so it goes.
