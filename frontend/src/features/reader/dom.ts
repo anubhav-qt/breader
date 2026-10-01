@@ -11,6 +11,34 @@ export function collectBlocks(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(BLOCKS)).filter((el) => !el.querySelector(INNER));
 }
 
+/** A picture Immersive stops at, and the block it's in, or else the last one before it (-1: none). */
+export interface Pic {
+  el: Element;
+  block: number;
+  inside: boolean;
+}
+
+const WORDY = /[\p{L}\p{N}]/u;
+
+/**
+ * The pictures in reading order, by the blocks `collectBlocks` found. Not one set in a line of words
+ * (a letter drawn as a picture), unless it's a figure's, whose caption is read after it.
+ */
+export function picturesIn(root: HTMLElement, blocks: HTMLElement[]): Pic[] {
+  const out: Pic[] = [];
+  let before = -1;
+  for (const el of Array.from(root.querySelectorAll('img, svg'))) {
+    if (el.parentElement?.closest('svg')) continue;
+    while (before + 1 < blocks.length && blocks[before + 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && !blocks[before + 1].contains(el)) before++;
+    const host = blocks[before + 1];
+    if (host?.contains(el)) {
+      if (!host.closest('figure') && WORDY.test(host.textContent ?? '')) continue;
+      out.push({ el, block: before + 1, inside: true });
+    } else out.push({ el, block: before, inside: false });
+  }
+  return out;
+}
+
 function textNodes(el: HTMLElement): Text[] {
   const out: Text[] = [];
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);

@@ -302,7 +302,7 @@ function SleepPanel({ asked, chapters, playing, onBack, onAwake }: { asked: Asle
               <span className="sl-ch">{chapterOf(r.s)}</span>
               {r.note && <em>{r.note}</em>}
             </span>
-            <span className="p-item-t">{r.s.text.trim()}</span>
+            <span className="p-item-t">{r.s.pic !== undefined ? 'A picture' : r.s.text.trim()}</span>
           </button>
         ))}
       </div>

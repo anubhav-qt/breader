@@ -10,6 +10,7 @@ import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useBarAsk, useFocusMode, useWake } from './focus';
 import { useFullscreenReading } from './fullscreen';
 import { loadRevisit, useAiStatus, useVoiceMarks } from './ai';
+import { keepLooking, looking, stopLook } from './look';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
 import { overlaps, usePacing } from './pacing';
 import { PdfView } from './PdfView';
@@ -218,6 +219,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   /** Enter stops the light, carries on where it paused, or starts at the top of the page. False when it's not Enter's to take. */
   const onEnter = useRef<() => boolean>(() => false);
   onEnter.current = () => {
+    if (looking() && !closing) { stopLook(); return true; }
     if (!immersive || narration.playing || closing) return false;
     if (pacing.running) pauseLight();
     else if (begun) carryOn();
@@ -332,13 +334,34 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   };
   // In Immersive without a voice, a tap anywhere stops the light, and a tap on a sentence starts it
   // there. Otherwise touch screens, which have no mouse to wake the controls, wake them with a tap
-  // mid-page in focus mode (or while it reads), and hide them again.
+  // mid-page in focus mode (or while it reads), and hide them again. On a picture the voice or the
+  // light waits at, a tap goes on, and a press keeps it there until it's let go (look.ts).
   const touched = useRef(false);
-  const onPointerDown = (e: PointerEvent) => { touched.current = e.pointerType === 'touch'; };
+  const pressed = useRef<number | null>(null);
+  const held = useRef(false);
+  const onPointerDown = (e: PointerEvent) => {
+    touched.current = e.pointerType === 'touch';
+    held.current = false;
+    if (!looking() || (e.target as HTMLElement).closest('a, button, input, select, textarea')) return;
+    const down = e.timeStamp;
+    pressed.current = down;
+    keepLooking(true);
+    const up = (u: Event) => {
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      if (pressed.current !== down) return;
+      pressed.current = null;
+      held.current = u.timeStamp - down > 400;
+      keepLooking(false);
+    };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
   const onClick = (e: MouseEvent) => {
     if (e.defaultPrevented || closing) return;
     if ((e.target as HTMLElement).closest('a, button, input, select, textarea')) return;
     if (window.getSelection()?.toString()) return;
+    if (looking()) { if (!held.current) stopLook(); return; }
     if (pacing.running) { pauseLight(); return; }
     const s = immersive && !narration.playing ? view.current?.listen.pick?.(e.clientX, e.clientY) : null;
     if (s) { tapped(s); return; }
@@ -447,7 +470,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   return (
     <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${bar.hidden ? ' is-barless' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
-        <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick}>
+        <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick} onContextMenu={(e) => { if (looking()) e.preventDefault(); }}>
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} />
           ) : (

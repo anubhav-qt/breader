@@ -6,8 +6,9 @@ import type { FlowBook, Position } from '../../books/types';
 import { countWords } from '../../lib/format';
 import { glide, stopGlide } from '../../lib/glide';
 import { firstSentence } from '../../books/record';
-import { caretAt, charRect, collectBlocks, firstCharWhere, firstRect, offsetIn, rangeOf, sentenceAt } from './dom';
+import { caretAt, charRect, collectBlocks, firstCharWhere, firstRect, offsetIn, picturesIn, rangeOf, sentenceAt, type Pic } from './dom';
 import { pad2 } from './chapters';
+import { lookLeft, useLook } from './look';
 import { light, sentencesIn, type Listen, type Paragraph, type Sentence } from './narration';
 import { fontFamily, type Style, type StyleSettings } from './settings';
 import { curves, runTurn, swaps, type TurnStyle } from './turn';
@@ -57,7 +58,9 @@ type Target =
   | { kind: 'pos'; block: number; offset: number; y?: number }
   | { kind: 'words'; value: number }
   | { kind: 'text'; needle: string }
-  | { kind: 'anchor'; id: string };
+  | { kind: 'anchor'; id: string }
+  /** The chapter's how-manyth picture (Sentence.pic). */
+  | { kind: 'pic'; n: number };
 
 const norm = (t: string) => t.replace(/\s+/g, ' ').trim();
 const plain = (html: string) =>
@@ -79,6 +82,33 @@ interface Props {
 }
 
 const PAGE_SPRING = { type: 'spring', stiffness: 158, damping: 25.1, mass: 1 } as const;
+
+const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+
+/**
+ * A chapter's sentences from `block` and `offset` on (all of them, from -1), with a stop at each
+ * picture where it falls among them: those after that point, and any `seen` before it.
+ */
+function inOrder(section: number, blocks: HTMLElement[], pics: Pic[], block = -1, offset = 0, seen: (n: number) => boolean = () => false): Sentence[] {
+  const out: Sentence[] = [];
+  const at = new Map<number, number[]>();
+  pics.forEach((p, n) => {
+    if (p.block > block || (p.block === block && (!p.inside || offset === 0)) || seen(n)) at.set(p.block, [...(at.get(p.block) ?? []), n]);
+  });
+  const stops = (b: number, inside: boolean) => {
+    for (const n of at.get(b) ?? []) if (pics[n].inside === inside) out.push({ section, block: Math.max(0, b), start: 0, end: 0, text: '', pic: n });
+  };
+  stops(-1, false);
+  blocks.forEach((el, b) => {
+    stops(b, true);
+    if (b >= block) {
+      const text = el.textContent ?? '';
+      for (const [start, end] of sentencesIn(text, b === block ? offset : 0)) out.push({ section, block: b, start, end, text: text.slice(start, end) });
+    }
+    stops(b, false);
+  });
+  return out;
+}
 
 /** Paragraphs get numbers: blocks with words, not headings (the chapter's title isn't paragraph 1). */
 const isParagraph = (el: HTMLElement) => !/^H[1-6]$/.test(el.tagName) && /[\p{L}\p{N}]/u.test(el.textContent ?? '');
@@ -126,6 +156,11 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   const viewRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<HTMLDivElement>(null);
   const blocks = useRef<HTMLElement[]>([]);
+  const pics = useRef<Pic[]>([]);
+  /** The place is a picture Immersive turned to: a page count changed by a picture drawn late keeps it. */
+  const onPic = useRef<number | null>(null);
+  /** Pictures drawn since the chapter was laid out, which take room the pages didn't count. */
+  const [drawn, setDrawn] = useState(0);
   const blockWords = useRef<number[]>([]);
   const taggedFor = useRef(-1);
   const onLocationRef = useRef(onLocation);
@@ -170,18 +205,22 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
 
   const measurePages = () => {
     const bl = blocks.current;
-    const last = bl[bl.length - 1] ?? (flowRef.current!.lastElementChild as HTMLElement | null);
-    if (!last) return 1;
-    const rects = last.getClientRects();
-    const r = rects[rects.length - 1] ?? last.getBoundingClientRect();
-    return Math.max(1, Math.floor((r.left - flowLeft() + 1) / step) + 1);
+    // The last block, or a picture after it.
+    const ends = [bl[bl.length - 1] ?? (flowRef.current!.lastElementChild as HTMLElement | null), pics.current[pics.current.length - 1]?.el].flatMap((el) => {
+      if (!el) return [];
+      const rects = el.getClientRects();
+      return [(rects[rects.length - 1] ?? el.getBoundingClientRect()).left];
+    });
+    if (!ends.length) return 1;
+    return Math.max(1, Math.floor((Math.max(...ends) - flowLeft() + 1) / step) + 1);
   };
+
+  const pageAt = (r: DOMRect) => Math.max(0, Math.min(pagesRef.current - 1, Math.floor((r.left - flowLeft() + 1) / step)));
 
   const pageOf = (block: number, offset: number) => {
     const el = blocks.current[block];
     const r = el ? charRect(el, offset) : null;
-    if (!r) return 0;
-    return Math.max(0, Math.min(pagesRef.current - 1, Math.floor((r.left - flowLeft() + 1) / step)));
+    return r ? pageAt(r) : 0;
   };
 
   /** The first character on screen (scrolled: from `below` pixels down the view), and how far down it is. */
@@ -198,7 +237,12 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
           if (!r.width && !r.height) continue;
           if (r.right - fl > x0 + 1 && r.left - fl < x1 - 1) { hit = true; break; }
         }
-        if (!hit) continue;
+        if (!hit) {
+          // A page with only a picture on it: the place is the first block after it.
+          const after = firstRect(bl[i]);
+          if (after && after.left - fl >= x1 - 1) return { block: i, offset: 0 };
+          continue;
+        }
         const f = firstRect(bl[i]);
         if (!f || f.left - fl >= x0 - 1) return { block: i, offset: 0 };
         return { block: i, offset: firstCharWhere(bl[i], (r) => r.left - fl >= x0 - 1) };
@@ -296,13 +340,17 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       const target = flowRef.current!.querySelector<HTMLElement>(`#${CSS.escape(t.id)}`);
       const i = target ? bl.findIndex((b) => b === target || b.contains(target) || target.contains(b)) : -1;
       block = Math.max(0, i);
+    } else if (t.kind === 'pic') {
+      block = Math.max(0, pics.current[t.n]?.block ?? 0);
     }
-    const precise = t.kind === 'pos' || t.kind === 'words' || t.kind === 'anchor' || t.kind === 'text';
+    const pic = t.kind === 'pic' ? pics.current[t.n]?.el : undefined;
+    onPic.current = t.kind === 'pic' && pic ? t.n : null;
+    const precise = t.kind === 'pos' || t.kind === 'words' || t.kind === 'anchor' || t.kind === 'text' || t.kind === 'pic';
     if (pagesMode) {
       const total = measurePages();
       pagesRef.current = total;
       setPages(total);
-      const p = t.kind === 'end' ? total - 1 : t.kind === 'start' ? 0 : pageOf(block, offset);
+      const p = t.kind === 'end' ? total - 1 : t.kind === 'start' ? 0 : pic ? pageAt(pic.getBoundingClientRect()) : pageOf(block, offset);
       pageRef.current = p;
       setPage(p);
       setX(p, true);
@@ -311,6 +359,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       stopGlide(v);
       if (t.kind === 'start') v.scrollTop = 0;
       else if (t.kind === 'end') v.scrollTop = v.scrollHeight;
+      else if (pic) v.scrollTop += pic.getBoundingClientRect().top - v.getBoundingClientRect().top - 88;
       else {
         const r = bl[block] ? charRect(bl[block], offset) : null;
         if (r) v.scrollTop += r.top - v.getBoundingClientRect().top - (t.kind === 'pos' ? t.y ?? 88 : 88);
@@ -346,13 +395,14 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     const newSection = taggedFor.current !== section;
     if (newSection) {
       blocks.current = collectBlocks(flow);
+      pics.current = picturesIn(flow, blocks.current);
       let acc = 0;
       blockWords.current = blocks.current.map((b) => { const at = acc; acc += countWords(b.textContent ?? ''); return at; });
       taggedFor.current = section;
     }
     if (!pagesMode) { animate(flow, { x: 0 }, { duration: 0 }); flow.style.transform = ''; }
-    // Nowhere new to go: the place stays where it was on screen.
-    const t = pending.current ?? { kind: 'pos', block: loc.current.block, offset: loc.current.offset, y: locY.current ?? undefined };
+    // Nowhere new to go: the place stays where it was on screen, or on the picture it was turned to.
+    const t: Target = pending.current ?? (onPic.current !== null && pagesMode ? { kind: 'pic', n: onPic.current } : { kind: 'pos', block: loc.current.block, offset: loc.current.offset, y: locY.current ?? undefined });
     pending.current = null;
     land(t);
     const dir = arriving.current;
@@ -369,7 +419,23 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, size.w, size.h, pagesMode, viewW, colW, s.font, s.size, s.lh, s.justify, style, fontTick]);
+  }, [section, size.w, size.h, pagesMode, viewW, colW, s.font, s.size, s.lh, s.justify, style, fontTick, drawn]);
+
+  useEffect(() => {
+    const flow = flowRef.current;
+    if (!flow) return;
+    let frame = 0;
+    const loaded = (e: Event) => {
+      if (!(e.target instanceof HTMLImageElement)) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setDrawn((d) => d + 1));
+    };
+    flow.addEventListener('load', loaded, true);
+    return () => {
+      flow.removeEventListener('load', loaded, true);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
 
   const announce = (dir: 1 | -1, chapter: boolean) => {
     const v = viewRef.current;
@@ -411,6 +477,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     if (np >= pagesRef.current) { if (section < n - 1) goSection(section + 1, { kind: 'start' }, 1); return; }
     const move = () => {
       pageRef.current = np;
+      onPic.current = null;
       if (swap) flushSync(() => setPage(np));
       else setPage(np);
       setX(np, swap);
@@ -452,21 +519,49 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     return r.top > v.top && r.top < v.bottom + v.height ? 'next' : 'away';
   };
 
+  /** The same for a picture: scrolled, it's on screen once most of it can be seen. */
+  const picPlace = (el: Element): 'here' | 'next' | 'away' => {
+    const r = el.getBoundingClientRect();
+    if (pagesMode) {
+      const p = Math.floor((r.left - flowLeft() + 1) / step);
+      return p === pageRef.current ? 'here' : p === pageRef.current + 1 ? 'next' : 'away';
+    }
+    const v = viewRef.current!.getBoundingClientRect();
+    const top = v.top + (head ? BAR : 0);
+    const bottom = v.bottom - BAR;
+    if (Math.min(r.bottom, bottom) - Math.max(r.top, top) >= Math.min(r.height, bottom - top) * 0.6) return 'here';
+    return r.top > v.top && r.top < v.bottom + v.height ? 'next' : 'away';
+  };
+
+  /** Turns to a picture stop, or scrolls it to the middle of what can be seen (its top to the top, when it's taller). */
+  const showPic = (n: number) => {
+    light(null);
+    const el = pics.current[n]?.el;
+    if (!el) return false;
+    const place = picPlace(el);
+    if (pagesMode) {
+      if (place === 'next') turn(1);
+    } else if (!steered() && place !== 'away') {
+      const r = el.getBoundingClientRect();
+      const box = viewRef.current!.getBoundingClientRect();
+      const top = box.top + (head ? BAR : 0);
+      const by = r.top - top - Math.max(0, (box.bottom - BAR - top - r.height) / 2);
+      if (Math.abs(by) > 24) steer(by);
+    }
+    return place !== 'away';
+  };
+
   const listen: Listen = {
     at: () => section,
     from: async () => {
-      const out: Sentence[] = [];
-      // Scrolled, from the first line that can be seen, not one under the controls.
+      // Scrolled, from the first line that can be seen, not one under the controls. And a picture
+      // on screen above that, at the top of the page.
       const { block, offset } = pagesMode ? loc.current : locate(head ? BAR : 8);
-      blocks.current.forEach((el, i) => {
-        if (i < block) return;
-        const text = el.textContent ?? '';
-        for (const [start, end] of sentencesIn(text, i === block ? offset : 0)) out.push({ section, block: i, start, end, text: text.slice(start, end) });
-      });
-      return out;
+      return inOrder(section, blocks.current, pics.current, block, offset, (n) => picPlace(pics.current[n].el) === 'here');
     },
     show: (sn, at, centre) => {
       if (sn.section !== section) return false;
+      if (sn.pic !== undefined) return showPic(sn.pic);
       const el = blocks.current[sn.block];
       light(el ? rangeOf(el, sn.start, sn.end) : null, el && at > 0 ? rangeOf(el, sn.start, sn.start + at) : null);
       const place = placeOf(sn.block, sn.start + at);
@@ -482,21 +577,33 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       }
       return place !== 'away';
     },
-    onScreen: (sn, at) => sn.section === section && (steered() || placeOf(sn.block, sn.start + at) === 'here'),
+    onScreen: (sn, at) => {
+      if (sn.section !== section) return false;
+      if (steered()) return true;
+      if (sn.pic === undefined) return placeOf(sn.block, sn.start + at) === 'here';
+      const el = pics.current[sn.pic]?.el;
+      return !!el && picPlace(el) === 'here';
+    },
     clear: () => light(null),
     section: async (i) => {
       const html = book.sections[i]?.html;
       if (html === undefined) return null;
-      // Parsed apart from the page, so nothing in it loads: the same blocks the page would have.
+      // Parsed apart from the page, so nothing in it loads: the same blocks and pictures the page would have.
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const out: Sentence[] = [];
-      collectBlocks(doc.body).forEach((el, b) => {
-        const text = el.textContent ?? '';
-        for (const [start, end] of sentencesIn(text, 0)) out.push({ section: i, block: b, start, end, text: text.slice(start, end) });
-      });
-      return out;
+      const bl = collectBlocks(doc.body);
+      return inOrder(i, bl, picturesIn(doc.body, bl));
     },
-    reach: (sn, at) => goSection(sn.section, { kind: 'pos', block: sn.block, offset: sn.start + at }),
+    reach: (sn, at) => goSection(sn.section, sn.pic !== undefined ? { kind: 'pic', n: sn.pic } : { kind: 'pos', block: sn.block, offset: sn.start + at }),
+    picture: async (sn) => {
+      const el = sn.section === taggedFor.current && sn.pic !== undefined ? pics.current[sn.pic]?.el : undefined;
+      if (!el) return false;
+      if (el instanceof HTMLImageElement && !el.complete) await Promise.race([el.decode().catch(() => {}), wait(2000)]);
+      for (let waited = 0; !listenRef.current.onScreen(sn, 0) && waited < 1500; waited += 50) await wait(50);
+      if (!listenRef.current.onScreen(sn, 0)) return false;
+      // A flourish between scenes, or a letter drawn as a picture, isn't stopped at.
+      const r = el.getBoundingClientRect();
+      return r.width >= 100 && r.height >= 100;
+    },
     print: async (i) => {
       const html = book.sections[i]?.html;
       if (html === undefined) return null;
@@ -514,7 +621,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       return out;
     },
     range: (sn) => {
-      const el = sn.section === section ? blocks.current[sn.block] : undefined;
+      const el = sn.section === section && sn.pic === undefined ? blocks.current[sn.block] : undefined;
       return el ? rangeOf(el, sn.start, sn.end) : null;
     },
     pick: (x, y) => {
@@ -530,6 +637,34 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       return found ? { section, block: i, start: found[0], end: found[1], text: text.slice(found[0], found[1]) } : null;
     },
   };
+
+  const listenRef = useRef(listen);
+  listenRef.current = listen;
+
+  // The ring in the corner of a picture Immersive waits on, counting down, kept there as the page
+  // moves. On the picture, not under it, where a caption would be.
+  const look = useLook();
+  const looked = look && look.section === section ? look : null;
+  const ringRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!looked) return;
+    let frame = 0;
+    const draw = () => {
+      frame = requestAnimationFrame(draw);
+      const el = pics.current[looked.pic]?.el;
+      const ring = ringRef.current;
+      if (!el || !ring) return;
+      const r = el.getBoundingClientRect();
+      const box = rootRef.current!.getBoundingClientRect();
+      const v = viewRef.current!.getBoundingClientRect();
+      const x = Math.min(r.right, v.right) - 10 - ring.offsetWidth;
+      const y = Math.min(r.bottom, v.bottom - (pagesMode ? 4 : BAR)) - 10 - ring.offsetHeight;
+      ring.style.translate = `${x - box.left}px ${y - box.top}px`;
+      ring.style.setProperty('--left', lookLeft().toFixed(4));
+    };
+    draw();
+    return () => cancelAnimationFrame(frame);
+  }, [looked, pagesMode]);
 
   useImperativeHandle(ref, () => ({
     goTo: (i, anchor) => goSection(i, anchor ? { kind: 'anchor', id: anchor } : { kind: 'start' }),
@@ -605,6 +740,14 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
           </div>
         )}
       </div>
+      {looked && (
+        <div ref={ringRef} className={`fv-look${looked.held ? ' is-held' : ''}`} role="timer" aria-label="A picture. Tap to go on, or hold to keep looking.">
+          <svg viewBox="0 0 28 28" aria-hidden="true">
+            <circle className="is-track" cx="14" cy="14" r="10" pathLength={1} />
+            <circle className="is-left" cx="14" cy="14" r="10" pathLength={1} />
+          </svg>
+        </div>
+      )}
       {pagesMode && (
         <>
           <div className="fv-folio">{pages > 1 ? `${page + 1} of ${pages}` : ''}</div>

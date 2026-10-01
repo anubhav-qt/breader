@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Loc, ViewHandle } from './FlowView';
+import { lookAt, lookFor, stopLook } from './look';
 import { checkGpu, type Mode, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
@@ -32,6 +33,11 @@ export interface Sentence {
   text: string;
   /** 2 voices: hers or his (voice/two.ts). */
   g?: Two;
+  /**
+   * A picture, the chapter's how-manyth, with nothing to say: Immersive stops on it (look.ts).
+   * `block` is the one it's in or follows, and `start` and `end` are 0.
+   */
+  pic?: number;
 }
 
 export interface Listen {
@@ -60,6 +66,11 @@ export interface Listen {
   range?: (s: Sentence) => Range | null;
   /** A chapter's fingerprint (shared printOf), to tell it's the text 2 voices' marks were made from. */
   print?: (i: number) => Promise<string | null>;
+  /**
+   * Once a picture stop is drawn and on screen: whether it's big enough to stop at, and not a
+   * flourish between scenes.
+   */
+  picture?: (s: Sentence) => Promise<boolean>;
 }
 
 /** A paragraph by its number in the chapter, and its first sentence. */
@@ -207,7 +218,7 @@ const both = (m: Mode) => {
 };
 
 const keyOf = (s: Sentence) => `${s.section}.${s.block}.${s.start}`;
-const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && s.block === r.block && s.start <= r.start && r.start < s.end;
+const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && (r.pic !== undefined ? s.pic === r.pic : s.block === r.block && s.start <= r.start && r.start < s.end);
 
 /**
  * Reads the book on screen aloud. `loc` is the reader's place, so a page turned or a chapter picked
@@ -248,6 +259,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     player.current?.stop();
     player.current = null;
     cut.current = null;
+    stopLook();
     if (!keep) view.current?.listen?.clear();
     setTone(null);
     hold(false);
@@ -357,7 +369,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
           return;
         }
         chars += list[j].text.length;
-        if (clips.has(keyOf(list[j]))) continue;
+        if (list[j].pic !== undefined || clips.has(keyOf(list[j]))) continue;
         if (making >= 2) return;
         making++;
         const mine = clips;
@@ -425,6 +437,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         continue;
       }
       const s = list[i];
+      const pic = s.pic !== undefined;
       spot.current = { s, at: 0 };
       setTone(voices.length > 1 ? s.g ?? null : null);
       // Into the next chapter: the page follows as soon as it's seen.
@@ -439,12 +452,27 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
           resolve(null);
         };
       });
+      let cutOff = false;
+      void interrupted.then(() => { cutOff = true; });
       let clip: Clip | null = null;
-      try {
-        clip = await Promise.race([clipOf(s), interrupted]);
-      } catch (e) {
-        console.warn('A sentence couldn’t be read aloud:', e);
-        lastError = e instanceof Error ? e.message : String(e);
+      if (pic) {
+        // A picture: Immersive turns to it and waits on it a moment. Normal reads on past it, and
+        // so does a voice nobody can see the page of.
+        if (centred() && !document.hidden) {
+          await catchUp(s, 0);
+          if (live() && !cutOff && (await listen()?.picture?.(s)) && live() && !cutOff) {
+            const seen = lookAt(s, lookFor(p.pace));
+            await Promise.race([seen.done, interrupted]);
+            seen.end();
+          }
+        }
+      } else {
+        try {
+          clip = await Promise.race([clipOf(s), interrupted]);
+        } catch (e) {
+          console.warn('A sentence couldn’t be read aloud:', e);
+          lastError = e instanceof Error ? e.message : String(e);
+        }
       }
       if (!live()) return;
       let how: Awaited<Playing['done']> | null = null;
@@ -521,7 +549,9 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         openSheet();
         return;
       }
-      if (!clip) {
+      if (pic) {
+        // Looked at, or passed.
+      } else if (!clip) {
         if (++failures >= 3) {
           failed(`The voice couldn’t read this part of the book${lastError ? ` (${lastError})` : ''}.`);
           openSheet();

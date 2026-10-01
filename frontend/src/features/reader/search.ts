@@ -78,6 +78,7 @@ export function readBook(book: LoadedBook, listen: Listen, onRead?: (done: numbe
       // A block's text again, from its sentences where they sit in it.
       const texts = new Map<number, string>();
       for (const s of sentences) {
+        if (s.pic !== undefined) continue;
         const t = texts.get(s.block) ?? '';
         texts.set(s.block, t.padEnd(s.start, ' ') + s.text);
       }

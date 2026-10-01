@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Loc, ViewHandle } from './FlowView';
+import { lookAt, lookFor, stopLook } from './look';
 import { wordMarks, wordsIn, type Sentence } from './narration';
 import { voicePrefs } from './voice/prefs';
 
@@ -7,7 +8,8 @@ import { voicePrefs } from './voice/prefs';
  * Immersive without a voice. The page dims, and from the sentence the reader taps, the words light
  * up one after another at their pace, in words a minute (voice/prefs.ts). Pages turn and chapters
  * follow as it gets to them, as they do for a voice. For phones that can't run a voice, and for
- * anyone who'd rather read than listen. Play adds a voice, which carries on from the light.
+ * anyone who'd rather read than listen. Play adds a voice, which carries on from the light. It
+ * stops on each picture a moment, as a voice does (look.ts).
  */
 
 export interface Spot {
@@ -16,8 +18,9 @@ export interface Spot {
   at: number;
 }
 
-/** The same words: a sentence, or the part of it a voice started from. */
-export const overlaps = (a: Sentence, b: Sentence) => a.section === b.section && a.block === b.block && a.start < b.end && b.start < a.end;
+/** The same words: a sentence, or the part of it a voice started from. Or the same picture. */
+export const overlaps = (a: Sentence, b: Sentence) =>
+  a.section === b.section && (a.pic !== undefined || b.pic !== undefined ? a.pic === b.pic : a.block === b.block && a.start < b.end && b.start < a.end);
 
 /** A sentence's time at a pace: its words, and a breath after. */
 const msFor = (words: number, wpm: number) => (60_000 * (words + 0.5)) / wpm;
@@ -86,9 +89,21 @@ export function usePacing(view: RefObject<ViewHandle | null>, active: boolean, l
     requestAnimationFrame(tick);
   });
 
+  /** Turns to a picture and waits on it (look.ts). False when it was stopped or moved. */
+  const look = async (gen: number, s: Sentence) => {
+    const live = () => run.current === gen;
+    here.current = { s, at: 0 };
+    const l = listen();
+    if (!l) return false;
+    if (!l.show(s, 0, true)) await follow(s, 0);
+    if (live() && (await listen()?.picture?.(s)) && live()) await lookAt(s, lookFor(voicePrefs().pace)).done;
+    return live();
+  };
+
   const halt = useCallback(() => {
     run.current++;
     turning.current = false;
+    stopLook();
     setRunning(false);
   }, []);
 
@@ -112,7 +127,7 @@ export function usePacing(view: RefObject<ViewHandle | null>, active: boolean, l
         list = more;
         i = 0;
       }
-      if (!(await light(gen, list[i], at))) return;
+      if (!(await (list[i].pic !== undefined ? look(gen, list[i]) : light(gen, list[i], at)))) return;
       at = 0;
       i++;
     }

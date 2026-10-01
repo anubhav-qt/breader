@@ -249,13 +249,33 @@
 /* Immersive. The page dims to a third of its ink around the lit sentence, which comes up full and
    takes the book's colour word by word: as a voice says it, or without one, at the reader's pace
    (pacing.ts). A click or tap on a sentence lights it. While it moves on, the controls sleep as in
-   focus mode, all but the dot row, where you are in the book now beats with the words. */
+   focus mode, all but the dot row, where you are in the book now beats with the words. Pictures
+   keep their full colour, and each one is stopped at (look.ts). */
 
 .rd .fv-flow { transition: color 600ms ease; }
-.rd .fv-flow :is(img, svg) { transition: opacity 600ms ease; }
 .rd.is-immersed .fv-flow { color: color-mix(in oklab, var(--r-fg) 32%, var(--r-bg)); }
 .rd.is-immersed .fv-flow :is(a, blockquote, .ph-author, .ph-note) { color: inherit; border-bottom-color: transparent; }
-.rd.is-immersed .fv-flow :is(img, svg) { opacity: 0.3; }
+/* A finger held on a picture keeps it, rather than opening the phone's menu for saving it. */
+.rd.is-immersed .fv-flow :is(img, svg) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* The ring in the corner of a picture waited on, emptying as its time runs out; still while a finger holds it. */
+.fv-look {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--r-bg);
+  pointer-events: none;
+  animation: fv-look-in 320ms ease both;
+}
+.fv-look svg { display: block; width: 100%; height: 100%; rotate: -90deg; }
+.fv-look circle { fill: none; stroke-width: 1.5; }
+.fv-look .is-track { stroke: var(--r-line); }
+.fv-look .is-left { stroke: var(--book-mark); stroke-linecap: round; stroke-dasharray: 1 1; stroke-dashoffset: calc(var(--left, 1) - 1); transition: stroke 200ms ease; }
+.fv-look.is-held .is-left { stroke: var(--r-fg); }
+@keyframes fv-look-in { from { opacity: 0; } }
 .rd.is-immersed ::highlight(narrate) { color: var(--r-fg); }
 .rd.is-immersed ::highlight(narrate-said) { color: var(--book-mark); }
 .rd.is-immersed ::highlight(narrate-her),

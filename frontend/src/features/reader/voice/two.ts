@@ -61,6 +61,11 @@ const SAYABLE = /[\p{L}\p{N}]/u;
 export function inTwo(list: Sentence[], marks: Marks, pick: Two, same: (section: number) => boolean): Sentence[] {
   const out: Sentence[] = [];
   for (const s of list) {
+    // A picture has nothing to say, in either voice.
+    if (s.pic !== undefined) {
+      out.push(s);
+      continue;
+    }
     if (!same(s.section)) {
       out.push({ ...s, g: pick });
       continue;
