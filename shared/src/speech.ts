@@ -119,10 +119,15 @@ export interface PiperConfig {
 /**
  * What a Piper model is given to say `text` at `speed`: its sounds as the ids the voice knows,
  * each followed by a pause, between a start and an end; and how much it varies them.
+ *
+ * A full stop goes first: the first 45 ms or so a model makes are it fading in, and a sentence
+ * starting there lost up to 15 dB of its first sound, more the faster it talked. The quiet it
+ * says for the stop is cut back when it's played (speaker.ts).
  */
 export async function piperInput(text: string, cfg: PiperConfig, speed: number) {
   const map = cfg.phoneme_id_map;
   const ids = [...map['^'], ...map['_']];
+  for (const p of ['.', ' ']) if (map[p]) ids.push(...map[p], ...map['_']);
   for (const p of await piperPhonemes(text, cfg.espeak?.voice || 'en-us')) {
     if (!map[p]) continue;
     ids.push(...map[p], ...map['_']);

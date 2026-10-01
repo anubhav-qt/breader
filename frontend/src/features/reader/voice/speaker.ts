@@ -288,20 +288,37 @@ export function wav(samples: Float32Array, rate: number, lead = 0): Blob {
 }
 
 /*
- * The voices start speaking within a few thousandths of a second of their sound's start (some
- * straight away), and a new sound can take longer than that to be heard: a phone or Safari
- * starting it, or a speaker coming back up after the gap between two sentences. Whatever didn't
- * make it was the sentence's first sounds. So every sentence gets at least this long before its
- * first word.
+ * A new sound can take a moment to be heard: a phone or Safari starting it, a speaker coming back
+ * up after the gap between two sentences. Chrome hands its speaker every sample, so it happens
+ * after the browser, and whatever didn't make it was the sentence's first sound. The voices leave
+ * quiet in front of it, but never the same: Kokoro about 300 ms at 1x and 210 at 1.88x (320 wpm),
+ * where the first sound went missing; Normal's voices anything up to 700 ms. So at every speed, in
+ * every voice, a sentence starts exactly this long before its first sound: quiet added in front
+ * when it has less, taken off when it has more.
  */
-const LEAD = 0.15;
+const LEAD = 0.35;
 
-/** How many samples to put before a sentence's sound for LEAD, counting the quiet it starts with. */
-export function leadOf(x: Float32Array, rate: number) {
+/**
+ * What's added in front comes off the quiet after the sentence's last sound, down to this much, so
+ * the pause between two sentences, and the pace with it, stays the voice's own.
+ */
+const AFTER = 0.06;
+
+/**
+ * A sentence's sound as it's played, LEAD before its first sound, and where the clip's own first
+ * sample falls in it (`shift`, in samples: less than nothing when quiet came off the front).
+ */
+export function framed(clip: Clip) {
+  const { audio: x, rate } = clip;
   const want = Math.round(LEAD * rate);
-  let i = 0;
-  while (i < want && i < x.length && Math.abs(x[i]) < 0.01) i++;
-  return want - i;
+  let own = 0;
+  while (own < x.length && Math.abs(x[own]) < 0.01) own++;
+  let after = 0;
+  while (after < x.length - own && Math.abs(x[x.length - 1 - after]) < 0.01) after++;
+  const lead = Math.max(0, want - own);
+  const from = Math.max(0, own - want);
+  const to = x.length - Math.min(lead, Math.max(0, after - Math.round(AFTER * rate)));
+  return { blob: wav(x.subarray(from, to), rate, lead), shift: lead - from };
 }
 
 let silence: string | null = null;
@@ -356,14 +373,14 @@ export function letGoKeys() {
   carrier = null;
 }
 
-let current: { clip: Clip; a: HTMLAudioElement; lead: number } | null = null;
+let current: { clip: Clip; a: HTMLAudioElement; shift: number } | null = null;
 
 /** How loud the voice is right now, 0 to 1, for things that move with it. */
 export function level() {
   const p = current;
   if (!p || p.a.paused) return 0;
   const { audio: x, rate } = p.clip;
-  const mid = Math.floor(p.a.currentTime * rate) - p.lead;
+  const mid = Math.floor(p.a.currentTime * rate) - p.shift;
   let sum = 0;
   let n = 0;
   for (let i = Math.max(0, mid - 512); i < Math.min(x.length, mid + 512); i++, n++) sum += x[i] * x[i];
@@ -385,15 +402,15 @@ export interface Playing {
 /** Plays a sentence's sound. `volume` below 1 is a fade (ignored by iPhones, which keep their own). */
 export function play(clip: Clip, volume = 1): Playing {
   const a = audio();
-  const lead = leadOf(clip.audio, clip.rate);
-  const url = URL.createObjectURL(wav(clip.audio, clip.rate, lead));
+  const { blob, shift } = framed(clip);
+  const url = URL.createObjectURL(blob);
   const length = clip.audio.length / clip.rate;
   let stopped = false;
   let started = false;
   a.src = url;
   a.volume = volume;
-  current = { clip, a, lead };
-  const out: Playing = { done: null!, refusal: null, time: () => Math.max(0, Math.min(1, (a.currentTime - lead / clip.rate) / length)), stop: () => {} };
+  current = { clip, a, shift };
+  const out: Playing = { done: null!, refusal: null, time: () => Math.max(0, Math.min(1, (a.currentTime - shift / clip.rate) / length)), stop: () => {} };
   out.done = new Promise((resolve) => {
     let settled = false;
     const finish = (how: 'ended' | 'stopped' | 'paused' | 'refused') => {

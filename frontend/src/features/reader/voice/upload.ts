@@ -3,7 +3,7 @@ import { KOKORO_PACK_BYTES, LIMITS } from '@breader/shared/limits';
 import { storeFile } from '../../../data/sync';
 import { checkGpu, fromListed, SAMPLE_LINE, type Engine } from './catalog';
 import { putVoice } from './list';
-import { drop, failed, leadOf, missing, synth, wav } from './speaker';
+import { drop, failed, framed, missing, synth } from './speaker';
 import { forget, keep, uploaded } from './store';
 import type { PiperConfig } from './tts.worker';
 
@@ -99,7 +99,7 @@ export async function uploadVoice(d: Draft, as: { name: string; accent: Accent; 
     if (d.engine === 'piper' || ((await checkGpu()) && (await missing(trial)).bytes === 0)) {
       const clip = await synth(trial, SAMPLE_LINE, 1);
       if (!clip.audio.length || clip.audio.some((x) => Number.isNaN(x))) throw new Error('it made no sound');
-      sample = wav(clip.audio, clip.rate, leadOf(clip.audio, clip.rate));
+      sample = framed(clip).blob;
     }
   } catch (e) {
     failed(null);
