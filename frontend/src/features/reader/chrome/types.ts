@@ -2,7 +2,6 @@ import type { RefObject } from 'react';
 import type { RevisitResponse } from '@breader/shared/ai';
 import type { LoadedBook, TocItem } from '../../../books/types';
 import type { Chapter } from '../chapters';
-import type { CommentsLayout } from '../comments';
 import type { TalkView } from './Comments';
 import type { Loc } from '../FlowView';
 import type { Paragraph, Sentence } from '../narration';
@@ -89,18 +88,15 @@ export interface ChromeProps {
   /** 2 voices for this book: ready (an AI marked who says what), soon (its switch is on), or off. */
   two: 'ready' | 'soon' | 'off';
   /**
-   * Comments on the book (comments.ts), where the reader put them: `opens` says whether a chapter's
-   * thread is open to them yet, `at` is the thread the drop opens on (BOOK_THREAD, or a chapter's
-   * first section; the chapter being read if not said), and `card` the one passing by.
+   * Comments on the book (comments.ts), for the speech bubble a PDF has in place of the tail:
+   * `opens` says whether a chapter's thread is open to them yet, `at` is the thread the drop opens
+   * on (BOOK_THREAD, or a chapter's first section; the chapter being read if not said).
    */
   talk: {
-    layout: CommentsLayout;
     view: TalkView;
     opens: (i: number) => boolean;
     at?: number;
     open: (section?: number) => void;
-    card: { section: number; stay: boolean; n: number } | null;
-    closeCard: () => void;
   };
 }
 

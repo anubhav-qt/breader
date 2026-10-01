@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { duration, minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
@@ -11,7 +11,7 @@ import { level, useLoadState } from '../voice/speaker';
 import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
 import { CHECK, CROSS, FOCUS, FOCUSED, GROW, MINUS, PAUSE, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
-import { CommentsPanel, PassingCard, TalkButton, TalkContents } from './Comments';
+import { CommentsPanel, TalkButton } from './Comments';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { RevisitMenu, RevisitWindow, type Scope } from './Revisit';
 import { SayAs } from './SayAs';
@@ -85,13 +85,9 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   const [scope, setScope] = useState<Scope>('chapter');
   const canRevisit = !!revisit && !!loc && (loc.section > 0 || loc.block > 0);
   const up = panel === 'revisit';
-  // Comments: the speech bubble in the drawer layout, and for a PDF, whose pages take no tail.
-  const bubble = talk.layout === 'drawer' || (talk.layout === 'tail' && isPdf);
+  // Comments: a PDF's pages take no tail, so the speech bubble up top has them.
   const here = chapters[current];
   const talkCount = here ? talk.view.talk.threads.get(here.section)?.count ?? 0 : 0;
-  const contents = (chip?: (section: number) => ReactNode, top?: ReactNode) => (
-    <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} chip={chip} top={top} />
-  );
 
   return (
     <>
@@ -102,7 +98,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
         <div className="i3-ends">
-          {bubble && talk.view.talk.state !== 'off' && (
+          {isPdf && talk.view.talk.state !== 'off' && (
             <TalkButton count={talkCount} lit={talk.opens(current)} open={panel === 'comments'} onClick={() => (panel === 'comments' ? openPanel(null) : talk.open())} />
           )}
           {search && (
@@ -195,8 +191,6 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         )}
       </div>
 
-      {talk.layout === 'card' && !panel && <PassingCard view={talk.view} chapters={chapters} card={talk.card} onOpen={talk.open} onClose={talk.closeCard} />}
-
       {choosing && !panel && (
         <div className="i3-hint" role="status"><Typed text={`${tap} a paragraph, or type its number`} /></div>
       )}
@@ -239,7 +233,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
             {/* The drop keeps its close button in place; what's in it scrolls. */}
             <div className="i3-drop-in">
               {panel === 'toc' ? (
-                talk.layout === 'list' ? <TalkContents view={talk.view} chapters={chapters} opens={talk.opens} contents={contents} /> : contents()
+                <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
               ) : panel === 'comments' ? (
                 <CommentsPanel key={talk.at ?? 'here'} view={talk.view} chapters={chapters} current={current} opens={talk.opens} at={talk.at} />
               ) : panel === 'voice' && (narration || immersion) ? (

@@ -102,6 +102,44 @@ describe('comments', () => {
     expect((await owner.get(`/v1/comments/${shared.id}/3`)).body.comments.map((x: { body: string }) => x.body)).toEqual(['Mine']);
   });
 
+  it('keeps replies one deep, under what they answer', async () => {
+    const { b: owner, shared } = await sharer();
+    const { b: reader } = await registered();
+    await reader.post('/v1/sync/push', push('r', { type: 'book.put', book: book({ fileId: shared.fileId, origin: shared.id }) }));
+    const first = (await say(owner, shared.id, 'Who was the Hatter?', { name: unique('Asker') })).body.comment;
+    expect(first.parent).toBeNull();
+
+    const answer = await say(reader, shared.id, 'A friend of the Hare', { name: unique('Answerer'), parent: first.id });
+    expect(answer.status).toBe(201);
+    expect(answer.body.comment).toMatchObject({ parent: first.id, section: 3 });
+    // Answering the answer goes under the first comment too.
+    const more = (await say(owner, shared.id, 'Thanks', { parent: answer.body.comment.id })).body.comment;
+    expect(more.parent).toBe(first.id);
+
+    const list = (await reader.get(`/v1/comments/${shared.id}/3`)).body.comments;
+    expect(list.map((x: { body: string; parent: string | null }) => [x.body, x.parent])).toEqual([
+      ['Who was the Hatter?', null],
+      ['A friend of the Hare', first.id],
+      ['Thanks', first.id],
+    ]);
+    expect((await owner.get(`/v1/comments/${shared.id}`)).body.threads).toEqual([expect.objectContaining({ section: 3, count: 3 })]);
+
+    // Not across threads, nor to a comment that's gone or on another book.
+    expect((await say(reader, shared.id, 'Elsewhere', { parent: first.id, section: -1 })).status).toBe(400);
+    expect((await say(reader, shared.id, 'Nobody', { parent: 'no-such-comment' })).body.code).toBe('parent_gone');
+    const { b: other, shared: elsewhere } = await sharer();
+    const there = (await say(other, elsewhere.id, 'Another book', { name: unique('There') })).body.comment;
+    expect((await say(reader, shared.id, 'Crossed', { parent: there.id })).body.code).toBe('parent_gone');
+
+    // Taking a comment back leaves its replies where they were.
+    expect((await owner.del(`/v1/comments/${shared.id}/c/${first.id}`)).status).toBe(204);
+    const left = (await reader.get(`/v1/comments/${shared.id}/3`)).body.comments;
+    expect(left.map((x: { body: string; parent: string | null }) => [x.body, x.parent])).toEqual([
+      ['A friend of the Hare', first.id],
+      ['Thanks', first.id],
+    ]);
+  });
+
   it('turns away what isn’t a comment', async () => {
     const { b, shared } = await sharer();
     const name = unique('Checker');
@@ -110,6 +148,7 @@ describe('comments', () => {
     expect((await say(b, shared.id, 'ok', { name, section: -2 })).status).toBe(400);
     expect((await say(b, shared.id, 'ok', { name, progress: 2 })).status).toBe(400);
     expect((await say(b, shared.id, 'ok', { name, extra: 1 })).status).toBe(400);
+    expect((await say(b, shared.id, 'ok', { name, parent: 'not an id' })).status).toBe(400);
   });
 
   it('reaches the laptop’s copy', async () => {

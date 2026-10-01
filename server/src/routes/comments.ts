@@ -25,7 +25,8 @@ import { requireLibrary } from '../lib/library.ts';
  * on that book. A thread is the shared book's id, so a library may read and write it while it has
  * that book (its own, or a copy started from it) or the book is on the Shared Library. Holding a
  * chapter back until the reader gets there is the app's to do: the server doesn't know chapters.
- * Comments are kept as written; the app censors them when it shows them.
+ * A reply names the comment it answers, which keeps replies one deep. Comments are kept as
+ * written; the app censors them when it shows them.
  */
 
 const taken = () => new ApiError(409, 'name_taken', 'Someone already has that name. Pick another.');
@@ -56,12 +57,13 @@ export function commentRoutes(deps: Deps) {
   const nameOf = async (libraryId: string) =>
     (await db.select({ name: commenters.name }).from(commenters).where(eq(commenters.libraryId, libraryId)))[0]?.name ?? null;
 
-  const shown = (row: { id: string; section: number; name: string; body: string; progress: number; at: Date; library_id: string }, me: string): BookComment => ({
+  const shown = (row: { id: string; section: number; name: string; body: string; progress: number; parent: string | null; at: Date; library_id: string }, me: string): BookComment => ({
     id: row.id,
     section: row.section,
     name: row.name,
     body: row.body,
     progress: row.progress,
+    parent: row.parent ?? null,
     at: new Date(row.at).getTime(),
     mine: row.library_id === me,
   });
@@ -102,7 +104,7 @@ export function commentRoutes(deps: Deps) {
     if (!Number.isInteger(section) || section < BOOK_THREAD) throw notHere();
     const { rows } = await db.execute<Parameters<typeof shown>[0]>(sql`
       SELECT * FROM (
-        SELECT c.id, c.section, coalesce(m.name, 'A reader') AS name, c.body, c.progress, c.created_at AS at, c.library_id
+        SELECT c.id, c.section, coalesce(m.name, 'A reader') AS name, c.body, c.progress, c.parent_id AS parent, c.created_at AS at, c.library_id
           FROM comments c LEFT JOIN commenters m ON m.library_id = c.library_id
          WHERE c.book = ${book} AND c.section = ${section}
          ORDER BY c.created_at DESC
@@ -117,6 +119,17 @@ export function commentRoutes(deps: Deps) {
     const me = c.var.library.id;
     const book = await thread(me, c.req.param('book'));
     const body = parse(PostComment, await readJson(c));
+    // A reply goes under the comment it answers, or under the one that comment answers.
+    let parent: string | null = null;
+    if (body.parent) {
+      const [to] = await db
+        .select({ id: comments.id, section: comments.section, parentId: comments.parentId })
+        .from(comments)
+        .where(and(eq(comments.id, body.parent), eq(comments.book, book)));
+      if (!to) throw new ApiError(404, 'parent_gone', 'The comment you answered was taken back.');
+      if (to.section !== body.section) throw new ApiError(400, 'bad_request', 'A reply goes in the same thread as what it answers.');
+      parent = to.parentId ?? to.id;
+    }
     let name = await nameOf(me);
     if (!name) {
       if (!body.name) throw new ApiError(400, 'name_needed', 'Pick a name to comment under first.');
@@ -132,10 +145,10 @@ export function commentRoutes(deps: Deps) {
     }
     const [row] = await db
       .insert(comments)
-      .values({ id: randomUUID(), book, section: body.section, libraryId: me, body: body.body, progress: body.progress })
+      .values({ id: randomUUID(), book, section: body.section, libraryId: me, body: body.body, progress: body.progress, parentId: parent })
       .returning();
     return c.json(
-      { comment: shown({ ...row, name, at: row.createdAt, library_id: me }, me), name } satisfies CommentPosted,
+      { comment: shown({ ...row, name, parent: row.parentId, at: row.createdAt, library_id: me }, me), name } satisfies CommentPosted,
       201,
     );
   });

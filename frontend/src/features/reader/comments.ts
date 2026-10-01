@@ -28,15 +28,6 @@ import type { Loc } from './FlowView';
 export { BOOK_THREAD };
 export type { BookComment };
 
-/** How the comments sit in the reader, for the reader to choose between (Appearance). */
-export type CommentsLayout = 'tail' | 'drawer' | 'card' | 'list';
-export const COMMENT_LAYOUTS: Array<{ v: CommentsLayout; label: string; about: string }> = [
-  { v: 'tail', label: 'Tail', about: 'A quiet line after each chapter’s last paragraph, opening in place.' },
-  { v: 'drawer', label: 'Drawer', about: 'A speech bubble up top, lit at a chapter’s end, opening a panel.' },
-  { v: 'card', label: 'Card', about: 'A small card for a few seconds as you move into the next chapter.' },
-  { v: 'list', label: 'List', about: 'Counts beside each chapter in the contents.' },
-];
-
 export interface Talk {
   /** `off`: no library here, or the book isn't one the server knows. */
   state: 'loading' | 'ready' | 'off';
@@ -110,9 +101,19 @@ export async function openThread(thread: string, section: number) {
   }
 }
 
-/** Says something in a thread, with the reader's name the first time. Throws for the composer to show. */
-export async function postComment(thread: string, section: number, body: string, progress: number, name?: string) {
-  const { comment, name: mine } = await api.post<CommentPosted>(path(thread), { section, body, progress: Math.max(0, Math.min(1, progress)), ...(name ? { name } : {}) });
+/**
+ * Says something in a thread, with the reader's name the first time. `parent` is the comment it
+ * answers; the server files it under the one that comment answers, if any. Throws for the
+ * composer to show.
+ */
+export async function postComment(thread: string, section: number, body: string, progress: number, name?: string, parent?: string) {
+  const { comment, name: mine } = await api.post<CommentPosted>(path(thread), {
+    section,
+    body,
+    progress: Math.max(0, Math.min(1, progress)),
+    ...(name ? { name } : {}),
+    ...(parent ? { parent } : {}),
+  });
   const was = get(thread);
   const list = was.lists.get(section);
   const count = (was.threads.get(section)?.count ?? 0) + 1;

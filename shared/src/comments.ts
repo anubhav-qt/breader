@@ -1,10 +1,14 @@
 import { z } from 'zod';
+import { Id } from './protocol.ts';
 
 /*
  * Comments on a book: one thread for the whole book and one at the end of each chapter, read by
  * everyone on that book. A book's threads go by the shared book's id (a copy's origin), so the
  * sharer and every reader who started a copy meet in the same place. A chapter's thread is the
  * section its chapter starts at; the whole book's is BOOK_THREAD.
+ *
+ * A comment can be answered: a reply goes under it, in the same thread. Replies are one deep, so
+ * answering a reply answers the comment it's under.
  *
  * Each library comments under one name, which nobody else may have. Names are told apart by
  * foldName, so "Mira", "mira" and "M.ira" are one name.
@@ -39,6 +43,8 @@ export const PostComment = z.strictObject({
   progress: z.number().min(0).max(1),
   /** The writer's name, the first time they comment. */
   name: CommentName.optional(),
+  /** The comment this answers, in the same thread. */
+  parent: Id.optional(),
 });
 export type PostComment = z.input<typeof PostComment>;
 
@@ -48,6 +54,8 @@ export interface BookComment {
   name: string;
   body: string;
   progress: number;
+  /** The comment this answers, or null for one that answers nothing. */
+  parent: string | null;
   /** Written at, ms. */
   at: number;
   mine: boolean;

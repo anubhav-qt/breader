@@ -297,7 +297,9 @@ export const commenters = pgTable(
 /**
  * What readers say about a book, for everyone on it: `book` is the shared book's id (a copy's
  * origin), `section` the chapter's first section, or -1 for the whole book. `progress` is how far
- * the writer had read. Stored as written; the app censors it when it shows it. Fed.
+ * the writer had read. `parentId` is the comment a reply answers, always one that isn't itself a
+ * reply; no key holds it, so a reply outlives what it answered being taken back. Stored as
+ * written; the app censors it when it shows it. Fed.
  */
 export const comments = pgTable(
   'comments',
@@ -308,6 +310,7 @@ export const comments = pgTable(
     libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
     body: text('body').notNull(),
     progress: doublePrecision('progress').notNull().default(0),
+    parentId: text('parent_id'),
     createdAt: at('created_at').notNull().defaultNow(),
     version: version(),
   },

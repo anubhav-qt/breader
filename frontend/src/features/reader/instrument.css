@@ -720,15 +720,14 @@
 
 
 /* ------------------------------------------------------------------ */
-/* Comments (chrome/Comments.tsx), in whichever of the four places the reader put them: the tail
-   after a chapter's text, the drop from the speech bubble, the passing card, the contents. */
+/* Comments (chrome/Comments.tsx): the tail after a chapter's text, and for a PDF, the drop from
+   the speech bubble. */
 
 .i3-drop.is-comments { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(380px, calc(100% - 24px)); }
 .i3-talk { display: flex; align-items: center; gap: 5px; }
 .i3-talk.is-lit { color: var(--book-mark); }
 .i3-head .i3-talk.is-lit { opacity: 1; transform: none; }
 .i3-talk-n { font: var(--ui-w-strong) 12px/1 var(--ui); }
-.cm-about { margin: -8px 0 0; }
 
 .cm-tabs { margin-bottom: 14px; }
 .cm-tabs button { text-transform: uppercase; letter-spacing: 0.06em; }
@@ -737,57 +736,44 @@
 .cm-step-b:hover:not(:disabled) { color: var(--r-fg); background: var(--r-fill); }
 .cm-step-b:disabled { opacity: 0.3; cursor: default; }
 .cm-step-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-family: var(--read); font-size: 22px; line-height: 1.1; color: var(--r-fg); }
-.cm-step-t.is-alone { text-align: left; margin: 10px 0 4px; }
-.cm-back { padding: 4px 0; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); transition: color 140ms ease; }
-.cm-back:hover { color: var(--r-fg); }
 .cm-why { margin: 10px 0 4px; }
 
-.cm-list { display: grid; }
-.cm-c { padding: 12px 2px; }
-.cm-c + .cm-c { box-shadow: 0 -1px var(--r-line); }
+/* What's been said, newest first, each with its replies under a rule to its left. */
+.cm-list { display: grid; margin-top: 4px; }
+.cm-one { padding: 12px 2px 10px; }
+.cm-one + .cm-one { box-shadow: 0 -1px var(--r-line); }
 .cm-c-h { display: flex; align-items: baseline; gap: 8px; font: var(--ui-w) 11px/1.3 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
 .cm-c-h b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: inherit; color: var(--r-fg); text-transform: none; letter-spacing: 0; font-family: var(--read); font-size: 20px; line-height: 1; }
 .cm-c.is-mine .cm-c-h b { color: var(--book-mark); }
 .cm-c-t { margin-top: 5px; font: 20px/1.15 var(--read); color: var(--r-fg); white-space: pre-wrap; overflow-wrap: anywhere; }
-.cm-take { margin-left: auto; padding: 3px 6px; border-radius: 6px; font: inherit; text-transform: inherit; letter-spacing: inherit; color: var(--r-mu); transition: color 140ms ease, background-color 140ms ease; }
-.cm-take:hover, .cm-take.is-sure { color: var(--r-fg); background: var(--r-fill); }
+.cm-c-a { display: flex; gap: 2px; margin: 3px 0 0 -6px; }
+.cm-act { padding: 4px 6px; border-radius: 6px; font: var(--ui-w) 11px/1.2 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); transition: color 140ms ease, background-color 140ms ease; }
+.cm-act:hover:not(:disabled), .cm-act.is-sure { color: var(--r-fg); background: var(--r-fill); }
+.cm-act.is-on { color: var(--book-mark); }
+.cm-gone { font: var(--ui-w) 11px/1.3 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.cm-replies { display: grid; gap: 4px; margin: 8px 0 0 4px; padding-left: 14px; box-shadow: inset 1.5px 0 var(--r-line); }
+.cm-replies .cm-c { padding: 2px 0 4px; }
+.cm-more { justify-self: start; padding: 4px 0; font: var(--ui-w) 11px/1.2 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--book-mark); }
+.cm-more:hover { color: var(--r-fg); }
 .cm-ahead { width: 100%; margin: 6px 0; padding: 9px 10px; border-radius: 9px; font: var(--ui-w) 11px/1.2 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); box-shadow: inset 0 0 0 1px var(--r-line); transition: color 140ms ease; }
 .cm-ahead:hover { color: var(--r-fg); }
 .cm-list.is-ahead { opacity: 0.8; }
 
-/* Writing: the name beside the comment until there is one, then the name itself. */
-.cm-say { position: sticky; bottom: 0; padding: 12px 0 2px; background: var(--r-bg); }
+/* Writing, at the top of the thread, or under a comment to answer it: the name beside it until
+   there is one, then the name itself. */
+.cm-say { padding: 4px 0 6px; }
+.cm-say.is-reply { padding: 4px 0 2px; }
 .cm-say-row { display: flex; align-items: flex-end; gap: 6px; }
 .cm-say .vs-input { font-size: 20px; }
 .cm-name { flex: 0 1 26%; min-width: 72px; }
 .cm-name.is-free { box-shadow: inset 0 0 0 1.5px var(--book-mark); }
 .cm-name.is-taken { box-shadow: inset 0 0 0 1.5px var(--r-fg); }
 .cm-me { flex: 0 1 auto; max-width: 34%; height: 40px; display: flex; align-items: center; padding: 0 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 20px/1 var(--read); color: var(--book-mark); }
+.cm-say.is-reply .cm-me { display: none; }
 .cm-body { flex: 1; min-width: 0; height: 40px; min-height: 40px; padding: 9px 12px; resize: none; line-height: 1.1; overflow-y: auto; scrollbar-width: thin; }
 .cm-send { flex: none; }
 .cm-note { margin: 8px 0 0; }
 .cm-note.is-bad { color: var(--r-fg); }
-
-/* The passing card, above the bottom line, gone in a few seconds. */
-.rd-chrome > .cm-card {
-  position: absolute;
-  left: 50%;
-  bottom: 84px;
-  translate: -50% 0;
-  z-index: 9;
-  width: min(360px, calc(100% - 32px));
-  border-radius: 14px;
-  background: var(--r-bg);
-  box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
-}
-.cm-card .i3-x { top: 6px; right: 6px; }
-.cm-card-b { width: 100%; display: grid; gap: 8px; padding: 13px 16px 15px; text-align: left; }
-.cm-card-h { display: flex; align-items: center; gap: 8px; padding-right: 28px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--book-mark); }
-.cm-card-h .i3-dots-icon { flex: none; font-size: 13px; }
-.cm-card-w { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cm-card-n { flex: none; margin-left: auto; color: var(--r-mu); }
-.cm-card-t { font: 20px/1.12 var(--read); color: var(--r-fg); overflow-wrap: anywhere; }
-.cm-card-t em, .cm-tail-p em { font-style: normal; color: var(--r-mu); }
 
 /* The tail, after a chapter's text, in the page but not of it: none of the book's own styles
    (indents, drop caps, justified lines) reach it. */
@@ -802,19 +788,10 @@
 .cm-tail-l { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-tail-n { flex: none; display: flex; gap: 8px; color: var(--book-mark); }
 .cm-tail-p { font: 20px/1.15 var(--read); color: var(--r-mu); overflow-wrap: anywhere; }
-.cm-tail .cm-say { position: static; background: none; }
-.cm-tail .cm-c { padding: 10px 0; }
+.cm-tail-p em { font-style: normal; color: var(--r-mu); }
+.cm-tail .cm-one { padding: 10px 0 8px; }
 /* In Immersive it steps back with the text, until it's pointed at or written in. */
 .fv-flow .fv-aside { transition: opacity 600ms ease; }
 .rd.is-immersed .fv-flow .fv-aside:not(:hover, :focus-within) { opacity: 0.5; }
 /* Paged, the turn zones keep to the margins while the tail is on the page, so it takes taps. */
 .fv.is-aside .fv-zone { width: max(44px, calc(50% - var(--vw) / 2)); }
-
-/* The contents, with each chapter's comments beside it. */
-.cm-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
-.cm-chip { display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border-radius: 8px; font: var(--ui-w-strong) 11.5px/1 var(--ui); color: var(--book-mark); transition: background-color 140ms ease; }
-button.cm-chip:hover { background: var(--r-fill); }
-.cm-chip .i3-dots-icon { font-size: 12px; }
-.cm-chip.is-locked { font-weight: var(--ui-w); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10.5px; color: var(--r-mu); }
-.rd .p-item.cm-book::before { background: var(--book-mark); box-shadow: none; border-radius: 50%; }
-.cm-book { margin-bottom: 6px; }
