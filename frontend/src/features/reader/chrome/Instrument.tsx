@@ -164,7 +164,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         ) : (
           <>
             <span className="i3-left">
-              <span className="i3-read"><Digits value={progress * 100} width={3} /><small>%</small></span>
+              <span className="i3-read"><Digits value={Math.floor(progress * 100)} width={3} /><small>%</small></span>
               {canRevisit && (
                 <button type="button" className={`i3-rv${panel === 'revisit' || panel === 'recap' ? ' is-open' : ''}`} onClick={() => toggle('revisit')} aria-expanded={panel === 'revisit'} aria-haspopup="dialog">
                   Revisit<span className="i3-caret" aria-hidden="true">▴</span>

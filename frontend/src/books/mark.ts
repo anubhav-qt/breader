@@ -55,6 +55,8 @@ export function markTracker(start: ReadMark | undefined, words: number) {
         last = { at, t };
         bank = 0;
         run = { from: at, read: 0 };
+        // It opens on its last words, and the mark was on that screen: it was read to the end.
+        if (p.progress >= 1 && mark.progress < 1 && total - mark.progress * total <= screen * 2) mark = here;
         return mark;
       }
       bank = Math.min(cap, bank + ((t - last.t) * PACE) / 60_000);

@@ -221,16 +221,33 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   /* Geometry */
   const flowLeft = () => flowRef.current!.getBoundingClientRect().left;
 
-  const measurePages = () => {
+  /** The last box of the text: its last block, or a picture after it. The aside isn't text. */
+  const textEnds = (aside: boolean) => {
     const bl = blocks.current;
-    // The last block, or a picture after it, or the aside after them.
-    const ends = [bl[bl.length - 1] ?? (flowRef.current!.lastElementChild as HTMLElement | null), pics.current[pics.current.length - 1]?.el, host.isConnected ? host : null].flatMap((el) => {
+    return [bl[bl.length - 1] ?? (flowRef.current!.lastElementChild as HTMLElement | null), pics.current[pics.current.length - 1]?.el, aside && host.isConnected ? host : null].flatMap((el) => {
       if (!el) return [];
       const rects = el.getClientRects();
-      return [(rects[rects.length - 1] ?? el.getBoundingClientRect()).left];
+      return [rects[rects.length - 1] ?? el.getBoundingClientRect()];
     });
+  };
+
+  const measurePages = () => {
+    const ends = textEnds(true).map((r) => r.left);
     if (!ends.length) return 1;
     return Math.max(1, Math.floor((Math.max(...ends) - flowLeft() + 1) / step) + 1);
+  };
+
+  /**
+   * The text's end is on screen: the book has been read to its last word. The comments after it
+   * add pages or scroll, which nobody has to go through to finish.
+   */
+  const textEndShown = () => {
+    const ends = textEnds(false);
+    if (!ends.length) return true;
+    if (pagesMode) return pageRef.current >= Math.floor((Math.max(...ends.map((r) => r.left)) - flowLeft() + 1) / step);
+    const v = viewRef.current!;
+    if (v.scrollTop + v.clientHeight >= v.scrollHeight - 4) return true;
+    return Math.max(...ends.map((r) => r.bottom)) <= v.getBoundingClientRect().bottom + 4;
   };
 
   const pageAt = (r: DOMRect) => Math.max(0, Math.min(pagesRef.current - 1, Math.floor((r.left - flowLeft() + 1) / step)));
@@ -308,11 +325,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     const secWords = Math.max(book.sections[section]?.words ?? 0, into);
     const done = starts[section] + into;
     const v = viewRef.current!;
-    let atEnd = false;
-    if (section === n - 1) {
-      if (pagesMode) atEnd = pageRef.current >= pagesRef.current - 1;
-      else atEnd = v.scrollTop + v.clientHeight >= v.scrollHeight - 4;
-    }
+    const atEnd = section === n - 1 && textEndShown();
     onLocationRef.current({
       section,
       block,

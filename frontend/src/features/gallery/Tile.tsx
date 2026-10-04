@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { animate, motion, useMotionValue } from 'motion/react';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
-import { IconMore, IconStar } from '../../components/icons';
+import { IconCheck, IconMore, IconStar } from '../../components/icons';
 import { blotsFor, maskFor, radiiFor } from './blots';
 import { fitCard } from './fit';
 import { cardNames } from './names';
@@ -100,7 +100,10 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   // A recent book without a cover gets one drawn.
   const made = art && !b.coverUrl && roomy;
   const started = b.progress > 0;
-  useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started]);
+  const done = b.progress >= 1;
+  // The corner's buttons: finished, favourite and the edit button, which the first line keeps clear of.
+  const tools = stack ? 0 : 1 + (done ? 1 : 0) + (b.favorite ? 1 : 0);
+  useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);
   useEffect(() => {
     let live = true;
     void document.fonts.ready.then(() => { if (live) fitCard(ref.current); });
@@ -124,7 +127,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
       <div
         ref={ref}
         className={`tile tile-${variant}${hasArt || made ? ' has-art' : ''}`}
-        style={{ ...bookVars(b), ...(hasArt ? { '--art-ratio': artRatio } : null) } as CSSProperties}
+        style={{ ...bookVars(b), '--tools': tools, ...(hasArt ? { '--art-ratio': artRatio } : null) } as CSSProperties}
         onContextMenu={(e) => {
           if (!moreRef.current) return;
           e.preventDefault();
@@ -157,6 +160,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
         )}
         {/* A series' card opens the series; its books are edited there. */}
         {!stack && <div className="tile-tools">
+          {done && <span className="tile-fav tile-done" title="Finished"><IconCheck /></span>}
           {b.favorite && <span className="tile-fav" title="Favourite"><IconStar /></span>}
           <button
             ref={moreRef}

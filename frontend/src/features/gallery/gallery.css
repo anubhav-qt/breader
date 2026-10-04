@@ -70,7 +70,7 @@
 }
 .tile-face.is-ink { z-index: 1; background: var(--bc); color: var(--bc-ink); }
 /* The first line of text keeps clear of the corner button. */
-.tile-face > :first-child { padding-right: 36px; }
+.tile-face > :first-child { padding-right: calc(var(--tools, 1) * 36px); }
 .tile-hit { position: absolute; inset: 0; z-index: 2; border-radius: inherit; }
 .tile-hit:focus-visible { outline: none; }
 
@@ -90,6 +90,7 @@
 .tile-more:hover { background: var(--canvas); }
 .tile-more svg, .tile-fav svg { width: 16px; height: 16px; }
 .tile-fav svg { fill: currentColor; }
+.tile-done svg { fill: none; width: 15px; height: 15px; }
 
 /* Type inside cards */
 .t-eyebrow { font: var(--ui-w) 12px/1 var(--ui); opacity: 0.75; margin-bottom: 12px; }
