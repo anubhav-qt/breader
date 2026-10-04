@@ -23,6 +23,7 @@ import { useLoadState } from './voice/speaker';
 import { TWO_COLORS, useReaderSettings, type ThemeName } from './settings';
 import { flash, readBook, type Found } from './search';
 import { useSleepWatch } from './sleep';
+import { keepStop, stopIn, type Stop } from './stops';
 import { useReadingClock } from './useReadingClock';
 import './reader.css';
 import './instrument.css';
@@ -188,9 +189,42 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (byVoice) { voiceFrom('top'); return; }
     void view.current?.listen.from().then((list) => { if (list[0]) lightFrom(list[0]); });
   };
-  /** From where it paused: the light's place, which a paused voice leaves lit too. */
+  /*
+   * Where the light or the voice stopped last time in this book, on this device (stops.ts): the
+   * first Begin after opening it carries on from there, when it's on the page the book opened at.
+   * Noted every second while either goes, and kept when they stop or the book closes.
+   */
+  const [stoppedBefore] = useState(() => stopIn(record.id));
+  const stopped = useRef(stoppedBefore);
+  /** The book was read before: Begin offers Continue, not the top. */
+  const resumable = begun || !!stoppedBefore || (initial?.progress ?? record.progress) > 0;
+  const spot = useRef<Stop | null>(null);
+  useEffect(() => {
+    if (!going) return;
+    const note = () => {
+      const h = pacing.current();
+      const s = h?.s ?? (narration.busy() ? narration.current() : undefined);
+      if (s && s.pic === undefined) spot.current = { s, at: h?.s === s ? h.at : 0 };
+    };
+    note();
+    const t = window.setInterval(note, 1000);
+    return () => {
+      window.clearInterval(t);
+      note();
+      if (!spot.current) return;
+      stopped.current = spot.current;
+      keepStop(record.id, spot.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [going]);
+  /** Last time's stop, if it's on the page on screen. */
+  const lastStop = () => {
+    const st = stopped.current;
+    return st && view.current?.listen.onScreen(st.s, st.at) ? st : null;
+  };
+  /** From where it paused: the light's place, which a paused voice leaves lit too. The first time, where it stopped last time. */
   const carryOn = () => {
-    const h = pacing.current();
+    const h = pacing.current() ?? (begun ? null : lastStop());
     if (byVoice) voiceFrom(h?.s ?? narration.where() ?? 'top');
     else if (h) lightFrom(h.s, h.at);
     else fromTop();
@@ -227,7 +261,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (looking() && !closing) { stopLook(); return true; }
     if (!immersive || narration.playing || closing) return false;
     if (pacing.running) pauseLight();
-    else if (begun) carryOn();
+    else if (resumable) carryOn();
     else fromTop();
     return true;
   };
@@ -469,7 +503,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       running: pacing.running,
       waiting: !going && !asking,
       choosing,
-      begun,
+      begun: resumable,
       choose: () => setAsking(true),
       cancel: () => setAsking(false),
       fromTop,

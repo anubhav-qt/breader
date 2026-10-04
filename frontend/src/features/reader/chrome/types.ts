@@ -57,8 +57,8 @@ export interface ChromeProps {
   /**
    * Immersive on a book whose words can light up (pacing.ts): `running` while the light moves on
    * its own, `waiting` while Begin is on the bottom line. Begin (`choose`) numbers the paragraphs,
-   * and `choosing`, the reader starts from the top of the page, or once `begun`, carries on, or
-   * picks one by its number.
+   * and `choosing`, the reader starts from the top of the page, or once `begun` (or a book read
+   * before), carries on, or picks one by its number.
    */
   immersion: {
     running: boolean;
