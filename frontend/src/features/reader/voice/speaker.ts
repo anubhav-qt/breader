@@ -3,7 +3,7 @@ import { api } from '../../../lib/api';
 import { engineFiles, filesOf, noGpu, weight, type Engine, type VoiceInfo } from './catalog';
 import { onServer, startingHeavy } from './prefs';
 import { readyOnServer, sayOnServer } from './server';
-import { has, type Want } from './store';
+import { has, hosted, type Want } from './store';
 import type { Reply, Request } from './tts.worker';
 
 /*
@@ -209,9 +209,11 @@ const onServerReady = new Map<string, Promise<void>>();
 function prepareOnServer(v: VoiceInfo): Promise<void> {
   const ready = onServerReady.get(v.key);
   if (ready) return ready;
+  // What the server fetches the first time, as a guess until it says: the heavy voices' model too.
   const f = filesOf(v);
+  const total = [v.engine === 'kokoro' ? hosted('kokoro') : undefined, f.model, f.config, f.pack].reduce((n, w) => n + (w?.size ?? 0), 0);
   const p = (async () => {
-    setLoad({ key: v.key, loaded: 0, total: (f.model?.size ?? 0) + (f.config?.size ?? 0), error: null, gpu: false });
+    setLoad({ key: v.key, loaded: 0, total, error: null, gpu: false });
     try {
       await readyOnServer(v, (loaded, total) => setLoad({ loaded, total }));
       setLoad({ key: null });

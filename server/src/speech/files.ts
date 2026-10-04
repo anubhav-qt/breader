@@ -8,30 +8,32 @@ import manifest from '@breader/shared/voice-files.json';
 
 /*
  * The voices the server reads with, and their files on the laptop's disk. They're the app's five
- * Normal voices (Piper), fetched from where the app's build fetches them (shared voice-files.json:
- * a fixed revision on Hugging Face) the first time each is wanted, checked against its SHA-256,
- * and kept. A file is only ever written under its final name once it has checked out, so one that
- * is there is whole.
+ * Normal voices (Piper) and its five heavy ones (Kokoro: one model for all five, and a small pack
+ * for each), fetched from where the app's build fetches them (shared voice-files.json: a fixed
+ * revision on Hugging Face) the first time each is wanted, checked against its SHA-256, and kept. A
+ * file is only ever written under its final name once it has checked out, so one that is there is
+ * whole.
  */
 
 type Entry = { from?: string; path?: string; size: number; sha256: string };
 const files = manifest.files as Record<string, Entry>;
 
-/** The voices, by their key in the app's catalog: piper:kristin… */
-export const VOICES = Object.keys(files)
-  .map((name) => /^piper-([a-z_]+)$/.exec(name)?.[1])
-  .filter((id): id is string => !!id && !!files[`piper-${id}-config`])
-  .map((id) => `piper:${id}`);
+const ids = (re: RegExp) => Object.keys(files).map((name) => re.exec(name)?.[1]).filter((id): id is string => !!id);
 
-/** A voice's files on disk. */
-export interface VoiceFiles {
-  model: string;
-  config: string;
-}
+/** The voices, by their key in the app's catalog: piper:kristin, kokoro:af_heart… */
+export const VOICES = [
+  ...ids(/^piper-([a-z_]+)$/).filter((id) => !!files[`piper-${id}-config`]).map((id) => `piper:${id}`),
+  ...(files.kokoro ? ids(/^kokoro-([a-z]{2}_[a-z]+)$/).map((id) => `kokoro:${id}`) : []),
+];
 
-const entriesOf = (key: string) => {
-  const id = key.split(':')[1];
-  return [files[`piper-${id}`], files[`piper-${id}-config`]];
+/** A voice's files on disk. A Kokoro voice says words the British way if it's one of the b voices. */
+export type VoiceFiles =
+  | { engine: 'piper'; model: string; config: string }
+  | { engine: 'kokoro'; model: string; pack: string; british: boolean };
+
+const parts = (key: string) => {
+  const [engine, id] = key.split(':');
+  return engine === 'kokoro' ? [files.kokoro, files[`kokoro-${id}`]] : [files[`piper-${id}`], files[`piper-${id}-config`]];
 };
 
 export function makeFiles(dir: string) {
@@ -95,14 +97,15 @@ export function makeFiles(dir: string) {
     /** A voice's files, fetched first if they aren't here. */
     async ensure(key: string): Promise<VoiceFiles> {
       if (!VOICES.includes(key)) throw new Error(`No such voice: ${key}`);
-      const [model, config] = await Promise.all(entriesOf(key).map(one));
-      return { model, config };
+      const [model, other] = await Promise.all(parts(key).map(one));
+      const [engine, id] = key.split(':');
+      return engine === 'kokoro' ? { engine: 'kokoro', model, pack: other, british: id.startsWith('b') } : { engine: 'piper', model, config: other };
     },
     /** How much of a voice's files is here, in bytes. */
     async progress(key: string) {
       let loaded = 0;
       let total = 0;
-      for (const f of entriesOf(key)) {
+      for (const f of parts(key)) {
         total += f.size;
         loaded += (await has(f)) ? f.size : arrived.get(where(f)) ?? 0;
       }

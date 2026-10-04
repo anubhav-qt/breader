@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { parentPort, workerData } from 'node:worker_threads';
 import { Mp3Encoder } from '@breezystack/lamejs';
 import * as ort from 'onnxruntime-web';
-import { piperInput, type PiperConfig } from '@breader/shared/speech';
+import { KOKORO_PACK_BYTES, KOKORO_RATE, kokoroInput, piperInput, type PiperConfig } from '@breader/shared/speech';
 import type { VoiceFiles } from './files.ts';
 
 /*
@@ -13,7 +13,9 @@ import type { VoiceFiles } from './files.ts';
  * seventh of the bytes of the raw sound, for phones on mobile data.
  *
  * One request at a time, as a model can't run twice at once. It holds two voices (2 voices reads
- * with a pair), about 150 MB each; a third lets go of the one used longest ago.
+ * with a pair); a third lets go of the one used longest ago. A Normal voice is about 150 MB. The
+ * heavy ones share one model, about 1 GB while any of them is held (it runs at about twice real
+ * time on four threads of an M-series Mac), and each adds half a megabyte.
  */
 
 export type Request =
@@ -39,7 +41,26 @@ if (existsSync(new URL('ort-wasm-simd-threaded.wasm', bundled))) {
 ort.env.wasm.numThreads = (workerData as { threads: number }).threads;
 ort.env.logLevel = 'error';
 
-const voices = new Map<string, { session: ort.InferenceSession; config: PiperConfig }>();
+type Voice =
+  | { engine: 'piper'; session: ort.InferenceSession; config: PiperConfig }
+  | { engine: 'kokoro'; pack: Float32Array; british: boolean };
+
+const voices = new Map<string, Voice>();
+/** Kokoro's one model, for all its voices: held while one of them is. */
+let kokoro: ort.InferenceSession | null = null;
+
+const session = async (file: string) => ort.InferenceSession.create(await readFile(file), { executionProviders: ['wasm'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
+
+async function open(files: VoiceFiles): Promise<Voice> {
+  if (files.engine === 'kokoro') {
+    kokoro ??= await session(files.model);
+    const b = await readFile(files.pack);
+    if (b.byteLength !== KOKORO_PACK_BYTES) throw new Error('That isn’t a Kokoro voice pack.');
+    return { engine: 'kokoro', pack: new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)), british: files.british };
+  }
+  const [model, config] = await Promise.all([session(files.model), readFile(files.config, 'utf8')]);
+  return { engine: 'piper', session: model, config: JSON.parse(config) as PiperConfig };
+}
 
 async function load(key: string, files: VoiceFiles) {
   const had = voices.get(key);
@@ -49,33 +70,45 @@ async function load(key: string, files: VoiceFiles) {
     voices.set(key, had);
     return had;
   }
-  const [model, config] = await Promise.all([readFile(files.model), readFile(files.config, 'utf8')]);
-  const cfg = JSON.parse(config) as PiperConfig;
-  const session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
+  const v = await open(files);
   while (voices.size >= HELD) {
-    const [oldest, v] = voices.entries().next().value!;
+    const [oldest, gone] = voices.entries().next().value!;
     voices.delete(oldest);
-    await v.session.release();
+    if (gone.engine === 'piper') await gone.session.release();
   }
-  const v = { session, config: cfg };
   voices.set(key, v);
+  if (kokoro && ![...voices.values()].some((h) => h.engine === 'kokoro')) {
+    await kokoro.release();
+    kokoro = null;
+  }
   return v;
 }
 
 const int64 = (ids: number[]) => BigInt64Array.from(ids, (n) => BigInt(n));
 
-async function say(m: Extract<Request, { type: 'say' }>) {
-  const { session, config } = await load(m.key, m.files);
-  const { ids, scales, speakers } = await piperInput(m.text, config, m.speed);
+async function sound(v: Voice, text: string, speed: number): Promise<{ audio: Float32Array; rate: number }> {
+  if (v.engine === 'kokoro') {
+    const { ids, style } = await kokoroInput(text, v.british, v.pack);
+    const out = await kokoro!.run({
+      input_ids: new ort.Tensor('int64', int64(ids), [1, ids.length]),
+      style: new ort.Tensor('float32', style, [1, 256]),
+      speed: new ort.Tensor('float32', new Float32Array([speed]), [1]),
+    });
+    return { audio: (out.waveform as ort.Tensor).data as Float32Array, rate: KOKORO_RATE };
+  }
+  const { ids, scales, speakers } = await piperInput(text, v.config, speed);
   const feeds: Record<string, ort.Tensor> = {
     input: new ort.Tensor('int64', int64(ids), [1, ids.length]),
     input_lengths: new ort.Tensor('int64', int64([ids.length]), [1]),
     scales: new ort.Tensor('float32', new Float32Array(scales), [3]),
   };
   if (speakers > 1) feeds.sid = new ort.Tensor('int64', int64([0]), [1]);
-  const out = await session.run(feeds);
-  const audio = (out[session.outputNames[0]] as ort.Tensor).data as Float32Array;
-  const rate = config.audio.sample_rate;
+  const out = await v.session.run(feeds);
+  return { audio: (out[v.session.outputNames[0]] as ort.Tensor).data as Float32Array, rate: v.config.audio.sample_rate };
+}
+
+async function say(m: Extract<Request, { type: 'say' }>) {
+  const { audio, rate } = await sound(await load(m.key, m.files), m.text, m.speed);
   return { mp3: mp3(audio, rate), samples: audio.length, rate };
 }
 

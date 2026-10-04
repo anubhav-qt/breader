@@ -120,14 +120,18 @@ function find(key: string, engines: Engine[]): VoiceInfo | undefined {
   return up && fromListed(up);
 }
 
+/** The kinds of voice a mode reads with: Normal's, and in Immersive the heavy ones too. */
+const enginesOf = (mode: Mode): Engine[] => (mode === 'normal' ? ['piper'] : ['piper', 'kokoro']);
+
 /**
  * The voice a mode reads with: the one picked, or the default when that one has gone. A heavy
  * voice where the graphics chip can't run it reads with Normal's pick instead. The server reads
- * with its own voices, the Normal ones: the mode's pick, or Normal's, if it has them.
+ * with its own voices, Normal's and the heavy ones, on its own processor, so any device can have
+ * them: the mode's pick, or Normal's, if it has them.
  */
 export function voiceFor(mode: Mode): VoiceInfo {
   const normal = find(prefs.voice.normal, ['piper']) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
-  if (onServer()) return [find(prefs.voice[mode], ['piper']), normal].find(serverHas) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
+  if (onServer()) return [find(prefs.voice[mode], enginesOf(mode)), normal].find(serverHas) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
   if (mode === 'normal') return normal;
   const v = find(prefs.voice.immersive, ['piper', 'kokoro']) ?? (handheld() ? normal : find(DEFAULT_VOICE.immersive, ['kokoro'])!);
   return v.engine === 'kokoro' && !hasGpu() ? normal : v;
@@ -141,27 +145,27 @@ export function voiceFor(mode: Mode): VoiceInfo {
 /** A voice can read one side of 2 voices if it's a woman's or a man's. */
 export const sideOf = (v: VoiceInfo): Two | null => v.gender ?? null;
 
+/** Never one of each kind: his follows hers. */
+const sameKind = (F: VoiceInfo, M: VoiceInfo): Record<Two, VoiceInfo> => ({ F, M: M.engine === F.engine ? M : find(pairOfKind(F.engine).M, [F.engine])! });
+
 /**
  * The voices 2 voices reads with in a mode: the pair picked, or the default where one has gone,
  * or isn't a woman's or a man's any more. Heavy voices where the graphics chip can't run them
- * read with Normal's pair instead.
+ * read with Normal's pair instead; on the server, they read there.
  */
 export function pairFor(mode: Mode): Record<Two, VoiceInfo> {
   const pick = (m: Mode, g: Two, engines: Engine[]) => {
     const v = find(prefs.pair[m][g], engines);
     return v && sideOf(v) === g ? v : find(defaultPair(m)[g], engines)!;
   };
-  if (onServer()) {
-    const side = (g: Two) => [pick(mode, g, ['piper']), pick('normal', g, ['piper'])].find(serverHas) ?? find(DEFAULT_PAIR.normal[g], ['piper'])!;
-    return { F: side('F'), M: side('M') };
-  }
   const normal = { F: pick('normal', 'F', ['piper']), M: pick('normal', 'M', ['piper']) };
+  if (onServer()) {
+    const side = (g: Two) => [pick(mode, g, enginesOf(mode)), normal[g]].find(serverHas) ?? find(DEFAULT_PAIR.normal[g], ['piper'])!;
+    return sameKind(side('F'), side('M'));
+  }
   if (mode === 'normal') return normal;
-  const F = pick('immersive', 'F', ['piper', 'kokoro']);
-  let M = pick('immersive', 'M', ['piper', 'kokoro']);
-  // Never one of each kind: his follows hers.
-  if (M.engine !== F.engine) M = find(pairOfKind(F.engine).M, [F.engine])!;
-  return F.engine === 'kokoro' && !hasGpu() ? normal : { F, M };
+  const both = sameKind(pick('immersive', 'F', ['piper', 'kokoro']), pick('immersive', 'M', ['piper', 'kokoro']));
+  return both.F.engine === 'kokoro' && !hasGpu() ? normal : both;
 }
 
 /** Picks a woman's or a man's voice for her side or his. The other side keeps to the same kind. */

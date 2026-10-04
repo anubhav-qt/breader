@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { makeApp } from '../src/app.ts';
 import { users } from '../src/db/schema.ts';
+import { VOICES } from '../src/speech/files.ts';
 import type { Speech } from '../src/speech/index.ts';
 import { browser, deps, primary } from './helpers.ts';
 
@@ -83,7 +84,7 @@ describe('the server voice', () => {
   it('says only its own voices, and a sentence at a time', async () => {
     const b = await loggedIn(OPEN.replace('open-', 'open2-'), true, makeApp({ ...deps, env: { ...deps.env, SPEECH_EMAILS: [OPEN.replace('open-', 'open2-')] }, speech: fake }));
     const count = heard.length;
-    expect((await b.post('/v1/speech/say', { ...say, voice: 'kokoro:af_heart' })).body.code).toBe('speech_voice');
+    expect((await b.post('/v1/speech/say', { ...say, voice: 'user:someones-upload' })).body.code).toBe('speech_voice');
     expect((await b.post('/v1/speech/say', { ...say, text: 'a'.repeat(1001) })).status).toBe(400);
     expect((await b.post('/v1/speech/say', { ...say, speed: 9 })).status).toBe(400);
     expect(heard.length).toBe(count);
@@ -95,5 +96,14 @@ describe('the server voice', () => {
     const r = await b.post('/v1/speech/say', say);
     expect(r.status).toBe(503);
     expect(r.body.code).toBe('speech_off');
+  });
+});
+
+describe('the server’s voices', () => {
+  it('are the app’s five Normal voices and its five heavy ones, and no uploads', () => {
+    expect(VOICES).toEqual([
+      'piper:kristin', 'piper:norman', 'piper:cori', 'piper:northern', 'piper:ljspeech',
+      'kokoro:af_heart', 'kokoro:am_michael', 'kokoro:bf_emma', 'kokoro:bm_george', 'kokoro:af_bella',
+    ]);
   });
 });

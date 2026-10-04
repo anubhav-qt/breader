@@ -111,11 +111,14 @@ instead of sending them.
   `https://api.breader.example` on the laptop, `https://fb.breader.example` on Render.
 
 **The server voice.** The laptop can read aloud for phones too slow for a voice of their own,
-with the app's five Normal voices, sending each sentence as MP3 (about 22 MB an hour). It's open
-only to the accounts in `SPEECH_EMAILS` (comma separated, laptop only; Render is too small to
-speak), and only once each address is confirmed; they then see **Read on the server** in the voice
-sheet. Each voice downloads into the `voices` volume the first time it's asked for, about 64 MB,
-and the engine holds about 150 MB per voice while it reads, letting go after ten quiet minutes.
+with the app's five Normal voices and its five heavy ones (2 voices too), sending each sentence as
+MP3 (about 22 MB an hour). It's open only to the accounts in `SPEECH_EMAILS` (comma separated,
+laptop only; Render is too small to speak), and only once each address is confirmed; they then see
+**Read on the server** in the voice sheet. Each voice downloads into the `voices` volume the first
+time it's asked for: about 64 MB for a Normal one, and 326 MB once for all the heavy ones. The
+engine holds about 150 MB per Normal voice while it reads, and about 1 GB while any heavy one is
+held, letting go after ten quiet minutes. The heavy ones run at about twice real time on four
+threads of an M-series Mac; a slower processor may keep a reader waiting between sentences.
 `SPEECH_THREADS` caps the processor threads it uses (4, or one less than the laptop has).
 
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the

@@ -27,6 +27,8 @@ const ABOUT: Record<Mode, string> = {
   immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, from where you pick, until Immersive is off: any Normal voice, or on a computer, one of the richer heavy ones below.',
 };
 const HEAVY = 'Richer, and much heavier: one download of about 330 MB for all five, run on the graphics chip. Use them on a computer. On a phone they can hang the browser.';
+/** The heavy voices, read on the server. */
+const SERVER_HEAVY = 'Richer voices, read on Breader’s own computer, so nothing downloads and any phone can have them. Each sentence takes it a little longer than a Normal voice.';
 const FALLBACK = 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, with a Normal voice, each about 66 MB. The heavy ones need a newer computer with a recent Chrome, Edge or Safari.';
 /** A browser that can't run any voice still has Immersive. */
 const NO_VOICES: Record<Mode, string> = {
@@ -37,7 +39,7 @@ const HUNG = 'A heavy voice stopped this browser last time, so Immersive reads w
 /** Read on the server: what each mode does then. */
 const SERVER: Record<Mode, string> = {
   normal: 'Breader’s own computer reads aloud and sends the sound here, for a phone that’s slow with voices of its own. Nothing downloads, but it needs a connection.',
-  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, from where you pick, until Immersive is off, with a voice from Breader’s own computer.',
+  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, from where you pick, until Immersive is off, with a voice from Breader’s own computer: a Normal one, or one of the richer heavy ones below.',
 };
 
 /*
@@ -83,9 +85,9 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
   const server = speech.allowed && prefs.server;
   // Immersive where the GPU can't run the heavy voices offers only the Normal ones (prefs.ts, voiceFor).
   const gpu = useGpu();
-  const fallback = mode === 'immersive' && gpu === false;
+  const fallback = mode === 'immersive' && gpu === false && !server;
   const voices: Mode = fallback ? 'normal' : mode;
-  const engines: Engine[] = voices === 'immersive' && !server ? ['piper', 'kokoro'] : ['piper'];
+  const engines: Engine[] = voices === 'immersive' ? ['piper', 'kokoro'] : ['piper'];
   const current = voiceFor(mode);
   // 2 voices: one list as ever, her pick and his lit in their colours.
   const paired = two === 'ready' && prefs.count[mode] === 2;
@@ -214,12 +216,12 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
       <div className="vs-lists" role={paired ? 'group' : 'radiogroup'} aria-label={paired ? 'Her voice and his' : 'Voice'}>
         <div className="vs-list">{(server ? BUILT_IN.normal.filter(serverHas) : BUILT_IN.normal).map((v) => row(v))}</div>
-        {/* The server has the five Normal voices and no others. */}
-        {!server && engines.includes('kokoro') && (
+        {/* The server has the built-in voices, and no one's uploads. */}
+        {engines.includes('kokoro') && (
           <>
             <div className="clbl vs-sub">Heavy voices</div>
-            <p className="p-note vs-heavy">{HEAVY}</p>
-            <div className="vs-list">{BUILT_IN.immersive.map((v) => row(v))}</div>
+            <p className="p-note vs-heavy">{server ? SERVER_HEAVY : HEAVY}</p>
+            <div className="vs-list">{(server ? BUILT_IN.immersive.filter(serverHas) : BUILT_IN.immersive).map((v) => row(v))}</div>
           </>
         )}
         {!server && others.length > 0 && (

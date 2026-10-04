@@ -25,7 +25,7 @@ export function speechRoutes(deps: Deps) {
   const gate = async (c: Context<AppEnv>, voice: string) => {
     if (!speech) throw new ApiError(503, 'speech_off', 'The server voice isn’t reading aloud just now. Turn off Read on the server to read with this device’s voice.');
     if (!(await allowed(c))) throw new ApiError(403, 'speech_not_allowed', 'The server voice isn’t open to this account.');
-    if (!speech.voices.includes(voice)) throw new ApiError(400, 'speech_voice', 'The server doesn’t have that voice. Pick one of the five Normal voices.');
+    if (!speech.voices.includes(voice)) throw new ApiError(400, 'speech_voice', 'The server doesn’t have that voice. Pick a Normal or heavy one; voices people uploaded read on their own devices.');
     return speech;
   };
 
