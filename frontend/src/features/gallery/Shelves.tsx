@@ -32,6 +32,7 @@ interface Props {
   editingId?: string;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
+  onFinish?: (book: ShelfItem, finished: boolean) => void;
   onSeries: (s: Series) => void;
 }
 
@@ -39,7 +40,7 @@ interface Props {
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, onOpen, onEdit, onSeries }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onSeries }: Props) {
   const key = `breader.view.${place}.v1`;
   const [picked, setPicked] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
@@ -146,6 +147,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
           editingId={editingId}
           onOpen={onOpen}
           onEdit={onEdit}
+          onFinish={onFinish}
           onSeries={onSeries}
         />
       </motion.div>
@@ -153,7 +155,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
   );
 }
 
-type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onSeries'> & {
+type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onFinish' | 'onSeries'> & {
   shelves: Shelf[];
   lazy: boolean;
   empty?: string;
@@ -186,7 +188,7 @@ function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
 type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onSeries }: RowProps) {
+function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onSeries }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -265,6 +267,7 @@ function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, 
                 layoutKey={layoutKey}
                 onOpen={stack ? () => onSeries(stack) : onOpen}
                 onEdit={onEdit}
+                onFinish={onFinish}
               />
             );
           })}

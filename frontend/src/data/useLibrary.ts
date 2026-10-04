@@ -5,7 +5,7 @@ import { laterMark } from '../books/mark';
 import { report } from '../lib/report';
 import { store } from '../lib/store';
 import { onNews, tell, withData } from '../lib/tabs';
-import type { BookEdit, BookRecord, ReadState } from '../books/types';
+import type { BookEdit, BookRecord, ReadMark, ReadState } from '../books/types';
 import { normColor, pickColor } from './colors';
 import { sampleRecords } from './library';
 import { newId, newLibraryKey } from '../lib/key';
@@ -488,18 +488,29 @@ function saveRead(id: string, read: ReadState) {
   void change((d) => ({ reads: { ...d.reads, [id]: read } }), holds(id) ? [{ type: 'read.put', bookId: id, read }] : [], { wait: 400 });
 }
 
+/** How far books were before they were marked finished here, so taking it back puts them back. */
+const beforeFinished = new Map<string, Omit<ReadMark, 'n'>>();
+
 /**
  * Marks a book read to the end, or takes it back. The mark moves (books/mark.ts), not the place
  * it's open at, so it still opens where it was left, and keeps its place among the others. A mark
- * only goes forward, on every device, so taking it back is a new reading, from where it's open.
+ * only goes forward, on every device, so taking it back is a new reading: from how far it was, if
+ * it was marked finished here, or from where it's open, or from the start when that's its end.
  * `card` is what its card shows, for a book never opened here.
  */
 function setFinished(id: string, finished: boolean, card: Pick<ReadState, 'progress' | 'line' | 'lastOpened'>) {
   const r: ReadState = view.reads[id] ?? { progress: card.progress, line: card.line, lastOpened: card.lastOpened };
   const at = { pos: r.pos ?? { section: 0, block: 0, offset: 0 }, progress: r.progress, line: r.line };
   const n = r.mark?.n ?? 0;
-  const mark = finished ? { ...at, progress: 1, line: r.mark?.line ?? at.line, ...(n ? { n } : {}) } : { ...at, n: n + 1 };
-  saveRead(id, { ...r, mark });
+  if (finished) {
+    const was = r.mark ?? at;
+    if (was.progress < 1) beforeFinished.set(id, { pos: was.pos, progress: was.progress, line: was.line });
+    saveRead(id, { ...r, mark: { ...at, progress: 1, line: r.mark?.line ?? at.line, ...(n ? { n } : {}) } });
+    return;
+  }
+  const back = beforeFinished.get(id) ?? (at.progress < 1 ? at : { pos: { section: 0, block: 0, offset: 0 }, progress: 0, line: '' });
+  beforeFinished.delete(id);
+  saveRead(id, { ...r, mark: { ...back, n: n + 1 } });
 }
 
 /**

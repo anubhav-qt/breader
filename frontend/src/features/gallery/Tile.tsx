@@ -35,6 +35,8 @@ export interface TileProps {
   ref?: Ref<HTMLDivElement>;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
+  /** Marks it finished, or not after all, from the tick beside the star. */
+  onFinish?: (book: ShelfItem, finished: boolean) => void;
 }
 
 export interface Stack {
@@ -56,7 +58,7 @@ function setMask(el: HTMLElement | null, mask: string) {
  *
  * A full-size button opens the book; the corner button (or a right-click) opens the edit popover.
  */
-export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, ref: slotRef, onOpen, onEdit }: TileProps) {
+export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, ref: slotRef, onOpen, onEdit, onFinish }: TileProps) {
   const b = item.book;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
@@ -101,8 +103,10 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   const made = art && !b.coverUrl && roomy;
   const started = b.progress > 0;
   const done = b.progress >= 1;
+  // A shared book not started has no reading of the reader's own to finish.
+  const finishable = !!onFinish && b.source !== 'shelf';
   // The corner's buttons: finished, favourite and the edit button, which the first line keeps clear of.
-  const tools = stack ? 0 : 1 + (done ? 1 : 0) + (b.favorite ? 1 : 0);
+  const tools = stack ? 0 : 1 + (finishable || done ? 1 : 0) + (b.favorite ? 1 : 0);
   useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);
   useEffect(() => {
     let live = true;
@@ -160,7 +164,18 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
         )}
         {/* A series' card opens the series; its books are edited there. */}
         {!stack && <div className="tile-tools">
-          {done && <span className="tile-fav tile-done" title="Finished"><IconCheck /></span>}
+          {finishable ? (
+            <button
+              type="button"
+              className={`tile-fav tile-done${done ? ' is-on' : ''}`}
+              aria-pressed={done}
+              aria-label={done ? `${b.title} is finished` : `Mark ${b.title} as finished`}
+              title={done ? 'Finished. Tap if it isn’t after all' : 'Mark as finished'}
+              onClick={() => onFinish!(b, !done)}
+            >
+              <IconCheck />
+            </button>
+          ) : done && <span className="tile-fav tile-done is-on" title="Finished"><IconCheck /></span>}
           {b.favorite && <span className="tile-fav" title="Favourite"><IconStar /></span>}
           <button
             ref={moreRef}

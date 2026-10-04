@@ -96,7 +96,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
     );
   }
 
-  const shared = { now, enter: first.current, editingId: editing?.id, onOpen, onEdit: openEdit };
+  const shared = { now, enter: first.current, editingId: editing?.id, onOpen, onEdit: openEdit, onFinish };
   // Shelves below only add something once there's more than Recent holds, or a series to show.
   const more = books.length > RECENT || stacks.size > 0;
   return (
@@ -149,6 +149,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             editingId={editing?.id}
             onOpen={onOpen}
             onEdit={openEdit}
+            onFinish={onFinish}
             onClose={closeSeries}
           />
         )}

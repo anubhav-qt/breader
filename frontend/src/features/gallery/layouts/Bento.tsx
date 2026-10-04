@@ -4,7 +4,7 @@ import { Tile } from '../Tile';
 import type { SectionProps } from '../types';
 import { slotsFor } from './slots';
 
-export function Bento({ items, now, enter, editingId, onOpen, onEdit }: SectionProps) {
+export function Bento({ items, now, enter, editingId, onOpen, onEdit, onFinish }: SectionProps) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const cols = width >= 1000 ? 6 : width >= 640 ? 4 : 2;
   const slots = slotsFor(items.length, cols);
@@ -32,6 +32,7 @@ export function Bento({ items, now, enter, editingId, onOpen, onEdit }: SectionP
               layoutKey={layoutKey}
               onOpen={onOpen}
               onEdit={onEdit}
+              onFinish={onFinish}
             />
           );
         })}

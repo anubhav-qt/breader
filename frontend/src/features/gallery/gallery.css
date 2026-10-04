@@ -91,6 +91,10 @@
 .tile-more svg, .tile-fav svg { width: 16px; height: 16px; }
 .tile-fav svg { fill: currentColor; }
 .tile-done svg { fill: none; width: 15px; height: 15px; }
+/* Not finished yet, the tick waits faintly, like the edit button beside it. */
+button.tile-done:not(.is-on) { opacity: 0.55; transition: opacity 160ms ease, background-color 160ms ease; }
+.tile:hover button.tile-done, button.tile-done:focus-visible { opacity: 1; }
+button.tile-done:hover { background: var(--canvas); }
 
 /* Type inside cards */
 .t-eyebrow { font: var(--ui-w) 12px/1 var(--ui); opacity: 0.75; margin-bottom: 12px; }
