@@ -83,3 +83,31 @@
 .add-sep { height: 1px; background: var(--line); margin: 8px 0 2px; }
 .key-error { color: var(--ink); }
 .key-actions { flex-wrap: wrap; }
+
+/* Several books at once (BulkAdd.tsx): a row each, its series and genres beside each other */
+.bulk-count { font: var(--ui-w) 12.5px/1 var(--ui); color: var(--ink-2); }
+.bulk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.bulk-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.bulk-row.is-reading .add-fic { background: var(--fill); animation: bulk-wait 1.2s ease-in-out infinite alternate; }
+@keyframes bulk-wait { to { opacity: 0.4; } }
+.bulk-row.is-error .add-fic { background: none; box-shadow: inset 0 0 0 1.5px var(--dash); }
+.bulk-main { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.bulk-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.bulk-head > div { min-width: 0; }
+.bulk-head b { display: block; font-family: var(--read); font-weight: 700; font-size: 23px; line-height: 1; overflow-wrap: anywhere; }
+.bulk-head span { display: block; margin-top: 4px; font: var(--ui-w) 12px/1.3 var(--ui); color: var(--ink-2); }
+.bulk-x { width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); transition: background-color 140ms ease; }
+.bulk-x:hover { background: var(--fill); color: var(--ink); }
+.bulk-x svg { width: 14px; height: 14px; }
+.bulk-fields { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; margin-top: 4px; }
+.bulk-fields > div { display: grid; gap: 6px; align-content: start; }
+.bulk-fields .add-label { margin: 0; }
+.bulk-input { font-size: 19px; padding: 7px 10px; }
+@media (max-width: 520px) { .bulk-fields { grid-template-columns: minmax(0, 1fr); } }

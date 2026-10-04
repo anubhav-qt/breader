@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Modal } from '../../components/Modal';
-import { IconLock, IconPaste, IconPeople, IconUpload } from '../../components/icons';
+import { IconPaste, IconUpload } from '../../components/icons';
 import { ACCEPT, coverOf, detectFormat, parseSource, titleFromName } from '../../books/load';
 import type { BookRecord, Format, LoadedBook } from '../../books/types';
 import { colorVars } from '../../data/colors';
@@ -12,23 +12,27 @@ import { AI_LABEL, AI_WHY } from '../../books/ai';
 import { detectSeries, spellSeries, type FoundSeries, type SeriesName } from '../gallery/series';
 import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
 import { GenreField } from '../gallery/GenreField';
+import { BulkAdd } from './BulkAdd';
 import { FreshKey } from './FreshKey';
+import { WhoReads } from './WhoReads';
 import './add.css';
 
 type Step =
   | { kind: 'choose' }
   | { kind: 'paste' }
   | { kind: 'reading'; name: string }
+  /** Several files at once (BulkAdd.tsx). */
+  | { kind: 'bulk'; files: File[] }
   | { kind: 'decide'; book: LoadedBook; data: Blob | string; format: Format; name: string; size: number; color: string; found: FoundSeries | null }
-  | { kind: 'key'; key: string; title: string }
+  | { kind: 'key'; key: string; title: string; count: number }
   | { kind: 'error'; message: string };
 
 interface Props {
   initialFile?: File | null;
   initialMode?: 'file' | 'paste';
   hasKey: boolean;
-  /** The colour the book will get, from the library's pool. */
-  nextColor: () => string;
+  /** The colour a book will get, from the library's pool, leaving out any `taken` already. */
+  nextColor: (taken?: string[]) => string;
   /** Start on "Shared Library" when adding from that tab. */
   defaultShared?: boolean;
   /** Every series in either library, offered as a series name is typed. */
@@ -98,6 +102,23 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     decide(book, text, 'Text', 'Pasted text', new Blob([text]).size);
   };
 
+  /** One file goes on as ever; several get a row each. */
+  const pick = (files: File[]) => {
+    if (files.length > 1) setStep({ kind: 'bulk', files });
+    else if (files[0]) void read(files[0]);
+  };
+
+  /** Shared books need a key too: it's how they reach the server, and so the Shared Library. */
+  const afterAdding = async (title: string, count = 1) => {
+    if (!hasKey) {
+      const key = newLibraryKey();
+      await onKey(key);
+      setStep({ kind: 'key', key, title, count });
+    } else {
+      onClose();
+    }
+  };
+
   const add = async () => {
     if (step.kind !== 'decide') return;
     const { book, data, format, color } = step;
@@ -115,27 +136,19 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     const cover = await coverOf(book);
     book.cleanup?.();
     await onAdded(rec, data, cover, { ai: readAlong });
-    // Shared books need a key too: it's how they reach the server, and so the Shared Library.
-    if (!hasKey) {
-      const key = newLibraryKey();
-      await onKey(key);
-      setStep({ kind: 'key', key, title: rec.title });
-    } else {
-      onClose();
-    }
+    await afterAdding(rec.title);
   };
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) void read(f);
+    pick(Array.from(e.dataTransfer.files));
   };
 
-  const title = step.kind === 'key' ? 'Your personal key' : 'Add a book';
+  const title = step.kind === 'key' ? 'Your personal key' : step.kind === 'bulk' ? 'Add books' : 'Add a book';
 
   return (
-    <Modal title={title} onClose={onClose} width={480}>
+    <Modal title={title} onClose={onClose} width={step.kind === 'bulk' ? 600 : 480}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={step.kind}
@@ -154,10 +167,10 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                 onDrop={onDrop}
               >
                 <IconUpload />
-                <b>Drop a book here</b>
-                <span>EPUB, PDF, TXT or Markdown</span>
-                <button type="button" className="btn btn-primary" onClick={() => fileInput.current?.click()}>Choose file</button>
-                <input ref={fileInput} type="file" accept={ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void read(f); }} />
+                <b>Drop books here</b>
+                <span>EPUB, PDF, TXT or Markdown, one or several</span>
+                <button type="button" className="btn btn-primary" onClick={() => fileInput.current?.click()}>Choose files</button>
+                <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => pick(Array.from(e.target.files ?? []))} />
               </div>
               <div className="add-or">or</div>
               <button type="button" className="add-row" onClick={() => setStep({ kind: 'paste' })}>
@@ -195,19 +208,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                   <span>{[step.book.author, step.format === 'Text' ? 'Pasted text' : step.format, sizeText(step.size)].filter(Boolean).join(' · ')}</span>
                 </div>
               </div>
-              <div className="add-label">Who can read it?</div>
-              <div className="add-choices" role="radiogroup" aria-label="Who can read it">
-                <button type="button" role="radio" aria-checked={!shared} className={`add-choice${!shared ? ' is-on' : ''}`} onClick={() => setShared(false)}>
-                  <IconLock />
-                  <span><b>Just me</b><span>Private. Opens in any browser with your library key.</span></span>
-                  <i className="add-radio" />
-                </button>
-                <button type="button" role="radio" aria-checked={shared} className={`add-choice${shared ? ' is-on' : ''}`} onClick={() => setShared(true)}>
-                  <IconPeople />
-                  <span><b>Shared Library</b><span>Anyone using Breader can read it. Only share books that are public domain or yours to share.</span></span>
-                  <i className="add-radio" />
-                </button>
-              </div>
+              <WhoReads shared={shared} onChange={setShared} />
               <label className="add-label" htmlFor="add-genre">Genres</label>
               <GenreField id="add-genre" value={genre} className="add-input" onPick={setGenre} />
               {shared && <span className="add-found">Readers on the Shared Library start with your genres, and can pick their own.</span>}
@@ -247,8 +248,21 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
             </>
           )}
 
+          {step.kind === 'bulk' && (
+            <BulkAdd
+              files={step.files}
+              defaultShared={defaultShared}
+              knownSeries={knownSeries}
+              nextColor={nextColor}
+              genreFor={genreFor}
+              onAdded={onAdded}
+              onBack={() => setStep({ kind: 'choose' })}
+              onDone={(count, first, failed) => { if (count && (!hasKey || !failed)) void afterAdding(first, count); }}
+            />
+          )}
+
           {step.kind === 'key' && (
-            <FreshKey libraryKey={step.key} title={step.title} onLogin={onLogin} onDone={onClose} />
+            <FreshKey libraryKey={step.key} title={step.title} count={step.count} onLogin={onLogin} onDone={onClose} />
           )}
 
           {step.kind === 'error' && (

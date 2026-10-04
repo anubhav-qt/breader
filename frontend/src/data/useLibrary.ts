@@ -471,8 +471,9 @@ async function restoreBook(r: RemovedBook) {
 }
 
 /** The colour the next book added gets. Only the colour each book was given counts, not recolours. */
-function nextColor() {
-  return pickColor(view.records.filter((r) => r.source !== 'placeholder').map((r) => normColor(r.color, r.title)));
+/** A colour for a new book, from those the library uses least, counting `taken` too (books still being added). */
+function nextColor(taken: string[] = []) {
+  return pickColor([...view.records.filter((r) => r.source !== 'placeholder').map((r) => normColor(r.color, r.title)), ...taken]);
 }
 
 /** Seconds spent reading a book, added to today's count and sent as this browser's share. */

@@ -6,13 +6,15 @@ interface Props {
   libraryKey: string;
   /** The book that made the key, named first. */
   title?: string;
+  /** Added together with others: how many. */
+  count?: number;
   /** Unset once logged in: the account keeps the key already. */
   onLogin?: () => void;
   onDone: () => void;
 }
 
 /** A new key, shown once: keep it, or log in so an account keeps the books instead. */
-export function FreshKey({ libraryKey, title, onLogin, onDone }: Props) {
+export function FreshKey({ libraryKey, title, count = 1, onLogin, onDone }: Props) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -28,7 +30,7 @@ export function FreshKey({ libraryKey, title, onLogin, onDone }: Props) {
   return (
     <>
       <p className="add-keynote">
-        {title ? `“${title}” is in My books. ` : ''}This is your personal key. Store it somewhere safe: it can’t be recovered.
+        {count > 1 ? `Your ${count} books are in My books. ` : title ? `“${title}” is in My books. ` : ''}This is your personal key. Store it somewhere safe: it can’t be recovered.
       </p>
       <div className="key-box">{libraryKey}</div>
       <p className="add-local">
