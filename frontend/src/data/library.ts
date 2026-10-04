@@ -262,10 +262,10 @@ export function shelfRecords(now: number): BookRecord[] {
   }));
 }
 
-/** Only a reader's own uploads can go on the Shared Library or come off it; a copy's file is the sharer's. */
-export const canShare = (rec: BookRecord) => rec.source === 'file' && !rec.origin;
+/** Any of the reader's own books can be shared with their key, copies of others' too. */
+export const canShare = (rec: BookRecord) => rec.source === 'file';
 
-/** Books other people put on the shared shelf are theirs to take off, not yours. */
+/** Books in other people's shared libraries are theirs to take out, not yours. */
 export const canRemove = (rec: BookRecord) => rec.source !== 'shelf' && !(rec.shared && rec.source === 'placeholder');
 
 export type PreviewMode = 'live' | 'empty' | 'one' | 'few' | 'many' | 'series' | 'mixed';

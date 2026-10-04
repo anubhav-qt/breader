@@ -22,15 +22,16 @@ describe('series', () => {
     expect((await pulled(b, a.id)).edit).toMatchObject({ series: null, seriesIndex: null });
   });
 
-  it('shows a shared book’s series on the Shared Library, the sharer’s own first', async () => {
-    const { b } = await registered();
+  it('shows a shared book’s series in its shared library, the sharer’s own first', async () => {
+    const { b, key } = await registered();
     const body = Buffer.from(`series ${Math.random()}`);
     const ask = await b.post('/v1/uploads', { sha256: createHash('sha256').update(body).digest('hex'), size: body.length, mime: 'application/epub+zip', kind: 'book' });
     await fetch(ask.body.upload.url, { method: 'PUT', headers: ask.body.upload.headers, body });
     await b.post(`/v1/uploads/${ask.body.fileId}/complete`);
     const a = book({ shared: true, fileId: ask.body.fileId, series: 'Sherlock Holmes', seriesIndex: 3 });
     await b.post('/v1/sync/push', push('c', { type: 'book.put', book: a }));
-    const entry = async () => (await browser().get('/v1/shelf')).body.books.find((x: { id: string }) => x.id === a.id);
+    const token = (await browser().post('/v1/shared/open', { key })).body.token;
+    const entry = async () => (await browser().post('/v1/shared/books', { token })).body.books.find((x: { id: string }) => x.id === a.id);
     expect(await entry()).toMatchObject({ series: 'Sherlock Holmes', seriesIndex: 3 });
     await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: a.id, edit: { seriesIndex: 4 } }));
     expect(await entry()).toMatchObject({ series: 'Sherlock Holmes', seriesIndex: 4 });

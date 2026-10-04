@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { animate, motion, useMotionValue } from 'motion/react';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
-import { IconCheck, IconMore, IconStar } from '../../components/icons';
+import { IconAddBook, IconCheck, IconMore, IconStar } from '../../components/icons';
 import { blotsFor, maskFor, radiiFor } from './blots';
 import { fitCard } from './fit';
 import { cardNames } from './names';
@@ -37,6 +37,8 @@ export interface TileProps {
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   /** Marks it finished, or not after all, from the tick beside the star. */
   onFinish?: (book: ShelfItem, finished: boolean) => void;
+  /** Someone's shared library: puts the book in the reader's own. */
+  onKeep?: (book: ShelfItem) => void;
 }
 
 export interface Stack {
@@ -58,7 +60,7 @@ function setMask(el: HTMLElement | null, mask: string) {
  *
  * A full-size button opens the book; the corner button (or a right-click) opens the edit popover.
  */
-export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, ref: slotRef, onOpen, onEdit, onFinish }: TileProps) {
+export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, ref: slotRef, onOpen, onEdit, onFinish, onKeep }: TileProps) {
   const b = item.book;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
@@ -103,10 +105,12 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   const made = art && !b.coverUrl && roomy;
   const started = b.progress > 0;
   const done = b.progress >= 1;
-  // A shared book not started has no reading of the reader's own to finish.
-  const finishable = !!onFinish && b.source !== 'shelf';
-  // The corner's buttons: finished, favourite and the edit button, which the first line keeps clear of.
-  const tools = stack ? 0 : 1 + (finishable || done ? 1 : 0) + (b.favorite ? 1 : 0);
+  // Someone else's book, in their shared library: theirs to change. It can only be read, or kept.
+  const theirs = b.source === 'shelf';
+  const finishable = !!onFinish && !theirs;
+  const keepable = !!onKeep && theirs;
+  // The corner's buttons: keep or finished, favourite and the edit button, which the first line keeps clear of.
+  const tools = stack ? 0 : (theirs ? 0 : 1) + (keepable || finishable || done ? 1 : 0) + (b.favorite ? 1 : 0);
   useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);
   useEffect(() => {
     let live = true;
@@ -164,6 +168,18 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
         )}
         {/* A series' card opens the series; its books are edited there. */}
         {!stack && <div className="tile-tools">
+          {keepable && (
+            <button
+              type="button"
+              className={`tile-fav tile-keep${b.kept ? ' is-on' : ''}`}
+              aria-pressed={!!b.kept}
+              aria-label={b.kept ? `${b.title} is in your library` : `Add ${b.title} to your library`}
+              title={b.kept ? 'In your library' : 'Add to my library'}
+              onClick={() => { if (!b.kept) onKeep!(b); }}
+            >
+              {b.kept ? <IconCheck /> : <IconAddBook />}
+            </button>
+          )}
           {finishable ? (
             <button
               type="button"
@@ -177,7 +193,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
             </button>
           ) : done && <span className="tile-fav tile-done is-on" title="Finished"><IconCheck /></span>}
           {b.favorite && <span className="tile-fav" title="Favourite"><IconStar /></span>}
-          <button
+          {!theirs && <button
             ref={moreRef}
             type="button"
             className="tile-more"
@@ -188,7 +204,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
             onClick={(e) => onEdit(b, e.currentTarget)}
           >
             <IconMore />
-          </button>
+          </button>}
         </div>}
       </div>
     </motion.div>

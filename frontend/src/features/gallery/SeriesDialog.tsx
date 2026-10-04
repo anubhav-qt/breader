@@ -16,11 +16,12 @@ interface Props {
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   onFinish?: (book: ShelfItem, finished: boolean) => void;
+  onKeep?: (book: ShelfItem) => void;
   onClose: () => void;
 }
 
 /** A whole series, its books in order on cards all the same size. Opening one closes it. */
-export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdit, onFinish, onClose }: Props) {
+export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdit, onFinish, onKeep, onClose }: Props) {
   const grid = useRef<HTMLDivElement>(null);
   const author = s.books.map((b) => authors.get(b.id)).find(Boolean) ?? cardAuthor(s.books[0].author).author;
   const n = s.books.length;
@@ -50,6 +51,7 @@ export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdi
               onOpen={(book, rect) => { onClose(); onOpen(book, rect); }}
               onEdit={onEdit}
               onFinish={onFinish}
+              onKeep={onKeep}
             />
           );
         })}

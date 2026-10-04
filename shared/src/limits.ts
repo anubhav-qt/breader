@@ -30,7 +30,7 @@ export const VOICE_LIST_LIMIT = 300;
 /** The longest text the server voice says in one go. The app sends a sentence at a time, 220 characters at most. */
 export const SPEECH_CHARS = 1000;
 
-/** The most books the Shared Library lists, newest first. */
+/** The most books a shared library lists, newest first. */
 export const SHELF_LIMIT = 2000;
 
 export const SYNC = {

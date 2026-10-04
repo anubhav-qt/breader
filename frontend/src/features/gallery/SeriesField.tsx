@@ -30,7 +30,7 @@ const EDGE = 12;
 
 /**
  * A series name and its number. As the name is typed, the series already in the library and the
- * Shared Library drop down under it; picking one moves on to the number.
+ * shared library drop down under it; picking one moves on to the number.
  */
 export function SeriesField({ id, value, known, inputClass, onChange, onDone, autoFocus }: Props) {
   const groupRef = useRef<HTMLDivElement>(null);

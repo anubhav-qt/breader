@@ -33,7 +33,7 @@ interface Props {
   hasKey: boolean;
   /** The colour a book will get, from the library's pool, leaving out any `taken` already. */
   nextColor: (taken?: string[]) => string;
-  /** Start on "Shared Library" when adding from that tab. */
+  /** Start on "Shared with your key" when adding from the reader's own shared library. */
   defaultShared?: boolean;
   /** Every series in either library, offered as a series name is typed. */
   knownSeries: SeriesName[];
@@ -108,7 +108,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     else if (files[0]) void read(files[0]);
   };
 
-  /** Shared books need a key too: it's how they reach the server, and so the Shared Library. */
+  /** Shared books need a key too: it's how they reach the server, and anyone given the key. */
   const afterAdding = async (title: string, count = 1) => {
     if (!hasKey) {
       const key = newLibraryKey();
@@ -211,7 +211,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
               <WhoReads shared={shared} onChange={setShared} />
               <label className="add-label" htmlFor="add-genre">Genres</label>
               <GenreField id="add-genre" value={genre} className="add-input" onPick={setGenre} />
-              {shared && <span className="add-found">Readers on the Shared Library start with your genres, and can pick their own.</span>}
+              {shared && <span className="add-found">Anyone who reads it from your shared library starts with your genres, and can pick their own.</span>}
               <div className="add-switch">
                 <span className="add-label" id="add-series">Part of a series</span>
                 <button type="button" className="switch" role="switch" aria-checked={inSeries} aria-labelledby="add-series" onClick={() => setInSeries(!inSeries)} />

@@ -50,15 +50,16 @@ describe('genre', () => {
     expect(await pulled(b, a.id)).toMatchObject({ genre: 'fantasy,lightnovel', edit: { genre: 'mystery,crime,thriller' } });
   });
 
-  it('shows a shared book’s genre on the Shared Library, the sharer’s own first', async () => {
-    const { b } = await registered();
+  it('shows a shared book’s genre in its shared library, the sharer’s own first', async () => {
+    const { b, key } = await registered();
     const body = Buffer.from(`genre ${Math.random()}`);
     const ask = await b.post('/v1/uploads', { sha256: createHash('sha256').update(body).digest('hex'), size: body.length, mime: 'application/epub+zip', kind: 'book' });
     await fetch(ask.body.upload.url, { method: 'PUT', headers: ask.body.upload.headers, body });
     await b.post(`/v1/uploads/${ask.body.fileId}/complete`);
     const a = book({ shared: true, fileId: ask.body.fileId, genre: 'mystery' });
     await b.post('/v1/sync/push', push('c', { type: 'book.put', book: a }));
-    const entry = async () => (await browser().get('/v1/shelf')).body.books.find((x: { id: string }) => x.id === a.id);
+    const token = (await browser().post('/v1/shared/open', { key })).body.token;
+    const entry = async () => (await browser().post('/v1/shared/books', { token })).body.books.find((x: { id: string }) => x.id === a.id);
     expect(await entry()).toMatchObject({ genre: 'mystery' });
     await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: a.id, edit: { genre: 'thriller' } }));
     expect(await entry()).toMatchObject({ genre: 'thriller' });

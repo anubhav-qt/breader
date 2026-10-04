@@ -73,7 +73,7 @@ export async function refreshTalk(thread: string) {
     // Offline: what was here stands.
     if (was.state === 'ready') return;
     const off = e instanceof ApiError && (e.status === 404 || e.status === 401);
-    set(thread, { ...was, state: 'off', why: off ? 'Comments come with books in your library or on the Shared Library.' : say(e) });
+    set(thread, { ...was, state: 'off', why: off ? 'Comments come with books in your library or someone’s shared library.' : say(e) });
   }
 }
 

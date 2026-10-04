@@ -21,9 +21,9 @@ interface Props {
   others?: ShelfItem[];
   onChange: (patch: BookEdit) => void;
   onChangeOther?: (book: ShelfItem, patch: BookEdit) => void;
-  /** Absent for books someone else shared: only they can take them off the shelf. */
+  /** Absent for books in someone else's shared library: only they can take them out. */
   onRemove?: (fromKeyboard: boolean) => void;
-  /** Puts the book on the Shared Library or takes it off. Only for the reader's own uploads. */
+  /** Shares the book with everyone who has the reader's key, or stops. */
   onShare?: (shared: boolean) => void;
   /** Marks it read to the end, or takes that back. Absent for a shared book not started. */
   onFinish?: (finished: boolean) => void;
@@ -230,7 +230,7 @@ export function EditPopover({ book, seriesNames, anchor, others = [], onChange, 
       </div>
       {onShare && (
         <div className="ep-share">
-          <span className="ep-label" id="ep-share">On the Shared Library</span>
+          <span className="ep-label" id="ep-share">Share with your key</span>
           <button type="button" className="switch" role="switch" aria-checked={!!book.shared} aria-labelledby="ep-share" onClick={() => onShare(!book.shared)} />
         </div>
       )}

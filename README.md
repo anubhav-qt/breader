@@ -34,7 +34,7 @@ Open [breader.site](https://breader.site), add a book, read. Nothing to install,
 ## Your library
 
 - **A key, not an account.** Your library opens with a key only you hold. Or log in with email or Google and it follows you everywhere.
-- **The Shared Library.** Put a book there for everyone. Read past the first hundred words of one and your copy is yours to keep.
+- **Shared libraries.** Share any of your books with your key: whoever you give it to opens your shared library, reads, and keeps a copy, never changes yours. Read past the first hundred words of one and your copy is yours to keep.
 - **Offline first.** Everything lives in your browser and syncs when it can. Add breader to your home screen and it opens like an app.
 
 ## Free, always

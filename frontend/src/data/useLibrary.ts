@@ -28,6 +28,8 @@ export interface ShelfItem extends BookRecord {
   own?: { series?: boolean; genre?: boolean };
   /** Filled in from its title and the books like it as it's shown (gallery/fill.ts), not saved. */
   guessed?: { series?: boolean; index?: boolean; genre?: boolean };
+  /** A book in someone's shared library that the reader has in their own too. */
+  kept?: boolean;
 }
 
 /** A removed book, kept in memory so it can be put back. */
@@ -391,11 +393,14 @@ async function setCover(id: string, cover: Blob) {
 }
 
 /**
- * Starting a book on the Shared Library adds a copy of it to this library, pointing at the sharer's
- * file, with its own place, colour and card. Starting it again finds the same copy.
+ * Starting a book from someone's shared library (or adding it) puts a copy of it in this library,
+ * pointing at the sharer's file, with its own place, colour and card, and shared here too until the
+ * reader says otherwise. A copy of a copy goes by the first book, so a book is only ever in a
+ * library once: starting it again, from anyone's library, finds the one here.
  */
 async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
-  const had = view.records.find((r) => r.origin === entry.id);
+  const first = entry.origin ?? entry.id;
+  const had = view.records.find((r) => r.id === first || r.origin === first);
   if (had) return had;
   const now = Date.now();
   const cover = await shelfCover(entry.id);
@@ -405,7 +410,7 @@ async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
     author: entry.author,
     format: entry.format,
     source: 'file',
-    shared: false,
+    shared: true,
     addedAt: now,
     words: entry.words,
     color: nextColor(),
@@ -415,7 +420,7 @@ async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
     lastOpened: now,
     ...(entry.fileId ? { fileId: entry.fileId } : {}),
     ...(entry.coverId ? { coverId: entry.coverId } : {}),
-    origin: entry.id,
+    origin: first,
     ...(entry.series ? { series: entry.series, seriesIndex: entry.seriesIndex } : {}),
     // The sharer's genre is the one it comes with; the reader can pick their own.
     ...(entry.genre ? { genre: entry.genre } : {}),
@@ -515,7 +520,7 @@ function setFinished(id: string, finished: boolean, card: Pick<ReadState, 'progr
 }
 
 /**
- * Puts one of the reader's own books on the Shared Library, or takes it off. It stays in My books
+ * Shares one of the reader's books with everyone who has their key, or stops. It stays in My books
  * either way, and anyone who read far enough into it (KEEP_WORDS) keeps their copy.
  */
 function setShared(id: string, shared: boolean) {
@@ -524,7 +529,7 @@ function setShared(id: string, shared: boolean) {
   put({ ...rec, shared });
 }
 
-/** Takes a shared book out of the reader's own books while it stays on the Shared Library, or puts it back. */
+/** Takes a shared book out of the reader's own books while it stays in their shared library, or puts it back. */
 function setSharedOnly(id: string, sharedOnly: boolean) {
   const rec = view.records.find((r) => r.id === id);
   if (!rec || !!rec.sharedOnly === sharedOnly) return;

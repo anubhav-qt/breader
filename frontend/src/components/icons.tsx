@@ -20,6 +20,10 @@ export const IconTrash = (p: P) => (
   <svg {...base} strokeWidth={1.9} {...p}><path d="M4.5 7h15M9.5 7V5.3c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3V7" /><path d="m6.5 7 .8 11.2a2 2 0 0 0 2 1.8h5.4a2 2 0 0 0 2-1.8L17.5 7M10 11v5M14 11v5" /></svg>
 );
 export const IconChevron = (p: P) => (<svg {...base} {...p}><path d="m9.5 5.5 6.5 6.5-6.5 6.5" /></svg>);
+export const IconPencil = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M14.5 5.5l4 4L9 19H5v-4z" /><path d="m12.5 7.5 4 4" /></svg>);
+export const IconCaret = (p: P) => (<svg {...base} strokeWidth={2.2} {...p}><path d="m7 10 5 5 5-5" /></svg>);
+/** A book with a plus: into the reader's own library. */
+export const IconAddBook = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M5 18.5V6a2 2 0 0 1 2-2h10v11" /><path d="M5 18.5A1.5 1.5 0 0 0 6.5 20H12" /><path d="M5 18.5A1.5 1.5 0 0 1 6.5 17H12" /><path d="M18 15v6M15 18h6" /></svg>);
 export const IconMore = (p: P) => (
   <svg {...base} {...p}><g fill="currentColor" stroke="none"><circle cx="6" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="18" cy="12" r="1.7" /></g></svg>
 );

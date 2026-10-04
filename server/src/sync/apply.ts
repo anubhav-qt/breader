@@ -3,7 +3,7 @@ import { KOKORO_PACK_BYTES, type Mutation } from '@breader/shared';
 import type { Db } from '../db/client.ts';
 import { blobs, libraryItems, librarySettings, readingStates, readingTime, voices, voiceUses } from '../db/schema.ts';
 import { ApiError } from '../lib/errors.ts';
-import { onShelf, usedBy } from '../lib/shelf.ts';
+import { sharedSomewhere, usedBy } from '../lib/shelf.ts';
 import { usable } from '../lib/voices.ts';
 
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -11,7 +11,7 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 const notFound = () => new ApiError(404, 'not_found', 'That book isn’t in this library.');
 
 /**
- * A file id a book may point at: ready, and this library's own, public, on the Shared Library (a
+ * A file id a book may point at: ready, and this library’s own, public, shared in some library (a
  * copy of a shared book), or one a book here points at already. The share lock holds until the
  * push commits, so clean-up (jobs/cleanup.ts) can't delete the file in between.
  */
@@ -23,7 +23,7 @@ async function checkFile(tx: Tx, libraryId: string, fileId: string | null | unde
     .where(and(
       eq(blobs.id, fileId),
       eq(blobs.status, 'ready'),
-      or(eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true), onShelf(blobs.id), usedBy(libraryId, blobs.id)),
+      or(eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true), sharedSomewhere(blobs.id), usedBy(libraryId, blobs.id)),
     ))
     .for('share', { of: blobs });
   if (!b) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');

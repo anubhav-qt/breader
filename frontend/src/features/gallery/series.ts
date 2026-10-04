@@ -85,12 +85,12 @@ export function seriesAuthors(series: Map<string, Series>, first: (raw: string) 
 
 export interface SeriesName {
   name: string;
-  /** Books in it, across the library and the Shared Library. */
+  /** Books in it, across the library and the shared library on show. */
   count: number;
 }
 
 /**
- * Every series any book is in, however few books: the reader's, the Shared Library's, and those an
+ * Every series any book is in, however few books: the reader's, the shared library's, and those an
  * EPUB named itself. Spelled as most of its books spell it.
  */
 export function seriesNames(books: ShelfItem[]): SeriesName[] {

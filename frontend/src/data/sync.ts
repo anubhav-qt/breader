@@ -5,6 +5,7 @@ import type { AccountResponse, Book, LibraryResponse, Mutation, NewMutation, Pul
 import type { BookEdit, BookRecord, Format, ReadState } from '../books/types';
 import { api, ApiError, OfflineError, type ApiBase } from '../lib/api';
 import { report } from '../lib/report';
+import { tokenForFile } from './shelf';
 import { readLocal, store } from '../lib/store';
 import { onNews, tell, withData, withSync } from '../lib/tabs';
 import { allCountsLocked } from './readTime';
@@ -570,15 +571,17 @@ export function flush(): Promise<void> {
 
 /**
  * A stored file, fetched through a short-lived signed link. A shared book's file (`shelf`) comes
- * from the Shared Library, which needs no key, and otherwise from this library, whose copies of
- * shared books keep their file after it leaves the shelf once they're read far enough into.
+ * through a shared library in the reader's list that has it, which needs no library of their own,
+ * and otherwise from this library, whose copies of shared books can read their file while someone
+ * shares it, and for good once they're read far enough into.
  */
 export async function downloadFile(fileId: string, shelf = false): Promise<Blob> {
   const id = encodeURIComponent(fileId);
   let link: { url: string } | null = null;
-  if (shelf) {
+  const token = shelf ? tokenForFile(fileId) : null;
+  if (token) {
     try {
-      link = await api.get<{ url: string }>(`/v1/shelf/files/${id}/link`);
+      link = await api.post<{ url: string }>('/v1/shared/link', { token, fileId });
     } catch (e) {
       if (!(e instanceof ApiError && e.status === 404) || !host?.snapshot().key) throw e;
     }

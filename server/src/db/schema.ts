@@ -125,7 +125,7 @@ export const libraryItems = pgTable(
     source: text('source').notNull(),
     url: text('url'),
     shared: boolean('shared').notNull().default(false),
-    /** Taken out of the reader's own books but left on the Shared Library. */
+    /** Taken out of the reader's own books but left in their shared library. */
     sharedOnly: boolean('shared_only').notNull().default(false),
     addedAt: at('added_at').notNull(),
     words: integer('words').notNull().default(0),
@@ -136,7 +136,7 @@ export const libraryItems = pgTable(
     lastOpened: at('last_opened').notNull(),
     fileId: text('file_id').references(() => blobs.id),
     coverId: text('cover_id').references(() => blobs.id),
-    /** A copy of a book on the Shared Library, started by this reader: the shared book's id. Its file stays the sharer's. */
+    /** A copy of a shared book, started by this reader: the first book's id, however many copies away. Its file stays the sharer's. */
     origin: text('origin'),
     /** The series the book's file names, and its number in it. */
     series: text('series'),
@@ -167,7 +167,7 @@ export const libraryItems = pgTable(
     index('library_items_removed_idx').on(t.removedAt).where(sql`${t.removedAt} IS NOT NULL`),
     index('library_items_file_idx').on(t.fileId),
     index('library_items_cover_idx').on(t.coverId),
-    // The Shared Library: every library's shared books, newest first.
+    // Each library's shared books, newest first (routes/shelf.ts).
     index('library_items_shelf_idx').on(t.addedAt).where(sql`${t.shared} AND ${t.removedAt} IS NULL`),
   ],
 );

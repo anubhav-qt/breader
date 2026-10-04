@@ -23,7 +23,7 @@ import { requireLibrary } from '../lib/library.ts';
 /*
  * Comments on a book (shared comments.ts): its whole-book thread and one per chapter, for everyone
  * on that book. A thread is the shared book's id, so a library may read and write it while it has
- * that book (its own, or a copy started from it) or the book is on the Shared Library. Holding a
+ * that book (its own, or a copy started from it) or the book is shared in some library. Holding a
  * chapter back until the reader gets there is the app's to do: the server doesn't know chapters.
  * A reply names the comment it answers, which keeps replies one deep. Comments are kept as
  * written; the app censors them when it shows them.

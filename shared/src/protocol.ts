@@ -206,11 +206,19 @@ export const PullResponse = z.object({
 });
 export type PullResponse = z.infer<typeof PullResponse>;
 
-/* ---- Shared Library ---- */
+/* ---- Shared libraries ---- */
 
-/** A book someone put on the Shared Library, as everyone sees it. */
+/*
+ * Each library's shared books, open to anyone with its key, to read and copy but not to change. A
+ * key is traded once for a token (POST /v1/shared/open) that opens only the shared books, so a
+ * reader who keeps someone's library in their list keeps that token, not the key.
+ */
+
+/** A book in someone's shared library, as anyone with the key sees it. */
 export const ShelfBook = z.object({
   id: Id,
+  /** The book it's a copy of, if it is one: copies of copies all go by the first. */
+  origin: Id.nullish(),
   title: z.string(),
   author: z.string(),
   format: Format,
@@ -228,8 +236,29 @@ export const ShelfBook = z.object({
 });
 export type ShelfBook = z.infer<typeof ShelfBook>;
 
-export const ShelfResponse = z.object({ books: z.array(ShelfBook) });
-export type ShelfResponse = z.infer<typeof ShelfResponse>;
+/** Opens a library's shared books, the token to come back with in place of the key. */
+export const SharedToken = z.string().min(20).max(120).regex(/^[A-Za-z0-9_.-]+$/);
+
+export const SharedOpenRequest = z.object({ key: z.string().max(64) });
+export const SharedOpenResponse = z.object({
+  token: SharedToken,
+  /** What its owner named it, if they did. */
+  name: z.string().nullable(),
+  /** The library this browser is in itself. */
+  own: z.boolean(),
+});
+export type SharedOpenResponse = z.infer<typeof SharedOpenResponse>;
+
+export const SharedBooksRequest = z.object({ token: SharedToken });
+export const SharedBooksResponse = z.object({ name: z.string().nullable(), books: z.array(ShelfBook) });
+export type SharedBooksResponse = z.infer<typeof SharedBooksResponse>;
+
+/** A signed link to one of its shared books' files, or a cover. */
+export const SharedLinkRequest = z.object({ token: SharedToken, fileId: Id });
+
+/** The synced setting a library's own name is kept in, which the people it's shared with see. */
+export const LIBRARY_NAME = 'libraryName';
+export const LIBRARY_NAME_CHARS = 60;
 
 /* ---- Voice list ---- */
 

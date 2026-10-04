@@ -1,0 +1,42 @@
+/* The shared libraries tab's list, under the tab */
+.lm {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: min(340px, calc(100vw - 32px));
+  display: grid;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--tile-border), var(--float-shadow);
+  transform-origin: top left;
+}
+.lm-list { display: grid; gap: 2px; }
+.lm-row { display: flex; align-items: center; gap: 2px; border-radius: 11px; transition: background-color 140ms ease; }
+.lm-row:hover, .lm-row.is-on { background: var(--fill); }
+.lm-pick { flex: 1; min-width: 0; display: grid; gap: 4px; padding: 9px 10px; text-align: left; }
+.lm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 22px; line-height: 1; }
+.lm-row.is-on .lm-name { font-weight: 700; }
+.lm-sub { font: var(--ui-w) 11.5px/1 var(--ui); color: var(--ink-2); }
+.lm-icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); transition: color 140ms ease, background-color 140ms ease; }
+.lm-icon:hover { color: var(--ink); background: var(--canvas); }
+.lm-icon svg { width: 15px; height: 15px; }
+.lm-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas);
+  padding: 8px 10px;
+  font: var(--ui-w) 13.5px/1.2 var(--ui);
+  outline: none;
+  transition: border-color 140ms ease;
+}
+.lm-row .lm-input { margin: 4px; font-family: var(--read); font-size: 20px; padding: 5px 8px; }
+.lm-input:focus { border-color: var(--accent); }
+.lm-add { display: flex; gap: 6px; padding: 10px 2px 0; border-top: 1px solid var(--line); }
+.lm-add .btn { flex: none; }
+.lm-error { margin: -4px 4px 0; font: var(--ui-w) 12px/1.4 var(--ui); }
+.lm-note { margin: 0 4px 2px; font: var(--ui-w) 11.5px/1.45 var(--ui); color: var(--ink-2); }

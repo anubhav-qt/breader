@@ -58,12 +58,12 @@ export interface BookRecord {
   format: Format;
   /**
    * file: stored in this browser. sample: bundled public-domain file. placeholder: preview data only.
-   * shelf: a book on the Shared Library this reader hasn't started; starting it makes a copy here.
+   * shelf: a book in someone's shared library this reader hasn't started; starting it makes a copy here.
    */
   source: 'file' | 'sample' | 'placeholder' | 'shelf';
   url?: string;
   shared: boolean;
-  /** Taken out of the reader's own books but left on the Shared Library. */
+  /** Taken out of the reader's own books but left in their shared library. */
   sharedOnly?: boolean;
   addedAt: number;
   words: number;
@@ -77,7 +77,7 @@ export interface BookRecord {
   /** Server ids of the stored file and cover, once uploaded. */
   fileId?: string;
   coverId?: string;
-  /** A copy of a book on the Shared Library: that book's id. Its file stays the sharer's. */
+  /** A copy of a book someone shared: the first book's id, however many copies away. Its file stays the sharer's. */
   origin?: string;
   /** The series its file names, and its number in it. */
   series?: string;

@@ -13,6 +13,10 @@
 .gallery.is-empty:not([hidden]) { display: grid; place-items: center; padding-bottom: 76px; }
 .gallery-add { height: 50px; padding: 0 22px; border-radius: 14px; font-size: 15px; }
 .gallery-add svg { width: 18px; height: 18px; }
+/* An empty shared library: why, and what to do. */
+.gallery-empty { display: grid; justify-items: center; gap: 18px; max-width: 420px; padding: 0 16px; text-align: center; }
+.gallery-empty p { margin: 0; font-family: var(--read); font-size: 24px; line-height: 1.15; color: var(--ink-2); }
+.gallery-empty b { color: var(--ink); font-weight: 700; }
 
 .gallery-head {
   position: sticky;
@@ -94,7 +98,11 @@
 /* Not finished yet, the tick waits faintly, like the edit button beside it. */
 button.tile-done:not(.is-on) { opacity: 0.55; transition: opacity 160ms ease, background-color 160ms ease; }
 .tile:hover button.tile-done, button.tile-done:focus-visible { opacity: 1; }
-button.tile-done:hover { background: var(--canvas); }
+button.tile-done:hover, .tile-keep:not(.is-on):hover { background: var(--canvas); }
+/* Someone's book: into the reader's own library, then a tick once it's there. */
+.tile-keep svg { fill: none; width: 16px; height: 16px; }
+.tile-keep.is-on { cursor: default; }
+.tile-keep.is-on svg { width: 15px; height: 15px; }
 
 /* Type inside cards */
 .t-eyebrow { font: var(--ui-w) 12px/1 var(--ui); opacity: 0.75; margin-bottom: 12px; }

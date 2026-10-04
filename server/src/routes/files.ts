@@ -8,7 +8,7 @@ import type { Db } from '../db/client.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
-import { keeps, onShelf } from '../lib/shelf.ts';
+import { keeps, sharedSomewhere, usedBy } from '../lib/shelf.ts';
 import { voiceFile } from '../lib/voices.ts';
 
 const TYPES = {
@@ -137,8 +137,8 @@ export function fileRoutes(deps: Deps) {
   });
 
   /**
-   * This library's own files, public ones, shared books' files, those of shared books it keeps, and
-   * those of voices it may use.
+   * This library's own files, public ones, those of shared books it keeps, those its copies of
+   * shared books point at while someone still shares them, and those of voices it may use.
    */
   const visible = async (id: string, lib: LibraryRow) => {
     const [blob] = await db
@@ -147,7 +147,7 @@ export function fileRoutes(deps: Deps) {
       .where(and(
         eq(blobs.id, id),
         eq(blobs.status, 'ready'),
-        or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true), onShelf(blobs.id), keeps(lib.id, blobs.id), voiceFile(lib.id, blobs.id)),
+        or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true), keeps(lib.id, blobs.id), and(usedBy(lib.id, blobs.id), sharedSomewhere(blobs.id)), voiceFile(lib.id, blobs.id)),
       ));
     if (!blob) throw new ApiError(404, 'not_found', 'That file isn’t available.');
     return blob;

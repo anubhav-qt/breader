@@ -9,7 +9,8 @@
 }
 .logo { width: 38px; height: 38px; flex: none; display: block; }
 .logo-b { fill: var(--ink); }
-.tabs { display: flex; gap: 28px; }
+.tabs-wrap { position: relative; display: flex; align-items: center; gap: 2px; min-width: 0; }
+.tabs { display: flex; gap: 28px; min-width: 0; }
 .tab {
   position: relative;
   display: flex;
@@ -34,12 +35,19 @@
 }
 .hdr-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
-.tab { white-space: nowrap; }
+.tab { white-space: nowrap; min-width: 0; }
+/* The shared tab goes by its library's name, which can be long. */
+.tab-name { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+.tab-caret { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); transition: color 140ms ease, background-color 140ms ease, transform 160ms ease; }
+.tab-caret:hover, .tab-caret.is-open { color: var(--ink); background: var(--fill); }
+.tab-caret.is-open svg { transform: rotate(180deg); }
+.tab-caret svg { width: 16px; height: 16px; transition: transform 160ms ease; }
 
 /* Phones: the tabs get their own row under the logo and buttons. */
 @media (max-width: 720px) {
   .hdr { flex-wrap: wrap; height: auto; padding: 14px 16px 0; column-gap: 12px; row-gap: 4px; }
-  .tabs { order: 3; flex: 1 0 100%; gap: 24px; }
+  .tabs-wrap { order: 3; flex: 1 0 100%; }
+  .tabs { gap: 24px; }
 }
 @media (max-width: 480px) {
   .hdr-label { display: none; }

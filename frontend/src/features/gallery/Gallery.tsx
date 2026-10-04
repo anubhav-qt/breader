@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { BookEdit } from '../../books/types';
 import { canRemove, canShare } from '../../data/library';
@@ -35,7 +35,12 @@ interface Props {
   onEdit: (id: string, patch: BookEdit) => void;
   onRemove: (book: ShelfItem, fromKeyboard: boolean) => void;
   onShare: (book: ShelfItem, shared: boolean) => void;
-  onFinish: (book: ShelfItem, finished: boolean) => void;
+  /** Absent in the shared libraries, where no one's reading shows. */
+  onFinish?: (book: ShelfItem, finished: boolean) => void;
+  /** Someone's shared library: puts one of its books in the reader's own. */
+  onKeep?: (book: ShelfItem) => void;
+  /** What an empty library says, in place of its Add button. */
+  empty?: ReactNode;
 }
 
 /** The cards rise in and their colour grows only the first time a library appears after the page loads. */
@@ -45,7 +50,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish }: Props) {
+export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, empty }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -89,14 +94,16 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
   if (!books.length) {
     return (
       <div {...panel} className="gallery is-empty">
-        <button type="button" className="btn btn-primary gallery-add" onClick={onAdd}>
-          <IconPlus /> Add a book
-        </button>
+        {empty ?? (
+          <button type="button" className="btn btn-primary gallery-add" onClick={onAdd}>
+            <IconPlus /> Add a book
+          </button>
+        )}
       </div>
     );
   }
 
-  const shared = { now, enter: first.current, editingId: editing?.id, onOpen, onEdit: openEdit, onFinish };
+  const shared = { now, enter: first.current, editingId: editing?.id, onOpen, onEdit: openEdit, onFinish, onKeep };
   // Shelves below only add something once there's more than Recent holds, or a series to show.
   const more = books.length > RECENT || stacks.size > 0;
   return (
@@ -134,7 +141,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             onRemove={canRemove(editingBook) ? (fromKeyboard) => { setEditing(null); onRemove(editingBook, fromKeyboard); } : undefined}
             onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
             // A shared book not started has no reading of the reader's own to finish.
-            onFinish={editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
+            onFinish={onFinish && editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
             onClose={closeEdit}
           />
         )}
@@ -150,6 +157,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             onOpen={onOpen}
             onEdit={openEdit}
             onFinish={onFinish}
+            onKeep={onKeep}
             onClose={closeSeries}
           />
         )}

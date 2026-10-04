@@ -3,16 +3,16 @@ import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { Header, type Tab } from './components/Header';
+import { IconPlus } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
 import { normColor } from './data/colors';
-import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, shelfRecords, type PreviewMode } from './data/library';
-import { KEEP_WORDS } from '@breader/shared/limits';
+import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
 import type { AccountResponse } from '@breader/shared/protocol';
-import { shelfRecord, useShelf } from './data/shelf';
+import { libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
 import { AddBook } from './features/add/AddBook';
@@ -24,6 +24,7 @@ import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
 import { Reader } from './features/reader/Reader';
+import { LibraryMenu } from './features/shared/LibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
 import { newLibraryKey } from './lib/key';
@@ -40,7 +41,7 @@ function parseHash(): Route {
 
 /**
  * Development only: the preview bar, the ?preview= and ?theme= links it writes, and the placeholder
- * books on the shared shelf. Production shows only real books.
+ * books. Production shows only real books.
  */
 const devTools = import.meta.env.DEV;
 
@@ -103,7 +104,7 @@ async function closeReader(host: HTMLElement, id: string, reduced: boolean) {
 export default function App() {
   // Notices from sync (a file the server wouldn't take) use the toast below.
   const lib = useLibrary({ onNotice: (text) => say(text) });
-  const shelf = useShelf();
+  const sharing = useShared();
   const [now] = useState(() => Date.now());
   const [route, setRoute] = useState<Route>(parseHash);
   const [tab, setTab] = useState<Tab>('mine');
@@ -180,48 +181,51 @@ export default function App() {
   /* Data for the current view */
   const previewSets = useMemo(
     () => (devTools
-      ? { all: [...sampleRecords(now), ...placeholderRecords(now)], series: seriesRecords(now), shelf: shelfRecords(now), mixed: mixedRecords(now), covers: mixedCovers() }
-      : { all: [], series: [], shelf: [], mixed: [], covers: {} }),
+      ? { all: [...sampleRecords(now), ...placeholderRecords(now)], series: seriesRecords(now), mixed: mixedRecords(now), covers: mixedCovers() }
+      : { all: [], series: [], mixed: [], covers: {} }),
     [now],
   );
   /*
-   * The Shared Library tab: this reader's own shared books, then everyone else's. A shared book they
-   * have started shows as their copy of it, with their place and colour.
+   * Copies of shared books read too little of to keep (KEEP_WORDS) that no one shares any more.
+   * The server says which, to a library on it.
    */
-  const sharedRecords = useMemo(() => {
-    const own = lib.records.filter((r) => r.shared);
-    const ownIds = new Set(own.map((r) => r.id));
-    const copies = new Map<string, BookRecord>();
-    for (const r of lib.records) if (r.origin && !hidden.has(r.id)) copies.set(r.origin, r);
-    const others = shelf.books.filter((b) => !ownIds.has(b.id)).map((b) => copies.get(b.id) ?? shelfRecord(b));
-    return [...own, ...others];
-  }, [lib.records, shelf.books, hidden]);
+  const lapsed = lib.lapsed;
 
   /*
-   * Copies of shared books read too little of to keep (KEEP_WORDS) whose owner made them private.
-   * A library on the server hears which from it; one without a key goes by the Shared Library list.
+   * The shared libraries tab: the books the reader shares, or those of a library in their list, as
+   * its owner has them. A book of theirs the reader has too, as their own or a copy, is `kept`.
    */
-  const lapsed = useMemo(() => {
-    if (lib.key || !shelf.complete) return lib.lapsed;
-    const listed = new Set(shelf.books.map((b) => b.id));
-    return new Set(lib.records.filter((r) => r.origin && !listed.has(r.origin) && (lib.reads[r.id]?.wordsRead ?? 0) < KEEP_WORDS).map((r) => r.id));
-  }, [lib.key, lib.lapsed, lib.records, lib.reads, shelf.books, shelf.complete]);
+  const showing = sharing.showing;
+  const others = showing === 'own' ? null : sharing.libs[showing];
+  const sharedRecords = useMemo(
+    () => (showing === 'own' ? lib.records.filter((r) => r.shared && !lapsed.has(r.id)) : (others?.books ?? []).map(shelfRecord)),
+    [showing, others, lib.records, lapsed],
+  );
+  const keptFirsts = useMemo(
+    () => new Set(lib.records.filter((r) => !hidden.has(r.id) && !lapsed.has(r.id) && !r.sharedOnly).map((r) => r.origin ?? r.id)),
+    [lib.records, lapsed, hidden],
+  );
 
   const recordById = useMemo(() => {
     const m = new Map<string, BookRecord>();
-    for (const r of [...previewSets.all, ...previewSets.mixed, ...previewSets.shelf, ...sharedRecords, ...lib.records]) m.set(r.id, r);
+    for (const r of [...previewSets.all, ...previewSets.mixed, ...sharedRecords, ...lib.records]) m.set(r.id, r);
     // The series preview places some of the same books differently; it wins while it's showing.
     if (preview === 'series') for (const r of previewSets.series) m.set(r.id, r);
     return m;
   }, [previewSets, sharedRecords, lib.records, preview]);
 
   const items = useMemo(() => {
-    const covers = { ...previewSets.covers, ...shelf.covers, ...lib.covers };
+    const covers = { ...previewSets.covers, ...sharing.covers, ...lib.covers };
     const view = (recs: BookRecord[]) =>
       recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, covers, lib.edits)).sort(byRecent);
     const liveMine = view(lib.records.filter((r) => !lapsed.has(r.id) && !r.sharedOnly));
-    // A copy stands where its shared book stood, so its card stays put when it's started.
-    const onShelf = view([...sharedRecords, ...previewSets.shelf]).map((b) => (b.origin ? { ...b, key: b.origin } : b));
+    // No one's reading shows in a shared library, the reader's own included, newest first. Copies
+    // go by their first book, so a card stays put however many hands it passed through.
+    const onShelf = sharedRecords
+      .filter((r) => !hidden.has(r.id))
+      .map((r) => withReading(r, {}, covers, showing === 'own' ? lib.edits : {}))
+      .map((b) => ({ ...b, key: b.origin ?? b.id, ...(b.source === 'shelf' && keptFirsts.has(b.origin ?? b.id) ? { kept: true } : {}) }))
+      .sort((a, b) => b.addedAt - a.addedAt);
     let mine: ShelfItem[];
     switch (preview) {
       case 'empty': mine = []; break;
@@ -235,7 +239,7 @@ export default function App() {
     // Blank series, numbers and genres filled in from the rest of both libraries, and one name a series.
     const filled = fillGaps([...mine, ...onShelf]);
     return { mine: filled.slice(0, mine.length), shelf: filled.slice(mine.length) };
-  }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, shelf.covers, sharedRecords, previewSets, preview, hidden]);
+  }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, sharing.covers, sharedRecords, keptFirsts, showing, previewSets, preview, hidden]);
   const allSeries = useMemo(() => seriesNames([...items.mine, ...items.shelf]), [items]);
   const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...items.mine, ...items.shelf], b), [items]);
 
@@ -351,7 +355,7 @@ export default function App() {
     say(`Removed “${title}”`, { action: { label: 'Undo', run: () => void undo() }, focus: fromKeyboard });
   }, [recordById, lib, say]);
 
-  /** Removes a book, first asking about the other place when it's in both the reader's books and the Shared Library. */
+  /** Removes a book, first asking about the other place when it's in both the reader's books and their shared library. */
   const askRemove = useCallback((id: string, fromKeyboard = false, then?: () => void) => {
     const rec = lib.records.find((r) => r.id === id);
     const title = (rec && lib.edits[id]?.title?.trim()) || rec?.title || '';
@@ -359,16 +363,8 @@ export default function App() {
       setAsking({ id, title, from: tab, fromKeyboard, then });
       return;
     }
-    // Someone else's shared book, started here: out of My books, it stays on the Shared Library with
-    // the reader's place in it, for when they come back to it.
-    if (rec?.origin && !rec.sharedOnly && tab === 'mine' && shelf.books.some((b) => b.id === rec.origin)) {
-      lib.setSharedOnly(id, true);
-      say(`Took “${title}” out of your books. It stays on the Shared Library, and so does your place in it.`, { action: { label: 'Undo', run: () => lib.setSharedOnly(id, false) }, focus: fromKeyboard });
-      then?.();
-      return;
-    }
     void removeBook(id, fromKeyboard).then(then);
-  }, [lib, tab, shelf.books, removeBook, say]);
+  }, [lib, tab, removeBook]);
 
   const chooseRemove = useCallback((both: boolean) => {
     if (!asking) return;
@@ -377,10 +373,10 @@ export default function App() {
     if (both) void removeBook(id, fromKeyboard);
     else if (from === 'mine') {
       lib.setSharedOnly(id, true);
-      say(`Took “${title}” out of your books. It stays on the Shared Library.`, { action: { label: 'Undo', run: () => lib.setSharedOnly(id, false) }, focus: fromKeyboard });
+      say(`Took “${title}” out of your books. It stays in your shared library.`, { action: { label: 'Undo', run: () => lib.setSharedOnly(id, false) }, focus: fromKeyboard });
     } else {
       lib.setShared(id, false);
-      say(`Took “${title}” off the Shared Library. It stays in your books.`, { action: { label: 'Undo', run: () => lib.setShared(id, true) }, focus: fromKeyboard });
+      say(`Stopped sharing “${title}”. It stays in your books.`, { action: { label: 'Undo', run: () => lib.setShared(id, true) }, focus: fromKeyboard });
     }
     then?.();
   }, [asking, lib, removeBook, say]);
@@ -392,8 +388,11 @@ export default function App() {
   /* Drop files anywhere on the library and they're added straight to the tab you're on. */
   const tabRef = useRef(tab);
   tabRef.current = tab;
+  const showingRef = useRef(showing);
+  showingRef.current = showing;
   const addFiles = useCallback(async (files: File[]) => {
-    const shared = tabRef.current === 'shelf';
+    // Dropped on the reader's own shared library, they're shared; on someone else's, they're the reader's own.
+    const shared = tabRef.current === 'shelf' && showingRef.current === 'own';
     let needKey = !lib.key;
     for (const file of files) {
       const format = detectFormat(file);
@@ -456,8 +455,8 @@ export default function App() {
     await lib.addBook(rec, data, cover);
     if (opts?.ai) lib.editBook(rec.id, { ai: true });
     setPreview('live');
-    setTab(rec.shared ? 'shelf' : 'mine');
-    say(`Added “${rec.title}” to ${rec.shared ? 'the Shared Library' : 'My books'}`);
+    setTab('mine');
+    say(`Added “${rec.title}” to My books${rec.shared ? ', shared with your key' : ''}`);
   }, [lib, say]);
 
   /* The Key dialog's "Open library": this browser switches to the library behind that key. */
@@ -511,6 +510,27 @@ export default function App() {
   const shown = reading ?? leaving;
   const shownRec = shown ? recordById.get(shown.id) : undefined;
   const books = tab === 'mine' ? items.mine : items.shelf;
+  const ownShared = useMemo(() => lib.records.filter((r) => r.shared && !lapsed.has(r.id) && !hidden.has(r.id)).length, [lib.records, lapsed, hidden]);
+  /** Someone's book, put in the reader's own library from their shared one without opening it. */
+  const keep = useCallback(async (b: ShelfItem) => {
+    const entry = recordById.get(b.id);
+    if (entry?.source !== 'shelf') return;
+    await lib.startShelfBook(entry);
+    say(`Added “${b.title}” to My books`);
+  }, [recordById, lib, say]);
+  /** An empty shared library: the reader's own says how to share; someone else's, why it's empty. */
+  const emptyShelf = showing === 'own' ? (
+    <div className="gallery-empty">
+      <p>You don’t share any books yet. Switch on <b>Share with your key</b> in a book’s ⋯ menu, or as you add one, and anyone you give your key to can read it here.</p>
+      <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>
+    </div>
+  ) : others?.state === 'closed' ? (
+    <div className="gallery-empty">
+      <p>This key doesn’t open {libraryName(sharing, showing)} any more. Its owner may have a new key to give you.</p>
+    </div>
+  ) : (
+    <div className="gallery-empty"><p>{others?.state === 'ready' ? `Nothing is shared in ${libraryName(sharing, showing)} yet.` : 'Opening…'}</p></div>
+  );
 
   return (
     <MotionConfig reducedMotion="user">
@@ -519,19 +539,30 @@ export default function App() {
           <Header
             tab={tab}
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
+            shelfName={libraryName(sharing, showing)}
             canAdd={books.length > 0}
             onTab={setTab}
             onAdd={() => setAdding({ mode: 'file' })}
             onKey={() => setKeyOpen(true)}
+            libraries={(close) => (
+              <LibraryMenu
+                key="libraries"
+                sharing={sharing}
+                ownCount={ownShared}
+                onShow={(which: Showing) => { showLibrary(which); setTab('shelf'); }}
+                onClose={close}
+                say={say}
+              />
+            )}
             account={<AccountMenu account={account} onLogin={() => setLogin({ mode: 'login' })} onLogOut={logOutAll} />}
           />
           {lib.ready && (['mine', 'shelf'] as const).filter((t) => seen.has(t)).map((t) => (
             <Gallery
-              key={`${t}-${preview}`}
+              key={`${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}
               books={t === 'mine' ? items.mine : items.shelf}
               seriesNames={allSeries}
               place={t}
-              // The Shared Library is browsed by genre; one's own books, by series.
+              // Shared libraries are browsed by genre; one's own books, by series.
               view={t === 'shelf' ? 'genre' : 'series'}
               now={now}
               id={`library-${t}`}
@@ -540,13 +571,16 @@ export default function App() {
               onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={() => setAdding({ mode: 'file' })}
               onEdit={(id, patch) => void editBook(id, patch)}
-              onFinish={(b, finished) => lib.setFinished(b.id, finished, b)}
+              // Reading shows only in My books.
+              onFinish={t === 'mine' ? (b, finished) => lib.setFinished(b.id, finished, b) : undefined}
+              onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
+              empty={t === 'shelf' ? emptyShelf : undefined}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
-                // Out of their books already: off the Shared Library too, it's nowhere, so it goes.
+                // Out of their books already: not shared either, it's nowhere, so it goes.
                 if (!shared && b.sharedOnly) { void removeBook(b.id); return; }
                 lib.setShared(b.id, shared);
-                say(shared ? `“${b.title}” is on the Shared Library` : `Took “${b.title}” off the Shared Library. Anyone well into it keeps it.`);
+                say(shared ? `“${b.title}” is shared with your key` : `Stopped sharing “${b.title}”. Anyone well into it keeps their copy.`);
               }}
             />
           ))}
@@ -608,7 +642,7 @@ export default function App() {
             initialMode={adding.mode}
             hasKey={!!lib.key}
             nextColor={lib.nextColor}
-            defaultShared={tab === 'shelf'}
+            defaultShared={tab === 'shelf' && showing === 'own'}
             knownSeries={allSeries}
             genreFor={guessGenre}
             onClose={() => setAdding(null)}
