@@ -18,6 +18,7 @@ export interface StyleSettings {
 }
 
 export interface ReaderSettings {
+  /** Pages read as Book and scroll as Modern: the layout picks it (styleFor). */
   style: Style;
   theme: ThemeName;
   book: StyleSettings;
@@ -68,8 +69,11 @@ const DEFAULTS: ReaderSettings = {
   book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: false },
   modern: { font: 'dongle', size: 22, lh: 1.65, measure: 620, layout: 'scroll', justify: false },
   pdfLayout: 'pages',
-  v: 2,
+  v: 3,
 };
+
+/** The style a layout reads in: pages are a book's, scrolling is modern. */
+export const styleFor = (layout: Layout): Style => (layout === 'pages' ? 'book' : 'modern');
 
 const KEY = 'breader.reader.v1';
 
@@ -90,6 +94,18 @@ function loadSettings(): ReaderSettings {
     s.modern.justify = false;
     s.v = 2;
     if (saved.book || saved.modern) changedOnLoad = s;
+  }
+  // 3: No Style switch any more; the layout picks it. Book scrolling or Modern in pages becomes the
+  // other style, with the type it was read in, so the page looks as it did.
+  if ((saved.v ?? 1) < 3) {
+    const was = s[s.style];
+    const style = styleFor(was.layout);
+    if (style !== s.style) s[style] = { ...was };
+    s.style = style;
+    s.book = { ...s.book, layout: 'pages' };
+    s.modern = { ...s.modern, layout: 'scroll' };
+    s.v = 3;
+    if (saved.book || saved.modern || saved.style) changedOnLoad = s;
   }
   return s;
 }

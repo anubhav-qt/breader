@@ -5,7 +5,7 @@ import { IconCheck } from '../../components/icons';
 import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
-import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, type ReaderSettings, type StyleSettings } from './settings';
+import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
 
@@ -146,17 +146,6 @@ export function AppearancePanel({ settings, isPdf, update, two = false }: LookPr
   return (
     <div className="pnl">
       <div className="pnl-h">Appearance</div>
-      {!isPdf && (
-        <Segmented
-          label="Style"
-          value={settings.style}
-          onChange={(v) => update((s) => ({ ...s, style: v }))}
-          options={[
-            { v: 'book', label: 'Book' },
-            { v: 'modern', label: 'Modern' },
-          ]}
-        />
-      )}
       <div className="ctl">
         <div className="clbl">Theme</div>
         <div className="sws" role="radiogroup" aria-label="Theme">
@@ -214,7 +203,8 @@ export function AppearancePanel({ settings, isPdf, update, two = false }: LookPr
             <Segmented label="Spacing" value={cur.lh} onChange={(v) => set({ lh: v })} options={SPACING.map((o, i) => ({ v: o.v, label: o.label, content: lines(4 + i) }))} />
             <Segmented label="Margins" value={cur.measure} onChange={(v) => set({ measure: v })} options={MEASURES.map((o, i) => ({ v: o.v, label: o.label, content: margins(4 + i * 2) }))} />
           </div>
-          <Segmented label="Layout" value={cur.layout} onChange={(v) => set({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
+          {/* Pages read as Book, scrolling as Modern, each with its own type. */}
+          <Segmented label="Layout" value={cur.layout} onChange={(v) => update((s) => ({ ...s, style: styleFor(v) }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
           <div className="ctl tgrow">
             <span className="clbl">Justify</span>
             <button type="button" className="tg" role="switch" aria-checked={cur.justify} aria-label="Justify text" onClick={() => set({ justify: !cur.justify })} />
