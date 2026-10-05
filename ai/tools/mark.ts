@@ -246,7 +246,9 @@ async function runBook(key: string, lb: Balancer, top: Balancer, flags: Record<s
 
     // Parts a fallback model made, marked again by a primary one. Some parts they keep answering empty
     // (a scene they won't touch), so after a few tries those keep the fallback's marks and the book packs.
-    const redo = Object.entries(ledger(book)).filter(([, d]) => !PRIMARY.some((r) => r.name === d.model)).map(([n]) => Number(n));
+    // A model taken off the ladder since (DeepSeek, in Vol. 9 of Mushoku) was a primary then: its parts stay.
+    const fallbacks = LADDER.filter((r) => !r.primary).map((r) => r.name);
+    const redo = Object.entries(ledger(book)).filter(([, d]) => fallbacks.includes(d.model)).map(([n]) => Number(n));
     const who = PRIMARY.map((r) => r.name).join(' or ');
     if (redo.length) {
       console.log(`${tag}: parts ${redo.join(', ')} again, with ${who}`);
