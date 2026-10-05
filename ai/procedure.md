@@ -96,7 +96,11 @@ When the web and the book disagree, the book wins. When sources disagree and the
 - do Step 1 and Step 2, and nothing else: no marks, no notes, no ledger;
 - in `research.md`, give it what the web taught you: the narration, the cast table with every name, nickname and title the book uses for each person, the traps, and any identity the book hides and where it's revealed;
 - put everyone you found into `cast.json`, each with evidence;
-- run `check`, fix any errors, and tell the owner the book is ready for `mark`.
+- run `check` and fix any errors;
+- add a line `<n> <key>` to `ai/work/research-ready.txt`, where n puts the books in order (a series' volume number, say). That line is the hand-off: `mark-all` takes every book listed there (see "After research only" below);
+- tell the owner the book is ready.
+
+**A series, or many books at once.** Fetch them all first, in order. Then research them at the same time if you can, one agent for each book. When they're all done, make one pass over every `cast.json` in the series, so each person has the same id, voice and spelling in every volume. A voice change at a paragraph belongs only to the volume where it happens: later volumes start with the voice it changed to.
 
 ### Step 3: Read and mark, part by part
 
@@ -146,7 +150,39 @@ This writes `ai/out/<sha256>.json` and `ai/work/<key>/report.md`. Then tell the 
 - how many lines you marked, and how many are unsure;
 - anything odd: garbled text, a gender you couldn't settle, warnings you kept.
 
+Counts and status only. Never the plot, a reveal, or who someone turns out to be: the owner reads these books too.
+
 Then take the next book.
+
+### After research only: mark, import, report
+
+The owner's side, run by the owner or by an agent the owner asks to run it, never on your own. It's how every book researched on its own goes from `research-ready.txt` to the server.
+
+1. **Mark them all at once,** in a terminal of its own:
+
+   ```bash
+   npm --prefix ai run mark-all
+   ```
+
+   - It marks every book in `research-ready.txt` that isn't packed yet, in one `mark` run. One run means one balancer, so every book's calls queue together at Kimi's limit. Separate runs would each hit NVIDIA at once and bring back the 429s, so never start a second `mark-all` beside it, or a `mark` on a book it hasn't packed yet. A `--settle` on a packed book (step 3) is one call, and fine.
+   - Kimi K3 marks. Nemotron 3 Ultra takes calls only while Kimi is down, and Kimi marks those parts again before the book packs; a part Kimi still won't answer after 6 tries keeps Nemotron's marks.
+   - Any book that fails waits for the next round, two minutes later, which carries on where it stopped. Rounds go on until every book is packed, often for hours, so it can't run as a background job with a time limit.
+   - Watch it now and then. Empty answers, 429s and the odd "fetch failed" are routine and retried. A book failing the same way round after round needs its cause fixed.
+2. **Import each book as soon as it packs,** and check it:
+
+   ```bash
+   npm --prefix ai run import
+   npm --prefix ai run import -- --verify
+   ```
+
+   `--verify` must say every book matches what's in `ai/out`.
+3. **Unsure lines left?** If the book's `report.md` shows any, settle them once more, then import again:
+
+   ```bash
+   npm --prefix ai run mark -- <key> --settle
+   ```
+
+4. **Report each book** to the owner as it goes in: its lines (M, F and N), how many are unsure, and the verify result. Counts and status only, as in Step 5.
 
 ## 5. Voice marks: how to decide
 
@@ -428,7 +464,9 @@ Every command starts `npm --prefix ai run`, from the repository root.
 | `audit -- <key> cast` | Everyone, with their voice, their lines and the evidence |
 | `audit -- <key> notes <s:b>` | Revisit as a reader at that paragraph sees it |
 | `pack -- <key> --by "<model>"` | Final check, then writes the book's file for the server |
-| `mark -- <key>` | The owner's, not yours: after research only, marks every part with Kimi K3 through NVIDIA, then packs |
+| `mark -- <key>` | The owner's, not yours: after research only, marks every part with Kimi K3 through NVIDIA, then packs. `--settle` only settles the unsure lines again, then packs |
+| `mark-all` | The owner's, not yours: marks every book in `research-ready.txt` not packed yet, all in one run, round after round until all are packed |
+| `import` | The owner's, not yours: puts every packed book on the server. `import -- --verify` checks the server matches `ai/out` |
 | `notes -- <key>` | The owner's, not yours: after `mark`, writes the Revisit notes with Kimi K3 through NVIDIA, reads them through as a reader, then packs |
 
 `<key>` can also be the book's rank in `books`, or the first letters of its key.
