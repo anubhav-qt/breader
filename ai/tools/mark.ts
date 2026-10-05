@@ -15,15 +15,15 @@ import { validate } from './validate.ts';
  *   --try <n>       mark part n again beside the marks it has and compare them; changes nothing
  *   --settle        only settle the unsure lines
  *   --no-pack       don't pack at the end
- *   --with <model>  only that model (kimi-k3, deepseek-v4.1-flash, nemotron-3-ultra), say with --try
+ *   --with <model>  only that model (kimi-k3, nemotron-3-ultra), say with --try
  *
  * The same work as procedure.md, part 4, steps 3 to 5, done by a model through NVIDIA's free API,
  * after research (step 2) is done by hand in Antigravity. Each call gets the rules, the whole book,
  * research.md, the cast so far and the previous part's marks if there are any, and answers with
  * a part's marks plus any new people. Every part goes at once, since the whole book is there to
- * read. Then check, and one call to fix every part with errors together. Kimi K3 and DeepSeek V4.1
- * Flash share the parts; Nemotron 3 Ultra takes over only while both are down, and its parts are
- * marked again by one of them before the book is packed. Who marked each part is kept in
+ * read. Then check, and one call to fix every part with errors together. Kimi K3 marks the parts;
+ * Nemotron 3 Ultra takes over only while it's down, and its parts are marked again by Kimi before
+ * the book is packed. Who marked each part is kept in
  * marked-by.json. Nothing it prints has the book's text in it.
  */
 

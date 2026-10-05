@@ -10,10 +10,10 @@ import type { Cast } from './validate.ts';
  */
 
 // A book's parts all go at once, so each model takes as many calls as a long book has parts. The
-// primary ones share the calls as equals; Nemotron steps in only while they're both down.
+// primary ones share the calls as equals; Nemotron steps in only while they're all down. DeepSeek V4.1
+// Flash was a primary for Vol. 9 of Mushoku; its name stays in LONG for the packs it marked.
 export const LADDER: Rung[] = [
   { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 32_000, maxInFlight: 24, primary: true },
-  { model: 'deepseek-ai/deepseek-v4.1-flash', name: 'deepseek-v4.1-flash', extra: { chat_template_kwargs: { thinking: true } }, maxTokens: 32_000, maxInFlight: 24, primary: true },
   { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 32_000, maxInFlight: 24 },
 ];
 export const TOP = LADDER[0];
