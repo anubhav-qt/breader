@@ -23,6 +23,8 @@
 .lm-icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); transition: color 140ms ease, background-color 140ms ease; }
 .lm-icon:hover { color: var(--ink); background: var(--canvas); }
 .lm-icon svg { width: 15px; height: 15px; }
+.lm-star.is-on { color: var(--accent); }
+.lm-star.is-on svg { fill: currentColor; }
 .lm-input {
   flex: 1;
   min-width: 0;

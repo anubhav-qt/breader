@@ -4,21 +4,24 @@ import type { SharedBooksResponse, SharedOpenResponse, ShelfBook } from '@breade
 import type { BookRecord } from '../books/types';
 import { readSetting, writeSetting } from '../features/reader/settings';
 import { api, ApiError } from '../lib/api';
-import { readLocal, store, writeLocal } from '../lib/store';
+import { store } from '../lib/store';
 
 /*
  * Shared libraries. Each reader's key opens the books they share (server routes/shelf.ts): anyone
  * they give it to can read them and copy them, never change them. The reader's own shared books
- * come from their own library. Other people's are kept in a list by the token their key was traded
- * for (never the key), in the synced reader settings, so the list follows the reader between
- * browsers; which one the tab shows is this browser's. Each library's last list of books is kept
- * here too, so the tab opens at once and offline.
+ * come from their own library. Each key of someone else's adds a library of its own to a list,
+ * Shared Library 1, 2 and on until the reader names it, kept by the token the key was traded for
+ * (never the key) in the synced reader settings, so the list follows the reader between browsers,
+ * and so does which library the tab opens at: the reader's pick, or the first in the list. Each
+ * library's last list of books is kept here too, so the tab opens at once and offline.
  */
 
 export interface SavedLibrary {
   token: string;
-  /** The reader's own name for it, over its owner's. */
+  /** The reader's own name for it, over Shared Library N. */
   name?: string;
+  /** Its N in Shared Library N: the lowest free when it was added. */
+  n?: number;
   at: number;
 }
 
@@ -39,27 +42,50 @@ interface Shared {
   /** Object URLs of the covers this browser has fetched, by shared book id. */
   covers: Record<string, string>;
   showing: Showing;
+  /** The library the tab opens at. */
+  byDefault: Showing;
   /** The reader's name for their own library, which the people they share it with see. */
   ownName: string | null;
 }
 
 const SAVED = 'sharedLibraries';
-const SHOWING = 'breader.shared.showing.v1';
+/** The library id the tab opens at, or 'own'; unset, the first in the list. */
+const DEFAULT = 'sharedDefault';
 const REFRESH_AFTER = 30_000;
 /** Covers are fetched for the newest books only; the library shows only the two most recent. */
 const COVERS = 12;
 
+const counted = (n: unknown): n is number => Number.isInteger(n) && (n as number) > 0;
+/** The lowest N no library in the list has. */
+const freeNumber = (list: SavedLibrary[]) => {
+  const used = new Set(list.map((l) => l.n));
+  let n = 1;
+  while (used.has(n)) n++;
+  return n;
+};
 const savedNow = () => {
   const v = readSetting(SAVED);
-  return Array.isArray(v) ? (v as SavedLibrary[]).filter((l) => typeof l?.token === 'string') : [];
+  const list = Array.isArray(v) ? (v as SavedLibrary[]).filter((l) => typeof l?.token === 'string') : [];
+  // Libraries added before they were numbered take the lowest numbers free, in the list's order.
+  const out: SavedLibrary[] = list.map((l) => (counted(l.n) ? l : { ...l, n: undefined }));
+  for (const l of out) if (!counted(l.n)) l.n = freeNumber(out);
+  return out;
+};
+/** The library a token opens: the same library whoever's key gave it. */
+const libraryOf = (token: string) => token.slice(0, token.lastIndexOf('.'));
+const defaultNow = (saved: SavedLibrary[]): Showing => {
+  const v = readSetting(DEFAULT);
+  if (v === 'own') return 'own';
+  return saved.find((l) => libraryOf(l.token) === v)?.token ?? saved[0]?.token ?? 'own';
 };
 const ownNameNow = () => {
   const v = readSetting(LIBRARY_NAME);
   return typeof v === 'string' && v.trim() ? v.trim() : null;
 };
 
-let shared: Shared = { saved: savedNow(), libs: {}, covers: {}, showing: readLocal<Showing>(SHOWING, 'own'), ownName: ownNameNow() };
-if (shared.showing !== 'own' && !shared.saved.some((l) => l.token === shared.showing)) shared.showing = 'own';
+const savedAtStart = savedNow();
+const defaultAtStart = defaultNow(savedAtStart);
+let shared: Shared = { saved: savedAtStart, libs: {}, covers: {}, showing: defaultAtStart, byDefault: defaultAtStart, ownName: ownNameNow() };
 const subscribers = new Set<() => void>();
 const fetched = new Map<string, number>();
 const fetching = new Map<string, Promise<void>>();
@@ -72,8 +98,6 @@ const libOf = (token: string): SharedLibrary | undefined => shared.libs[token];
 const setLib = (token: string, patch: Partial<SharedLibrary>) =>
   set({ libs: { ...shared.libs, [token]: { books: [], name: null, state: 'loading', ...libOf(token), ...patch } } });
 
-/** The library a token opens: the same library whoever's key gave it. */
-const libraryOf = (token: string) => token.slice(0, token.lastIndexOf('.'));
 
 /** A library's books again, at most every 30 seconds unless asked to now. */
 export function refreshLibrary(token: string, now = false): Promise<void> {
@@ -129,41 +153,51 @@ async function warm(token: string) {
 }
 
 const keepSaved = (saved: SavedLibrary[]) => {
-  set({ saved });
   writeSetting(SAVED, saved);
+  set({ saved, byDefault: defaultNow(saved) });
 };
 
-/** Shows one library in the tab. */
+/** Shows one library in the tab, until the next visit opens at the default again. */
 export function showLibrary(which: Showing) {
   set({ showing: which });
-  writeLocal(SHOWING, which);
   if (which !== 'own') void warm(which);
 }
 
+/** The library the tab opens at, in every browser the reader uses. */
+export function setDefaultLibrary(which: Showing) {
+  // The tab stays on the library it shows now.
+  const { showing } = shared;
+  writeSetting(DEFAULT, which === 'own' ? 'own' : libraryOf(which));
+  set({ byDefault: defaultNow(shared.saved), showing });
+}
+
 /**
- * Adds someone's library to the list by their key, and shows it. The reader's own key shows their
- * own shared books instead.
+ * Adds someone's library to the list by their key, as a library of its own, and shows it. Nothing
+ * of theirs goes into the reader's own books. The same key again finds the same library; the
+ * reader's own key shows their own shared books.
  */
-export async function addLibrary(key: string): Promise<{ own: boolean; name: string | null; token: string }> {
+export async function addLibrary(key: string): Promise<{ own: boolean; label: string; token: string }> {
   const r = await api.post<SharedOpenResponse>('/v1/shared/open', { key: key.trim() });
   if (r.own) {
     showLibrary('own');
-    return { own: true, name: r.name, token: r.token };
+    return { own: true, label: libraryName(shared, 'own'), token: r.token };
   }
   // The same library again, with a newer token if its key changed since.
   const had = shared.saved.find((l) => libraryOf(l.token) === libraryOf(r.token));
-  const rest = shared.saved.filter((l) => l !== had);
-  keepSaved([...rest, { ...had, token: r.token, at: had?.at ?? Date.now() }]);
+  keepSaved(had
+    ? shared.saved.map((l) => (l === had ? { ...had, token: r.token } : l))
+    : [...shared.saved, { token: r.token, n: freeNumber(shared.saved), at: Date.now() }]);
   setLib(r.token, { name: r.name });
   fetched.delete(r.token);
   showLibrary(r.token);
-  return { own: false, name: r.name, token: r.token };
+  return { own: false, label: libraryName(shared, r.token), token: r.token };
 }
 
 /** Takes a library off the list. Copies of its books already in the reader's library stay. */
 export function removeLibrary(token: string) {
+  if (readSetting(DEFAULT) === libraryOf(token)) writeSetting(DEFAULT, null);
   keepSaved(shared.saved.filter((l) => l.token !== token));
-  if (shared.showing === token) showLibrary('own');
+  if (shared.showing === token) showLibrary(shared.byDefault);
 }
 
 /** Names the reader's own library, for everyone it's shared with, or their entry for someone else's. */
@@ -177,11 +211,11 @@ export function renameLibrary(which: Showing, name: string) {
   keepSaved(shared.saved.map((l) => (l.token === which ? { ...l, name: clean || undefined } : l)));
 }
 
-/** A library's name: the reader's own for it, its owner's, or a numbered stand-in. */
+/** A library's name: the reader's own for it, or Shared Library N. */
 export function libraryName(s: Shared, which: Showing): string {
   if (which === 'own') return s.ownName ?? 'Your shared library';
-  const i = s.saved.findIndex((l) => l.token === which);
-  return s.saved[i]?.name ?? s.libs[which]?.name ?? `Shared library ${i + 1}`;
+  const l = s.saved.find((x) => x.token === which);
+  return l?.name ?? `Shared Library ${l?.n ?? ''}`.trim();
 }
 
 /** A library in the list that shares this file, to fetch it through, for a book not yet the reader's own. */
@@ -225,8 +259,11 @@ function start() {
   // Changed on another browser (sync) or in another tab.
   window.addEventListener('breader:settings', () => {
     const saved = savedNow();
-    const showing = shared.showing === 'own' || saved.some((l) => l.token === shared.showing) ? shared.showing : 'own';
-    set({ saved, ownName: ownNameNow(), showing });
+    const byDefault = defaultNow(saved);
+    // A tab still at the default follows it, as the list first arrives in a new browser.
+    const kept = shared.showing !== shared.byDefault && (shared.showing === 'own' || saved.some((l) => l.token === shared.showing));
+    const showing = kept ? shared.showing : byDefault;
+    set({ saved, byDefault, ownName: ownNameNow(), showing });
   });
   // Every library in the list, so its books can be opened and fetched from wherever the reader is.
   for (const l of shared.saved) void warm(l.token);

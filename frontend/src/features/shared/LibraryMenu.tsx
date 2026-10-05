@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { IconClose, IconPencil } from '../../components/icons';
-import { addLibrary, libraryName, removeLibrary, renameLibrary, type Shared, type Showing } from '../../data/shelf';
+import { IconClose, IconPencil, IconStar } from '../../components/icons';
+import { addLibrary, libraryName, removeLibrary, renameLibrary, setDefaultLibrary, type Shared, type Showing } from '../../data/shelf';
 import { ApiError } from '../../lib/api';
 import { springs } from '../../lib/springs';
 import './shared.css';
@@ -17,9 +17,10 @@ interface Props {
 }
 
 /**
- * The shared libraries tab's list: the reader's own shared books, then the libraries they opened
- * with someone's key. Each can be named; others' come off the list with ×. A key pasted below adds
- * one. Others see the reader's shared books by the name they give their own.
+ * The shared libraries tab's list: the libraries opened with someone's key, Shared Library 1, 2
+ * and on, then the reader's own shared books. Each can be named; others' come off the list with ×.
+ * The star picks the one the tab opens at, the first unless the reader picks another. A key pasted
+ * below adds one. Others see the reader's shared books by the name they give their own.
  */
 export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) {
   const [renaming, setRenaming] = useState<Showing | null>(null);
@@ -29,9 +30,11 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
   const [error, setError] = useState<string | null>(null);
 
   const rows: Array<{ which: Showing; count: number | null; closed: boolean }> = [
-    { which: 'own', count: ownCount, closed: false },
     ...sharing.saved.map((l) => ({ which: l.token, count: sharing.libs[l.token]?.books.length ?? null, closed: sharing.libs[l.token]?.state === 'closed' })),
+    { which: 'own', count: ownCount, closed: false },
   ];
+  /** Only one library: it's the default, with nothing to pick. */
+  const choosing = rows.length > 1;
 
   const startRename = (which: Showing) => {
     setRenaming(which);
@@ -52,7 +55,7 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
       const r = await addLibrary(key);
       setKey('');
       onShow(r.own ? 'own' : r.token);
-      say(r.own ? 'That’s your own key: these are the books you share with it.' : `Added ${r.name ? `“${r.name}”` : 'their library'} to your shared libraries`);
+      say(r.own ? 'That’s your own key: these are the books you share with it.' : `Added ${r.label} to your shared libraries`);
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Couldn’t open that library. Check your connection and try again.');
@@ -75,6 +78,9 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
         {rows.map(({ which, count, closed }) => {
           const name = libraryName(sharing, which);
           const on = sharing.showing === which;
+          const isDefault = sharing.byDefault === which;
+          // What its owner calls it, when that isn't the name it has here.
+          const theirs = which === 'own' ? null : sharing.libs[which]?.name;
           return (
             <div key={which} className={`lm-row${on ? ' is-on' : ''}`}>
               {renaming === which ? (
@@ -98,7 +104,21 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
                   <span className="lm-sub">
                     {which === 'own' ? 'Yours, ' : ''}
                     {closed ? 'its key has changed' : count === null ? 'opening…' : `${count} ${count === 1 ? 'book' : 'books'}`}
+                    {choosing && isDefault ? ', opens first' : ''}
+                    {theirs && theirs !== name ? <>, “{theirs}” to its owner</> : null}
                   </span>
+                </button>
+              )}
+              {choosing && (
+                <button
+                  type="button"
+                  className={`lm-icon lm-star${isDefault ? ' is-on' : ''}`}
+                  title={isDefault ? 'The tab opens here' : 'Open the tab here'}
+                  aria-label={`Open the shared tab at ${name}`}
+                  aria-pressed={isDefault}
+                  onClick={() => { if (!isDefault) { setDefaultLibrary(which); say(`The shared tab opens at ${name} from now on`); } }}
+                >
+                  <IconStar />
                 </button>
               )}
               <button type="button" className="lm-icon" title="Rename" aria-label={`Rename ${name}`} onClick={() => startRename(which)}>

@@ -11,7 +11,9 @@ interface Props {
   /** Shown once, right after the key is created. */
   fresh?: boolean;
   onClose: () => void;
-  /** Opens the library behind another key, replacing the books in this browser. */
+  /** Adds someone's key as a shared library of its own: the box's usual answer. */
+  onShared?: (key: string) => Promise<void>;
+  /** Opens the library behind another key, replacing the books in this browser: only for the reader's own. */
   onOpen?: (key: string) => Promise<void>;
   /** Logged out: offers to log in instead of keeping the key. */
   onLogin?: () => void;
@@ -29,10 +31,12 @@ function syncLine(s: SyncStatus): string | null {
   }
 }
 
-export function KeyDialog({ libraryKey, fresh, onClose, onOpen, onLogin, loggedIn }: Props) {
+export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogin, loggedIn }: Props) {
   const [copied, setCopied] = useState(false);
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
+  /** Asked to swap this browser's books for the key's: one more tap says so. */
+  const [swapping, setSwapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sync = useSyncStatus();
 
@@ -49,12 +53,12 @@ export function KeyDialog({ libraryKey, fresh, onClose, onOpen, onLogin, loggedI
 
   const valid = normalizeKey(entered) !== null;
 
-  const open = async () => {
-    if (!onOpen || !valid) return;
+  const run = async (go: ((key: string) => Promise<void>) | undefined) => {
+    if (!go || !valid || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await onOpen(entered);
+      await go(entered);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Breader couldn’t open that library.');
@@ -88,31 +92,45 @@ export function KeyDialog({ libraryKey, fresh, onClose, onOpen, onLogin, loggedI
         )}
         {!fresh && <>
         <div className="add-sep" />
-        <label className="add-label" htmlFor="enter-key">Open books from another key</label>
+        <label className="add-label" htmlFor="enter-key">Someone else’s key</label>
         <input
           id="enter-key"
           className="add-input key-input"
           placeholder="BRDR-XXXX-XXXX-XXXX-XXXX-XXXX"
           value={entered}
-          onChange={(e) => { setEntered(e.target.value.toUpperCase()); setError(null); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') void open(); }}
+          onChange={(e) => { setEntered(e.target.value.toUpperCase()); setError(null); setSwapping(false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') void run(swapping ? onOpen : onShared); }}
           spellCheck={false}
           autoComplete="off"
           disabled={busy}
         />
         {error ? (
           <p className="add-local key-error" role="alert">{error}</p>
-        ) : (
-          <p className="add-local">
+        ) : swapping ? (
+          <p className="add-local key-error" role="alert">
             {libraryKey
-              ? 'The books in this browser are swapped for that library’s. Keep your current key to come back to these.'
-              : 'The books in this browser are swapped for that library’s.'}
+              ? 'Only for your own key from another browser: the books in this browser, and where you are in them, are swapped for that library’s. Keep your current key to come back to these.'
+              : 'Only for your own key from another browser: the books in this browser, and where you are in them, are swapped for that library’s.'}
           </p>
+        ) : (
+          <p className="add-local">Their shared books open as a shared library of their own. Nothing of theirs comes into My books.</p>
         )}
         <div className="add-actions">
-          <button type="button" className="btn btn-primary" disabled={!valid || busy || !onOpen} onClick={() => void open()}>
-            {busy ? 'Opening…' : 'Open library'}
-          </button>
+          {swapping ? (
+            <>
+              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { setSwapping(false); setError(null); }}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={!valid || busy || !onOpen} onClick={() => void run(onOpen)}>
+                {busy ? 'Opening…' : 'Swap to this library'}
+              </button>
+            </>
+          ) : (
+            <>
+              {onOpen && !loggedIn && <button type="button" className="btn btn-ghost" disabled={!valid || busy} onClick={() => { setSwapping(true); setError(null); }}>It’s my own key</button>}
+              <button type="button" className="btn btn-primary" disabled={!valid || busy || !onShared} onClick={() => void run(onShared)}>
+                {busy ? 'Opening…' : 'Add shared library'}
+              </button>
+            </>
+          )}
         </div>
         </>}
       </div>

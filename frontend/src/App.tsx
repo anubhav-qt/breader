@@ -12,7 +12,7 @@ import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types'
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
 import type { AccountResponse } from '@breader/shared/protocol';
-import { libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
+import { addLibrary, libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
 import { AddBook } from './features/add/AddBook';
@@ -459,7 +459,15 @@ export default function App() {
     say(`Added “${rec.title}” to My books${rec.shared ? ', shared with your key' : ''}`);
   }, [lib, say]);
 
-  /* The Key dialog's "Open library": this browser switches to the library behind that key. */
+  /* The Key dialog's usual answer to someone's key: a shared library of its own, beside My books. */
+  const openShared = useCallback(async (key: string) => {
+    const r = await addLibrary(key);
+    setPreview('live');
+    setTab('shelf');
+    say(r.own ? 'That’s your own key: these are the books you share with it.' : `Added ${r.label} to your shared libraries`);
+  }, [say]);
+
+  /* The Key dialog's "It's my own key": this browser switches to the library behind that key. */
   const openKey = useCallback(async (key: string) => {
     await openWithKey(key);
     setPreview('live');
@@ -652,7 +660,7 @@ export default function App() {
           />
         )}
         {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
-        {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onOpen={openKey} />}
+        {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} />}
         {freshKey && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
         {login && (
           <LoginDialog
