@@ -54,7 +54,11 @@
 .toast-action:hover { background: color-mix(in srgb, var(--canvas) 26%, transparent); }
 .toast-action:focus-visible { outline-color: var(--canvas); outline-offset: 2px; }
 .toast.is-stay { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 16px; pointer-events: auto; }
-.toast.is-stay .toast-text { margin-right: 10px; }
+.toast.is-stay .toast-text { margin-right: 10px; padding: 4px 0; }
+/* Too narrow for the message beside its choices (a phone, two choices): the choices go under it, on the right. */
+.toast.is-stay { flex-wrap: wrap; }
+.toast.is-stay .toast-text { flex: 1 1 200px; }
+.toast-choices { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .toast-close {
   flex: none;
   width: 32px;

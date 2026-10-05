@@ -316,8 +316,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   );
   /** Opened well past the mark: the way back to it, offered until taken, closed, or not needed. */
   const [away, setAway] = useState<ReadMark | null>(null);
+  const here = useRef<Loc | null>(null);
   const onLocation = useCallback((l: Loc) => {
     setLoc(l);
+    here.current = l;
     const first = lastAt.current === null;
     const moved = first ? 0 : (l.progress - lastAt.current!) * book.words;
     lastAt.current = l.progress;
@@ -335,12 +337,28 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (away) view.current?.listen.reach({ section: away.pos.section, block: away.pos.block, start: away.pos.offset, end: away.pos.offset, text: '' }, 0);
     setAway(null);
   }, [away]);
+  /** Read up to here after all: the mark comes to this page. */
+  const stayHere = useCallback(() => {
+    const l = here.current;
+    if (l) {
+      const pos = { section: l.section, block: l.block, offset: l.offset };
+      const mark = marker.set({ pos, progress: l.progress, line: l.line });
+      onSave({ pos, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current, mark });
+    }
+    setAway(null);
+  }, [marker, onSave, book.words]);
   const awayToast = useMemo<ToastMessage | null>(() => {
     if (!away) return null;
     const i = chapterAt(chapters, { section: away.pos.section });
     const where = chapters.length > 1 ? `in ${chapterName(chapters, i)}` : book.kind === 'pdf' ? `on page ${away.pos.section + 1}` : 'further back';
-    return { id: 1, text: `You were reading ${where} before you jumped here.`, stay: true, action: { label: 'Go back', run: goBack } };
-  }, [away, chapters, book.kind, goBack]);
+    return {
+      id: 1,
+      text: `You were reading ${where} before you jumped here.`,
+      stay: true,
+      action: { label: 'Go back', run: goBack },
+      also: { label: 'Stay here', run: stayHere, title: 'Count the book as read up to here' },
+    };
+  }, [away, chapters, book.kind, goBack, stayHere]);
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
   const paged = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'pages';

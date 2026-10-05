@@ -43,6 +43,15 @@ export function markTracker(start: ReadMark | undefined, words: number) {
 
   return {
     get: () => mark,
+    /** The reader says they've read up to here: the mark comes here, back or on, and reading on carries it. */
+    set(p: Omit<Place, 'screen'>, t = Date.now()): ReadMark {
+      mark = { pos: p.pos, progress: p.progress, line: p.line, ...(mark?.n ? { n: mark.n } : {}) };
+      const at = p.progress * total;
+      last = { at, t };
+      bank = 0;
+      run = { from: at, read: 0 };
+      return mark;
+    },
     /** The reader is somewhere new. Returns the mark, moved or not. */
     step(p: Place, t = Date.now()): ReadMark {
       const here: ReadMark = { pos: p.pos, progress: p.progress, line: p.line, ...(mark?.n ? { n: mark.n } : {}) };

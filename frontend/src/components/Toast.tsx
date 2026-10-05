@@ -7,6 +7,8 @@ export interface ToastMessage {
   id: number;
   text: string;
   action?: { label: string; run: () => void };
+  /** A second choice, after the action, on a message that stays. */
+  also?: { label: string; run: () => void; title?: string };
   /** Move focus to the action, when the change was made from the keyboard. */
   focus?: boolean;
   /** Stays until the reader picks the action or closes it. */
@@ -56,6 +58,33 @@ function ToastItem({ toast, onDone }: { toast: ToastMessage; onDone: (id: number
     return () => window.removeEventListener('keydown', onKey);
   }, [action, stay, id, onDone]);
 
+  // A message that stays keeps its choices together, so on a narrow screen they go under it as one.
+  const choices = (
+    <>
+      {action && (
+        <button
+          type="button"
+          className="toast-action"
+          autoFocus={toast.focus}
+          title={stay ? undefined : isMac ? '⌘Z' : 'Ctrl+Z'}
+          onClick={() => { action.run(); onDone(id); }}
+        >
+          {action.label}
+        </button>
+      )}
+      {stay && toast.also && (
+        <button type="button" className="toast-action" title={toast.also.title} onClick={() => { toast.also!.run(); onDone(id); }}>
+          {toast.also.label}
+        </button>
+      )}
+      {stay && (
+        <button type="button" className="toast-close" aria-label="Close" onClick={() => onDone(id)}>
+          <IconClose width={14} height={14} />
+        </button>
+      )}
+    </>
+  );
+
   return (
     <motion.div
       className={`toast${action ? ' has-action' : ''}${stay ? ' is-stay' : ''}`}
@@ -69,22 +98,7 @@ function ToastItem({ toast, onDone }: { toast: ToastMessage; onDone: (id: number
       onBlur={() => setHeld(false)}
     >
       <span className="toast-text">{toast.text}</span>
-      {action && (
-        <button
-          type="button"
-          className="toast-action"
-          autoFocus={toast.focus}
-          title={stay ? undefined : isMac ? '⌘Z' : 'Ctrl+Z'}
-          onClick={() => { action.run(); onDone(id); }}
-        >
-          {action.label}
-        </button>
-      )}
-      {stay && (
-        <button type="button" className="toast-close" aria-label="Close" onClick={() => onDone(id)}>
-          <IconClose width={14} height={14} />
-        </button>
-      )}
+      {stay ? <span className="toast-choices">{choices}</span> : choices}
     </motion.div>
   );
 }
