@@ -200,7 +200,7 @@ export const count = (n: number) => n.toLocaleString('en-GB');
 export const plural = (n: number, one = 'line', many = `${one}s`) => `${count(n)} ${n === 1 ? one : many}`;
 
 /** Flags that take the next argument as their value, as well as --flag=value. */
-const VALUED = new Set(['by', 'to', 'try']);
+const VALUED = new Set(['by', 'to', 'try', 'with']);
 
 /** Arguments after the command, and --flags with or without values. */
 export function args(): { rest: string[]; flags: Record<string, string | true> } {

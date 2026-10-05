@@ -9,13 +9,16 @@ import type { Cast } from './validate.ts';
  * answers with, and the pack's "by" (who marked which parts, and who wrote the notes).
  */
 
-// A book's parts all go at once, so each model takes as many calls as a long book has parts.
+// A book's parts all go at once, so each model takes as many calls as a long book has parts. The
+// primary ones share the calls as equals; Nemotron steps in only while they're both down.
 export const LADDER: Rung[] = [
-  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 32_000, maxInFlight: 24 },
+  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 32_000, maxInFlight: 24, primary: true },
+  { model: 'deepseek-ai/deepseek-v4.1-flash', name: 'deepseek-v4.1-flash', extra: { chat_template_kwargs: { thinking: true } }, maxTokens: 32_000, maxInFlight: 24, primary: true },
   { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 32_000, maxInFlight: 24 },
 ];
 export const TOP = LADDER[0];
-const LONG: Record<string, string> = { [TOP.name]: 'Kimi K3 (reasoning high, NVIDIA)' };
+export const PRIMARY = LADDER.filter((r) => r.primary);
+const LONG: Record<string, string> = { 'kimi-k3': 'Kimi K3 (reasoning high, NVIDIA)', 'deepseek-v4.1-flash': 'DeepSeek V4.1 Flash (thinking, NVIDIA)' };
 
 export interface Done {
   model: string;

@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { Balancer } from './balancer.ts';
-import { castText, context, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, text, TOP, type Done } from './kimi.ts';
+import { castText, context, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, PRIMARY, text, type Done } from './kimi.ts';
 import { AI, args, bookDir, count, inPart, loadBook, main, partName, posText, writeJson, type Book, type Gender, type Pos } from './lib.ts';
 import type { Msg } from './nim.ts';
 import { validate } from './validate.ts';
@@ -15,13 +15,15 @@ import { validate } from './validate.ts';
  *   --try <n>       mark part n again beside the marks it has and compare them; changes nothing
  *   --settle        only settle the unsure lines
  *   --no-pack       don't pack at the end
+ *   --with <model>  only that model (kimi-k3, deepseek-v4.1-flash, nemotron-3-ultra), say with --try
  *
  * The same work as procedure.md, part 4, steps 3 to 5, done by a model through NVIDIA's free API,
  * after research (step 2) is done by hand in Antigravity. Each call gets the rules, the whole book,
  * research.md, the cast so far and the previous part's marks if there are any, and answers with
  * a part's marks plus any new people. Every part goes at once, since the whole book is there to
- * read. Then check, and one call to fix every part with errors together. Kimi K3 marks; Nemotron 3 Ultra takes over only while Kimi is down, and its
- * parts are marked again by Kimi before the book is packed. Who marked each part is kept in
+ * read. Then check, and one call to fix every part with errors together. Kimi K3 and DeepSeek V4.1
+ * Flash share the parts; Nemotron 3 Ultra takes over only while both are down, and its parts are
+ * marked again by one of them before the book is packed. Who marked each part is kept in
  * marked-by.json. Nothing it prints has the book's text in it.
  */
 
@@ -242,19 +244,20 @@ async function runBook(key: string, lb: Balancer, flags: Record<string, string |
     }
     if (validate(book, false).todo.length) return console.log(`${tag}: stopped after part ${to}.`);
 
-    // Parts a fallback model made, marked again by the top one. Some parts it keeps answering empty
-    // (a scene it won't touch), so after a few tries those keep the fallback's marks and the book packs.
-    const redo = Object.entries(ledger(book)).filter(([, d]) => d.model !== TOP.name).map(([n]) => Number(n));
+    // Parts a fallback model made, marked again by a primary one. Some parts they keep answering empty
+    // (a scene they won't touch), so after a few tries those keep the fallback's marks and the book packs.
+    const redo = Object.entries(ledger(book)).filter(([, d]) => !PRIMARY.some((r) => r.name === d.model)).map(([n]) => Number(n));
+    const who = PRIMARY.map((r) => r.name).join(' or ');
     if (redo.length) {
-      console.log(`${tag}: parts ${redo.join(', ')} again, with ${TOP.name}`);
+      console.log(`${tag}: parts ${redo.join(', ')} again, with ${who}`);
       const old = new Map(redo.map((n) => [n, readFileSync(marksFile(book, n), 'utf8')]));
       const oldLedger = ledger(book);
-      const top = new Balancer([TOP], { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 6 });
+      const top = new Balancer(PRIMARY, { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 6 });
       const failed = await markParts(book, redo, top);
       for (const n of failed) writeFileSync(marksFile(book, n), old.get(n)!);
       if (failed.length) {
         writeJson(ledgerFile(book), { ...ledger(book), ...Object.fromEntries(failed.map((n) => [n, oldLedger[n]])) });
-        console.log(`${tag}: ${TOP.name} couldn't redo parts ${failed.join(', ')}, so they keep the fallback's marks.`);
+        console.log(`${tag}: ${who} couldn't redo parts ${failed.join(', ')}, so they keep the fallback's marks.`);
       }
     }
   }
@@ -339,9 +342,11 @@ async function tryPart(key: string, n: number, lb: Balancer) {
 
 main(async () => {
   const { rest, flags } = args();
-  if (!rest.length) throw new Error('Which book? npm --prefix ai run mark -- <rank or key> [<book>…] [--to n | --try n | --settle | --no-pack]');
+  if (!rest.length) throw new Error('Which book? npm --prefix ai run mark -- <rank or key> [<book>…] [--to n | --try n | --settle | --no-pack] [--with model]');
   for (const f of ['to', 'try']) if (flags[f] === true || (flags[f] && !/^\d+$/.test(String(flags[f])))) throw new Error(`--${f} needs a part number, like --${f} 3.`);
-  const lb = new Balancer(LADDER);
+  const only = flags.with ? LADDER.filter((r) => r.name === flags.with) : LADDER;
+  if (!only.length) throw new Error(`--with takes one of ${LADDER.map((r) => r.name).join(', ')}.`);
+  const lb = new Balancer(only);
   if (typeof flags.try === 'string') return tryPart(rest[0], Number(flags.try), lb);
   const results = await Promise.allSettled(rest.map((k) => runBook(k, lb, flags)));
   const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');

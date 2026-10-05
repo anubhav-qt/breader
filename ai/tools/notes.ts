@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import type { AiFile } from '../../shared/src/ai.ts';
 import { Balancer } from './balancer.ts';
-import { castOf, castText, context, isCastLine, LADDER, mergeCast, mins, notesDone, notesLedger, notesLedgerFile, packBy, text, TOP, type Done, type NotesLedger } from './kimi.ts';
+import { castOf, castText, context, isCastLine, LADDER, mergeCast, mins, notesDone, notesLedger, notesLedgerFile, packBy, PRIMARY, text, TOP, type Done, type NotesLedger } from './kimi.ts';
 import { AI, args, blockAt, bookDir, cmp, count, inPart, loadBook, loadQueue, main, OUT, parsePos, partName, posText, QUEUE, readJson, writeJson, type Book, type Pos, type QueueBook } from './lib.ts';
 import type { Msg } from './nim.ts';
 import { KINDS, validate, type Notes } from './validate.ts';
@@ -555,7 +555,7 @@ function clear(book: Book, d: Draft, earlier: Earlier, fallback?: Draft): string
 /** One call reads the whole notes as a reader would, and fixes what it finds. */
 async function review(book: Book, d: Draft, earlier: Earlier, led: NotesLedger) {
   // The read-through is Kimi's, waited for however long it takes.
-  const top = new Balancer([TOP], { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 40 });
+  const top = new Balancer(PRIMARY, { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 40 });
   const { reply, rung } = await top.chat(ask([...base(book, earlier), `# The notes\n\n${draftText(d)}`, `# Your task: read them as a reader would\n\n${REVIEW_TASK}`]), { book: book.key, notes: 'review' });
   const said = parse(reply.text);
   mergeCast(book, said.cast, rung.name);
