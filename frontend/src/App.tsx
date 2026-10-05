@@ -526,6 +526,24 @@ export default function App() {
     await lib.startShelfBook(entry);
     say(`Added “${b.title}” to My books`);
   }, [recordById, lib, say]);
+  /**
+   * A series from someone's shared library, put in the reader's own books at once, last book first
+   * so the first is the newest in Recent. Undo takes out the ones it added.
+   */
+  const keepAll = useCallback(async (books: ShelfItem[], series: string) => {
+    const had = new Set(lib.records.map((r) => r.id));
+    const added: string[] = [];
+    for (const b of [...books].reverse()) {
+      const entry = recordById.get(b.id);
+      if (entry?.source !== 'shelf' || b.kept) continue;
+      const rec = await lib.startShelfBook(entry);
+      if (!had.has(rec.id)) added.push(rec.id);
+    }
+    if (!added.length) return;
+    say(`Added ${added.length === 1 ? '1 book' : `${added.length} books`} of “${series}” to My books`, {
+      action: { label: 'Undo', run: () => { for (const id of added) void lib.removeBook(id); } },
+    });
+  }, [recordById, lib, say]);
   /** An empty shared library: the reader's own says how to share; someone else's, why it's empty. */
   const emptyShelf = showing === 'own' ? (
     <div className="gallery-empty">
@@ -582,6 +600,7 @@ export default function App() {
               // Reading shows only in My books.
               onFinish={t === 'mine' ? (b, finished) => lib.setFinished(b.id, finished, b) : undefined}
               onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
+              onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
               empty={t === 'shelf' ? emptyShelf : undefined}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {

@@ -58,6 +58,24 @@
 .shelf-name button:focus-visible { outline: none; }
 .shelf-name button:focus-visible span { text-decoration: underline 2px; text-underline-offset: 4px; }
 .shelf-meta { flex: none; font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); white-space: nowrap; }
+/* A series in someone's shared library, kept whole: a small pill beside its name. */
+.keep-series {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px 0 9px;
+  border-radius: 999px;
+  font: var(--ui-w) 12px/1 var(--ui);
+  color: var(--ink);
+  background: var(--fill);
+  white-space: nowrap;
+  transition: background-color 140ms ease;
+}
+.keep-series:hover { background: var(--line); }
+.keep-series:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+.keep-series svg { width: 14px; height: 14px; flex: none; }
+.keep-series.is-done { padding: 0; background: none; color: var(--ink-2); }
 
 .shelf-nav { flex: none; margin-left: auto; display: flex; gap: 6px; transition: opacity 160ms ease; }
 .shelf-nav.is-idle { opacity: 0; visibility: hidden; }

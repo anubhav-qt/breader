@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { ShelfItem } from '../../data/useLibrary';
 import { Modal } from '../../components/Modal';
+import { KeepSeries } from './KeepSeries';
 import { cardAuthor } from './names';
 import { finishedIn, numberOf, type Series } from './series';
 import { Tile } from './Tile';
@@ -17,11 +18,12 @@ interface Props {
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   onFinish?: (book: ShelfItem, finished: boolean) => void;
   onKeep?: (book: ShelfItem) => void;
+  onKeepAll?: (books: ShelfItem[], series: string) => void;
   onClose: () => void;
 }
 
 /** A whole series, its books in order on cards all the same size. Opening one closes it. */
-export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdit, onFinish, onKeep, onClose }: Props) {
+export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onClose }: Props) {
   const grid = useRef<HTMLDivElement>(null);
   const author = s.books.map((b) => authors.get(b.id)).find(Boolean) ?? cardAuthor(s.books[0].author).author;
   const n = s.books.length;
@@ -31,7 +33,8 @@ export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdi
       <p className="sd-meta">
         {author && <span>{author}</span>}
         <span>{n === 1 ? '1 book' : `${n} books`}</span>
-        <span>{finished === n ? 'All finished' : `${finished} finished`}</span>
+        {/* No one's reading shows in someone's shared library. */}
+        {onKeepAll ? <KeepSeries name={s.name} books={s.books} onKeepAll={onKeepAll} /> : <span>{finished === n ? 'All finished' : `${finished} finished`}</span>}
       </p>
       <div ref={grid} className="sd-grid">
         {s.books.map((b, k) => {

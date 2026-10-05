@@ -39,6 +39,8 @@ interface Props {
   onFinish?: (book: ShelfItem, finished: boolean) => void;
   /** Someone's shared library: puts one of its books in the reader's own. */
   onKeep?: (book: ShelfItem) => void;
+  /** Someone's shared library: puts these books of a series in the reader's own at once. */
+  onKeepAll?: (books: ShelfItem[], series: string) => void;
   /** What an empty library says, in place of its Add button. */
   empty?: ReactNode;
 }
@@ -50,7 +52,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, empty }: Props) {
+export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, empty }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -124,6 +126,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
           root={scrollRef}
           indexBase={RECENT}
           onSeries={openSeries}
+          onKeepAll={onKeepAll}
           {...shared}
         />
       )}
@@ -158,6 +161,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             onEdit={openEdit}
             onFinish={onFinish}
             onKeep={onKeep}
+            onKeepAll={onKeepAll}
             onClose={closeSeries}
           />
         )}

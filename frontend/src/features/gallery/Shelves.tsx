@@ -4,6 +4,7 @@ import type { ShelfItem } from '../../data/useLibrary';
 import { readLocal, writeLocal } from '../../lib/store';
 import { springs } from '../../lib/springs';
 import { IconBack, IconChevron } from '../../components/icons';
+import { KeepSeries } from './KeepSeries';
 import { finishedIn, type Series } from './series';
 import { VIEWS, byDate, byGenre, bySeries, isView, type Shelf, type View } from './shelving';
 import { Tile } from './Tile';
@@ -34,6 +35,8 @@ interface Props {
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   onFinish?: (book: ShelfItem, finished: boolean) => void;
   onKeep?: (book: ShelfItem) => void;
+  /** Someone's shared library: a series' shelf can put all its books in the reader's own. */
+  onKeepAll?: (books: ShelfItem[], series: string) => void;
   onSeries: (s: Series) => void;
 }
 
@@ -41,7 +44,7 @@ interface Props {
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onSeries }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: Props) {
   const key = `breader.view.${place}.v1`;
   const [picked, setPicked] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
@@ -150,6 +153,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
           onEdit={onEdit}
           onFinish={onFinish}
           onKeep={onKeep}
+          onKeepAll={onKeepAll}
           onSeries={onSeries}
         />
       </motion.div>
@@ -157,7 +161,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
   );
 }
 
-type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onFinish' | 'onKeep' | 'onSeries'> & {
+type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onFinish' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
   shelves: Shelf[];
   lazy: boolean;
   empty?: string;
@@ -190,7 +194,7 @@ function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
 type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onSeries }: RowProps) {
+function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -239,7 +243,12 @@ function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, 
             <span>{shelf.name}</span>
           )}
         </h3>
-        <span className="shelf-meta">{shelf.meta}</span>
+        {/* A series in someone's shared library: no one's reading shows, but all of it can be kept. */}
+        {s && onKeepAll ? (
+          <span className="shelf-meta"><KeepSeries name={s.name} books={s.books} onKeepAll={onKeepAll} /></span>
+        ) : (
+          <span className="shelf-meta">{shelf.meta}</span>
+        )}
         <span className={`shelf-nav${ends.start && ends.end ? ' is-idle' : ''}`}>
           <button type="button" className="shelf-arrow" aria-label={`Back through ${shelf.name}`} disabled={ends.start} onClick={() => go(-1)}>
             <IconBack />
