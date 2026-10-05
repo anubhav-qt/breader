@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { genreIds, joinGenres } from '@breader/shared/genres';
 import { IconClose } from '../../components/icons';
 import { AI_LABEL, AI_WHY } from '../../books/ai';
 import { coverOf, detectFormat, parseSource, titleFromName } from '../../books/load';
@@ -16,8 +17,9 @@ import { WhoReads } from './WhoReads';
  * Several books at once. Each file is read in turn and gets a row with its series, its number in
  * it and its genres already filled in, as adding one book fills them (gallery/series.ts and
  * gallery/fill.ts), and later books of a series the batch has already found take its spelling and
- * its genres. Any of it can be changed in the row before they're all added. Who can read them and
- * the AI go for them all.
+ * its genres. Any of it can be changed in the row before they're all added; a genre on a book whose
+ * series has other rows here asks, as on a card, whether it's for this book or all of them. Who can
+ * read them and the AI go for them all.
  */
 
 interface Ready {
@@ -148,6 +150,21 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
     onDone(added, first, failed);
   };
 
+  /** The other rows in this row's series, by the name typed in it. */
+  const seriesMates = (r: Extract<Row, { state: 'ready' }>) => {
+    const k = r.series.name.trim() ? seriesKey(r.series.name.trim()) : '';
+    return k ? ready.filter((x) => x.id !== r.id && x.series.name.trim() && seriesKey(x.series.name.trim()) === k) : [];
+  };
+  /** Puts a genre on, or takes it off, this row and every other in its series. */
+  const genreForSeries = (r: Extract<Row, { state: 'ready' }>, g: string, on: boolean) => {
+    const ids = new Set([r.id, ...seriesMates(r).map((x) => x.id)]);
+    setRows((rs) => rs.map((x) => {
+      if (x.state !== 'ready' || !ids.has(x.id)) return x;
+      const had: string[] = genreIds(x.genre);
+      return { ...x, genre: joinGenres(on ? [...had, g] : had.filter((y) => y !== g)) };
+    }));
+  };
+
   const total = ready.length;
   // The batch's own series are offered as names are typed, alongside the library's.
   const named = ready.map((r) => r.series.name.trim()).filter((n) => n && !knownSeries.some((k) => seriesKey(k.name) === seriesKey(n)));
@@ -193,7 +210,14 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
                       </div>
                       <div>
                         <label className="add-label" htmlFor={`bulk-genre-${r.id}`}>Genres</label>
-                        <GenreField id={`bulk-genre-${r.id}`} value={r.genre} className="add-input bulk-input" onPick={(genre) => update(r.id, { genre })} />
+                        <GenreField
+                          id={`bulk-genre-${r.id}`}
+                          value={r.genre}
+                          className="add-input bulk-input"
+                          others={seriesMates(r).map((x) => x.genre)}
+                          onPick={(genre) => update(r.id, { genre })}
+                          onSeries={(g, on) => genreForSeries(r, g, on)}
+                        />
                       </div>
                     </div>
                     {r.found && r.series.name.trim() === r.found.name && (
