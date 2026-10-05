@@ -242,18 +242,19 @@ async function runBook(key: string, lb: Balancer, flags: Record<string, string |
     }
     if (validate(book, false).todo.length) return console.log(`${tag}: stopped after part ${to}.`);
 
-    // Parts a fallback model made, marked again by the top one (which is waited for, however long).
+    // Parts a fallback model made, marked again by the top one. Some parts it keeps answering empty
+    // (a scene it won't touch), so after a few tries those keep the fallback's marks and the book packs.
     const redo = Object.entries(ledger(book)).filter(([, d]) => d.model !== TOP.name).map(([n]) => Number(n));
     if (redo.length) {
       console.log(`${tag}: parts ${redo.join(', ')} again, with ${TOP.name}`);
       const old = new Map(redo.map((n) => [n, readFileSync(marksFile(book, n), 'utf8')]));
       const oldLedger = ledger(book);
-      const top = new Balancer([TOP], { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 40 });
+      const top = new Balancer([TOP], { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 6 });
       const failed = await markParts(book, redo, top);
       for (const n of failed) writeFileSync(marksFile(book, n), old.get(n)!);
       if (failed.length) {
         writeJson(ledgerFile(book), { ...ledger(book), ...Object.fromEntries(failed.map((n) => [n, oldLedger[n]])) });
-        throw new Error(`${tag}: ${TOP.name} couldn't redo parts ${failed.join(', ')}; they keep the fallback's marks. Run mark again to retry.`);
+        console.log(`${tag}: ${TOP.name} couldn't redo parts ${failed.join(', ')}, so they keep the fallback's marks.`);
       }
     }
   }
