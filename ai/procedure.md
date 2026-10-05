@@ -176,7 +176,7 @@ The owner's side, run by the owner or by an agent the owner asks to run it, neve
    ```
 
    `--verify` must say every book matches what's in `ai/out`.
-3. **Unsure lines left?** If the book's `report.md` shows any, settle them once more, then import again:
+3. **Unsure lines left?** `mark` settles them twice already, since now and then one answer decides almost none of them. If the book's `report.md` still shows more than a handful, settle them again, then import again:
 
    ```bash
    npm --prefix ai run mark -- <key> --settle

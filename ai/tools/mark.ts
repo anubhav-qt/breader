@@ -185,6 +185,8 @@ async function settle(book: Book, lb: Balancer) {
     `# Settle these\n\nThese ${items.length} marks are unsure. Read each one's paragraph again, with everything the book says around it, and decide. Answer with one line per item, its number and then the mark, fixed or kept, with ? only if two readings still fit:\nU1 12:2.1 marlo\nAnswer with those lines only, plus cast lines for anyone new.\n\n${items.map((x) => `U${x.i} ${x.line}`).join('\n')}`,
   ].join('\n\n');
   const { reply, rung } = await lb.chat([{ role: 'system', content: SYSTEM }, { role: 'user', content: user }], { book: book.key, settle: items.length });
+  // The last answer, to see why lines stayed unsure. Marks and cast lines only, never the book's text.
+  writeFileSync(join(bookDir(book.key), 'settle-answer.txt'), reply.text);
   const files = [...new Set(items.map((x) => x.file))];
   const before = new Map(files.map((f) => [f, readFileSync(f, 'utf8')]));
   const lines = new Map(files.map((f) => [f, before.get(f)!.split(/\r?\n/)]));
@@ -264,6 +266,9 @@ async function runBook(key: string, lb: Balancer, top: Balancer, flags: Record<s
   }
 
   console.log(`${tag}: settling unsure lines`);
+  await settle(book, lb);
+  // Now and then a settle answer decides almost none of them, and the same question again decides
+  // nearly all (Mushoku Vol. 12: 0 of 18, then 17 of 18). So whatever is left gets a second go.
   await settle(book, lb);
   if (flags['no-pack']) return;
   // Revisit notes come from notes, for the whole book. Other notes that stop partway would show a
