@@ -629,6 +629,7 @@ export default function App() {
             onReadTime={(seconds) => lib.addReadTime(shown.id, seconds)}
             onRemove={canRemove(shownRec) ? removeOpen : undefined}
             ai={!!lib.edits[shown.id]?.ai}
+            onAi={(on) => void editBook(shown.id, { ai: on })}
           />
         </div>
       )}

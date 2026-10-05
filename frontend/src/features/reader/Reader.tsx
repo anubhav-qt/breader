@@ -45,13 +45,15 @@ interface Props {
   onRemove?: () => void;
   /** The reader lets an AI read the book along with them: Revisit and 2 voices, once it has. */
   ai?: boolean;
+  /** Flips that, from where 2 voices asks for it. */
+  onAi?: (on: boolean) => void;
 }
 
 const noTime = () => {};
 
 const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
 
-export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false }: Props) {
+export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, onAi }: Props) {
   const [settings, update] = useReaderSettings();
   const [panel, setPanel] = useState<PanelName | null>(null);
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
@@ -540,6 +542,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     } : null,
     revisit: aiStatus.revisit ? { read: marker.get()?.progress ?? 0, load: loadNotes } : null,
     two: marks ? 'ready' : ai ? 'soon' : 'off',
+    letAi: onAi,
     talk: { view: talkView, opens: opened, at: talkAt, open: openTalk },
   };
   const tones = settings.twoColors ?? TWO_COLORS;

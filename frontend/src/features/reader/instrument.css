@@ -523,6 +523,7 @@
 .vs-soon .p-note { margin: 0 0 10px; font-size: 13px; color: var(--r-fg); }
 .vs-soon .p-note:last-of-type { color: var(--r-mu); }
 .vs-soon .vs-go { width: 100%; margin-top: 18px; }
+.vs-soon-ai { margin: 16px 0 12px; }
 
 /* Adding a voice (chrome/AddVoice.tsx). */
 .vs-add { display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 0 10px; border-radius: 9px; font: var(--ui-w) 12.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); transition: color 140ms ease, background-color 140ms ease; }

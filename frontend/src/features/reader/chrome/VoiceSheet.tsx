@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
+import { AI_LABEL } from '../../../books/ai';
 import { hasKey } from '../../../data/sync';
 import { api } from '../../../lib/api';
 import { springs } from '../../../lib/springs';
@@ -44,7 +45,8 @@ const SERVER: Record<Mode, string> = {
 
 /*
  * Two voices, a woman's and a man's, need the book read through first to know who says each line
- * (ai/procedure.md). Until this book has been, 2 looks off and a tap on it says why, warmly.
+ * (ai/procedure.md). Until this book has been, 2 looks off and a tap on it says why, warmly, with
+ * the book's AI switch right there when it's off.
  */
 const counts = (ready: boolean) => [
   { v: 1 as const, label: '1 voice' },
@@ -74,9 +76,11 @@ interface Props {
   canPace: boolean;
   /** 2 voices for this book: ready, soon (an AI will read it), or off (its AI switch is off). */
   two: 'ready' | 'soon' | 'off';
+  /** Turns the book's AI switch on or off. */
+  onAi?: (on: boolean) => void;
 }
 
-export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
+export function VoiceSheet({ playing, onStart, onStop, canPace, two, onAi }: Props) {
   const prefs = useVoicePrefs();
   const listed = useListedVoices();
   const load = useLoadState();
@@ -259,19 +263,24 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two }: Props) {
           <span>{playing ? (loading ? 'Cancel' : 'Stop') : bytes ? `Download ${mb(bytes)} and read` : 'Read aloud'}</span>
         </button>
       </div>
-      {page && createPortal(<AnimatePresence>{waiting && <TwoVoicesSoon off={two === 'off'} onClose={() => setWaiting(false)} />}</AnimatePresence>, page)}
+      {page && createPortal(<AnimatePresence>{waiting && <TwoVoicesSoon off={two === 'off'} onAi={onAi} onClose={() => setWaiting(false)} />}</AnimatePresence>, page)}
     </div>
   );
 }
 
-/** Why 2 voices can't be picked yet: a small card in the middle, over the sheet. `off`: the book's AI switch is. */
-function TwoVoicesSoon({ off, onClose }: { off: boolean; onClose: () => void }) {
-  const ok = useRef<HTMLButtonElement>(null);
+/**
+ * Why 2 voices can't be picked yet: a small card in the middle, over the sheet. `off`: the book's AI
+ * switch is, and the card has it, to turn on there and then.
+ */
+function TwoVoicesSoon({ off, onAi, onClose }: { off: boolean; onAi?: (on: boolean) => void; onClose: () => void }) {
+  // Asked while the switch was off: it stays on the card, on or off, until the card closes.
+  const [asked] = useState(off && !!onAi);
+  const first = useRef<HTMLButtonElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
-    ok.current?.focus();
+    first.current?.focus();
     // Escape closes the card, not the sheet under it (or the book).
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -302,10 +311,23 @@ function TwoVoicesSoon({ off, onClose }: { off: boolean; onClose: () => void }) 
         <div className="pnl-h">Two voices</div>
         <p className="vs-soon-t" id="vs-soon-t">Not quite yet</p>
         <p className="p-note">Soon a book can be read by two voices, a woman’s and a man’s, so every conversation sounds like people talking.</p>
-        <p className="p-note">To get each line right, the whole book is read first, noting who says what. That takes a while, and this book isn’t ready yet. Sorry for the wait, and thank you for bearing with us.</p>
-        {off && <p className="p-note">This book hasn’t let an AI read along yet. Turn that on from its ⋯ in your library, and it joins the queue.</p>}
-        <p className="p-note">Once it’s ready, 2 voices turns on here by itself.</p>
-        <button type="button" className="vs-go" ref={ok} onClick={onClose}>I’ll wait</button>
+        {asked ? (
+          <>
+            <p className="p-note">To get each line right, an AI reads the whole book first, noting who says what. Let one read along with this book, and it joins the queue.</p>
+            <div className="ctl tgrow vs-soon-ai">
+              <span className="clbl" id="vs-soon-ai">{AI_LABEL}</span>
+              <button type="button" className="tg" role="switch" aria-checked={!off} aria-labelledby="vs-soon-ai" ref={first} onClick={() => onAi!(off)} />
+            </div>
+            <p className="p-note" aria-live="polite">{off ? 'It never keeps your book or learns from it.' : 'It’s in the queue. Once it’s ready, 2 voices turns on here by itself. Thank you for bearing with us.'}</p>
+          </>
+        ) : (
+          <>
+            <p className="p-note">To get each line right, the whole book is read first, noting who says what. That takes a while, and this book isn’t ready yet. Sorry for the wait, and thank you for bearing with us.</p>
+            {off && <p className="p-note">This book hasn’t let an AI read along yet. Turn that on from its ⋯ in your library, and it joins the queue.</p>}
+            <p className="p-note">Once it’s ready, 2 voices turns on here by itself.</p>
+          </>
+        )}
+        <button type="button" className="vs-go" ref={asked ? undefined : first} onClick={onClose}>{asked && off ? 'Not now' : 'I’ll wait'}</button>
       </motion.div>
     </>
   );

@@ -87,6 +87,8 @@ export interface ChromeProps {
   revisit: { read: number; load: () => Promise<{ notes: RevisitResponse; offline: boolean }> } | null;
   /** 2 voices for this book: ready (an AI marked who says what), soon (its switch is on), or off. */
   two: 'ready' | 'soon' | 'off';
+  /** Turns the book's AI switch on or off from the reader, where 2 voices asks for it. */
+  letAi?: (on: boolean) => void;
   /**
    * Comments on the book (comments.ts), for the speech bubble a PDF has in place of the tail:
    * `opens` says whether a chapter's thread is open to them yet, `at` is the thread the drop opens
