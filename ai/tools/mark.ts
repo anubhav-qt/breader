@@ -218,7 +218,7 @@ async function settle(book: Book, lb: Balancer) {
   console.log(`  ${rung.name} settled ${settled} of ${items.length} unsure lines, ${changed} of them changed, in ${mins(reply.secs)}.`);
 }
 
-async function runBook(key: string, lb: Balancer, flags: Record<string, string | true>) {
+async function runBook(key: string, lb: Balancer, top: Balancer, flags: Record<string, string | true>) {
   const book = loadBook(key);
   const tag = book.title;
   // Parts a stopped run left with errors go straight to the fix. A part that failed for good last
@@ -252,7 +252,6 @@ async function runBook(key: string, lb: Balancer, flags: Record<string, string |
       console.log(`${tag}: parts ${redo.join(', ')} again, with ${who}`);
       const old = new Map(redo.map((n) => [n, readFileSync(marksFile(book, n), 'utf8')]));
       const oldLedger = ledger(book);
-      const top = new Balancer(PRIMARY, { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 6 });
       const failed = await markParts(book, redo, top);
       for (const n of failed) writeFileSync(marksFile(book, n), old.get(n)!);
       if (failed.length) {
@@ -348,7 +347,10 @@ main(async () => {
   if (!only.length) throw new Error(`--with takes one of ${LADDER.map((r) => r.name).join(', ')}.`);
   const lb = new Balancer(only);
   if (typeof flags.try === 'string') return tryPart(rest[0], Number(flags.try), lb);
-  const results = await Promise.allSettled(rest.map((k) => runBook(k, lb, flags)));
+  // Redoing a fallback's parts never falls back itself. One for every book, so books marked
+  // together share its count of calls in flight and its cooldowns, as they share lb's.
+  const top = new Balancer(PRIMARY, { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 6 });
+  const results = await Promise.allSettled(rest.map((k) => runBook(k, lb, top, flags)));
   const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
   for (const f of failed) console.error(`\n${f.reason instanceof Error ? f.reason.message : String(f.reason)}`);
   return failed.length ? 1 : 0;
