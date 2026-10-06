@@ -70,7 +70,7 @@ const SUBJECTS: Array<[RegExp, GenreId]> = [
   [/historical/i, 'historical'],
   [/literary/i, 'literary'],
   [/adventure/i, 'adventure'],
-  [/humou?r/i, 'humour'],
+  [/humou?r|comedy/i, 'humour'],
   [/classic/i, 'classics'],
   [/young adult|\bteen/i, 'young'],
   [/juvenile|children/i, 'children'],

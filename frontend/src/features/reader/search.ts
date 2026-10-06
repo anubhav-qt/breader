@@ -65,8 +65,8 @@ const read = new WeakMap<LoadedBook, Promise<Block[]>>();
 export function readBook(book: LoadedBook, listen: Listen, onRead?: (done: number, of: number) => void): Promise<Block[]> {
   let p = read.get(book);
   if (p) return p;
-  const count = book.kind === 'pdf' ? book.pages : book.sections.length;
-  const weight = (i: number) => (book.kind === 'pdf' ? 1 : book.sections[i].words);
+  const count = book.kind === 'flow' ? book.sections.length : book.pages;
+  const weight = (i: number) => (book.kind === 'flow' ? book.sections[i].words : 1);
   let total = 0;
   for (let i = 0; i < count; i++) total += weight(i);
   total ||= 1;

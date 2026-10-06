@@ -1,5 +1,4 @@
 import type { LoadedBook } from '../../books/types';
-import { WORDS_PER_PDF_PAGE } from '../../books/pdf';
 import type { Loc } from './FlowView';
 
 /** A top-level chapter as a stretch of the whole book, for progress tracks and scrubbers. */
@@ -7,20 +6,21 @@ export interface Chapter {
   title: string;
   section: number;
   anchor?: string;
-  /** Where it starts and ends, as fractions of the book's words (or pages, for PDF). */
+  /** Where it starts and ends, as fractions of the book's words (or pages, for a PDF or a manga). */
   start: number;
   end: number;
   words: number;
 }
 
 export function chaptersOf(book: LoadedBook): Chapter[] {
-  if (book.kind === 'pdf') {
+  if (book.kind !== 'flow') {
+    const perPage = book.words / Math.max(1, book.pages);
     const tops = book.toc.filter((t) => t.level === 0 && t.section < book.pages).sort((a, b) => a.section - b.section);
     const items = tops.length ? tops : [{ title: book.title, section: 0 }];
     return items.map((t, i) => {
       const from = i === 0 ? 0 : t.section;
       const to = items[i + 1]?.section ?? book.pages;
-      return { title: t.title, section: t.section, start: from / book.pages, end: to / book.pages, words: (to - from) * WORDS_PER_PDF_PAGE };
+      return { title: t.title, section: t.section, start: from / book.pages, end: to / book.pages, words: (to - from) * perPage };
     });
   }
   const starts: number[] = [];

@@ -401,9 +401,9 @@ export default function App() {
         const book = await parseSource(file, format, titleFromName(file.name));
         const rec = recordFromBook(book, format, shared, lib.nextColor());
         // What the Add a book dialog would have filled in, taken as it is.
-        const found = detectSeries(book.title, file.name, book.kind === 'flow' ? book.series : undefined, allSeries);
+        const found = detectSeries(book.title, file.name, book.kind !== 'pdf' ? book.series : undefined, allSeries);
         if (found) Object.assign(rec, { series: found.name, seriesIndex: found.index });
-        const genre = guessGenre({ author: rec.author, series: found?.name, subjects: book.kind === 'flow' ? book.subjects : undefined });
+        const genre = guessGenre({ author: rec.author, series: found?.name, subjects: book.kind !== 'pdf' ? book.subjects : undefined });
         if (genre) rec.genre = genre;
         const cover = await coverOf(book);
         book.cleanup?.();

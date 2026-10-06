@@ -247,3 +247,21 @@ label.clbl { display: block; }
 .pdf-scroll { position: absolute; inset: 0; overflow-y: auto; padding: 48px 0; display: flex; flex-direction: column; align-items: center; gap: 24px; }
 .pdf-slot { flex: none; display: grid; place-items: center; }
 .pdfv .fv-zone { width: calc(50% - var(--vw, 600px) / 2 + 60px); }
+
+/* Manga (MangaView.tsx). Pictures as they are, never inverted by a dark theme. Pages can be
+   pinched to zoom, so the browser keeps its touches; but a sideways swipe turns the page, never
+   takes the browser back to the library. */
+html:has(.mgv) { overscroll-behavior-x: none; }
+.mgv { position: absolute; inset: 0; }
+.mg-pages { position: absolute; inset: 76px 0; display: grid; place-items: center; }
+.mg-spread { display: flex; box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); }
+.mg-spread.is-rtl { flex-direction: row-reverse; }
+.mg-pg { position: relative; flex: none; background: var(--r-fill); }
+.mg-pg img { display: block; width: 100%; height: 100%; object-fit: contain; background: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.mg-broken { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
+.mg-scroll { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.mg-column { position: relative; margin: 0 auto; }
+.mg-scroll .mg-pg { position: absolute; left: 0; right: 0; }
+.mg-scroll:not(.is-strip) .mg-pg { box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); }
+/* The page fills most of the screen, so its outer thirds turn it, as in most manga readers. */
+.mgv .fv-zone { width: max(30%, calc(50% - var(--vw) / 2 + var(--vw) * 0.2)); }

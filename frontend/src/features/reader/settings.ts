@@ -7,6 +7,8 @@ export type Style = 'book' | 'modern';
 export type ThemeName = 'auto' | 'day' | 'warm' | 'dusk' | 'night';
 export type FontKey = 'dongle' | 'oxanium' | 'literata' | 'garamond' | 'atkinson';
 export type Layout = 'pages' | 'scroll';
+/** Which way a manga's pages turn: right to left as manga is read, or left to right as comics are. */
+export type MangaDir = 'rtl' | 'ltr';
 
 export interface StyleSettings {
   font: FontKey;
@@ -24,6 +26,9 @@ export interface ReaderSettings {
   book: StyleSettings;
   modern: StyleSettings;
   pdfLayout: Layout;
+  /** Manga: scrolled down a column of pages, or turned a page (or two, side by side) at a time. */
+  mangaLayout: Layout;
+  mangaDir: MangaDir;
   /** 2 voices: the colour her lines light in, and his (book colours, data/colors.ts). */
   twoColors?: { F: BookColor; M: BookColor };
   /** Which of the changes below (loadSettings) these have been through. */
@@ -69,6 +74,8 @@ const DEFAULTS: ReaderSettings = {
   book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: false },
   modern: { font: 'dongle', size: 22, lh: 1.65, measure: 620, layout: 'scroll', justify: false },
   pdfLayout: 'pages',
+  mangaLayout: 'scroll',
+  mangaDir: 'rtl',
   v: 3,
 };
 

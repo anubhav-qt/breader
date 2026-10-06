@@ -70,16 +70,16 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
       for (const { id, file } of rowsRef.current) {
         const format = detectFormat(file);
         if (!format) {
-          update(id, { state: 'error', message: 'Breader can’t open this. Choose an EPUB, PDF, TXT or Markdown file.' });
+          update(id, { state: 'error', message: 'Breader can’t open this. Choose an EPUB, PDF, TXT, Markdown or CBZ file.' });
           continue;
         }
         try {
           const book = await parseSource(file, format, titleFromName(file.name));
           if (!live) { book.cleanup?.(); return; }
           const known = [...knownSeries, ...found.map((f) => ({ name: f.name, count: 1 }))];
-          const series = detectSeries(book.title, file.name, book.kind === 'flow' ? book.series : undefined, known);
+          const series = detectSeries(book.title, file.name, book.kind !== 'pdf' ? book.series : undefined, known);
           const earlier = series && found.find((f) => seriesKey(f.name) === seriesKey(series.name));
-          const genre = earlier?.genre || genreFor({ author: book.author, series: series?.name, subjects: book.kind === 'flow' ? book.subjects : undefined });
+          const genre = earlier?.genre || genreFor({ author: book.author, series: series?.name, subjects: book.kind !== 'pdf' ? book.subjects : undefined });
           if (series && !earlier) found.push({ name: series.name, genre });
           const color = nextColor(colors);
           colors.push(color);
@@ -107,6 +107,7 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
 
   const ready = rows.filter((r): r is Extract<Row, { state: 'ready' }> => r.state === 'ready');
   const reading = rows.some((r) => r.state === 'reading');
+  const onlyManga = ready.length > 0 && ready.every((r) => r.format === 'CBZ');
 
   const leaveOut = (r: Row) => {
     if (r.state === 'ready') r.book.cleanup?.();
@@ -134,7 +135,7 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
       if (r.genre) rec.genre = r.genre;
       try {
         const cover = await coverOf(r.book);
-        await onAdded(rec, r.file, cover, { ai: readAlong });
+        await onAdded(rec, r.file, cover, { ai: readAlong && r.format !== 'CBZ' });
         r.book.cleanup?.();
         setRows((rs) => rs.filter((x) => x.id !== r.id));
         added++;
@@ -231,11 +232,16 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
         </AnimatePresence>
       </ul>
       <WhoReads shared={shared} many onChange={setShared} />
-      <div className="add-switch">
-        <span className="add-label" id="bulk-ai">{AI_LABEL}</span>
-        <button type="button" className="switch" role="switch" aria-checked={readAlong} aria-labelledby="bulk-ai" aria-describedby="bulk-ai-why" onClick={() => setReadAlong(!readAlong)} />
-      </div>
-      <p className="add-found add-ai" id="bulk-ai-why">{AI_WHY}</p>
+      {/* Only for books with words: a manga's pages are pictures. */}
+      {!onlyManga && (
+        <>
+          <div className="add-switch">
+            <span className="add-label" id="bulk-ai">{AI_LABEL}</span>
+            <button type="button" className="switch" role="switch" aria-checked={readAlong} aria-labelledby="bulk-ai" aria-describedby="bulk-ai-why" onClick={() => setReadAlong(!readAlong)} />
+          </div>
+          <p className="add-found add-ai" id="bulk-ai-why">{AI_WHY}</p>
+        </>
+      )}
       <p className="add-local">Saved in this browser first, then synced, so your key or account opens them anywhere.</p>
       <div className="add-actions">
         <button type="button" className="btn btn-ghost" disabled={adding !== null} onClick={onBack}>Choose others</button>

@@ -24,7 +24,6 @@ export interface ChromeProps {
   current: number;
   settings: ReaderSettings;
   update: (fn: (s: ReaderSettings) => ReaderSettings) => void;
-  isPdf: boolean;
   panel: PanelName | null;
   lastPanel: PanelName;
   openPanel: (p: PanelName | null) => void;

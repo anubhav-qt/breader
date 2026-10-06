@@ -31,7 +31,7 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, isPdf, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit, two, letAi, talk }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit, two, letAi, talk }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
@@ -85,7 +85,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   const [scope, setScope] = useState<Scope>('chapter');
   const canRevisit = !!revisit && !!loc && (loc.section > 0 || loc.block > 0);
   const up = panel === 'revisit';
-  // Comments: a PDF's pages take no tail, so the speech bubble up top has them.
+  // Comments: a PDF's or a manga's pages take no tail, so the speech bubble up top has them.
   const here = chapters[current];
   const talkCount = here ? talk.view.talk.threads.get(here.section)?.count ?? 0 : 0;
 
@@ -98,7 +98,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
         <div className="i3-ends">
-          {isPdf && talk.view.talk.state !== 'off' && (
+          {book.kind !== 'flow' && talk.view.talk.state !== 'off' && (
             <TalkButton count={talkCount} lit={talk.opens(current)} open={panel === 'comments'} onClick={() => (panel === 'comments' ? openPanel(null) : talk.open())} />
           )}
           {search && (
@@ -131,8 +131,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               <DotIcon rows={VOICES} />
             </button>
           )}
-          <button type="button" className={`i3-side i3-aa${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip="Typeface, size, spacing and theme">Aa</button>
-          <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on} data-tip={focus.on ? 'Keep the controls in sight' : 'Hide everything but the words'}>
+          <button type="button" className={`i3-side i3-aa${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip={book.kind === 'manga' ? 'Layout, direction and theme' : 'Typeface, size, spacing and theme'}>Aa</button>
+          <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on} data-tip={focus.on ? 'Keep the controls in sight' : `Hide everything but the ${book.kind === 'manga' ? 'pages' : 'words'}`}>
             <DotIcon rows={focus.on ? FOCUSED : FOCUS} />
           </button>
           {canFullscreen() && (
@@ -247,7 +247,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
-                <AppearancePanel settings={settings} isPdf={isPdf} update={update} two={two === 'ready'} />
+                <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} />
               )}
             </div>
             <CloseDots onClick={() => openPanel(null)} />

@@ -67,7 +67,7 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
             >
               <span className="p-item-t">{it.title}</span>
               <span className="p-item-s">
-                {book.kind === 'pdf'
+                {book.kind !== 'flow'
                   ? `p. ${it.section + 1}`
                   : state === 'done'
                     ? <IconCheck />
@@ -90,7 +90,7 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
 
 interface LookProps {
   settings: ReaderSettings;
-  isPdf: boolean;
+  kind: LoadedBook['kind'];
   update: (fn: (s: ReaderSettings) => ReaderSettings) => void;
   /** The book can read in 2 voices, so their colours can be picked. */
   two?: boolean;
@@ -137,7 +137,7 @@ const margins = (inset: number) => (
   </svg>
 );
 
-export function AppearancePanel({ settings, isPdf, update, two = false }: LookProps) {
+export function AppearancePanel({ settings, kind, update, two = false }: LookProps) {
   const cur = settings[settings.style];
   const set = (patch: Partial<StyleSettings>) => update((s) => ({ ...s, [s.style]: { ...s[s.style], ...patch } }));
   // Immersive's voice bar, as the rest of the controls sleep (focus.ts).
@@ -165,7 +165,15 @@ export function AppearancePanel({ settings, isPdf, update, two = false }: LookPr
           ))}
         </div>
       </div>
-      {isPdf ? (
+      {kind === 'manga' ? (
+        <>
+          <Segmented label="Layout" value={settings.mangaLayout} onChange={(v) => update((s) => ({ ...s, mangaLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
+          {settings.mangaLayout === 'pages' && (
+            <Segmented label="Direction" value={settings.mangaDir} onChange={(v) => update((s) => ({ ...s, mangaDir: v }))} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
+          )}
+          <p className="p-note">{settings.mangaLayout === 'pages' ? 'Two pages side by side when the screen is wide enough. Manga reads right to left, comics left to right.' : 'One page after another, down the screen.'}</p>
+        </>
+      ) : kind === 'pdf' ? (
         <>
           <Segmented label="Layout" value={settings.pdfLayout} onChange={(v) => update((s) => ({ ...s, pdfLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
           <p className="p-note">PDF pages keep their own layout, so typeface and size don’t apply.</p>
@@ -211,10 +219,12 @@ export function AppearancePanel({ settings, isPdf, update, two = false }: LookPr
           </div>
         </>
       )}
-      <div className="ctl tgrow">
-        <span className="clbl">Always hide the voice bar</span>
-        <button type="button" className="tg" role="switch" aria-checked={barHidden} aria-label="Always hide the voice bar in focus" onClick={() => setBarHidden(!barHidden)} />
-      </div>
+      {kind !== 'manga' && (
+        <div className="ctl tgrow">
+          <span className="clbl">Always hide the voice bar</span>
+          <button type="button" className="tg" role="switch" aria-checked={barHidden} aria-label="Always hide the voice bar in focus" onClick={() => setBarHidden(!barHidden)} />
+        </div>
+      )}
       {two && <TwoColors settings={settings} update={update} />}
     </div>
   );

@@ -65,17 +65,17 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
 
   /** On to choosing who can read it, with the series and genres found for the book already filled in. */
   const decide = (book: LoadedBook, data: Blob | string, format: Format, name: string, size: number, fileName?: string) => {
-    const found = detectSeries(book.title, fileName, book.kind === 'flow' ? book.series : undefined, knownSeries);
+    const found = detectSeries(book.title, fileName, book.kind !== 'pdf' ? book.series : undefined, knownSeries);
     setInSeries(!!found);
     setSeries({ name: found?.name ?? '', num: found?.index !== undefined ? String(found.index) : '' });
-    setGenre(genreFor({ author: book.author, series: found?.name, subjects: book.kind === 'flow' ? book.subjects : undefined }));
+    setGenre(genreFor({ author: book.author, series: found?.name, subjects: book.kind !== 'pdf' ? book.subjects : undefined }));
     setStep({ kind: 'decide', book, data, format, name, size, color: nextColor(), found });
   };
 
   const read = async (file: File) => {
     const format = detectFormat(file);
     if (!format) {
-      setStep({ kind: 'error', message: `Breader can’t open “${file.name}”. Choose an EPUB, PDF, TXT or Markdown file.` });
+      setStep({ kind: 'error', message: `Breader can’t open “${file.name}”. Choose an EPUB, PDF, TXT, Markdown or CBZ file.` });
       return;
     }
     setStep({ kind: 'reading', name: file.name });
@@ -135,7 +135,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     if (genre) rec.genre = genre;
     const cover = await coverOf(book);
     book.cleanup?.();
-    await onAdded(rec, data, cover, { ai: readAlong });
+    await onAdded(rec, data, cover, { ai: readAlong && format !== 'CBZ' });
     await afterAdding(rec.title);
   };
 
@@ -168,7 +168,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
               >
                 <IconUpload />
                 <b>Drop books here</b>
-                <span>EPUB, PDF, TXT or Markdown, one or several</span>
+                <span>EPUB, PDF, TXT, Markdown or CBZ, one or several</span>
                 <button type="button" className="btn btn-primary" onClick={() => fileInput.current?.click()}>Choose files</button>
                 <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => pick(Array.from(e.target.files ?? []))} />
               </div>
@@ -235,11 +235,16 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                   </motion.div>
                 )}
               </AnimatePresence>
-              <div className="add-switch">
-                <span className="add-label" id="add-ai">{AI_LABEL}</span>
-                <button type="button" className="switch" role="switch" aria-checked={readAlong} aria-labelledby="add-ai" aria-describedby="add-ai-why" onClick={() => setReadAlong(!readAlong)} />
-              </div>
-              <p className="add-found add-ai" id="add-ai-why">{AI_WHY}</p>
+              {/* A manga's pages are pictures: nothing for an AI to read along with. */}
+              {step.format !== 'CBZ' && (
+                <>
+                  <div className="add-switch">
+                    <span className="add-label" id="add-ai">{AI_LABEL}</span>
+                    <button type="button" className="switch" role="switch" aria-checked={readAlong} aria-labelledby="add-ai" aria-describedby="add-ai-why" onClick={() => setReadAlong(!readAlong)} />
+                  </div>
+                  <p className="add-found add-ai" id="add-ai-why">{AI_WHY}</p>
+                </>
+              )}
               <p className="add-local">Saved in this browser first, then synced, so your key or account opens it anywhere.</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep({ kind: 'choose' })}>Choose another</button>

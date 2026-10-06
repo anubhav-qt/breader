@@ -87,7 +87,14 @@ export interface SyncStatus {
 
 const KEY = 'sync';
 const SETTINGS = 'breader.reader.v1';
-const MIME: Record<Format, string> = { EPUB: 'application/epub+zip', PDF: 'application/pdf', TXT: 'text/plain', Text: 'text/plain', MD: 'text/markdown' };
+const MIME: Record<Format, string> = {
+  EPUB: 'application/epub+zip',
+  PDF: 'application/pdf',
+  TXT: 'text/plain',
+  Text: 'text/plain',
+  MD: 'text/markdown',
+  CBZ: 'application/vnd.comicbook+zip',
+};
 const COVER_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const DAY = 86_400_000;
 

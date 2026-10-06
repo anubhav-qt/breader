@@ -14,6 +14,7 @@ import { useFullscreenReading } from './fullscreen';
 import { loadRevisit, useAiStatus, useVoiceMarks } from './ai';
 import { keepLooking, looking, stopLook } from './look';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
+import { MangaView } from './MangaView';
 import { overlaps, usePacing } from './pacing';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
@@ -95,9 +96,11 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   // adds a voice (pacing.ts). Only where there are words to light, not on a PDF's drawn pages.
   const voice = useVoicePrefs();
   const immersive = voice.mode === 'immersive' && book.kind === 'flow';
+  /** A manga's pages are pictures: nothing to read aloud or search. */
+  const pictures = book.kind === 'manga';
   const pacing = usePacing(view, immersive && !closing, loc);
   // Voices readers uploaded, so the one picked last time is known, and whether the server reads for this account.
-  useEffect(() => { if (canNarrate) { void refreshVoices(); void refreshSpeech(); } }, []);
+  useEffect(() => { if (canNarrate && !pictures) { void refreshVoices(); void refreshSpeech(); } }, [pictures]);
   const { busy: speaking, media } = narration;
   const { busy: lighting } = pacing;
   const busy = useCallback(() => speaking() || lighting(), [speaking, lighting]);
@@ -299,7 +302,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       else if (what !== 'pause') carryOn();
       return;
     }
-    if (canNarrate) media(what);
+    if (canNarrate && !pictures) media(what);
   };
 
   const [start] = useState<Start>(() => {
@@ -352,7 +355,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const awayToast = useMemo<ToastMessage | null>(() => {
     if (!away) return null;
     const i = chapterAt(chapters, { section: away.pos.section });
-    const where = chapters.length > 1 ? `in ${chapterName(chapters, i)}` : book.kind === 'pdf' ? `on page ${away.pos.section + 1}` : 'further back';
+    const where = chapters.length > 1 ? `in ${chapterName(chapters, i)}` : book.kind !== 'flow' ? `on page ${away.pos.section + 1}` : 'further back';
     return {
       id: 1,
       text: `You were reading ${where} before you jumped here.`,
@@ -363,7 +366,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   }, [away, chapters, book.kind, goBack, stayHere]);
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
-  const paged = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'pages';
+  const layout = book.kind === 'pdf' ? settings.pdfLayout : book.kind === 'manga' ? settings.mangaLayout : settings[settings.style].layout;
+  const paged = layout === 'pages';
+  /** A manga's pages turning right to left: swipes and arrows go on the other way. */
+  const rtl = book.kind === 'manga' && paged && settings.mangaDir === 'rtl';
   const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
   const swipedAt = useRef(-Infinity);
   const onTouchStart = (e: TouchEvent) => {
@@ -381,7 +387,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.4 || e.timeStamp - s.t > 800) return;
     if (window.getSelection()?.toString()) return;
     swipedAt.current = e.timeStamp;
-    view.current?.turn(dx < 0 ? 1 : -1);
+    view.current?.turn((dx < 0) !== rtl ? 1 : -1);
   };
   // Scrolled, a hand moving the page stops the light as a tap does, so it neither starts over from the
   // top of the screen nor pulls the page back to where it was: the page is the reader's, until
@@ -450,9 +456,9 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
       if (e.key === 'Enter' && !target.closest('a, button') && onEnter.current()) { e.preventDefault(); return; }
-      const scroll = (book.kind === 'pdf' ? settings.pdfLayout : settings[settings.style].layout) === 'scroll';
-      if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !scroll)) { letGo(); view.current?.turn(1); e.preventDefault(); }
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !scroll)) { letGo(); view.current?.turn(-1); e.preventDefault(); }
+      const scroll = layout === 'scroll';
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !scroll)) { letGo(); view.current?.turn(e.key === 'ArrowRight' && rtl ? -1 : 1); e.preventDefault(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !scroll)) { letGo(); view.current?.turn(e.key === 'ArrowLeft' && rtl ? 1 : -1); e.preventDefault(); }
     };
     window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey);
@@ -460,7 +466,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [panel, choosing, settings, book.kind, onBack, openPanel, closing]);
+  }, [panel, choosing, layout, rtl, onBack, openPanel, closing]);
 
   // The phone's status bar takes the page's colour while the book is open.
   const theme: ThemeName = settings.theme;
@@ -479,7 +485,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     view.current?.goTo(c.section, c.anchor);
   }, [chapters]);
 
-  const style = book.kind === 'pdf' ? 'modern' : settings.style;
+  const style = book.kind === 'flow' ? settings.style : 'modern';
 
   /*
    * Comments, after each chapter's text (the tail), or for a PDF in the drop from the speech
@@ -507,10 +513,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   };
 
   const chromeProps: ChromeProps = {
-    book, title, loc, chapters, current, settings, update, isPdf: book.kind === 'pdf',
+    book, title, loc, chapters, current, settings, update,
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
-    narration: canNarrate ? {
+    narration: canNarrate && !pictures ? {
       playing: narration.playing,
       listening,
       toggle: onPlay,
@@ -533,7 +539,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       pick: (p: Paragraph) => beginAt(p.s),
     } : null,
     focus: { on: focus, toggle: toggleFocus, ask: bar.ask },
-    search: { read: readAll, go: goFound },
+    search: pictures ? null : { read: readAll, go: goFound },
     sleep: asked ? {
       asked,
       back: backTo,
@@ -560,6 +566,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick} onContextMenu={(e) => { if (looking()) e.preventDefault(); }}>
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} aside={tail} />
+          ) : book.kind === 'manga' ? (
+            <MangaView ref={view} book={book} layout={settings.mangaLayout} dir={settings.mangaDir} start={start} onLocation={onLocation} onWidth={setPageW} />
           ) : (
             <PdfView ref={view} book={book} layout={settings.pdfLayout} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           )}

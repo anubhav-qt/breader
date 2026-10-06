@@ -4,12 +4,15 @@ import { countWords } from '../lib/format';
 import { escapeHtml } from './sanitize';
 import type { BookRecord, FlowBook, Format, LoadedBook } from './types';
 
-export const ACCEPT = '.epub,.pdf,.txt,.md,.markdown,application/epub+zip,application/pdf,text/plain,text/markdown';
+export const ACCEPT =
+  '.epub,.pdf,.txt,.md,.markdown,.cbz,.zip,application/epub+zip,application/pdf,text/plain,text/markdown,application/vnd.comicbook+zip,application/zip';
 
 export function detectFormat(file: File): Format | null {
   const name = file.name.toLowerCase();
   if (name.endsWith('.epub') || file.type === 'application/epub+zip') return 'EPUB';
   if (name.endsWith('.pdf') || file.type === 'application/pdf') return 'PDF';
+  // A zip that isn't an EPUB is a manga or comic's pages.
+  if (/\.(cbz|zip)$/.test(name) || /^application\/(vnd\.comicbook\+zip|x-cbz|zip|x-zip-compressed)$/.test(file.type)) return 'CBZ';
   if (name.endsWith('.md') || name.endsWith('.markdown') || file.type === 'text/markdown') return 'MD';
   if (name.endsWith('.txt') || file.type.startsWith('text/')) return 'TXT';
   return null;
@@ -31,6 +34,8 @@ export async function parseSource(input: Blob | string, format: Format, fallback
       return (await import('./epub')).parseEpub(input as Blob, fallbackTitle);
     case 'PDF':
       return (await import('./pdf')).openPdf(await (input as Blob).arrayBuffer(), fallbackTitle);
+    case 'CBZ':
+      return (await import('./manga')).openManga(input as Blob, fallbackTitle);
     case 'MD':
       return (await import('./markdown')).parseMarkdown(await text(), fallbackTitle);
     case 'Text': {
@@ -59,9 +64,10 @@ function placeholderBook(rec: BookRecord): FlowBook {
   };
 }
 
-/** A book's cover: the one it carries, its first picture, or a PDF's first page. */
+/** A book's cover: the one it carries, its first picture, or a PDF's or manga's first page. */
 export async function coverOf(book: LoadedBook): Promise<Blob | undefined> {
   if (book.kind === 'flow') return book.cover;
+  if (book.kind === 'manga') return (await import('./manga')).mangaCover(book);
   return (await import('./pdf')).pdfCover(book.doc);
 }
 

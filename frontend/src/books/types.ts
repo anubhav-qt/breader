@@ -1,6 +1,7 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
-export type Format = 'EPUB' | 'PDF' | 'TXT' | 'MD' | 'Text';
+/** CBZ: a manga or comic, its pages as pictures in a zip. */
+export type Format = 'EPUB' | 'PDF' | 'TXT' | 'MD' | 'Text' | 'CBZ';
 
 /** One chapter-sized chunk of a reflowable book, already sanitised. */
 export interface Section {
@@ -42,7 +43,24 @@ export interface PdfBook {
   cleanup?: () => void;
 }
 
-export type LoadedBook = FlowBook | PdfBook;
+/** A manga or comic: its pages are pictures, out of the file one at a time as they're read. */
+export interface MangaBook {
+  kind: 'manga';
+  title: string;
+  author: string;
+  pages: number;
+  /** Page i's picture. */
+  page(i: number): Promise<Blob>;
+  /** Page i's size in pixels from its file's first bytes, or null when they don't say. */
+  size(i: number): Promise<{ w: number; h: number } | null>;
+  toc: TocItem[];
+  words: number;
+  series?: { name: string; index?: number };
+  subjects?: string[];
+  cleanup?: () => void;
+}
+
+export type LoadedBook = FlowBook | PdfBook | MangaBook;
 
 /** A place in a book: section, block (paragraph-level element) and character offset in that block. */
 export interface Position {

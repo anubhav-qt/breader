@@ -69,6 +69,6 @@ export function recordFromBook(book: LoadedBook, format: Format, shared: boolean
     progress: 0,
     line: book.kind === 'flow' ? firstSentence(book.sections) : `Page 1 of ${book.pages}`,
     lastOpened: now,
-    ...(book.kind === 'flow' && book.series ? { series: book.series.name, seriesIndex: book.series.index } : {}),
+    ...(book.kind !== 'pdf' && book.series ? { series: book.series.name, seriesIndex: book.series.index } : {}),
   };
 }
