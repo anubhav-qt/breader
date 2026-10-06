@@ -27,6 +27,9 @@
 .pnl-h { font: var(--ui-w-strong) 13.5px/1 var(--ui); color: var(--r-mu); margin-bottom: 18px; }
 .p-title { font-family: var(--read); font-weight: 700; font-size: 32px; line-height: 0.98; text-wrap: balance; }
 .p-auth { font: var(--ui-w) 13px/1.3 var(--ui); color: var(--r-mu); margin-top: 8px; }
+/* A series from MangaDex: where it's from, and who it owes. */
+.p-from { display: inline-block; margin-top: 6px; font: var(--ui-w) 12px/1.3 var(--ui); color: var(--r-mu); text-decoration: underline; text-underline-offset: 2px; }
+.p-from:hover { color: var(--r-fg); }
 .p-bar { height: 3px; border-radius: 2px; background: var(--r-line); margin-top: 16px; overflow: hidden; }
 .p-bar i { display: block; height: 100%; background: var(--r-acc); border-radius: inherit; transition: width 400ms ease; }
 .p-meta { display: flex; justify-content: space-between; margin-top: 8px; font: var(--ui-w) 12.5px/1 var(--ui); color: var(--r-mu); }
@@ -43,6 +46,8 @@
   transition: background-color 140ms ease;
 }
 .p-item:hover { background: var(--r-fill); }
+.p-item.is-link { color: inherit; text-decoration: none; }
+.p-item.is-link .p-item-t { color: var(--r-mu); }
 .p-item-t { font-family: var(--read); font-size: 22px; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .p-item-s { flex: none; font: var(--ui-w) 11.5px/1 var(--ui); color: var(--r-mu); display: flex; }
 .p-item-s svg { width: 15px; height: 15px; color: var(--r-acc); }
@@ -265,3 +270,9 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-scroll:not(.is-strip) .mg-pg { box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); }
 /* The page fills most of the screen, so its outer thirds turn it, as in most manga readers. */
 .mgv .fv-zone { width: max(30%, calc(50% - var(--vw) / 2 + var(--vw) * 0.2)); }
+/* A chapter of a series from MangaDex starts under its name and who made it. */
+.mg-band { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; padding: 0 12px; text-align: center; font: var(--ui-w) 12px/1.3 var(--ui); color: var(--r-mu); }
+.mg-band b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; font-size: 13px; color: var(--r-fg); }
+.mg-band span, .mg-band a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mg-band a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.mg-band a:hover { color: var(--r-fg); }

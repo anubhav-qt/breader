@@ -87,6 +87,9 @@ async function openRecord(rec: BookRecord): Promise<LoadedBook> {
   let book: LoadedBook;
   if (rec.source === 'placeholder') {
     book = placeholderBook(rec);
+  } else if (rec.source === 'remote') {
+    // A series from MangaDex: its chapters as they are now, its pages as they're read.
+    book = await (await import('./remote')).openRemote(rec);
   } else if (rec.source === 'sample' && rec.url) {
     const res = await fetch(rec.url);
     if (!res.ok) throw new Error(`Couldn't load ${rec.url}`);

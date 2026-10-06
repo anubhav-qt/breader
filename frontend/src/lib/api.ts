@@ -14,6 +14,8 @@ const BASES = {
   fallback: import.meta.env.VITE_API_FALLBACK_URL || `${here}:8788`,
 };
 export type ApiBase = keyof typeof BASES;
+/** An address on the laptop, for a picture to load straight from it. */
+export const laptopUrl = (path: string) => BASES.primary + path;
 
 const TIMEOUT = 4000;
 const PROBE_EVERY = 60_000;

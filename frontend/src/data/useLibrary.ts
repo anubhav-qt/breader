@@ -384,6 +384,27 @@ async function addBook(rec: BookRecord, blob: Blob | string, cover?: Blob) {
 }
 
 /**
+ * A series from MangaDex: no file, as its pages come from there as they're read. Its cover is kept
+ * in this browser only; other devices fetch their own.
+ */
+async function addRemote(rec: BookRecord, cover?: Blob) {
+  if (cover) {
+    rec = { ...rec, hasCover: true };
+    await store.set(`cover:${rec.id}`, cover);
+    noCover.delete(rec.id);
+  }
+  await change((d) => ({ records: [rec, ...d.records.filter((r) => r.id !== rec.id)] }), [{ type: 'book.put', book: toWire(rec) }]);
+}
+
+/** Reads a remote book from another address: a series in another language. It opens afresh. */
+function setRemoteUrl(id: string, url: string) {
+  const rec = view.records.find((r) => r.id === id);
+  if (!rec || rec.source !== 'remote' || rec.url === url) return;
+  forget(id);
+  put({ ...rec, url });
+}
+
+/**
  * A cover found when a book is opened. Uploaded books send it to the server too; copies of shared
  * books don't, since the file is the sharer's.
  */
@@ -585,7 +606,7 @@ export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   useEffect(() => { notice = onNotice; }, [onNotice]);
   useEffect(() => { started ??= start(); }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, nextColor, addBook, setCover, startShelfBook, removeBook, restoreBook, saveRead, setFinished, addReadTime, editBook, setShared, setSharedOnly, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, addRemote, setRemoteUrl, setCover, startShelfBook, removeBook, restoreBook, saveRead, setFinished, addReadTime, editBook, setShared, setSharedOnly, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

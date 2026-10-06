@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
-import type { MangaBook } from '../../books/types';
+import type { MangaBook, RemoteChapter } from '../../books/types';
 import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
 import type { Layout, MangaDir } from './settings';
@@ -11,6 +11,8 @@ import { runTurn } from './turn';
  * strips. In pages, they turn one at a time, or two side by side as the book prints them once the
  * screen is wide enough, right to left as manga is read (or left to right, as comics are). A page's
  * picture comes out of the file as it nears the screen, and is let go once it's well behind.
+ * A series read from MangaDex is its chapters one after another: scrolled, each starts under a line
+ * crediting who made it, and in pages, a chapter starts on a page of its own.
  */
 
 interface Props {
@@ -39,6 +41,8 @@ const TAIL = BAR + 24;
 const BATCH = 24;
 /** Pages kept open past those wanted, so going back a little doesn't open them again. */
 const SPARE = 6;
+/** Scrolled: the line before each chapter of a series read from MangaDex. */
+const BAND = 56;
 
 /** The space beside the pages: on a phone, the screen is better spent on the page (and the lines of controls cover it). */
 const sideOf = (w: number) => (w < 640 ? 16 : 48);
@@ -52,8 +56,11 @@ interface At {
   end: boolean;
 }
 
-function startAt(start: Start, total: number): At {
-  if (start.kind === 'pos') return { page: Math.max(0, Math.min(total - 1, start.pos.section)), frac: Math.max(0, Math.min(1, start.pos.offset / 1000)), end: false };
+function startAt(start: Start, total: number, book: MangaBook): At {
+  if (start.kind === 'pos') {
+    const page = book.locate ? book.locate(start.pos) : start.pos.section;
+    return { page: Math.max(0, Math.min(total - 1, page)), frac: Math.max(0, Math.min(1, start.pos.offset / 1000)), end: false };
+  }
   const x = Math.max(0, Math.min(0.9999, start.value)) * total;
   return { page: Math.floor(x), frac: x - Math.floor(x), end: false };
 }
@@ -66,12 +73,13 @@ function typicalOf(ratios: number[]): number {
 
 /**
  * Pages as they face each other in print: the cover alone, then in twos, with a spread drawn across
- * two pages on its own (and the page before it, when that leaves it without a partner).
+ * two pages on its own (and the page before it, when that leaves it without a partner). Each
+ * chapter of a series starts alone, as its cover does, and no two pages of different chapters pair.
  */
-function spreadsOf(ratio: (i: number) => number, total: number, two: boolean): number[][] {
+function spreadsOf(ratio: (i: number) => number, total: number, two: boolean, starts: ReadonlySet<number>): number[][] {
   const out: number[][] = [];
   for (let i = 0; i < total; ) {
-    if (two && i > 0 && i + 1 < total && ratio(i) >= WIDE && ratio(i + 1) >= WIDE) {
+    if (two && i > 0 && i + 1 < total && !starts.has(i) && !starts.has(i + 1) && ratio(i) >= WIDE && ratio(i + 1) >= WIDE) {
       out.push([i, i + 1]);
       i += 2;
     } else {
@@ -126,7 +134,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const total = book.pages;
   const per = book.words / Math.max(1, total);
   const rtl = dir === 'rtl';
-  const [at, setAt] = useState<At>(() => startAt(start, total));
+  const [at, setAt] = useState<At>(() => startAt(start, total, book));
   const [size, setSize] = useState({ w: 0, h: 0 });
   /** Each page's height over its width, 0 until known. */
   const [ratios, setRatios] = useState<number[]>(() => new Array<number>(total).fill(0));
@@ -158,6 +166,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
         const chunk = order.slice(k, k + BATCH);
         const sizes = await Promise.all(chunk.map((i) => book.size(i).catch(() => null)));
         if (!live) return;
+        // A series read from MangaDex says nothing here: its pictures tell their sizes as they come.
+        if (!sizes.some(Boolean)) continue;
         setRatios((rs) => {
           const next = rs.slice();
           chunk.forEach((i, j) => {
@@ -194,7 +204,14 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   // Two side by side when each can be nearly as tall as one alone.
   const two = layout === 'pages' && !strip && areaW / 2 >= 0.85 * (areaH / typical);
 
-  const spreads = useMemo(() => spreadsOf(ratio, total, two), [ratio, total, two]);
+  /** A series' chapters by the page each starts on; those read on their publisher's site too, and at the end, past the last page. */
+  const bands = useMemo(() => {
+    const m = new Map<number, RemoteChapter[]>();
+    for (const c of book.remote?.chapters ?? []) m.set(c.first, [...(m.get(c.first) ?? []), c]);
+    return m;
+  }, [book]);
+  const starts = useMemo(() => new Set(book.remote?.chapters.filter((c) => c.pages > 0).map((c) => c.first) ?? []), [book]);
+  const spreads = useMemo(() => spreadsOf(ratio, total, two, starts), [ratio, total, two, starts]);
   const spreadAt = useMemo(() => {
     const at = new Int32Array(total);
     spreads.forEach((s, k) => s.forEach((i) => { at[i] = k; }));
@@ -217,12 +234,13 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const heights: number[] = [];
     let y = HEAD;
     for (let i = 0; i < total; i++) {
+      y += (bands.get(i)?.length ?? 0) * BAND;
       tops.push(y);
       heights.push(Math.max(1, Math.round(colW * ratio(i))));
       y += heights[i] + gap;
     }
-    return { tops, heights, height: y - gap + TAIL };
-  }, [ratio, total, colW, gap]);
+    return { tops, heights, height: y - gap + (bands.get(total)?.length ?? 0) * BAND + TAIL };
+  }, [ratio, total, colW, gap, bands]);
 
   // The width the controls line up with: steady from page to page.
   const pageW = layout === 'pages' ? Math.min(areaW, ((two ? 2 : 1) * areaH) / typical) : colW;
@@ -288,21 +306,23 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const end = layout === 'pages' ? last >= total - 1 : at.end;
     const exact = layout === 'scroll' ? at.page + at.frac : first;
     const next = book.toc.find((t) => t.section > first)?.section ?? total;
+    // A series' place goes by its chapter: page 5 of the series means little.
+    const ch = book.remote?.chapters.filter((c) => c.pages > 0 && c.first <= first).pop();
     onLocationRef.current({
       section: first,
-      block: 0,
+      block: book.anchor?.(first) ?? 0,
       offset: layout === 'scroll' ? Math.round(at.frac * 1000) : 0,
       progress: end ? 1 : exact / total,
       sectionWordsLeft: Math.round(Math.max(1, next - exact) * per),
       bookWordsLeft: end ? 0 : Math.round((total - (layout === 'pages' ? last + 1 : exact)) * per),
-      line: `Page ${first + 1} of ${total}`,
+      line: ch ? `${ch.label}, page ${first - ch.first + 1} of ${ch.pages}` : `Page ${first + 1} of ${total}`,
       page: first,
       pages: total,
       screen: Math.round(shown.length * per),
     });
     // The spread is new each time pages change shape; its first and last pages are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [at, layout, spread[0], spread[spread.length - 1], total, per, book.toc]);
+  }, [at, layout, spread[0], spread[spread.length - 1], total, per, book]);
 
   /** Goes to a page (and scrolled, that far down it). */
   const goTo = useCallback(async (p: number, frac = 0) => {
@@ -371,9 +391,9 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       clear: () => {},
       section: async () => null,
       // Back to a place kept: scrolled, `start` is how far down its page, in thousandths.
-      reach: (sn) => void goTo(sn.section, sn.start / 1000),
+      reach: (sn) => void goTo(book.locate ? book.locate({ section: sn.section, block: sn.block, offset: sn.start }) : sn.section, sn.start / 1000),
     },
-  }), [goTo, turn, total, at.page]);
+  }), [goTo, turn, total, at.page, book]);
 
   const picture = (i: number) => {
     const src = srcs.get(i);
@@ -389,6 +409,20 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
 
   const shownFrom = Math.max(0, win[0]);
   const shownTo = Math.min(total - 1, win[1]);
+  /** The lines before page i (or after the last, at total): a chapter each, who made it or where it's read. */
+  const bandsAt = (i: number, bottom: number) => {
+    const here = bands.get(i) ?? [];
+    return here.map((c, k) => (
+      <div key={`b-${c.id}`} className={`mg-band${c.external ? ' is-out' : ''}`} style={{ top: bottom - (here.length - k) * BAND, height: BAND }}>
+        <b>{c.number !== null && c.title ? `${c.label} · ${c.title}` : c.label}</b>
+        {c.external ? (
+          <a href={c.external} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>Read on its publisher’s site ↗</a>
+        ) : (
+          <span>{c.groups.length ? c.groups.map((g) => g.name).join(' & ') : 'No group credited'}</span>
+        )}
+      </div>
+    ));
+  };
   return (
     <div ref={rootRef} className={`mgv is-${layout}`} style={{ '--vw': `${Math.max(0, pageW)}px` } as CSSProperties}>
       {layout === 'pages' ? (
@@ -412,6 +446,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
             {colW > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).map((i) => (
               <div key={i} className="mg-pg" style={{ top: tops[i], height: heights[i] }}>{picture(i)}</div>
             ))}
+            {colW > 0 && bands.size > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).flatMap((i) => bandsAt(i, tops[i]))}
+            {colW > 0 && shownTo === total - 1 && bandsAt(total, tops[total - 1] + heights[total - 1] + (bands.get(total)?.length ?? 0) * BAND)}
           </div>
         </div>
       )}

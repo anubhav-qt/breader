@@ -15,6 +15,8 @@ export interface TocItem {
   section: number;
   anchor?: string;
   level: number;
+  /** Read somewhere else instead (a manga chapter its publisher puts up on its own site). */
+  link?: string;
 }
 
 export interface FlowBook {
@@ -43,6 +45,20 @@ export interface PdfBook {
   cleanup?: () => void;
 }
 
+/** A chapter of a manga read from a catalogue (books/remote.ts): where its pages start, and who made it. */
+export interface RemoteChapter {
+  id: string;
+  /** "Ch. 12", or "Oneshot". */
+  label: string;
+  title: string | null;
+  number: number | null;
+  /** Its first page in the book, and how many it has: none for one read on its publisher's site. */
+  first: number;
+  pages: number;
+  external: string | null;
+  groups: Array<{ id: string; name: string }>;
+}
+
 /** A manga or comic: its pages are pictures, out of the file one at a time as they're read. */
 export interface MangaBook {
   kind: 'manga';
@@ -57,6 +73,14 @@ export interface MangaBook {
   words: number;
   series?: { name: string; index?: number };
   subjects?: string[];
+  /** Read from a catalogue: its name, the series' page there, and its chapters. */
+  remote?: { name: string; page: string; chapters: RemoteChapter[] };
+  /**
+   * A place's block, and the page a place is at, for a book whose pages move as chapters are added
+   * or change: a remote one keeps its places by chapter (books/remote.ts).
+   */
+  anchor?(page: number): number;
+  locate?(pos: Position): number;
   cleanup?: () => void;
 }
 

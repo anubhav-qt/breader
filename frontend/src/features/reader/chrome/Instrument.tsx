@@ -37,7 +37,11 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   const [foot, setFoot] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
   const progress = loc?.progress ?? 0;
-  const label = chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
+  // A series from MangaDex credits the group that made each chapter, up top, as it's read.
+  const credit = book.kind === 'manga' ? book.remote?.chapters.filter((c) => c.pages > 0)[current] : undefined;
+  const label = credit
+    ? `${credit.label} · ${credit.groups.length ? credit.groups.map((g) => g.name).join(' & ') : 'No group credited'}`
+    : chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
   const toggle = (k: PanelName) => openPanel(panel === k ? null : k);
 
   // Play reads aloud and pauses; the button beside it opens the voices and modes.
@@ -247,7 +251,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
-                <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} />
+                <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} remote={book.kind === 'manga' && !!book.remote} />
               )}
             </div>
             <CloseDots onClick={() => openPanel(null)} />

@@ -1,10 +1,11 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { LoadedBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
+import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
 import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -27,7 +28,8 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
       : [];
   const section = loc?.section ?? 0;
   let current = -1;
-  items.forEach((it, i) => { if (it.section <= section) current = i; });
+  items.forEach((it, i) => { if (it.section <= section && !it.link) current = i; });
+  const remote = book.kind === 'manga' ? book.remote : undefined;
 
   const minutes = (i: number) => {
     if (book.kind !== 'flow') return '';
@@ -48,6 +50,9 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
       <div className="pnl-h">Contents</div>
       <div className="p-title">{title || book.title}</div>
       {book.author && <div className="p-auth">{book.author}</div>}
+      {remote && (
+        <a className="p-from" href={remote.page} target="_blank" rel="noopener noreferrer">From {remote.name}, made by its scanlation groups ↗</a>
+      )}
       <div className="p-bar"><i style={{ width: `${pct}%` }} /></div>
       <div className="p-meta">
         <span>{pct}%</span>
@@ -57,6 +62,15 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
         {items.length === 0 && <p className="p-empty">This book has no table of contents.</p>}
         {items.map((it, i) => {
           const state = i < current ? 'done' : i === current ? 'now' : 'next';
+          // Read on its publisher's site: a link there, not a place here.
+          if (it.link) {
+            return (
+              <a key={`${it.section}-link-${i}`} className={`p-item is-${state} is-link`} href={it.link} target="_blank" rel="noopener noreferrer" style={{ paddingLeft: 10 + Math.min(it.level, 3) * 14, '--i': i } as CSSProperties}>
+                <span className="p-item-t">{it.title}</span>
+                <span className="p-item-s">Official ↗</span>
+              </a>
+            );
+          }
           return (
             <button
               key={`${it.section}-${it.anchor ?? ''}-${i}`}
@@ -94,6 +108,8 @@ interface LookProps {
   update: (fn: (s: ReaderSettings) => ReaderSettings) => void;
   /** The book can read in 2 voices, so their colours can be picked. */
   two?: boolean;
+  /** A manga read from MangaDex, whose pages can come smaller. */
+  remote?: boolean;
 }
 
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
@@ -137,7 +153,17 @@ const margins = (inset: number) => (
   </svg>
 );
 
-export function AppearancePanel({ settings, kind, update, two = false }: LookProps) {
+/** MangaDex's smaller pages, for a slow or metered connection: this device's choice. */
+function DataSaver() {
+  const [saver, setSaver] = useState(() => readMangaPrefs().saver);
+  const pick = (on: boolean) => {
+    writeMangaPrefs({ ...readMangaPrefs(), saver: on });
+    setSaver(on);
+  };
+  return <Segmented label="Pages" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
+}
+
+export function AppearancePanel({ settings, kind, update, two = false, remote = false }: LookProps) {
   const cur = settings[settings.style];
   const set = (patch: Partial<StyleSettings>) => update((s) => ({ ...s, [s.style]: { ...s[s.style], ...patch } }));
   // Immersive's voice bar, as the rest of the controls sleep (focus.ts).
@@ -172,6 +198,12 @@ export function AppearancePanel({ settings, kind, update, two = false }: LookPro
             <Segmented label="Direction" value={settings.mangaDir} onChange={(v) => update((s) => ({ ...s, mangaDir: v }))} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
           )}
           <p className="p-note">{settings.mangaLayout === 'pages' ? 'Two pages side by side when the screen is wide enough. Manga reads right to left, comics left to right.' : 'One page after another, down the screen.'}</p>
+          {remote && (
+            <>
+              <DataSaver />
+              <p className="p-note">Data saver brings MangaDex’s smaller copy of each page, for a slow or metered connection. Pages kept offline stay as they were kept.</p>
+            </>
+          )}
         </>
       ) : kind === 'pdf' ? (
         <>

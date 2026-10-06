@@ -15,7 +15,8 @@ export interface Chapter {
 export function chaptersOf(book: LoadedBook): Chapter[] {
   if (book.kind !== 'flow') {
     const perPage = book.words / Math.max(1, book.pages);
-    const tops = book.toc.filter((t) => t.level === 0 && t.section < book.pages).sort((a, b) => a.section - b.section);
+    // A chapter read on its publisher's site has no pages here, so no stretch of the book.
+    const tops = book.toc.filter((t) => t.level === 0 && !t.link && t.section < book.pages).sort((a, b) => a.section - b.section);
     const items = tops.length ? tops : [{ title: book.title, section: 0 }];
     return items.map((t, i) => {
       const from = i === 0 ? 0 : t.section;
@@ -75,7 +76,7 @@ export const pad2 = (n: number) => String(n).padStart(2, '0');
 
 /** Titles that carry their own number ("Chapter IV", "Part 2", "XII. The Trial") don't get ours. */
 export const numbered = (title: string) =>
-  /^\s*(chapter|part|book|section|letter|canto|act|stave)\b/i.test(title) || /^\s*([IVXLCDM]+|\d+)[.:)]/.test(title);
+  /^\s*(chapter|ch\.|part|book|section|letter|canto|act|stave)(\b|\s)/i.test(title) || /^\s*([IVXLCDM]+|\d+)[.:)]/.test(title);
 
 /** "07 · The Pool of Tears", or just the title when it's already numbered. */
 export const chapterName = (chapters: Chapter[], i: number) => {
