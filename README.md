@@ -31,6 +31,12 @@ Open [breader.site](https://breader.site), add a book, read. Nothing to install,
 - **Say it your way.** Tap a word while it reads and tell it how that word sounds. It remembers, for you alone.
 - **Bring a voice.** Add your own Piper or Kokoro voice, and share it if you like.
 
+## Manga
+
+- **A shelf of its own.** Switch the library from Books to Manga. CBZ files, a volume or a chapter each, open in a reader made for pictures: down the screen, or a page at a time, two side by side when the screen is wide enough, right to left or left to right.
+- **MangaDex, through Breader.** Browse finds series on MangaDex, in English or any language it has, and reads them chapter after chapter in one long scroll, crediting the group that made each chapter and linking to where its publisher puts it up. Series for adults stay hidden until you turn on 18+. Keep chapters to read offline.
+- **Your own servers.** Connect a Suwayomi server to read from the sources installed there, or an OPDS catalog (Komga, Kavita, Calibre) to add its books and comics as files. Your browser asks them directly, and their addresses stay with you.
+
 ## Your library
 
 - **A key, not an account.** Your library opens with a key only you hold. Or log in with email or Google and it follows you everywhere.
