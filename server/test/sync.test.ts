@@ -151,6 +151,19 @@ describe('sync', () => {
     expect(odd.status).toBe(400);
   });
 
+  it('syncs a series on the reader’s own Suwayomi server by its number there', async () => {
+    const { b } = await registered();
+    const r = await b.post(
+      '/v1/sync/push',
+      push('c', { type: 'book.put', book: book({ id: 'sw-42', format: 'CBZ', source: 'remote', url: 'suwayomi:42' }) }, { type: 'book.put', book: book({ url: 'suwayomi:42' }) }),
+    );
+    expect(r.body.rejected.map((x: { code: string }) => x.code)).toEqual(['bad_book']);
+    expect((await b.get('/v1/sync/pull?since=0')).body.books.map((x: { url: string }) => x.url)).toEqual(['suwayomi:42']);
+    for (const url of ['suwayomi:0', 'suwayomi:abc', 'suwayomi:12345678901', 'suwayomi:']) {
+      expect((await b.post('/v1/sync/push', push('c3', { type: 'book.put', book: book({ source: 'remote', url }) }))).status, url).toBe(400);
+    }
+  });
+
   it('keeps libraries apart, even for the same sample ids', async () => {
     const one = await registered();
     const two = await registered();

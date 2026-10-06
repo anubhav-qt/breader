@@ -1,5 +1,5 @@
 import { and, eq, or, sql } from 'drizzle-orm';
-import { KOKORO_PACK_BYTES, type Mutation } from '@breader/shared';
+import { KOKORO_PACK_BYTES, REMOTE_URL, type Mutation } from '@breader/shared';
 import type { Db } from '../db/client.ts';
 import { blobs, libraryItems, librarySettings, readingStates, readingTime, voices, voiceUses } from '../db/schema.ts';
 import { ApiError } from '../lib/errors.ts';
@@ -53,8 +53,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
     case 'book.put': {
       const b = m.book;
       // A sample is its bundled file and a remote book its series in a catalogue: only they have a url.
-      const at = b.source === 'sample' ? '/samples/' : b.source === 'remote' ? 'mangadex:' : null;
-      if (at ? !b.url?.startsWith(at) : !!b.url) throw new ApiError(400, 'bad_book', 'Only bundled samples and remote books have a url.');
+      const ok = b.source === 'sample' ? b.url?.startsWith('/samples/') : b.source === 'remote' ? REMOTE_URL.test(b.url ?? '') : !b.url;
+      if (!ok) throw new ApiError(400, 'bad_book', 'Only bundled samples and remote books have a url.');
       // A remote book's pages come from its catalogue, never from a stored file.
       if (b.source === 'remote' && b.fileId) throw new ApiError(400, 'bad_book', 'A remote book has no file.');
       await checkFile(tx, libraryId, b.fileId);
