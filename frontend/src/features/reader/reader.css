@@ -30,6 +30,10 @@
 /* A series from MangaDex: where it's from, and who it owes. */
 .p-from { display: inline-block; margin-top: 6px; font: var(--ui-w) 12px/1.3 var(--ui); color: var(--r-mu); text-decoration: underline; text-underline-offset: 2px; }
 .p-from:hover { color: var(--r-fg); }
+.p-offline { display: grid; gap: 6px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--r-fill); font: var(--ui-w) 12px/1.35 var(--ui); color: var(--r-mu); }
+.p-offline-b { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.p-offline-b:empty { display: none; }
+.p-offline button { font: inherit; color: var(--r-fg); text-decoration: underline; text-underline-offset: 2px; }
 .p-bar { height: 3px; border-radius: 2px; background: var(--r-line); margin-top: 16px; overflow: hidden; }
 .p-bar i { display: block; height: 100%; background: var(--r-acc); border-radius: inherit; transition: width 400ms ease; }
 .p-meta { display: flex; justify-content: space-between; margin-top: 8px; font: var(--ui-w) 12.5px/1 var(--ui); color: var(--r-mu); }

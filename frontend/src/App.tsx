@@ -9,6 +9,7 @@ import { Toast, type ToastMessage } from './components/Toast';
 import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
+import { sweepKept } from './books/kept';
 import { remoteOf, remoteUrl } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
@@ -280,6 +281,13 @@ export default function App() {
     return m;
   }, [lib.records, hidden]);
   const haveSeries = useMemo(() => new Set(remoteSeries.keys()), [remoteSeries]);
+  // Chapters kept offline of series no longer in the library go, once the library's open.
+  const swept = useRef(false);
+  useEffect(() => {
+    if (!lib.ready || swept.current) return;
+    swept.current = true;
+    void sweepKept(haveSeries);
+  }, [lib.ready, haveSeries]);
   const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...everything.mine, ...everything.shelf], b), [everything]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */

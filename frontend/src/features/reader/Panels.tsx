@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { LoadedBook, TocItem } from '../../books/types';
+import { keepChapters, letGo, stopKeeping, useKept } from '../../books/kept';
+import type { LoadedBook, MangaBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import { useBarHidden } from './focus';
@@ -9,6 +10,35 @@ import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
 import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
+
+/** A series from MangaDex: chapters kept in this browser to read offline, and keeping more. */
+function Offline({ remote, at, kept, now, queued, failed }: { remote: NonNullable<MangaBook['remote']>; at: number } & ReturnType<typeof useKept>) {
+  const hosted = remote.chapters.filter((c) => c.pages > 0);
+  const from = Math.max(0, hosted.findIndex((c) => c.first + c.pages > at));
+  const next = hosted.slice(from, from + 5).filter((c) => !kept[c.id]?.done);
+  const done = Object.values(kept).filter((k) => k.done);
+  const mb = Math.max(1, Math.round(done.reduce((n, k) => n + k.bytes, 0) / 1_000_000));
+  const text = now
+    ? `Keeping ${now.label}: ${now.done} of ${now.of} pages${queued ? `, then ${queued} more` : ''}`
+    : failed
+      ? `Not all of them came: ${failed}`
+      : done.length
+        ? `${done.length === 1 ? '1 chapter' : `${done.length} chapters`} kept to read offline, ${mb} MB`
+        : 'Keep chapters in this browser to read them offline.';
+  return (
+    <div className="p-offline" aria-live="polite">
+      <span>{text}</span>
+      <span className="p-offline-b">
+        {now ? (
+          <button type="button" onClick={stopKeeping}>Stop</button>
+        ) : next.length > 0 && (
+          <button type="button" onClick={() => keepChapters(remote.series, next)}>{next.length === 1 ? `Keep ${next[0].label}` : `Keep the next ${next.length}`}</button>
+        )}
+        {!now && done.length > 0 && <button type="button" onClick={() => void letGo(remote.series)}>Let go of them</button>}
+      </span>
+    </div>
+  );
+}
 
 interface ContentsProps {
   book: LoadedBook;
@@ -30,6 +60,7 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
   let current = -1;
   items.forEach((it, i) => { if (it.section <= section && !it.link) current = i; });
   const remote = book.kind === 'manga' ? book.remote : undefined;
+  const offline = useKept(remote?.series);
 
   const minutes = (i: number) => {
     if (book.kind !== 'flow') return '';
@@ -51,7 +82,10 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
       <div className="p-title">{title || book.title}</div>
       {book.author && <div className="p-auth">{book.author}</div>}
       {remote && (
-        <a className="p-from" href={remote.page} target="_blank" rel="noopener noreferrer">From {remote.name}, made by its scanlation groups ↗</a>
+        <>
+          <a className="p-from" href={remote.page} target="_blank" rel="noopener noreferrer">From {remote.name}, made by its scanlation groups ↗</a>
+          <Offline remote={remote} at={section} {...offline} />
+        </>
       )}
       <div className="p-bar"><i style={{ width: `${pct}%` }} /></div>
       <div className="p-meta">
@@ -82,7 +116,7 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
               <span className="p-item-t">{it.title}</span>
               <span className="p-item-s">
                 {book.kind !== 'flow'
-                  ? `p. ${it.section + 1}`
+                  ? `${remote && offline.kept[remote.chapters[i]?.id]?.done ? 'Kept · ' : ''}p. ${it.section + 1}`
                   : state === 'done'
                     ? <IconCheck />
                     : state === 'now' && loc

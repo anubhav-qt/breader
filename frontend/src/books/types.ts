@@ -73,8 +73,8 @@ export interface MangaBook {
   words: number;
   series?: { name: string; index?: number };
   subjects?: string[];
-  /** Read from a catalogue: its name, the series' page there, and its chapters. */
-  remote?: { name: string; page: string; chapters: RemoteChapter[] };
+  /** Read from a catalogue: its name, the series' id and page there, and its chapters. */
+  remote?: { name: string; series: string; page: string; chapters: RemoteChapter[] };
   /**
    * A place's block, and the page a place is at, for a book whose pages move as chapters are added
    * or change: a remote one keeps its places by chapter (books/remote.ts).

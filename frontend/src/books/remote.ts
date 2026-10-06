@@ -1,9 +1,8 @@
 import type { MangaChapter } from '@breader/shared/manga';
-import { flush } from '../data/sync';
 import { ApiError, OfflineError } from '../lib/api';
-import { mangadex, readMangaPrefs } from '../lib/mangadex';
+import { mangadex } from '../lib/mangadex';
 import { store } from '../lib/store';
-import { keptPage } from './kept';
+import { pageFor } from './kept';
 import { WORDS_PER_MANGA_PAGE } from './manga';
 import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './types';
 
@@ -83,20 +82,6 @@ async function chaptersIn(series: string, lang: string): Promise<MangaChapter[]>
   }
 }
 
-async function pageOf(chapter: string, n: number): Promise<Blob> {
-  const had = await keptPage(chapter, n);
-  if (had) return had;
-  const saver = readMangaPrefs().saver;
-  try {
-    return await mangadex.page(chapter, n, saver);
-  } catch (e) {
-    // A library made in this browser a moment ago may not be signed in yet: its first sync does it.
-    if (!(e instanceof ApiError && e.code === 'signed_out')) throw e;
-    await flush();
-    return mangadex.page(chapter, n, saver);
-  }
-}
-
 /** A place's block: its chapter's number and its page in it (books/types.ts MangaBook.anchor). */
 const PER = 1000;
 const keyed = (n: number) => Math.round(n * 100);
@@ -153,13 +138,13 @@ export async function openRemote(rec: BookRecord): Promise<MangaBook> {
     pages: total,
     page: (i) => {
       const c = at(i);
-      return pageOf(c.id, i - c.first);
+      return pageFor(c.id, i - c.first);
     },
     // Its pictures say their size once they're in; asking first would cost a call each.
     size: async () => null,
     toc,
     words: total * WORDS_PER_MANGA_PAGE,
-    remote: { name: 'MangaDex', page: `https://mangadex.org/title/${where.series}`, chapters },
+    remote: { name: 'MangaDex', series: where.series, page: `https://mangadex.org/title/${where.series}`, chapters },
     anchor: (page) => {
       const c = at(page);
       if (c.number === null || c.number > 9999) return 0;
