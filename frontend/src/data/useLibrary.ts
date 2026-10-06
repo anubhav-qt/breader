@@ -562,7 +562,7 @@ async function setKey(key: string) {
  * them over instead of their being replaced (data/sync.ts enterAccount).
  */
 async function joinAccount(claim?: boolean) {
-  if (!view.key && view.records.some((r) => r.source === 'file' || r.source === 'sample')) await setKey(newLibraryKey());
+  if (!view.key && view.records.some((r) => r.source === 'file' || r.source === 'sample' || r.source === 'remote')) await setKey(newLibraryKey());
   return enterAccount(claim);
 }
 

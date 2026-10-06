@@ -77,8 +77,10 @@ export interface BookRecord {
   /**
    * file: stored in this browser. sample: bundled public-domain file. placeholder: preview data only.
    * shelf: a book in someone's shared library this reader hasn't started; starting it makes a copy here.
+   * remote: a series read from a catalogue like MangaDex, through the laptop, by its url.
    */
-  source: 'file' | 'sample' | 'placeholder' | 'shelf';
+  source: 'file' | 'sample' | 'placeholder' | 'shelf' | 'remote';
+  /** A sample's bundled file, or a remote book's series (mangadex:<id>, and :<language> when not English). */
   url?: string;
   shared: boolean;
   /** Taken out of the reader's own books but left in their shared library. */

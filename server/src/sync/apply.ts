@@ -52,7 +52,11 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
   switch (m.type) {
     case 'book.put': {
       const b = m.book;
-      if ((b.source === 'sample') !== !!b.url) throw new ApiError(400, 'bad_book', 'Only bundled samples have a url.');
+      // A sample is its bundled file and a remote book its series in a catalogue: only they have a url.
+      const at = b.source === 'sample' ? '/samples/' : b.source === 'remote' ? 'mangadex:' : null;
+      if (at ? !b.url?.startsWith(at) : !!b.url) throw new ApiError(400, 'bad_book', 'Only bundled samples and remote books have a url.');
+      // A remote book's pages come from its catalogue, never from a stored file.
+      if (b.source === 'remote' && b.fileId) throw new ApiError(400, 'bad_book', 'A remote book has no file.');
       await checkFile(tx, libraryId, b.fileId);
       await checkFile(tx, libraryId, b.coverId);
       await tx

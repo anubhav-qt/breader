@@ -100,7 +100,7 @@ export function syncRoutes(deps: Deps) {
             title: i.title,
             author: i.author,
             format: i.format as PullResponse['books'][number]['format'],
-            source: i.source as 'file' | 'sample',
+            source: i.source as PullResponse['books'][number]['source'],
             ...(i.url ? { url: i.url } : {}),
             shared: i.shared,
             ...(i.sharedOnly ? { sharedOnly: true } : {}),

@@ -165,8 +165,8 @@ export function toWire(r: BookRecord): Book {
     title: clip(r.title, 500),
     author: clip(r.author, 300),
     format: r.format,
-    source: r.source === 'sample' ? 'sample' : 'file',
-    ...(r.source === 'sample' && r.url ? { url: r.url } : {}),
+    source: r.source === 'sample' || r.source === 'remote' ? r.source : 'file',
+    ...((r.source === 'sample' || r.source === 'remote') && r.url ? { url: r.url } : {}),
     shared: r.shared,
     ...(r.sharedOnly ? { sharedOnly: true } : {}),
     addedAt: Math.round(r.addedAt),
@@ -307,7 +307,7 @@ async function queueSnapshotLocked() {
   const { records, reads, edits } = await host!.settleLocked();
   const s = await load();
   const resend = !!s.resend;
-  const mine = records.filter((r) => r.source === 'file' || r.source === 'sample');
+  const mine = records.filter((r) => r.source === 'file' || r.source === 'sample' || r.source === 'remote');
   const ids = new Set(mine.map((r) => r.id));
   // Copies of shared books keep pointing at the sharer's file: there's nothing of theirs to send.
   const muts: NewMutation[] = mine.map((r) => ({ type: 'book.put', book: resend && !r.origin ? { ...toWire(r), fileId: null, coverId: null } : toWire(r) }));

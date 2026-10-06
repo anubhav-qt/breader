@@ -15,8 +15,14 @@ const Millis = z.number().int().nonnegative();
 
 /** CBZ: a manga or comic, its pages as pictures in a zip. */
 export const Format = z.enum(['EPUB', 'PDF', 'TXT', 'MD', 'Text', 'CBZ']);
-/** Placeholders are layout previews and never sync. */
-export const Source = z.enum(['file', 'sample']);
+/** Placeholders are layout previews and never sync. remote: read from a catalogue, by its url. */
+export const Source = z.enum(['file', 'sample', 'remote']);
+
+/**
+ * A remote book's url: a MangaDex series by its id, with the language its chapters are read in
+ * after a colon when it isn't English (mangadex:<id>:pt-br).
+ */
+export const REMOTE_URL = /^mangadex:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[a-z]{2,3}(-[a-z]{2,3})?)?$/;
 
 export const Position = z.object({
   section: z.number().int().nonnegative(),
@@ -34,8 +40,8 @@ export const Book = z.object({
   author: z.string().max(300),
   format: Format,
   source: Source,
-  /** Samples only: the bundled file, e.g. /samples/alice.epub. */
-  url: z.string().regex(/^\/samples\/[\w.-]+$/).optional(),
+  /** Samples: the bundled file, e.g. /samples/alice.epub. Remote books: where they're read (REMOTE_URL). */
+  url: z.union([z.string().regex(/^\/samples\/[\w.-]+$/), z.string().regex(REMOTE_URL)]).optional(),
   shared: z.boolean(),
   /** Taken out of the reader's own books but left on the Shared Library. */
   sharedOnly: z.boolean().optional(),

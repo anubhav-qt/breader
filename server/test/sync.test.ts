@@ -125,6 +125,32 @@ describe('sync', () => {
     expect(r.body.rejected[0].code).toBe('bad_book');
   });
 
+  it('syncs remote books by their series, without a file', async () => {
+    const { b } = await registered();
+    const series = 'mangadex:a1c7c817-4e59-43b7-9365-09675a149a6f';
+    const r = await b.post(
+      '/v1/sync/push',
+      push(
+        'c',
+        { type: 'book.put', book: book({ id: 'md-frieren', format: 'CBZ', source: 'remote', url: series }) },
+        { type: 'book.put', book: book({ id: 'md-pt', format: 'CBZ', source: 'remote', url: `${series}:pt-br` }) },
+        { type: 'book.put', book: book({ source: 'remote' }) },
+        { type: 'book.put', book: book({ source: 'remote', url: '/samples/alice.epub' }) },
+        { type: 'book.put', book: book({ url: series }) },
+        { type: 'book.put', book: book({ source: 'remote', url: series, fileId: 'f1' }) },
+      ),
+    );
+    expect(r.body.rejected.map((x: { code: string }) => x.code)).toEqual(['bad_book', 'bad_book', 'bad_book', 'bad_book']);
+    const books = (await b.get('/v1/sync/pull?since=0')).body.books;
+    expect(books.map((x: { id: string; source: string; url: string }) => [x.id, x.source, x.url]).sort()).toEqual([
+      ['md-frieren', 'remote', series],
+      ['md-pt', 'remote', `${series}:pt-br`],
+    ]);
+    // Anything else after the colon isn't a language.
+    const odd = await b.post('/v1/sync/push', push('c2', { type: 'book.put', book: book({ source: 'remote', url: `${series}:../x` }) }));
+    expect(odd.status).toBe(400);
+  });
+
   it('keeps libraries apart, even for the same sample ids', async () => {
     const one = await registered();
     const two = await registered();
