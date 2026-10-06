@@ -20,3 +20,10 @@
 - [ ] Reproduce phone browsers properly, then tune voices and Immersive against them. So far both were tuned in code and a desktop browser only.
   - A real iPhone 13 with 1 to 2 GB free: Safari's memory ceiling for the voice worker, and what Cache Storage keeps when space is short.
   - Tapping a sentence to light it, the pace setter on the bottom line, and pages turning under the light.
+
+## Manga, to decide after testing
+- [ ] The reader: the scrolled column's width on desktop (860px), space above and below pages on phones, a setting to offset spreads by a page, and reading direction per series rather than for all.
+- [ ] The shelf: a series card shows its number, not its cover; files named like "c001" read as volume 1.
+- [ ] MangaDex: picking a chapter's group by hand; whether a series for adults in My manga hides while 18+ is off; covers on another device need the laptop on.
+- [ ] Your own servers: how many chapters a Suwayomi series opens at a time (now the one before and seven after); its UI login (only no login or a basic one now); reading an OPDS book page by page (its page streaming) before or instead of downloading it; the catalog on the Books shelf too.
+- [ ] Limits: a key library's 100 MB a file, and the header wrapping on the narrowest phones (320px).
