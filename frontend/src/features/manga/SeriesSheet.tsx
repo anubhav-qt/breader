@@ -36,7 +36,10 @@ const dateText = (at: number) => (at ? new Date(at).toLocaleDateString(undefined
 export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props) {
   const [series, setSeries] = useState<Load<MangaSeries>>({ state: 'loading' });
   const [more, setMore] = useState(false);
-  const langs = byLang(card.langs.length ? card.langs : ['en'], prefs.lang);
+  const s = series.state === 'ready' ? series.value : null;
+  // Opened from My manga, the card knows little until the series comes.
+  const shown: MangaCard = s ?? card;
+  const langs = byLang(shown.langs.length ? shown.langs : ['en'], prefs.lang);
   // English unless it's being looked for in another language; the one it's read in, once it's in My manga.
   const [lang, setLang] = useState(() => {
     const kept = had && remoteOf(had.url)?.lang;
@@ -68,7 +71,6 @@ export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props)
 
   const picked = useMemo(() => (list.state === 'ready' ? pickChapters(list.value) : []), [list]);
   const { chapters, total } = useMemo(() => laidOut(picked), [picked]);
-  const s = series.state === 'ready' ? series.value : null;
   const people = s ? [...new Set([...s.authors, ...s.artists])] : card.authors;
   const official = s?.links.filter((l) => l.kind === 'official') ?? [];
   const elsewhere = s?.links.filter((l) => l.kind !== 'official') ?? [];
@@ -82,19 +84,19 @@ export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props)
     <Modal title={card.title} onClose={onClose} width={860} className="mds">
       <div className="mds-top">
         <div className="mds-cover" ref={coverRef}>
-          {card.cover ? <img src={mangadex.coverUrl(card.id, card.cover, 512)} alt="" draggable={false} /> : <span className="mdx-nocover">{card.title}</span>}
+          {shown.cover ? <img src={mangadex.coverUrl(card.id, shown.cover, 512)} alt="" draggable={false} /> : <span className="mdx-nocover">{card.title}</span>}
         </div>
         <div className="mds-info">
           {alt && <p className="mds-alt">{alt}</p>}
           {people.length > 0 && <p className="mds-by">{people.join(', ')}</p>}
           <p className="mds-meta">
-            {[card.year, card.status ? STATUS_NAME[card.status] : null, s?.demographic ? s.demographic[0].toUpperCase() + s.demographic.slice(1) : null, `From ${langName(card.original)}`]
+            {[shown.year, shown.status ? STATUS_NAME[shown.status] : null, s?.demographic ? s.demographic[0].toUpperCase() + s.demographic.slice(1) : null, s ? `From ${langName(s.original)}` : null]
               .filter(Boolean)
               .join(' · ')}
           </p>
-          {(card.rating !== 'safe' || (s?.tags.length ?? 0) > 0) && (
+          {(shown.rating !== 'safe' || (s?.tags.length ?? 0) > 0) && (
             <div className="mds-tags">
-              {card.rating !== 'safe' && <span className="chip is-rating">{RATING_NAME[card.rating]}</span>}
+              {shown.rating !== 'safe' && <span className="chip is-rating">{RATING_NAME[shown.rating]}</span>}
               {s?.tags.filter((t) => t.group === 'genre' || t.group === 'theme').slice(0, 14).map((t) => <span key={t.name} className="chip">{t.name}</span>)}
             </div>
           )}

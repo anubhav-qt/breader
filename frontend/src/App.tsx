@@ -404,6 +404,12 @@ export default function App() {
     });
   }, [remoteSeries, lib, addSeries, startLoad, finishOpen]);
 
+  /** A MangaDex series in My manga: its sheet, from what the card knows until the rest comes. */
+  const chaptersOf = useCallback((b: ShelfItem) => {
+    const w = remoteOf(b.url);
+    if (w) setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [] });
+  }, []);
+
   const addSeriesOnly = useCallback(async (s: MangaSeries, lang: string) => {
     if (remoteSeries.has(s.id)) return;
     const rec = await addSeries(s, lang);
@@ -751,6 +757,7 @@ export default function App() {
               onFinish={t === 'mine' ? (b, finished) => lib.setFinished(b.id, finished, b) : undefined}
               onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
               onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
+              onChapters={chaptersOf}
               empty={t === 'shelf' ? emptyShelf : manga ? emptyManga : undefined}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {

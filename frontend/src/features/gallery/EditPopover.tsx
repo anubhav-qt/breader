@@ -6,7 +6,7 @@ import type { BookEdit } from '../../books/types';
 import { BOOK_COLORS, colorVars } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
-import { IconCheck, IconClose, IconStar, IconTrash } from '../../components/icons';
+import { IconCheck, IconClose, IconList, IconStar, IconTrash } from '../../components/icons';
 import { seriesKey, spellSeries, type SeriesName } from './series';
 import { SeriesField, type SeriesValue } from './SeriesField';
 import { genreIds, joinGenres } from '@breader/shared/genres';
@@ -27,6 +27,8 @@ interface Props {
   onShare?: (shared: boolean) => void;
   /** Marks it read to the end, or takes that back. Absent for a shared book not started. */
   onFinish?: (finished: boolean) => void;
+  /** A series from MangaDex: its chapters, who made them, and the language they're read in. */
+  onChapters?: () => void;
   onClose: () => void;
 }
 
@@ -50,7 +52,7 @@ function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
  * A small popover beside the card's corner button: rename, put in a series, file under a genre,
  * recolour, share, let an AI read along, mark finished, favourite or remove.
  */
-export function EditPopover({ book, seriesNames, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onClose }: Props) {
+export function EditPopover({ book, seriesNames, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onChapters, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(book.title);
   const numText = book.seriesIndex !== undefined ? String(book.seriesIndex) : '';
@@ -245,6 +247,12 @@ export function EditPopover({ book, seriesNames, anchor, others = [], onChange, 
         </>
       )}
       <div className="ep-actions">
+        {onChapters && (
+          <button type="button" className="ep-act" title="Its chapters, and the language they’re read in" onClick={onChapters}>
+            <IconList />
+            Chapters
+          </button>
+        )}
         {onFinish && (
           <button
             type="button"

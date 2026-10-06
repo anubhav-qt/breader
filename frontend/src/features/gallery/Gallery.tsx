@@ -41,6 +41,8 @@ interface Props {
   onKeep?: (book: ShelfItem) => void;
   /** Someone's shared library: puts these books of a series in the reader's own at once. */
   onKeepAll?: (books: ShelfItem[], series: string) => void;
+  /** A series from MangaDex: its sheet, for its chapters and their language. */
+  onChapters?: (book: ShelfItem) => void;
   /** What an empty library says, in place of its Add button. */
   empty?: ReactNode;
 }
@@ -52,7 +54,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, empty }: Props) {
+export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -145,6 +147,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
             // A shared book not started has no reading of the reader's own to finish.
             onFinish={onFinish && editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
+            onChapters={onChapters && editingBook.source === 'remote' ? () => { setEditing(null); onChapters(editingBook); } : undefined}
             onClose={closeEdit}
           />
         )}
