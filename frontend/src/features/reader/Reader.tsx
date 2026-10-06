@@ -354,7 +354,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   }, [marker, onSave, book.words]);
   const awayToast = useMemo<ToastMessage | null>(() => {
     if (!away) return null;
-    const i = chapterAt(chapters, { section: away.pos.section });
+    // A series from a catalogue keeps its places by chapter: its pages can move between openings.
+    const i = chapterAt(chapters, { section: book.kind === 'manga' && book.locate ? book.locate(away.pos) : away.pos.section });
     const where = chapters.length > 1 ? `in ${chapterName(chapters, i)}` : book.kind !== 'flow' ? `on page ${away.pos.section + 1}` : 'further back';
     return {
       id: 1,
@@ -363,7 +364,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       action: { label: 'Go back', run: goBack },
       also: { label: 'Stay here', run: stayHere, title: 'Count the book as read up to here' },
     };
-  }, [away, chapters, book.kind, goBack, stayHere]);
+  }, [away, chapters, book, goBack, stayHere]);
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
   const layout = book.kind === 'pdf' ? settings.pdfLayout : book.kind === 'manga' ? settings.mangaLayout : settings[settings.style].layout;

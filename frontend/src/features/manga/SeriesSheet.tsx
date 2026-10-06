@@ -42,7 +42,8 @@ export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props)
   const langs = byLang(shown.langs.length ? shown.langs : ['en'], prefs.lang);
   // English unless it's being looked for in another language; the one it's read in, once it's in My manga.
   const [lang, setLang] = useState(() => {
-    const kept = had && remoteOf(had.url)?.lang;
+    const w = had && remoteOf(had.url);
+    const kept = w && w.kind === 'mangadex' ? w.lang : undefined;
     if (kept) return kept;
     if (prefs.lang && langs.includes(prefs.lang)) return prefs.lang;
     return langs.includes('en') ? 'en' : langs[0];
@@ -78,7 +79,8 @@ export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props)
   const canRead = !!s && total > 0;
   const rect = () => coverRef.current?.getBoundingClientRect();
   // Read in another language than the one kept, it carries on in that one.
-  const sameLang = !had || remoteOf(had.url)?.lang === lang;
+  const keptIn = had && remoteOf(had.url);
+  const sameLang = !had || (keptIn?.kind === 'mangadex' && keptIn.lang === lang);
 
   return createPortal(
     <Modal title={card.title} onClose={onClose} width={860} className="mds">

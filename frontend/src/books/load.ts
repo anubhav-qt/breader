@@ -2,7 +2,7 @@ import { downloadFile } from '../data/sync';
 import { store } from '../lib/store';
 import { countWords } from '../lib/format';
 import { escapeHtml } from './sanitize';
-import type { BookRecord, FlowBook, Format, LoadedBook } from './types';
+import type { BookRecord, FlowBook, Format, LoadedBook, Position } from './types';
 
 export const ACCEPT =
   '.epub,.pdf,.txt,.md,.markdown,.cbz,.zip,application/epub+zip,application/pdf,text/plain,text/markdown,application/vnd.comicbook+zip,application/zip';
@@ -75,21 +75,24 @@ const cache = new Map<string, LoadedBook>();
 /** Books still opening: asked again meanwhile, it's the same book, with its pictures at the same URLs. */
 const opening = new Map<string, Promise<LoadedBook>>();
 
-export async function loadRecord(rec: BookRecord): Promise<LoadedBook> {
+/** A book to read, opened. `at` is the place it opens at, for a series opened a few chapters at a time. */
+export async function loadRecord(rec: BookRecord, at?: Position): Promise<LoadedBook> {
   const hit = cache.get(rec.id) ?? opening.get(rec.id);
   if (hit) return hit;
-  const going = openRecord(rec).finally(() => opening.delete(rec.id));
+  const going = openRecord(rec, at).finally(() => opening.delete(rec.id));
   opening.set(rec.id, going);
   return going;
 }
 
-async function openRecord(rec: BookRecord): Promise<LoadedBook> {
+async function openRecord(rec: BookRecord, at?: Position): Promise<LoadedBook> {
   let book: LoadedBook;
   if (rec.source === 'placeholder') {
     book = placeholderBook(rec);
   } else if (rec.source === 'remote') {
-    // A series from MangaDex: its chapters as they are now, its pages as they're read.
-    book = await (await import('./remote')).openRemote(rec);
+    // A series from a catalogue: its chapters as they are now, its pages as they're read. One from
+    // the reader's own server opens around its place, so it isn't kept to open again elsewhere.
+    book = await (await import('./remote')).openRemote(rec, at);
+    if (rec.url?.startsWith('suwayomi:')) return book;
   } else if (rec.source === 'sample' && rec.url) {
     const res = await fetch(rec.url);
     if (!res.ok) throw new Error(`Couldn't load ${rec.url}`);

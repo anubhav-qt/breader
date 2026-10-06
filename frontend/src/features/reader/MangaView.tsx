@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
-import type { MangaBook, RemoteChapter } from '../../books/types';
+import type { MangaBook, Position, RemoteChapter } from '../../books/types';
 import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
 import type { Layout, MangaDir } from './settings';
@@ -43,6 +43,9 @@ const BATCH = 24;
 const SPARE = 6;
 /** Scrolled: the line before each chapter of a series read from MangaDex. */
 const BAND = 56;
+
+/** A series opened a few chapters at a time opens again at a chapter outside them (App.tsx). */
+const reopen = (pos: Position) => window.dispatchEvent(new CustomEvent('breader:reopen', { detail: { pos } }));
 
 /** The space beside the pages: on a phone, the screen is better spent on the page (and the lines of controls cover it). */
 const sideOf = (w: number) => (w < 640 ? 16 : 48);
@@ -207,7 +210,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   /** A series' chapters by the page each starts on; those read on their publisher's site too, and at the end, past the last page. */
   const bands = useMemo(() => {
     const m = new Map<number, RemoteChapter[]>();
-    for (const c of book.remote?.chapters ?? []) m.set(c.first, [...(m.get(c.first) ?? []), c]);
+    for (const c of book.remote?.chapters ?? []) if (!c.away) m.set(c.first, [...(m.get(c.first) ?? []), c]);
     return m;
   }, [book]);
   const starts = useMemo(() => new Set(book.remote?.chapters.filter((c) => c.pages > 0).map((c) => c.first) ?? []), [book]);
@@ -229,18 +232,21 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   // Scrolled: a column of pages at its width, each at its own height.
   const colW = Math.min(COLUMN, areaW);
   const gap = strip ? 0 : GAP;
+  // Opened a few chapters at a time, the way to the chapters before and after these.
+  const prev = book.remote?.prev;
+  const next = book.remote?.next;
   const { tops, heights, height } = useMemo(() => {
     const tops: number[] = [];
     const heights: number[] = [];
-    let y = HEAD;
+    let y = HEAD + (prev ? BAND : 0);
     for (let i = 0; i < total; i++) {
       y += (bands.get(i)?.length ?? 0) * BAND;
       tops.push(y);
       heights.push(Math.max(1, Math.round(colW * ratio(i))));
       y += heights[i] + gap;
     }
-    return { tops, heights, height: y - gap + (bands.get(total)?.length ?? 0) * BAND + TAIL };
-  }, [ratio, total, colW, gap, bands]);
+    return { tops, heights, height: y - gap + ((bands.get(total)?.length ?? 0) + (next ? 1 : 0)) * BAND + TAIL };
+  }, [ratio, total, colW, gap, bands, prev, next]);
 
   // The width the controls line up with: steady from page to page.
   const pageW = layout === 'pages' ? Math.min(areaW, ((two ? 2 : 1) * areaH) / typical) : colW;
@@ -305,16 +311,18 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const last = shown[shown.length - 1];
     const end = layout === 'pages' ? last >= total - 1 : at.end;
     const exact = layout === 'scroll' ? at.page + at.frac : first;
-    const next = book.toc.find((t) => t.section > first)?.section ?? total;
+    // Of a series opened a few chapters at a time, how far through all of it.
+    const progress = book.progressOf ? book.progressOf(exact, end) : end ? 1 : exact / total;
+    const nextAt = book.toc.find((t) => t.section > first && !t.reopen)?.section ?? total;
     // A series' place goes by its chapter: page 5 of the series means little.
     const ch = book.remote?.chapters.filter((c) => c.pages > 0 && c.first <= first).pop();
     onLocationRef.current({
       section: first,
       block: book.anchor?.(first) ?? 0,
       offset: layout === 'scroll' ? Math.round(at.frac * 1000) : 0,
-      progress: end ? 1 : exact / total,
-      sectionWordsLeft: Math.round(Math.max(1, next - exact) * per),
-      bookWordsLeft: end ? 0 : Math.round((total - (layout === 'pages' ? last + 1 : exact)) * per),
+      progress,
+      sectionWordsLeft: Math.round(Math.max(1, nextAt - exact) * per),
+      bookWordsLeft: book.progressOf ? Math.round((1 - progress) * book.words) : end ? 0 : Math.round((total - (layout === 'pages' ? last + 1 : exact)) * per),
       line: ch ? `${ch.label}, page ${first - ch.first + 1} of ${ch.pages}` : `Page ${first + 1} of ${total}`,
       page: first,
       pages: total,
@@ -436,6 +444,12 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
               </div>
             )}
           </div>
+          {next && spread[spread.length - 1] >= total - 1 && (
+            <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>Carry on to {next.label} ›</button>
+          )}
+          {prev && spread[0] === 0 && !(next && spread[spread.length - 1] >= total - 1) && (
+            <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>‹ Back to {prev.label}</button>
+          )}
           {/* Right to left, the left side goes on. */}
           <button type="button" tabIndex={-1} className="fv-zone is-prev" aria-label={rtl ? 'Next page' : 'Previous page'} onClick={() => turn(rtl ? 1 : -1)}><span>‹</span></button>
           <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label={rtl ? 'Previous page' : 'Next page'} onClick={() => turn(rtl ? -1 : 1)}><span>›</span></button>
@@ -448,6 +462,16 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
             ))}
             {colW > 0 && bands.size > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).flatMap((i) => bandsAt(i, tops[i]))}
             {colW > 0 && shownTo === total - 1 && bandsAt(total, tops[total - 1] + heights[total - 1] + (bands.get(total)?.length ?? 0) * BAND)}
+            {colW > 0 && prev && shownFrom === 0 && (
+              <div className="mg-band is-more" style={{ top: tops[0] - (bands.get(0)?.length ?? 0) * BAND - BAND, height: BAND }}>
+                <button type="button" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>‹ Back to {prev.label}</button>
+              </div>
+            )}
+            {colW > 0 && next && shownTo === total - 1 && (
+              <div className="mg-band is-more" style={{ top: tops[total - 1] + heights[total - 1] + (bands.get(total)?.length ?? 0) * BAND, height: BAND }}>
+                <button type="button" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>Carry on to {next.label} ›</button>
+              </div>
+            )}
           </div>
         </div>
       )}

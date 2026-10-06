@@ -51,7 +51,7 @@
 }
 .p-item:hover { background: var(--r-fill); }
 .p-item.is-link { color: inherit; text-decoration: none; }
-.p-item.is-link .p-item-t { color: var(--r-mu); }
+.p-item.is-link .p-item-t, .p-item.is-away .p-item-t { color: var(--r-mu); }
 .p-item-t { font-family: var(--read); font-size: 22px; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .p-item-s { flex: none; font: var(--ui-w) 11.5px/1 var(--ui); color: var(--r-mu); display: flex; }
 .p-item-s svg { width: 15px; height: 15px; color: var(--r-acc); }
@@ -280,3 +280,7 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-band span, .mg-band a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mg-band a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .mg-band a:hover { color: var(--r-fg); }
+/* A series opened a few chapters at a time: on to the ones beyond. */
+.mg-band.is-more button, .mg-more { height: 36px; padding: 0 16px; border-radius: 10px; background: var(--r-fill); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
+.mg-band.is-more button:hover, .mg-more:hover { background: var(--r-line); }
+.mg-more { position: absolute; left: 50%; bottom: 88px; z-index: 3; transform: translateX(-50%); box-shadow: 0 0 0 1px var(--r-line); }

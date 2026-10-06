@@ -36,7 +36,7 @@ export function Header({ category, onCategory, tab, counts, mangadex, shelfName,
   const manga = category === 'manga';
   // MangaDex sits between the reader's own and the shared library, whose list opens beside it.
   const TABS: Tab[] = manga && mangadex ? ['mine', 'mangadex', 'shelf'] : ['mine', 'shelf'];
-  const label = (t: Tab) => (t === 'mine' ? (manga ? 'My manga' : 'My books') : t === 'mangadex' ? 'MangaDex' : shelfName);
+  const label = (t: Tab) => (t === 'mine' ? (manga ? 'My manga' : 'My books') : t === 'mangadex' ? 'Browse' : shelfName);
 
   useEffect(() => {
     if (!menu) return;

@@ -16,7 +16,7 @@ export function chaptersOf(book: LoadedBook): Chapter[] {
   if (book.kind !== 'flow') {
     const perPage = book.words / Math.max(1, book.pages);
     // A chapter read on its publisher's site has no pages here, so no stretch of the book.
-    const tops = book.toc.filter((t) => t.level === 0 && !t.link && t.section < book.pages).sort((a, b) => a.section - b.section);
+    const tops = book.toc.filter((t) => t.level === 0 && !t.link && !t.reopen && t.section < book.pages).sort((a, b) => a.section - b.section);
     const items = tops.length ? tops : [{ title: book.title, section: 0 }];
     return items.map((t, i) => {
       const from = i === 0 ? 0 : t.section;

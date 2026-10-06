@@ -2,24 +2,34 @@ import type { MangaChapter } from '@breader/shared/manga';
 import { ApiError, OfflineError } from '../lib/api';
 import { mangadex } from '../lib/mangadex';
 import { store } from '../lib/store';
-import { pageFor } from './kept';
+import { ServerError, suwayomi } from '../lib/suwayomi';
+import { keptNote, keptPage, pageFor } from './kept';
 import { WORDS_PER_MANGA_PAGE } from './manga';
 import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './types';
 
 /*
- * A manga read from MangaDex: the whole series as one book, its chapters one after another in a
- * language, so it scrolls on from chapter to chapter like a webtoon app. Each chapter's pages come
- * through the laptop as they're read, or from this browser for chapters kept offline. Places are
- * kept by chapter number, so they stay put as chapters are added, uploads change, or the language
- * does.
+ * A manga read from a catalogue, its chapters one after another in one book, so it scrolls on from
+ * chapter to chapter like a webtoon app. From MangaDex, that's the whole series in a language, each
+ * chapter's pages coming through the laptop as they're read. From the reader's own Suwayomi server,
+ * which only learns a chapter's pages by asking its source, it's a few chapters around the place,
+ * the rest a tap away. Either way, chapters kept offline come from this browser, and places are kept
+ * by chapter number, so they stay put as chapters are added, uploads change, or the language does.
  */
 
-/** A remote book's series and the language its chapters are read in, from its url. */
-export function remoteOf(url: string | undefined): { series: string; lang: string } | null {
-  const m = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?$/.exec(url ?? '');
-  return m ? { series: m[1], lang: m[2] ?? 'en' } : null;
+export type Remote =
+  | { kind: 'mangadex'; series: string; lang: string; key: string }
+  | { kind: 'suwayomi'; id: number; key: string };
+
+/** Where a remote book is read from, by its url. `key` names it for what's kept offline. */
+export function remoteOf(url: string | undefined): Remote | null {
+  const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?$/.exec(url ?? '');
+  if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', key: md[1] };
+  const sw = /^suwayomi:([1-9]\d{0,9})$/.exec(url ?? '');
+  if (sw) return { kind: 'suwayomi', id: Number(sw[1]), key: `sw:${sw[1]}` };
+  return null;
 }
 export const remoteUrl = (series: string, lang: string) => (lang === 'en' ? `mangadex:${series}` : `mangadex:${series}:${lang}`);
+export const serverUrl = (id: number) => `suwayomi:${id}`;
 
 /** Its number: 12, 12.5; null for a oneshot or an extra. */
 export function numberOf(c: { chapter: string | null }): number | null {
@@ -45,7 +55,7 @@ export function pickChapters(all: MangaChapter[]): MangaChapter[] {
   }
   const weight = (c: MangaChapter) => Math.max(0, ...c.groups.map((g) => made.get(g.id)?.size ?? 0));
   const better = (a: MangaChapter, b: MangaChapter) =>
-    Number(a.pages > 0) - Number(b.pages > 0) || weight(a) - weight(b) || a.at - b.at;
+    Number(!a.external) - Number(!b.external) || weight(a) - weight(b) || a.at - b.at;
   const best = new Map<string, MangaChapter>();
   for (const c of all) {
     const k = keyOf(c);
@@ -68,16 +78,16 @@ export const labelOf = (c: { chapter: string | null; title: string | null }, onl
 /** Who made a chapter, for its credit. */
 export const madeBy = (c: { groups: Array<{ name: string }> }) => (c.groups.length ? c.groups.map((g) => g.name).join(' & ') : 'No group credited');
 
-/** The chapters in a language, or as they were last time when there's no reaching them. */
-async function chaptersIn(series: string, lang: string): Promise<MangaChapter[]> {
-  const kept = `mdlist:${series}:${lang}`;
+/** A list as it came, or as it was last time when there's no reaching where it comes from. */
+async function kept<T>(key: string, get: () => Promise<T>): Promise<T> {
   try {
-    const { chapters } = await mangadex.chapters(series, lang);
-    void store.set(kept, chapters);
-    return chapters;
+    const v = await get();
+    void store.set(key, v);
+    return v;
   } catch (e) {
-    const had = await store.get<MangaChapter[]>(kept);
-    if (had && (e instanceof OfflineError || (e instanceof ApiError && e.status >= 500))) return had;
+    const had = await store.get<T>(key);
+    const away = e instanceof OfflineError || (e instanceof ApiError && e.status >= 500) || (e instanceof ServerError && e.code === 'unreachable');
+    if (had !== undefined && away) return had;
     throw e;
   }
 }
@@ -85,6 +95,7 @@ async function chaptersIn(series: string, lang: string): Promise<MangaChapter[]>
 /** A place's block: its chapter's number and its page in it (books/types.ts MangaBook.anchor). */
 const PER = 1000;
 const keyed = (n: number) => Math.round(n * 100);
+const blockOf = (c: Pick<RemoteChapter, 'number'>, page = 0) => (c.number !== null && c.number <= 9999 ? (keyed(c.number) + 1) * PER + Math.min(PER - 1, page) : 0);
 
 /** The chapters picked, one after another: where each starts in the book, and the pages in all. */
 export function laidOut(picked: MangaChapter[]): { chapters: RemoteChapter[]; total: number } {
@@ -98,21 +109,18 @@ export function laidOut(picked: MangaChapter[]): { chapters: RemoteChapter[]; to
 }
 
 /** The start of a chapter, as a place the book finds again whatever's changed before it. */
-export const startOf = (c: Pick<RemoteChapter, 'number' | 'first'>): Position => ({
-  section: c.first,
-  block: c.number !== null && c.number <= 9999 ? (keyed(c.number) + 1) * PER : 0,
-  offset: 0,
-});
+export const startOf = (c: Pick<RemoteChapter, 'number' | 'first'>): Position => ({ section: Math.max(0, c.first), block: blockOf(c), offset: 0 });
 
-export async function openRemote(rec: BookRecord): Promise<MangaBook> {
-  const where = remoteOf(rec.url);
-  if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
-  const { chapters, total } = laidOut(pickChapters(await chaptersIn(where.series, where.lang)));
-  if (!total) {
-    throw new Error(chapters.length
-      ? 'Every chapter of this manga in this language is read on its publisher’s own site. The links are in its chapter list.'
-      : 'MangaDex has no chapters of this manga in this language yet.');
-  }
+/** The chapter a place names, by its number: or, gone, the next one after it. */
+function chapterAt<T extends Pick<RemoteChapter, 'number'>>(chapters: T[], pos: Position): T | undefined {
+  if (pos.block < PER) return undefined;
+  const key = Math.floor(pos.block / PER) - 1;
+  return chapters.find((x) => x.number !== null && keyed(x.number) === key) ?? chapters.find((x) => x.number !== null && keyed(x.number) > key);
+}
+
+/** The book over chapters laid out: the pages of those with any, and its places by chapter. */
+function bookOf(rec: BookRecord, remote: NonNullable<MangaBook['remote']>, total: number, page: (c: RemoteChapter, n: number) => Promise<Blob>): MangaBook {
+  const { chapters } = remote;
   const hosted = chapters.filter((c) => c.pages > 0);
   /** The chapter page i is in. */
   const at = (i: number) => {
@@ -127,9 +135,9 @@ export async function openRemote(rec: BookRecord): Promise<MangaBook> {
   };
   const toc: TocItem[] = chapters.map((c) => ({
     title: c.number !== null && c.title ? `${c.label} · ${c.title}` : c.label,
-    section: Math.min(total - 1, c.first),
+    section: c.away ? 0 : Math.min(total - 1, c.first),
     level: 0,
-    ...(c.external ? { link: c.external } : {}),
+    ...(c.external ? { link: c.external } : c.away ? { reopen: startOf(c) } : {}),
   }));
   return {
     kind: 'manga',
@@ -138,28 +146,126 @@ export async function openRemote(rec: BookRecord): Promise<MangaBook> {
     pages: total,
     page: (i) => {
       const c = at(i);
-      return pageFor(c.id, i - c.first);
+      return page(c, i - c.first);
     },
     // Its pictures say their size once they're in; asking first would cost a call each.
     size: async () => null,
     toc,
     words: total * WORDS_PER_MANGA_PAGE,
-    remote: { name: 'MangaDex', series: where.series, page: `https://mangadex.org/title/${where.series}`, chapters },
-    anchor: (page) => {
-      const c = at(page);
-      if (c.number === null || c.number > 9999) return 0;
-      return (keyed(c.number) + 1) * PER + Math.min(PER - 1, page - c.first);
+    remote,
+    anchor: (p) => {
+      const c = at(p);
+      return blockOf(c, p - c.first);
     },
     locate: (pos: Position) => {
-      if (pos.block >= PER) {
-        const key = Math.floor(pos.block / PER) - 1;
-        const c = hosted.find((x) => x.number !== null && keyed(x.number) === key);
-        if (c) return c.first + Math.min(pos.block % PER, c.pages - 1);
-        // That chapter isn't here (not in this language, or taken down): the next one that is.
-        const next = hosted.find((x) => x.number !== null && keyed(x.number) > key);
-        if (next) return next.first;
-      }
+      const c = chapterAt(hosted, pos);
+      // In the chapter the place names, at its page; past it (that one's gone), at the start of the next.
+      if (c) return c.first + (keyed(c.number!) === Math.floor(pos.block / PER) - 1 ? Math.min(pos.block % PER, c.pages - 1) : 0);
       return Math.max(0, Math.min(total - 1, pos.section));
     },
   };
+}
+
+async function openMangaDex(rec: BookRecord, series: string, lang: string): Promise<MangaBook> {
+  const { chapters, total } = laidOut(pickChapters(await kept(`mdlist:${series}:${lang}`, async () => (await mangadex.chapters(series, lang)).chapters)));
+  if (!total) {
+    throw new Error(chapters.length
+      ? 'Every chapter of this manga in this language is read on its publisher’s own site. The links are in its chapter list.'
+      : 'MangaDex has no chapters of this manga in this language yet.');
+  }
+  return bookOf(rec, { name: 'MangaDex', series, page: `https://mangadex.org/title/${series}`, chapters }, total, (c, n) => pageFor(c.id, n));
+}
+
+/** Chapters opened at a time from the reader's own server: the one before the place, and these after it. */
+const BEFORE = 1;
+const AFTER = 7;
+
+/** Each of these, at most `n` at a time. */
+async function each<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  }));
+  return out;
+}
+
+async function openServer(rec: BookRecord, id: number, key: string, at?: Position): Promise<MangaBook> {
+  const picked = pickChapters(await kept(`swlist:${id}`, () => suwayomi.chapters(id)));
+  if (!picked.length) throw new Error('Your server has no chapters of this series yet.');
+  const all = picked.map((c) => ({ ...c, number: numberOf(c) }));
+  const here = at ? chapterAt(all, at) : undefined;
+  const start = here ? all.indexOf(here) : 0;
+  const from = Math.max(0, start - BEFORE);
+  const to = Math.min(all.length, start + 1 + AFTER);
+  const note = await keptNote(key);
+  // A chapter's pages: the server asks its source for them, unless they're kept here already.
+  const lists = await each(all.slice(from, to), 4, async (c) => {
+    const k = note[c.id];
+    if (k?.done) return { urls: undefined, pages: k.pages };
+    try {
+      const urls = await suwayomi.pages(c.id);
+      return { urls, pages: urls.length };
+    } catch {
+      return { urls: undefined, pages: 0 };
+    }
+  });
+  const chapters: RemoteChapter[] = [];
+  let total = 0;
+  all.forEach((c, i) => {
+    const got = i >= from && i < to ? lists[i - from] : null;
+    const pages = got?.pages ?? 0;
+    chapters.push({
+      id: c.id,
+      label: labelOf(c, all.length === 1),
+      title: c.title,
+      number: c.number,
+      first: got ? total : -1,
+      pages,
+      external: null,
+      groups: c.groups,
+      ...(got?.urls ? { urls: got.urls } : {}),
+      ...(got ? {} : { away: true }),
+    });
+    total += pages;
+  });
+  if (!total) throw new Error('Your server couldn’t bring these chapters’ pages. It may be off, or its source may be down.');
+  const shown = chapters.filter((c) => c.pages > 0);
+  const before = chapters[from - 1];
+  const after = chapters[to];
+  const remote: NonNullable<MangaBook['remote']> = {
+    name: 'your server',
+    series: key,
+    page: suwayomi.webUrl(id),
+    chapters,
+    ...(before ? { prev: { label: before.label, at: startOf(before) } } : {}),
+    ...(after ? { next: { label: after.label, at: startOf(after) } } : {}),
+  };
+  const book = bookOf(rec, remote, total, async (c, n) => {
+    const had = await keptPage(c.id, n);
+    if (had) return had;
+    if (!c.urls?.[n]) throw new Error(`No page ${n + 1}`);
+    return suwayomi.picture(c.urls[n]);
+  });
+  // Progress and time left go by the whole series, of which only these chapters are open.
+  const perChapter = total / Math.max(1, shown.length);
+  return {
+    ...book,
+    words: Math.round(all.length * perChapter * WORDS_PER_MANGA_PAGE),
+    progressOf: (exact, end) => {
+      if (end && !after) return 1;
+      const c = shown.filter((x) => x.first <= exact).pop() ?? shown[0];
+      const i = chapters.indexOf(c);
+      return Math.min(0.9999, (i + Math.max(0, Math.min(1, (exact - c.first) / c.pages))) / chapters.length);
+    },
+  };
+}
+
+export async function openRemote(rec: BookRecord, at?: Position): Promise<MangaBook> {
+  const where = remoteOf(rec.url);
+  if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
+  return where.kind === 'mangadex' ? openMangaDex(rec, where.series, where.lang) : openServer(rec, where.id, where.key, at);
 }

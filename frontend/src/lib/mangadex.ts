@@ -54,16 +54,22 @@ export const mangadex = {
   },
 };
 
-/** How this device looks through MangaDex: its language, whether 18+ series show, data saver. */
+/**
+ * How this device looks for manga: where (MangaDex, or a source on the reader's own server, sw:<id>),
+ * in what language and order, whether 18+ series show, and data saver.
+ */
 export interface MangaPrefs {
+  source: string;
   lang: string;
   adult: boolean;
   sort: MangaSort;
+  /** A source on the reader's server: its popular series, or its latest. */
+  serverSort: 'POPULAR' | 'LATEST';
   saver: boolean;
 }
 
 const PREFS = 'breader.mangadex.v1';
-const DEFAULTS: MangaPrefs = { lang: 'en', adult: false, sort: 'popular', saver: false };
+const DEFAULTS: MangaPrefs = { source: 'mangadex', lang: 'en', adult: false, sort: 'popular', serverSort: 'POPULAR', saver: false };
 
 export const readMangaPrefs = (): MangaPrefs => ({ ...DEFAULTS, ...readLocal<Partial<MangaPrefs>>(PREFS, {}) });
 export const writeMangaPrefs = (p: MangaPrefs) => writeLocal(PREFS, p);

@@ -58,7 +58,7 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
       : [];
   const section = loc?.section ?? 0;
   let current = -1;
-  items.forEach((it, i) => { if (it.section <= section && !it.link) current = i; });
+  items.forEach((it, i) => { if (it.section <= section && !it.link && !it.reopen) current = i; });
   const remote = book.kind === 'manga' ? book.remote : undefined;
   const offline = useKept(remote?.series);
 
@@ -83,7 +83,11 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
       {book.author && <div className="p-auth">{book.author}</div>}
       {remote && (
         <>
-          <a className="p-from" href={remote.page} target="_blank" rel="noopener noreferrer">From {remote.name}, made by its scanlation groups ↗</a>
+          {remote.page ? (
+            <a className="p-from" href={remote.page} target="_blank" rel="noopener noreferrer">From {remote.name}, made by its scanlation groups ↗</a>
+          ) : (
+            <span className="p-from">From {remote.name}, made by its scanlation groups</span>
+          )}
           <Offline remote={remote} at={section} {...offline} />
         </>
       )}
@@ -96,6 +100,16 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
         {items.length === 0 && <p className="p-empty">This book has no table of contents.</p>}
         {items.map((it, i) => {
           const state = i < current ? 'done' : i === current ? 'now' : 'next';
+          // Not open this time (a series from the reader's own server opens a few chapters at a time): it opens again there.
+          if (it.reopen) {
+            const at = it.reopen;
+            return (
+              <button key={`${it.title}-away-${i}`} type="button" className="p-item is-next is-away" style={{ paddingLeft: 10 + Math.min(it.level, 3) * 14, '--i': i } as CSSProperties} onClick={() => window.dispatchEvent(new CustomEvent('breader:reopen', { detail: { pos: at } }))}>
+                <span className="p-item-t">{it.title}</span>
+                <span className="p-item-s">Opens there</span>
+              </button>
+            );
+          }
           // Read on its publisher's site: a link there, not a place here.
           if (it.link) {
             return (

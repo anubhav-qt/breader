@@ -3,6 +3,7 @@ import { createStore, del, get, keys, set } from 'idb-keyval';
 import { flush } from '../data/sync';
 import { ApiError } from '../lib/api';
 import { mangadex, readMangaPrefs } from '../lib/mangadex';
+import { suwayomi } from '../lib/suwayomi';
 import type { RemoteChapter } from './types';
 
 /*
@@ -56,6 +57,9 @@ export async function pageFor(chapter: string, n: number): Promise<Blob> {
   return (await keptPage(chapter, n)) ?? fetchPage(chapter, n);
 }
 
+/** A series' chapters kept here. */
+export const keptNote = (series: string) => noteOf(series);
+
 async function noteOf(series: string): Promise<Kept> {
   if (!db) return {};
   try {
@@ -101,8 +105,9 @@ async function run() {
         if (stopped) break;
         let blob = await keptPage(chapter.id, n);
         if (!blob) {
-          // Once more, then the chapter waits for another try.
-          blob = await fetchPage(chapter.id, n).catch(() => fetchPage(chapter.id, n));
+          // From the reader's own server by its address, or from MangaDex; once more, then it waits for another try.
+          const get = () => (chapter.urls ? suwayomi.picture(chapter.urls[n]) : fetchPage(chapter.id, n));
+          blob = await get().catch(get);
           await set(pageKey(chapter.id, n), { bytes: await blob.arrayBuffer(), type: blob.type } satisfies Bytes, store);
         }
         bytes += blob.size;

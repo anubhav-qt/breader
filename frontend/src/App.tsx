@@ -10,7 +10,7 @@ import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
-import { remoteOf, remoteUrl } from './books/remote';
+import { remoteOf, remoteUrl, serverUrl } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
@@ -29,12 +29,15 @@ import { detectSeries, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
 import { Reader } from './features/reader/Reader';
 import { Browse } from './features/manga/Browse';
+import { ConnectServer } from './features/manga/ConnectServer';
 import { SeriesSheet } from './features/manga/SeriesSheet';
+import { ServerSheet } from './features/manga/ServerSheet';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
 import { genreOf, mangadex, readMangaPrefs, type MangaPrefs } from './lib/mangadex';
+import { readServer, suwayomi, type ServerCard, type ServerManga } from './lib/suwayomi';
 import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
@@ -125,6 +128,11 @@ export default function App() {
   const [sheet, setSheet] = useState<MangaCard | null>(null);
   /** A chapter picked in a sheet: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
+  /** The reader's own Suwayomi server (its address, kept in this browser), a series' sheet on it, and connecting it. */
+  // Its address, and how many times it's been connected: a new login asks its sources again.
+  const [server, setServer] = useState<string | null>(() => (readServer() ? `${readServer()!.url}#0` : null));
+  const [serverSheet, setServerSheet] = useState<ServerCard | null>(null);
+  const [connecting, setConnecting] = useState(false);
   // Whether the Manga shelf has a MangaDex tab: the laptop says. Out of reach, the tab stays and says so.
   useEffect(() => {
     if (category !== 'manga' || mdOn !== null) return;
@@ -276,7 +284,7 @@ export default function App() {
     const m = new Map<string, BookRecord>();
     for (const r of lib.records) {
       const w = r.source === 'remote' && !hidden.has(r.id) ? remoteOf(r.url) : null;
-      if (w) m.set(w.series, r);
+      if (w) m.set(w.key, r);
     }
     return m;
   }, [lib.records, hidden]);
@@ -296,11 +304,12 @@ export default function App() {
     setOpening(null);
   }, []);
 
-  const startLoad = useCallback(async (id: string, given?: BookRecord) => {
+  const startLoad = useCallback(async (id: string, given?: BookRecord, at?: Position) => {
     const rec = given ?? recordById.get(id);
     if (!rec) return null;
     try {
-      const book = await loadRecord(rec);
+      // A series from the reader's own server opens a few chapters around its place.
+      const book = await loadRecord(rec, at ?? lib.reads[id]?.pos);
       loadedId.current = id;
       setLoaded({ id, book });
       // Its own shelf is the one to go back to, opened from a link or not.
@@ -351,6 +360,23 @@ export default function App() {
     setStartAt(null);
   }, [route]);
 
+  // A chapter not in the book as it's open (a series from the reader's own server opens a few at a
+  // time): the book opens again, there.
+  useEffect(() => {
+    const onReopen = (e: Event) => {
+      const pos = (e as CustomEvent<{ pos?: Position }>).detail?.pos;
+      const rec = route.name === 'read' ? recordById.get(route.id) : undefined;
+      if (!pos || !rec) return;
+      forget(rec.id);
+      setStartAt({ id: rec.id, pos });
+      loadedId.current = null;
+      setLoaded(null);
+      void startLoad(rec.id, rec, pos);
+    };
+    window.addEventListener('breader:reopen', onReopen);
+    return () => window.removeEventListener('breader:reopen', onReopen);
+  }, [route, recordById, startLoad]);
+
   /** A MangaDex series into My manga: its cover kept here, its genres from its tags. */
   const addSeries = useCallback(async (s: MangaSeries, lang: string): Promise<BookRecord> => {
     const now = Date.now();
@@ -398,7 +424,7 @@ export default function App() {
     openAnimDone.current = false;
     loadedId.current = null;
     setOpening({ id, rect: rect ?? new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2 - 85, 120, 170) });
-    void startLoad(id, rec).then((b) => {
+    void startLoad(id, rec, from).then((b) => {
       if (!b) setOpening(null);
       else if (openAnimDone.current) finishOpen(id);
     });
@@ -407,8 +433,57 @@ export default function App() {
   /** A MangaDex series in My manga: its sheet, from what the card knows until the rest comes. */
   const chaptersOf = useCallback((b: ShelfItem) => {
     const w = remoteOf(b.url);
-    if (w) setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [] });
+    if (w?.kind === 'mangadex') setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [] });
+    else if (w?.kind === 'suwayomi') {
+      if (readServer()) setServerSheet({ id: w.id, title: b.title, thumbnailUrl: `/api/v1/manga/${w.id}/thumbnail`, inLibrary: false });
+      else setConnecting(true);
+    }
   }, []);
+
+  /** A series from the reader's own server into My manga, with its cover from there. */
+  const addServerSeries = useCallback(async (m: ServerManga): Promise<BookRecord> => {
+    const now = Date.now();
+    const cover = m.thumbnailUrl ? await suwayomi.picture(m.thumbnailUrl).catch(() => undefined) : undefined;
+    const genre = genreOf(m.genre.map((name) => ({ name })));
+    const rec: BookRecord = {
+      id: newId(),
+      title: m.title.slice(0, 500),
+      author: [...new Set([m.author, m.artist].flatMap((p) => p?.split(/\s*,\s*/) ?? []).filter(Boolean))].join(', ').slice(0, 300),
+      format: 'CBZ',
+      source: 'remote',
+      url: serverUrl(m.id),
+      shared: false,
+      addedAt: now,
+      words: 0,
+      color: lib.nextColor(),
+      progress: 0,
+      line: '',
+      lastOpened: now,
+      ...(genre ? { genre } : {}),
+    };
+    await lib.addRemote(rec, cover);
+    setPreview('live');
+    if (!lib.key) {
+      const key = newLibraryKey();
+      await lib.setKey(key);
+      setFreshKey(key);
+    }
+    return rec;
+  }, [lib]);
+
+  const readServerSeries = useCallback(async (m: ServerManga, from: Position | undefined, rect: DOMRect | undefined) => {
+    const rec = remoteSeries.get(`sw:${m.id}`) ?? (await addServerSeries(m));
+    const id = rec.id;
+    setStartAt(from ? { id, pos: from } : null);
+    setServerSheet(null);
+    openAnimDone.current = false;
+    loadedId.current = null;
+    setOpening({ id, rect: rect ?? new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2 - 85, 120, 170) });
+    void startLoad(id, rec, from).then((b) => {
+      if (!b) setOpening(null);
+      else if (openAnimDone.current) finishOpen(id);
+    });
+  }, [remoteSeries, addServerSeries, startLoad, finishOpen]);
 
   const addSeriesOnly = useCallback(async (s: MangaSeries, lang: string) => {
     if (remoteSeries.has(s.id)) return;
@@ -423,8 +498,12 @@ export default function App() {
     if (!libIsReady || category !== 'manga') return;
     for (const r of libRecords) {
       const w = r.source === 'remote' && !r.hasCover && !coverAsked.current.has(r.id) ? remoteOf(r.url) : null;
-      if (!w) continue;
+      if (!w || (w.kind === 'suwayomi' && !server)) continue;
       coverAsked.current.add(r.id);
+      if (w.kind === 'suwayomi') {
+        void suwayomi.picture(`/api/v1/manga/${w.id}/thumbnail`).then((blob) => setCover(r.id, blob)).catch(() => {});
+        continue;
+      }
       void mangadex.series(w.series, true)
         .then(async (s) => {
           const blob = s.cover ? await mangadex.cover(s.id, s.cover, 512) : undefined;
@@ -432,7 +511,7 @@ export default function App() {
         })
         .catch(() => {});
     }
-  }, [libIsReady, libRecords, category, setCover]);
+  }, [libIsReady, libRecords, category, setCover, server]);
 
   // Closing waits two frames, so the library underneath has laid out the card to land on.
   useEffect(() => {
@@ -775,8 +854,11 @@ export default function App() {
               hidden={!manga || tab !== 'mangadex'}
               have={haveSeries}
               prefs={mdPrefs}
+              server={server}
               onPrefs={setMdPrefs}
               onPick={setSheet}
+              onPickServer={setServerSheet}
+              onConnect={() => setConnecting(true)}
             />
           )}
         </div>
@@ -862,6 +944,27 @@ export default function App() {
             onRead={(s, lang, from, rect) => void readSeries(s, lang, from, rect)}
             onAdd={(s, lang) => void addSeriesOnly(s, lang)}
             onClose={() => setSheet(null)}
+          />
+        )}
+        {serverSheet && route.name === 'library' && (
+          <ServerSheet
+            key={`server-${serverSheet.id}`}
+            card={serverSheet}
+            had={remoteSeries.get(`sw:${serverSheet.id}`)}
+            onRead={(m, from, rect) => void readServerSeries(m, from, rect)}
+            onAdd={(m) => { if (!remoteSeries.has(`sw:${m.id}`)) void addServerSeries(m).then((rec) => say(`Added “${rec.title}” to My manga`)); }}
+            onClose={() => setServerSheet(null)}
+          />
+        )}
+        {connecting && (
+          <ConnectServer
+            key="connect"
+            onDone={(login) => {
+              setConnecting(false);
+              setServer(login ? `${login.url}#${Date.now()}` : null);
+              say(login ? 'Your server is connected: its sources are in Browse' : 'Your server is let go of, in this browser');
+            }}
+            onClose={() => setConnecting(false)}
           />
         )}
         {login && (

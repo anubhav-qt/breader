@@ -17,6 +17,8 @@ export interface TocItem {
   level: number;
   /** Read somewhere else instead (a manga chapter its publisher puts up on its own site). */
   link?: string;
+  /** Not in the book as it's open: going there opens it again at this place (books/remote.ts). */
+  reopen?: Position;
 }
 
 export interface FlowBook {
@@ -57,6 +59,10 @@ export interface RemoteChapter {
   pages: number;
   external: string | null;
   groups: Array<{ id: string; name: string }>;
+  /** Its pages' addresses, on a server that gives them a chapter at a time (Suwayomi). */
+  urls?: string[];
+  /** Not opened this time: a series on a reader's own server opens a few chapters at a time. */
+  away?: boolean;
 }
 
 /** A manga or comic: its pages are pictures, out of the file one at a time as they're read. */
@@ -73,8 +79,20 @@ export interface MangaBook {
   words: number;
   series?: { name: string; index?: number };
   subjects?: string[];
-  /** Read from a catalogue: its name, the series' id and page there, and its chapters. */
-  remote?: { name: string; series: string; page: string; chapters: RemoteChapter[] };
+  /**
+   * Read from a catalogue: its name, the series' id and page there, and its chapters. Opened a few
+   * chapters at a time, the chapters just before and after these, to open it again at.
+   */
+  remote?: {
+    name: string;
+    series: string;
+    page: string | null;
+    chapters: RemoteChapter[];
+    prev?: { label: string; at: Position };
+    next?: { label: string; at: Position };
+  };
+  /** How far through the whole series a place in the pages open is, for one opened a few chapters at a time. */
+  progressOf?(exact: number, end: boolean): number;
   /**
    * A place's block, and the page a place is at, for a book whose pages move as chapters are added
    * or change: a remote one keeps its places by chapter (books/remote.ts).
