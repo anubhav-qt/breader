@@ -71,6 +71,15 @@ describe('files', () => {
     expect((await b.post(`/v1/uploads/${ask.body.fileId}/complete`)).body.code).toBe('upload_missing');
   });
 
+  it('stores manga as CBZ, and a book that points at it syncs as one', async () => {
+    const { b } = await registered();
+    const ask = await upload(b, bytes(`a cbz ${Math.random()}`), 'application/vnd.comicbook+zip');
+    expect(ask.body.status).toBe('upload');
+    const m = book({ format: 'CBZ', fileId: ask.body.fileId, line: 'Page 1 of 40' });
+    expect((await b.post('/v1/sync/push', push('c', { type: 'book.put', book: m }))).body.rejected).toEqual([]);
+    expect((await b.get('/v1/sync/pull?since=0')).body.books[0]).toMatchObject({ format: 'CBZ', fileId: ask.body.fileId });
+  });
+
   it('enforces the per-file limit, the quota and the file types', async () => {
     const { b, libraryId } = await registered();
     const big = await b.post('/v1/uploads', { sha256: 'a'.repeat(64), size: 101 * 1024 * 1024, mime: 'application/pdf', kind: 'book' });

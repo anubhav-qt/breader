@@ -13,7 +13,8 @@ export const Id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'Not a valid id');
 export const Sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'Not a SHA-256 hex digest');
 const Millis = z.number().int().nonnegative();
 
-export const Format = z.enum(['EPUB', 'PDF', 'TXT', 'MD', 'Text']);
+/** CBZ: a manga or comic, its pages as pictures in a zip. */
+export const Format = z.enum(['EPUB', 'PDF', 'TXT', 'MD', 'Text', 'CBZ']);
 /** Placeholders are layout previews and never sync. */
 export const Source = z.enum(['file', 'sample']);
 

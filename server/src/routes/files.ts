@@ -12,7 +12,7 @@ import { keeps, sharedSomewhere, usedBy } from '../lib/shelf.ts';
 import { voiceFile } from '../lib/voices.ts';
 
 const TYPES = {
-  book: new Set(['application/epub+zip', 'application/pdf', 'text/plain', 'text/markdown']),
+  book: new Set(['application/epub+zip', 'application/pdf', 'text/plain', 'text/markdown', 'application/vnd.comicbook+zip']),
   cover: new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
   // A voice's model or pack, and Piper's settings.
   voice: new Set(['application/octet-stream', 'application/json']),
@@ -20,7 +20,7 @@ const TYPES = {
 };
 
 const BAD_TYPE = {
-  book: 'Breader stores EPUB, PDF, text and Markdown files.',
+  book: 'Breader stores EPUB, PDF, text, Markdown and CBZ files.',
   cover: 'Covers must be JPEG, PNG, WebP or GIF images.',
   voice: 'Voices are Piper .onnx and .onnx.json files, or Kokoro .bin packs.',
   sample: 'Voice samples are WAV files.',
