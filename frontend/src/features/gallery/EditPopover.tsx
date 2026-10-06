@@ -234,11 +234,16 @@ export function EditPopover({ book, seriesNames, anchor, others = [], onChange, 
           <button type="button" className="switch" role="switch" aria-checked={!!book.shared} aria-labelledby="ep-share" onClick={() => onShare(!book.shared)} />
         </div>
       )}
-      <div className="ep-share">
-        <span className="ep-label" id="ep-ai">{AI_LABEL}</span>
-        <button type="button" className="switch" role="switch" aria-checked={book.ai} aria-labelledby="ep-ai" aria-describedby="ep-ai-why" onClick={() => onChange({ ai: !book.ai })} />
-      </div>
-      <p className="ep-note" id="ep-ai-why">{AI_WHY}</p>
+      {/* A manga's pages are pictures: nothing for an AI to read along. */}
+      {book.format !== 'CBZ' && (
+        <>
+          <div className="ep-share">
+            <span className="ep-label" id="ep-ai">{AI_LABEL}</span>
+            <button type="button" className="switch" role="switch" aria-checked={book.ai} aria-labelledby="ep-ai" aria-describedby="ep-ai-why" onClick={() => onChange({ ai: !book.ai })} />
+          </div>
+          <p className="ep-note" id="ep-ai-why">{AI_WHY}</p>
+        </>
+      )}
       <div className="ep-actions">
         {onFinish && (
           <button
