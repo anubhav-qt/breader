@@ -11,7 +11,7 @@ const rand = () => Math.floor(Math.random() * 256);
 export const env = loadEnv();
 export const primary = connectPrimary(env);
 export const mirror = connectMirror(env)!;
-export const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech: null };
+export const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech: null, manga: null };
 export const app = makeApp(deps);
 
 /** A browser: keeps its cookies between requests, like fetch with credentials. `to` is another app to talk to. */

@@ -85,6 +85,15 @@ const Env = z.object({
   SPEECH_DIR: z.string().default('/data/voices'),
   /** Processor threads the voice may use. Defaults to 4, or fewer on a smaller machine. */
   SPEECH_THREADS: z.coerce.number().int().min(1).max(16).optional(),
+
+  /**
+   * Manga from MangaDex, through the laptop (src/manga/): on unless this says false, and always off
+   * on the fallback. Pages read are kept in MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used
+   * longest ago going first.
+   */
+  MANGADEX: bool.default(true),
+  MANGA_CACHE_DIR: z.string().default('/data/manga'),
+  MANGA_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).default(2048),
 });
 
 export type Env = z.infer<typeof Env>;

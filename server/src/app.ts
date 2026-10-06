@@ -12,6 +12,7 @@ import { commentRoutes } from './routes/comments.ts';
 import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
 import { libraryRoutes } from './routes/libraries.ts';
+import { mangaRoutes } from './routes/manga.ts';
 import { shelfRoutes } from './routes/shelf.ts';
 import { speechRoutes } from './routes/speech.ts';
 import { syncRoutes } from './routes/sync.ts';
@@ -63,6 +64,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', aiRoutes(deps));
   app.route('/v1', commentRoutes(deps));
   app.route('/v1', speechRoutes(deps));
+  app.route('/v1', mangaRoutes(deps));
 
   app.notFound((c) => c.json({ code: 'not_found', message: 'No such endpoint.' }, 404));
   app.onError(onError);

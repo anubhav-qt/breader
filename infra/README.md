@@ -121,6 +121,17 @@ held, letting go after ten quiet minutes. The heavy ones run at about twice real
 threads of an M-series Mac; a slower processor may keep a reader waiting between sentences.
 `SPEECH_THREADS` caps the processor threads it uses (4, or one less than the laptop has).
 
+**Manga from MangaDex.** The Manga shelf's MangaDex tab finds series there and reads them
+through the laptop: MangaDex lets only its own site fetch its pages in a browser, so its API, its
+covers and its pages all come through here. Anyone can look through it; pages are for browsers
+signed in to a library, which a series joins as it's read. However many
+read at once, the laptop keeps to MangaDex's limits for its one address (four calls a second, 35
+chapters opened a minute), so a busy minute waits instead of getting the address blocked. Pages
+read lately are kept in the `manga` volume, up to `MANGA_CACHE_MB` (2048 by default), the ones
+used longest ago going first; none go to R2. Series for adults show only to readers who turn on
+**Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
+Render never has it: its free plan hasn't the bandwidth for pages.
+
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
 **Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged
 by `component`), then copy Project settings › Client keys › DSN → `SENTRY_DSN` (laptop and

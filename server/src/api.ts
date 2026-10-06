@@ -7,6 +7,7 @@ import { pruneStaleFeed } from './jobs/chores.ts';
 import { startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
+import { makeManga } from './manga/mangadex.ts';
 import { makeSpeech } from './speech/index.ts';
 
 const env = loadEnv();
@@ -18,7 +19,9 @@ const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // The server voice runs on the laptop only: Render's free plan hasn't the processor for it.
 const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(env) : null;
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech };
+// MangaDex too: its pages go through here, and the fallback's free plan hasn't the bandwidth.
+const manga = env.ROLE === 'laptop' && env.MANGADEX ? makeManga({ dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024 }) : null;
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.0.0.0' }, (info) =>

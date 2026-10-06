@@ -10,6 +10,7 @@
     "./genres": "./src/genres.ts",
     "./key": "./src/key.ts",
     "./limits": "./src/limits.ts",
+    "./manga": "./src/manga.ts",
     "./protocol": "./src/protocol.ts",
     "./report": "./src/report.ts",
     "./speech": "./src/speech.ts",
