@@ -113,7 +113,25 @@
 .mdx-cover-wait { position: absolute; inset: 0; }
 .mdx-cover-wait img, .mds-cover .mdx-cover-wait img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
+/* The reader's OPDS catalog (Catalog.tsx): where in it, its feeds as rows, its books as covers. */
+.ctg { display: grid; gap: 16px; }
+.ctg-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.ctg-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; font: var(--ui-w) 13px/1.2 var(--ui); }
+.ctg-step { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.ctg-step svg { width: 14px; height: 14px; color: var(--ink-2); }
+.ctg-step button { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 8px; border-radius: 8px; color: var(--ink-2); }
+.ctg-step button:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
+.ctg-step button:disabled { cursor: default; color: var(--ink); }
+.ctg-bar .mdx-search { flex: 1 1 240px; }
+.ctg-feeds { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.ctg-feeds button { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t c" "s c"; align-items: center; column-gap: 10px; width: 100%; min-height: 56px; padding: 10px 14px; border-radius: 12px; background: var(--fill); text-align: left; transition: background-color 140ms ease; }
+.ctg-feeds button:hover { background: var(--line); }
+.ctg-feed-t { grid-area: t; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 24px; line-height: 1; }
+.ctg-feed-s { grid-area: s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 11.5px/1.3 var(--ui); color: var(--ink-2); }
+.ctg-feeds svg { grid-area: c; width: 18px; height: 18px; color: var(--ink-2); }
+
 /* Connecting the reader's own server */
+.srv-kind { justify-self: start; margin-bottom: 6px; }
 .srv-form { display: grid; gap: 7px; }
 .srv-intro { margin: 0 0 8px; font: var(--ui-w) 12.5px/1.5 var(--ui); color: var(--ink-2); }
 .srv-intro a { color: var(--ink); }

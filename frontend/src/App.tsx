@@ -36,7 +36,8 @@ import { LibraryMenu } from './features/shared/LibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
-import { genreOf, mangadex, readMangaPrefs, type MangaPrefs } from './lib/mangadex';
+import { genreOf, mangadex, readMangaPrefs, writeMangaPrefs, type MangaPrefs } from './lib/mangadex';
+import { bestFile, opds, readCatalog, type Entry as CatalogEntry } from './lib/opds';
 import { readServer, suwayomi, type ServerCard, type ServerManga } from './lib/suwayomi';
 import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
@@ -132,6 +133,8 @@ export default function App() {
   // Its address, and how many times it's been connected: a new login asks its sources again.
   const [server, setServer] = useState<string | null>(() => (readServer() ? `${readServer()!.url}#0` : null));
   const [serverSheet, setServerSheet] = useState<ServerCard | null>(null);
+  /** The reader's OPDS catalog, likewise. */
+  const [catalog, setCatalog] = useState<string | null>(() => (readCatalog() ? `${readCatalog()!.url}#0` : null));
   const [connecting, setConnecting] = useState(false);
   // Whether the Manga shelf has a MangaDex tab: the laptop says. Out of reach, the tab stays and says so.
   useEffect(() => {
@@ -605,7 +608,8 @@ export default function App() {
   categoryRef.current = category;
   const showingRef = useRef(showing);
   showingRef.current = showing;
-  const addFiles = useCallback(async (files: File[]) => {
+  /** Files dropped on the library, or downloaded into it; `stay` keeps the shelf showing as it is. */
+  const addFiles = useCallback(async (files: File[], stay = false) => {
     // Dropped on the reader's own shared library, they're shared; on someone else's, they're the reader's own.
     const shared = tabRef.current === 'shelf' && showingRef.current === 'own';
     let needKey = !lib.key;
@@ -641,8 +645,15 @@ export default function App() {
         say(`Breader couldn’t read “${file.name}”`);
       }
     }
-    if (landed.size && !landed.has(categoryRef.current)) setCategory([...landed][0]);
+    if (landed.size && !landed.has(categoryRef.current) && !stay) setCategory([...landed][0]);
   }, [lib, say, allSeries, guessGenre]);
+
+  /** A book from the reader's OPDS catalog: its file downloaded, then added like one dropped here. */
+  const addFromCatalog = useCallback(async (book: Extract<CatalogEntry, { kind: 'book' }>) => {
+    const file = bestFile(book.files);
+    if (!file) throw new Error('Breader can’t open any of this book’s files.');
+    await addFiles([await opds.download(file, book.title)], true);
+  }, [addFiles]);
 
   useEffect(() => {
     if (route.name !== 'library') return;
@@ -855,6 +866,8 @@ export default function App() {
               have={haveSeries}
               prefs={mdPrefs}
               server={server}
+              catalog={catalog}
+              onAddBook={addFromCatalog}
               onPrefs={setMdPrefs}
               onPick={setSheet}
               onPickServer={setServerSheet}
@@ -959,10 +972,17 @@ export default function App() {
         {connecting && (
           <ConnectServer
             key="connect"
-            onDone={(login) => {
+            onDone={(kind, url) => {
               setConnecting(false);
-              setServer(login ? `${login.url}#${Date.now()}` : null);
-              say(login ? 'Your server is connected: its sources are in Browse' : 'Your server is let go of, in this browser');
+              const key = url ? `${url}#${Date.now()}` : null;
+              if (kind === 'suwayomi') setServer(key);
+              else setCatalog(key);
+              if (url && kind === 'opds') {
+                const next = { ...mdPrefs, source: 'opds' };
+                writeMangaPrefs(next);
+                setMdPrefs(next);
+              }
+              say(url ? (kind === 'suwayomi' ? 'Your server is connected: its sources are in Browse' : 'Your catalog is connected: it’s in Browse') : 'Let go of, in this browser');
             }}
             onClose={() => setConnecting(false)}
           />

@@ -3,7 +3,10 @@ import type { MangaCard, MangaSort } from '@breader/shared/manga';
 import { IconCaret, IconCheck, IconSearch } from '../../components/icons';
 import { ApiError } from '../../lib/api';
 import { LANGS, langName, mangadex, RATING_NAME, STATUS_NAME, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
+import type { Entry } from '../../lib/opds';
+import { readCatalog } from '../../lib/opds';
 import { readServer, suwayomi, type ServerCard, type ServerSource } from '../../lib/suwayomi';
+import { Catalog } from './Catalog';
 import { ServerCover } from './ServerCover';
 import './manga.css';
 
@@ -23,6 +26,10 @@ interface Props {
   prefs: MangaPrefs;
   /** Changes when a server is connected or let go, so its sources are asked again. */
   server: string | null;
+  /** The reader's OPDS catalog, when one's connected; changes when it does. */
+  catalog: string | null;
+  /** Downloads a book from the catalog into the library. */
+  onAddBook: (book: Extract<Entry, { kind: 'book' }>) => Promise<void>;
   onPrefs: (p: MangaPrefs) => void;
   onPick: (card: MangaCard) => void;
   onPickServer: (card: ServerCard) => void;
@@ -53,7 +60,7 @@ const messageOf = (e: unknown) =>
     ? 'MangaDex comes through Breader’s own computer, which can’t be reached just now.'
     : e instanceof Error ? e.message : 'Breader couldn’t reach it.';
 
-export function Browse({ id, labelledBy, hidden, have, prefs, server, onPrefs, onPick, onPickServer, onConnect }: Props) {
+export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, onPrefs, onPick, onPickServer, onAddBook, onConnect }: Props) {
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
   const [found, setFound] = useState<Found>({ state: 'loading' });
@@ -81,14 +88,14 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, onPrefs, o
   const source = onServer ? sources?.find((s) => `sw:${s.id}` === prefs.source) : undefined;
   // A source not there any more, or adult with 18+ off, or no server: MangaDex.
   const gone = !server || (!!sources && (!source || (source.isNsfw && !prefs.adult)));
-  const where = prefs.source.startsWith('sw:') && !gone ? prefs.source : 'mangadex';
+  const where = prefs.source === 'opds' && catalog ? 'opds' : prefs.source.startsWith('sw:') && !gone ? prefs.source : 'mangadex';
   const serverSort = source?.supportsLatest ? prefs.serverSort : 'POPULAR';
   // Searching, the best match comes first; otherwise the order picked.
   const sort: MangaSort = q ? 'relevance' : prefs.sort;
   const ask = where === 'mangadex' ? { where, q, lang: prefs.lang || undefined, sort, adult: prefs.adult } : { where, q, serverSort };
   const askKey = JSON.stringify(ask);
   /** A source on the server, while the server's sources are still on their way. */
-  const waiting = where !== 'mangadex' && !source;
+  const waiting = where.startsWith('sw:') && !source;
 
   // A pause in typing searches.
   useEffect(() => {
@@ -128,7 +135,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, onPrefs, o
   };
 
   useEffect(() => {
-    if (waiting) return;
+    if (waiting || where === 'opds') return;
     let live = true;
     setFound({ state: 'loading' });
     scroller.current?.scrollTo({ top: 0 });
@@ -189,16 +196,16 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, onPrefs, o
     setPicking(false);
     if (s !== prefs.source) set({ source: s });
   };
-  const sourceName = where === 'mangadex' ? 'MangaDex' : source?.displayName ?? 'your server';
-  const login = readServer();
-  const host = (() => { try { return login ? new URL(login.url).host : ''; } catch { return ''; } })();
+  const sourceName = where === 'mangadex' ? 'MangaDex' : where === 'opds' ? 'your catalog' : source?.displayName ?? 'your server';
+  const hostOf = (url?: string) => { try { return url ? new URL(url).host : ''; } catch { return ''; } };
+  const host = hostOf(readServer()?.url);
 
   return (
     <div id={id} role="tabpanel" aria-labelledby={labelledBy} hidden={hidden} className="gallery mdx" ref={scroller}>
       <div className="mdx-bar">
         <div className="mdx-from" ref={pickerRef}>
           <button type="button" className="mdx-from-b" aria-haspopup="listbox" aria-expanded={picking} onClick={() => setPicking(!picking)}>
-            <span>{where === 'mangadex' ? 'MangaDex' : source?.displayName ?? 'Your server'}</span>
+            <span>{where === 'mangadex' ? 'MangaDex' : where === 'opds' ? 'Your catalog' : source?.displayName ?? 'Your server'}</span>
             <IconCaret />
           </button>
           {picking && (
@@ -221,18 +228,27 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, onPrefs, o
                   {sources && sources.length > shownSources.length && <div className="mdx-from-note">Turn on 18+ for its sources for adults.</div>}
                 </>
               )}
+              {catalog && (
+                <>
+                  <div className="mdx-from-h">{hostOf(readCatalog()?.url) || 'Your catalog'}</div>
+                  <button type="button" role="option" aria-selected={where === 'opds'} onClick={() => choose('opds')}>
+                    <span>Your catalog</span>
+                    <small>OPDS</small>
+                  </button>
+                </>
+              )}
               <button type="button" className="mdx-from-connect" onClick={() => { setPicking(false); onConnect(); }}>
-                {server ? 'Your server…' : 'Connect your own server…'}
+                {server || catalog ? 'Your servers…' : 'Connect your own server…'}
               </button>
             </div>
           )}
         </div>
-        <label className="mdx-search">
+        {where !== 'opds' && <label className="mdx-search">
           <IconSearch />
           <span className="sr-only">Search {sourceName}</span>
           <input type="search" value={text} placeholder={`Search ${sourceName}`} enterKeyHint="search" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setQ(text.trim()); }} />
-        </label>
-        <div className="mdx-tools">
+        </label>}
+        {where !== 'opds' && <div className="mdx-tools">
           {where === 'mangadex' ? (
             <>
               <div className="mdx-sorts" role="radiogroup" aria-label="Order">
@@ -260,10 +276,12 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, onPrefs, o
             <span id={`${id}-adult`}>18+</span>
             <button type="button" className="switch" role="switch" aria-checked={prefs.adult} aria-labelledby={`${id}-adult`} title="Show series and sources for adults too" onClick={() => set({ adult: !prefs.adult })} />
           </span>
-        </div>
+        </div>}
       </div>
 
-      {found.state === 'error' && !waiting ? (
+      {where === 'opds' ? (
+        <Catalog key={catalog ?? ''} onAdd={onAddBook} />
+      ) : found.state === 'error' && !waiting ? (
         <div className="mdx-note">
           <p>{found.message}</p>
           <button type="button" className="btn btn-quiet" onClick={() => setTries((n) => n + 1)}>Try again</button>
@@ -301,7 +319,9 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, onPrefs, o
         </>
       )}
       <p className="mdx-credit">
-        {where === 'mangadex' ? (
+        {where === 'opds' ? (
+          <>From your own catalog. Breader asks it from this browser, and its address and login stay here.</>
+        ) : where === 'mangadex' ? (
           <>Series, chapters and pages from <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a>, made by the scanlation groups credited with each chapter. Where a publisher puts a series up itself, its sheet links there.</>
         ) : (
           <>From {sourceName}, through your own Suwayomi server. Breader asks it from this browser, and its address and login stay here.</>
