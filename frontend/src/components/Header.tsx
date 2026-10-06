@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { CATEGORIES, countOf, type Category } from '../books/category';
 import { springs } from '../lib/springs';
 import { IconCaret, IconKey, IconPlus } from './icons';
 import { Logo } from './Logo';
@@ -8,6 +9,9 @@ import './header.css';
 export type Tab = 'mine' | 'shelf';
 
 interface Props {
+  /** Books or manga: the tabs, their counts and the Add button are the category's. */
+  category: Category;
+  onCategory: (c: Category) => void;
   tab: Tab;
   counts: Record<Tab, number>;
   /** The shared library the second tab shows: the reader's own, or someone's from their list. */
@@ -25,10 +29,11 @@ interface Props {
 
 const TABS: Tab[] = ['mine', 'shelf'];
 
-export function Header({ tab, counts, shelfName, canAdd, onTab, onAdd, onKey, libraries, account }: Props) {
+export function Header({ category, onCategory, tab, counts, shelfName, canAdd, onTab, onAdd, onKey, libraries, account }: Props) {
   const [menu, setMenu] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
-  const label = (t: Tab) => (t === 'mine' ? 'My books' : shelfName);
+  const manga = category === 'manga';
+  const label = (t: Tab) => (t === 'mine' ? (manga ? 'My manga' : 'My books') : shelfName);
 
   useEffect(() => {
     if (!menu) return;
@@ -54,9 +59,35 @@ export function Header({ tab, counts, shelfName, canAdd, onTab, onAdd, onKey, li
     document.getElementById(`tab-${next}`)?.focus();
   };
 
+  // One Tab stop for the pair too; the arrow keys switch between them, as radio buttons do.
+  const onCategoryArrow = (e: KeyboardEvent) => {
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    const next = CATEGORIES[(CATEGORIES.indexOf(category) + 1) % CATEGORIES.length];
+    onCategory(next);
+    document.getElementById(`cat-${next}`)?.focus();
+  };
+
   return (
     <header className="hdr">
       <Logo />
+      <div className="cats" role="radiogroup" aria-label="Shelf" onKeyDown={onCategoryArrow}>
+        {CATEGORIES.map((c) => (
+          <button
+            key={c}
+            id={`cat-${c}`}
+            type="button"
+            role="radio"
+            className="cat"
+            aria-checked={category === c}
+            tabIndex={category === c ? 0 : -1}
+            onClick={() => onCategory(c)}
+          >
+            {category === c && <motion.span className="cat-on" layoutId="cat-on" transition={springs.snappy} />}
+            <span className="cat-name">{c === 'manga' ? 'Manga' : 'Books'}</span>
+          </button>
+        ))}
+      </div>
       <div className="tabs-wrap" ref={wrap}>
         <nav className="tabs" role="tablist" aria-label="Library" onKeyDown={onArrow}>
           {TABS.map((t) => (
@@ -75,7 +106,7 @@ export function Header({ tab, counts, shelfName, canAdd, onTab, onAdd, onKey, li
               {t === 'shelf' && <span className="sr-only">Shared library: </span>}
               <span className="tab-name">{label(t)}</span>
               <span className="tab-count" aria-hidden="true">{counts[t]}</span>
-              <span className="sr-only">, {counts[t]} {counts[t] === 1 ? 'book' : 'books'}</span>
+              <span className="sr-only">, {countOf(counts[t], category)}</span>
               {tab === t && <motion.span className="tab-line" layoutId="tab-line" transition={springs.snappy} />}
             </button>
           ))}
@@ -97,8 +128,8 @@ export function Header({ tab, counts, shelfName, canAdd, onTab, onAdd, onKey, li
         {/* Not animated: a fading copy would sit beside the empty library's own Add button,
             and on phones that fade can stall and leave both on screen. */}
         {canAdd && (
-          <button type="button" className="btn btn-primary" onClick={onAdd} aria-label="Add book">
-            <IconPlus /> <span className="hdr-label">Add book</span>
+          <button type="button" className="btn btn-primary" onClick={onAdd} aria-label={manga ? 'Add manga' : 'Add book'}>
+            <IconPlus /> <span className="hdr-label">{manga ? 'Add manga' : 'Add book'}</span>
           </button>
         )}
         <button type="button" className="btn btn-ghost" onClick={onKey} title="Library key" aria-label="Library key">

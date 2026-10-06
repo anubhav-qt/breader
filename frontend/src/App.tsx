@@ -6,6 +6,7 @@ import { Header, type Tab } from './components/Header';
 import { IconPlus } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
+import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
@@ -29,7 +30,7 @@ import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './l
 import { api } from './lib/api';
 import { newLibraryKey } from './lib/key';
 import { springs } from './lib/springs';
-import { readLocal } from './lib/store';
+import { readLocal, writeLocal } from './lib/store';
 import './app.css';
 
 type Route = { name: 'library' } | { name: 'read'; id: string };
@@ -108,6 +109,9 @@ export default function App() {
   const [now] = useState(() => Date.now());
   const [route, setRoute] = useState<Route>(parseHash);
   const [tab, setTab] = useState<Tab>('mine');
+  /** Books or manga: the shelf both tabs show, as the reader last left it. */
+  const [category, setCategory] = useState<Category>(() => (readLocal<string>('breader.category.v1', 'books') === 'manga' ? 'manga' : 'books'));
+  useEffect(() => { writeLocal('breader.category.v1', category); }, [category]);
   // Each tab's library stays once it's been seen, so switching back finds it as it was.
   const [seen, setSeen] = useState<ReadonlySet<Tab>>(() => new Set([tab]));
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
@@ -117,7 +121,7 @@ export default function App() {
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
   /** A book in both places being removed from one: asking whether it leaves the other too. */
-  const [asking, setAsking] = useState<{ id: string; title: string; from: Tab; fromKeyboard: boolean; then?: () => void } | null>(null);
+  const [asking, setAsking] = useState<{ id: string; title: string; from: Tab; category: Category; fromKeyboard: boolean; then?: () => void } | null>(null);
   const [login, setLogin] = useState<LoginStart | null>(null);
   const account = useAccount();
   const [dragOver, setDragOver] = useState(false);
@@ -214,7 +218,7 @@ export default function App() {
     return m;
   }, [previewSets, sharedRecords, lib.records, preview]);
 
-  const items = useMemo(() => {
+  const everything = useMemo(() => {
     const covers = { ...previewSets.covers, ...sharing.covers, ...lib.covers };
     const view = (recs: BookRecord[]) =>
       recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, covers, lib.edits)).sort(byRecent);
@@ -240,8 +244,13 @@ export default function App() {
     const filled = fillGaps([...mine, ...onShelf]);
     return { mine: filled.slice(0, mine.length), shelf: filled.slice(mine.length) };
   }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, sharing.covers, sharedRecords, keptFirsts, showing, previewSets, preview, hidden]);
-  const allSeries = useMemo(() => seriesNames([...items.mine, ...items.shelf]), [items]);
-  const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...items.mine, ...items.shelf], b), [items]);
+  // Each tab shows the chosen shelf's books; series and genres are offered from both.
+  const items = useMemo(() => ({
+    mine: everything.mine.filter((b) => categoryOf(b) === category),
+    shelf: everything.shelf.filter((b) => categoryOf(b) === category),
+  }), [everything, category]);
+  const allSeries = useMemo(() => seriesNames([...everything.mine, ...everything.shelf]), [everything]);
+  const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...everything.mine, ...everything.shelf], b), [everything]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
   const finishOpen = useCallback((id: string) => {
@@ -256,6 +265,8 @@ export default function App() {
       const book = await loadRecord(rec);
       loadedId.current = id;
       setLoaded({ id, book });
+      // Its own shelf is the one to go back to, opened from a link or not.
+      setCategory(categoryOf(rec));
       // Books added before they had a cover get one the first time they open.
       if (!rec.hasCover && rec.source === 'file') {
         void coverOf(book).then((cover) => { if (cover) void lib.setCover(id, cover); });
@@ -360,7 +371,7 @@ export default function App() {
     const rec = lib.records.find((r) => r.id === id);
     const title = (rec && lib.edits[id]?.title?.trim()) || rec?.title || '';
     if (rec && canShare(rec) && rec.shared && !rec.sharedOnly) {
-      setAsking({ id, title, from: tab, fromKeyboard, then });
+      setAsking({ id, title, from: tab, category: categoryOf(rec), fromKeyboard, then });
       return;
     }
     void removeBook(id, fromKeyboard).then(then);
@@ -369,14 +380,15 @@ export default function App() {
   const chooseRemove = useCallback((both: boolean) => {
     if (!asking) return;
     const { id, title, from, fromKeyboard, then } = asking;
+    const yours = asking.category === 'manga' ? 'your manga' : 'your books';
     setAsking(null);
     if (both) void removeBook(id, fromKeyboard);
     else if (from === 'mine') {
       lib.setSharedOnly(id, true);
-      say(`Took “${title}” out of your books. It stays in your shared library.`, { action: { label: 'Undo', run: () => lib.setSharedOnly(id, false) }, focus: fromKeyboard });
+      say(`Took “${title}” out of ${yours}. It stays in your shared library.`, { action: { label: 'Undo', run: () => lib.setSharedOnly(id, false) }, focus: fromKeyboard });
     } else {
       lib.setShared(id, false);
-      say(`Stopped sharing “${title}”. It stays in your books.`, { action: { label: 'Undo', run: () => lib.setShared(id, true) }, focus: fromKeyboard });
+      say(`Stopped sharing “${title}”. It stays in ${yours}.`, { action: { label: 'Undo', run: () => lib.setShared(id, true) }, focus: fromKeyboard });
     }
     then?.();
   }, [asking, lib, removeBook, say]);
@@ -388,12 +400,16 @@ export default function App() {
   /* Drop files anywhere on the library and they're added straight to the tab you're on. */
   const tabRef = useRef(tab);
   tabRef.current = tab;
+  const categoryRef = useRef(category);
+  categoryRef.current = category;
   const showingRef = useRef(showing);
   showingRef.current = showing;
   const addFiles = useCallback(async (files: File[]) => {
     // Dropped on the reader's own shared library, they're shared; on someone else's, they're the reader's own.
     const shared = tabRef.current === 'shelf' && showingRef.current === 'own';
     let needKey = !lib.key;
+    /** The shelves they went on: none on the one showing, and it switches to theirs. */
+    const landed = new Set<Category>();
     for (const file of files) {
       const format = detectFormat(file);
       if (!format) { say(`Breader can’t open “${file.name}”`); continue; }
@@ -409,7 +425,9 @@ export default function App() {
         book.cleanup?.();
         await lib.addBook(rec, file, cover);
         setPreview('live');
-        say(`Added “${rec.title}”`);
+        const on = categoryOf(rec);
+        landed.add(on);
+        say(`Added “${rec.title}”${on !== categoryRef.current ? ` to ${on === 'manga' ? 'Manga' : 'Books'}` : ''}`);
         // A key gives the book somewhere on the server to go: to sync, and to reach the Shared Library.
         if (needKey) {
           const key = newLibraryKey();
@@ -422,6 +440,7 @@ export default function App() {
         say(`Breader couldn’t read “${file.name}”`);
       }
     }
+    if (landed.size && !landed.has(categoryRef.current)) setCategory([...landed][0]);
   }, [lib, say, allSeries, guessGenre]);
 
   useEffect(() => {
@@ -456,7 +475,9 @@ export default function App() {
     if (opts?.ai) lib.editBook(rec.id, { ai: true });
     setPreview('live');
     setTab('mine');
-    say(`Added “${rec.title}” to My books${rec.shared ? ', shared with your key' : ''}`);
+    const on = categoryOf(rec);
+    setCategory(on);
+    say(`Added “${rec.title}” to ${on === 'manga' ? 'My manga' : 'My books'}${rec.shared ? ', shared with your key' : ''}`);
   }, [lib, say]);
 
   /* The Key dialog's usual answer to someone's key: a shared library of its own, beside My books. */
@@ -524,7 +545,7 @@ export default function App() {
     const entry = recordById.get(b.id);
     if (entry?.source !== 'shelf') return;
     await lib.startShelfBook(entry);
-    say(`Added “${b.title}” to My books`);
+    say(`Added “${b.title}” to ${categoryOf(b) === 'manga' ? 'My manga' : 'My books'}`);
   }, [recordById, lib, say]);
   /**
    * A series from someone's shared library, put in the reader's own books at once, last book first
@@ -540,15 +561,17 @@ export default function App() {
       if (!had.has(rec.id)) added.push(rec.id);
     }
     if (!added.length) return;
-    say(`Added ${added.length === 1 ? '1 book' : `${added.length} books`} of “${series}” to My books`, {
+    const on = categoryOf(books[0]);
+    say(`Added ${countOf(added.length, on)} of “${series}” to ${on === 'manga' ? 'My manga' : 'My books'}`, {
       action: { label: 'Undo', run: () => { for (const id of added) void lib.removeBook(id); } },
     });
   }, [recordById, lib, say]);
+  const manga = category === 'manga';
   /** An empty shared library: the reader's own says how to share; someone else's, why it's empty. */
   const emptyShelf = showing === 'own' ? (
     <div className="gallery-empty">
-      <p>You don’t share any books yet. Switch on <b>Share with your key</b> in a book’s ⋯ menu, or as you add one, and anyone you give your key to can read it here.</p>
-      <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>
+      <p>You don’t share any {manga ? 'manga' : 'books'} yet. Switch on <b>Share with your key</b> in {manga ? 'a manga’s' : 'a book’s'} ⋯ menu, or as you add one, and anyone you give your key to can read it here.</p>
+      <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> {manga ? 'Add manga' : 'Add a book'}</button>
     </div>
   ) : others?.state === 'closed' ? (
     <div className="gallery-empty">
@@ -557,12 +580,21 @@ export default function App() {
   ) : (
     <div className="gallery-empty"><p>{others?.state === 'ready' ? `Nothing is shared in ${libraryName(sharing, showing)} yet.` : 'Opening…'}</p></div>
   );
+  /** No manga yet: what goes here, and how. */
+  const emptyManga = (
+    <div className="gallery-empty">
+      <p>Manga and comics go here. Add their <b>CBZ</b> files, a volume or a chapter each, and they sync and open offline like your books.</p>
+      <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add manga</button>
+    </div>
+  );
 
   return (
     <MotionConfig reducedMotion="user">
       {route.name === 'library' && (
         <div className="lib">
           <Header
+            category={category}
+            onCategory={setCategory}
             tab={tab}
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
             shelfName={libraryName(sharing, showing)}
@@ -584,10 +616,11 @@ export default function App() {
           />
           {lib.ready && (['mine', 'shelf'] as const).filter((t) => seen.has(t)).map((t) => (
             <Gallery
-              key={`${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}
+              key={`${category}-${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}
               books={t === 'mine' ? items.mine : items.shelf}
               seriesNames={allSeries}
-              place={t}
+              // Manga keeps its own view below Recent; books keep the one they always had.
+              place={manga ? `${t}-manga` : t}
               // Shared libraries are browsed by genre; one's own books, by series.
               view={t === 'shelf' ? 'genre' : 'series'}
               now={now}
@@ -601,7 +634,7 @@ export default function App() {
               onFinish={t === 'mine' ? (b, finished) => lib.setFinished(b.id, finished, b) : undefined}
               onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
               onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
-              empty={t === 'shelf' ? emptyShelf : undefined}
+              empty={t === 'shelf' ? emptyShelf : manga ? emptyManga : undefined}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
                 // Out of their books already: not shared either, it's nowhere, so it goes.
@@ -668,6 +701,7 @@ export default function App() {
             key="add"
             initialFile={adding.file}
             initialMode={adding.mode}
+            manga={manga}
             hasKey={!!lib.key}
             nextColor={lib.nextColor}
             defaultShared={tab === 'shelf' && showing === 'own'}
@@ -679,7 +713,7 @@ export default function App() {
             onLogin={loggedIn ? undefined : loginInstead}
           />
         )}
-        {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
+        {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
         {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} />}
         {freshKey && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
         {login && (

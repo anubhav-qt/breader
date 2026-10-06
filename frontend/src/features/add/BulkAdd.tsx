@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { genreIds, joinGenres } from '@breader/shared/genres';
 import { IconClose } from '../../components/icons';
 import { AI_LABEL, AI_WHY } from '../../books/ai';
+import { countOf } from '../../books/category';
 import { coverOf, detectFormat, parseSource, titleFromName } from '../../books/load';
 import { recordFromBook } from '../../books/record';
 import type { BookRecord, Format, LoadedBook } from '../../books/types';
@@ -173,7 +174,7 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
   return (
     <>
       <div className="bulk-count" aria-live="polite">
-        {reading ? `Reading ${rows.length - rows.filter((r) => r.state === 'reading').length + 1} of ${rows.length}…` : `${total} ${total === 1 ? 'book' : 'books'} to add`}
+        {reading ? `Reading ${rows.length - rows.filter((r) => r.state === 'reading').length + 1} of ${rows.length}…` : `${countOf(total, onlyManga ? 'manga' : 'books')} to add`}
       </div>
       <ul className="bulk-list">
         <AnimatePresence initial={false}>
@@ -246,7 +247,7 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
       <div className="add-actions">
         <button type="button" className="btn btn-ghost" disabled={adding !== null} onClick={onBack}>Choose others</button>
         <button type="button" className="btn btn-primary" disabled={reading || !total || adding !== null} onClick={() => void addAll()}>
-          {adding ? `Adding ${Math.min(adding.done + 1, adding.of)} of ${adding.of}…` : `Add ${total} ${total === 1 ? 'book' : 'books'}`}
+          {adding ? `Adding ${Math.min(adding.done + 1, adding.of)} of ${adding.of}…` : `Add ${countOf(total, onlyManga ? 'manga' : 'books')}`}
         </button>
       </div>
     </>

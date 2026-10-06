@@ -30,6 +30,8 @@ type Step =
 interface Props {
   initialFile?: File | null;
   initialMode?: 'file' | 'paste';
+  /** Added from the Manga shelf: it asks for manga, with no text to paste. */
+  manga?: boolean;
   hasKey: boolean;
   /** The colour a book will get, from the library's pool, leaving out any `taken` already. */
   nextColor: (taken?: string[]) => string;
@@ -50,7 +52,7 @@ interface Props {
 const MB = 1024 * 1024;
 const sizeText = (b: number) => (b >= MB ? `${(b / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultShared = false, knownSeries, genreFor, onClose, onAdded, onKey, onLogin }: Props) {
+export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextColor, defaultShared = false, knownSeries, genreFor, onClose, onAdded, onKey, onLogin }: Props) {
   const [step, setStep] = useState<Step>(initialMode === 'paste' ? { kind: 'paste' } : { kind: 'choose' });
   const [shared, setShared] = useState(defaultShared);
   const [inSeries, setInSeries] = useState(false);
@@ -145,7 +147,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
     pick(Array.from(e.dataTransfer.files));
   };
 
-  const title = step.kind === 'key' ? 'Your personal key' : step.kind === 'bulk' ? 'Add books' : 'Add a book';
+  const title = step.kind === 'key' ? 'Your personal key' : manga ? 'Add manga' : step.kind === 'bulk' ? 'Add books' : 'Add a book';
 
   return (
     <Modal title={title} onClose={onClose} width={step.kind === 'bulk' ? 600 : 480}>
@@ -167,15 +169,19 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
                 onDrop={onDrop}
               >
                 <IconUpload />
-                <b>Drop books here</b>
-                <span>EPUB, PDF, TXT, Markdown or CBZ, one or several</span>
+                <b>{manga ? 'Drop manga here' : 'Drop books here'}</b>
+                <span>{manga ? 'CBZ files, a volume or a chapter each, one or several' : 'EPUB, PDF, TXT, Markdown or CBZ, one or several'}</span>
                 <button type="button" className="btn btn-primary" onClick={() => fileInput.current?.click()}>Choose files</button>
                 <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => pick(Array.from(e.target.files ?? []))} />
               </div>
-              <div className="add-or">or</div>
-              <button type="button" className="add-row" onClick={() => setStep({ kind: 'paste' })}>
-                <IconPaste /> Paste text
-              </button>
+              {!manga && (
+                <>
+                  <div className="add-or">or</div>
+                  <button type="button" className="add-row" onClick={() => setStep({ kind: 'paste' })}>
+                    <IconPaste /> Paste text
+                  </button>
+                </>
+              )}
             </>
           )}
 
@@ -248,7 +254,7 @@ export function AddBook({ initialFile, initialMode, hasKey, nextColor, defaultSh
               <p className="add-local">Saved in this browser first, then synced, so your key or account opens it anywhere.</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep({ kind: 'choose' })}>Choose another</button>
-                <button type="button" className="btn btn-primary" onClick={() => void add()}>Add book</button>
+                <button type="button" className="btn btn-primary" onClick={() => void add()}>{step.format === 'CBZ' ? 'Add manga' : 'Add book'}</button>
               </div>
             </>
           )}

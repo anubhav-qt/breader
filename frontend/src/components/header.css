@@ -35,6 +35,21 @@
 }
 .hdr-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
+/* Books or manga: which shelf the tabs beside it show. Closer to the logo than the tabs are. */
+.cats { flex: none; display: flex; margin-left: -22px; padding: 3px; border-radius: 12px; background: var(--fill); }
+.cat {
+  position: relative;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font: var(--ui-w) 13px/1 var(--ui);
+  color: var(--ink-2);
+  transition: color 160ms ease;
+}
+.cat:hover, .cat[aria-checked="true"] { color: var(--ink); }
+.cat-on { position: absolute; inset: 0; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
+.cat-name { position: relative; }
+
 .tab { white-space: nowrap; min-width: 0; }
 /* The shared tab goes by its library's name, which can be long. */
 .tab-name { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
@@ -46,11 +61,20 @@
 /* Phones: the tabs get their own row under the logo and buttons. */
 @media (max-width: 720px) {
   .hdr { flex-wrap: wrap; height: auto; padding: 14px 16px 0; column-gap: 12px; row-gap: 4px; }
+  .cats { margin-left: 0; }
   .tabs-wrap { order: 3; flex: 1 0 100%; }
   .tabs { gap: 24px; }
 }
-@media (max-width: 480px) {
+/* Narrow screens: the buttons go to icons, so the shelf switch fits beside them on the top row. */
+@media (max-width: 560px) {
   .hdr-label { display: none; }
   .hdr-actions { gap: 4px; }
   .hdr-actions .btn { padding: 0 12px; }
+}
+@media (max-width: 400px) {
+  .hdr { column-gap: 10px; }
+  .hdr-actions { gap: 2px; }
+  .hdr-actions .btn { padding: 0 10px; }
+  .cats { margin-left: -4px; }
+  .cat { padding: 0 9px; font-size: 12px; }
 }
