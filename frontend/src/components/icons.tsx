@@ -30,3 +30,5 @@ export const IconMore = (p: P) => (
 export const IconStar = (p: P) => (
   <svg {...base} strokeWidth={1.8} {...p}><path d="m12 3.8 2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8Z" /></svg>
 );
+export const IconSearch = (p: P) => (<svg {...base} strokeWidth={2.1} {...p}><circle cx="10.5" cy="10.5" r="6" /><path d="m15 15 5 5" /></svg>);
+export const IconOut = (p: P) => (<svg {...base} strokeWidth={2} {...p}><path d="M9 6H6.5A2.5 2.5 0 0 0 4 8.5v9A2.5 2.5 0 0 0 6.5 20h9a2.5 2.5 0 0 0 2.5-2.5V15" /><path d="M13 4h7v7M20 4l-9 9" /></svg>);

@@ -9,10 +9,12 @@ import { Toast, type ToastMessage } from './components/Toast';
 import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
-import type { BookEdit, BookRecord, LoadedBook, ReadState } from './books/types';
+import { remoteOf, remoteUrl } from './books/remote';
+import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
 import type { AccountResponse } from '@breader/shared/protocol';
+import type { MangaCard, MangaSeries } from '@breader/shared/manga';
 import { addLibrary, libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
@@ -25,10 +27,13 @@ import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
 import { Reader } from './features/reader/Reader';
+import { Browse } from './features/manga/Browse';
+import { SeriesSheet } from './features/manga/SeriesSheet';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
-import { newLibraryKey } from './lib/key';
+import { newId, newLibraryKey } from './lib/key';
+import { genreOf, mangadex, readMangaPrefs, type MangaPrefs } from './lib/mangadex';
 import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
@@ -112,6 +117,21 @@ export default function App() {
   /** Books or manga: the shelf both tabs show, as the reader last left it. */
   const [category, setCategory] = useState<Category>(() => (readLocal<string>('breader.category.v1', 'books') === 'manga' ? 'manga' : 'books'));
   useEffect(() => { writeLocal('breader.category.v1', category); }, [category]);
+  /** The laptop has MangaDex (null until it says), and how this device looks through it. */
+  const [mdOn, setMdOn] = useState<boolean | null>(null);
+  const [mdPrefs, setMdPrefs] = useState<MangaPrefs>(readMangaPrefs);
+  /** A MangaDex series' sheet, open over the library. */
+  const [sheet, setSheet] = useState<MangaCard | null>(null);
+  /** A chapter picked in a sheet: where its series opens, this once. */
+  const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
+  // Whether the Manga shelf has a MangaDex tab: the laptop says. Out of reach, the tab stays and says so.
+  useEffect(() => {
+    if (category !== 'manga' || mdOn !== null) return;
+    let live = true;
+    mangadex.state().then((st) => { if (live) setMdOn(st.on); }, () => { if (live) setMdOn(true); });
+    return () => { live = false; };
+  }, [category, mdOn]);
+  if ((category !== 'manga' || mdOn === false) && tab === 'mangadex') setTab('mine');
   // Each tab's library stays once it's been seen, so switching back finds it as it was.
   const [seen, setSeen] = useState<ReadonlySet<Tab>>(() => new Set([tab]));
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
@@ -121,7 +141,7 @@ export default function App() {
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
   /** A book in both places being removed from one: asking whether it leaves the other too. */
-  const [asking, setAsking] = useState<{ id: string; title: string; from: Tab; category: Category; fromKeyboard: boolean; then?: () => void } | null>(null);
+  const [asking, setAsking] = useState<{ id: string; title: string; from: 'mine' | 'shelf'; category: Category; fromKeyboard: boolean; then?: () => void } | null>(null);
   const [login, setLogin] = useState<LoginStart | null>(null);
   const account = useAccount();
   const [dragOver, setDragOver] = useState(false);
@@ -250,6 +270,16 @@ export default function App() {
     shelf: everything.shelf.filter((b) => categoryOf(b) === category),
   }), [everything, category]);
   const allSeries = useMemo(() => seriesNames([...everything.mine, ...everything.shelf]), [everything]);
+  /** Series from MangaDex in this library, by their MangaDex id. */
+  const remoteSeries = useMemo(() => {
+    const m = new Map<string, BookRecord>();
+    for (const r of lib.records) {
+      const w = r.source === 'remote' && !hidden.has(r.id) ? remoteOf(r.url) : null;
+      if (w) m.set(w.series, r);
+    }
+    return m;
+  }, [lib.records, hidden]);
+  const haveSeries = useMemo(() => new Set(remoteSeries.keys()), [remoteSeries]);
   const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...everything.mine, ...everything.shelf], b), [everything]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
@@ -310,7 +340,85 @@ export default function App() {
     if (route.name === 'read' && loadedId.current === route.id) setClosing({ id: route.id });
     window.location.hash = '';
     setRoute({ name: 'library' });
+    setStartAt(null);
   }, [route]);
+
+  /** A MangaDex series into My manga: its cover kept here, its genres from its tags. */
+  const addSeries = useCallback(async (s: MangaSeries, lang: string): Promise<BookRecord> => {
+    const now = Date.now();
+    const cover = s.cover ? await mangadex.cover(s.id, s.cover, 512) : undefined;
+    const genre = genreOf(s.tags);
+    const rec: BookRecord = {
+      id: newId(),
+      title: s.title.slice(0, 500),
+      author: [...new Set([...s.authors, ...s.artists])].join(', ').slice(0, 300),
+      format: 'CBZ',
+      source: 'remote',
+      url: remoteUrl(s.id, lang),
+      shared: false,
+      addedAt: now,
+      words: 0,
+      color: lib.nextColor(),
+      progress: 0,
+      line: '',
+      lastOpened: now,
+      ...(genre ? { genre } : {}),
+    };
+    await lib.addRemote(rec, cover);
+    setPreview('live');
+    // As with a first book: a key gives it somewhere to sync, and its pages a library to go to.
+    if (!lib.key) {
+      const key = newLibraryKey();
+      await lib.setKey(key);
+      setFreshKey(key);
+    }
+    return rec;
+  }, [lib]);
+
+  /** Read from a series' sheet: into My manga if it isn't, then open, at the chapter picked if one was. */
+  const readSeries = useCallback(async (s: MangaSeries, lang: string, from: Position | undefined, rect: DOMRect | undefined) => {
+    const url = remoteUrl(s.id, lang);
+    let rec = remoteSeries.get(s.id);
+    if (rec && rec.url !== url) {
+      lib.setRemoteUrl(rec.id, url);
+      rec = { ...rec, url };
+    }
+    rec ??= await addSeries(s, lang);
+    const id = rec.id;
+    setStartAt(from ? { id, pos: from } : null);
+    setSheet(null);
+    openAnimDone.current = false;
+    loadedId.current = null;
+    setOpening({ id, rect: rect ?? new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2 - 85, 120, 170) });
+    void startLoad(id, rec).then((b) => {
+      if (!b) setOpening(null);
+      else if (openAnimDone.current) finishOpen(id);
+    });
+  }, [remoteSeries, lib, addSeries, startLoad, finishOpen]);
+
+  const addSeriesOnly = useCallback(async (s: MangaSeries, lang: string) => {
+    if (remoteSeries.has(s.id)) return;
+    const rec = await addSeries(s, lang);
+    say(`Added “${rec.title}” to My manga`);
+  }, [remoteSeries, addSeries, say]);
+
+  // A series added on another device brings its cover here once, through the laptop.
+  const coverAsked = useRef(new Set<string>());
+  const { ready: libIsReady, records: libRecords, setCover } = lib;
+  useEffect(() => {
+    if (!libIsReady || category !== 'manga') return;
+    for (const r of libRecords) {
+      const w = r.source === 'remote' && !r.hasCover && !coverAsked.current.has(r.id) ? remoteOf(r.url) : null;
+      if (!w) continue;
+      coverAsked.current.add(r.id);
+      void mangadex.series(w.series, true)
+        .then(async (s) => {
+          const blob = s.cover ? await mangadex.cover(s.id, s.cover, 512) : undefined;
+          if (blob) await setCover(r.id, blob);
+        })
+        .catch(() => {});
+    }
+  }, [libIsReady, libRecords, category, setCover]);
 
   // Closing waits two frames, so the library underneath has laid out the card to land on.
   useEffect(() => {
@@ -371,7 +479,7 @@ export default function App() {
     const rec = lib.records.find((r) => r.id === id);
     const title = (rec && lib.edits[id]?.title?.trim()) || rec?.title || '';
     if (rec && canShare(rec) && rec.shared && !rec.sharedOnly) {
-      setAsking({ id, title, from: tab, category: categoryOf(rec), fromKeyboard, then });
+      setAsking({ id, title, from: tab === 'shelf' ? 'shelf' : 'mine', category: categoryOf(rec), fromKeyboard, then });
       return;
     }
     void removeBook(id, fromKeyboard).then(then);
@@ -538,7 +646,7 @@ export default function App() {
   const leaving = !reading && closing && loaded?.id === closing.id ? loaded : null;
   const shown = reading ?? leaving;
   const shownRec = shown ? recordById.get(shown.id) : undefined;
-  const books = tab === 'mine' ? items.mine : items.shelf;
+  const books = tab === 'shelf' ? items.shelf : items.mine;
   const ownShared = useMemo(() => lib.records.filter((r) => r.shared && !lapsed.has(r.id) && !hidden.has(r.id)).length, [lib.records, lapsed, hidden]);
   /** Someone's book, put in the reader's own library from their shared one without opening it. */
   const keep = useCallback(async (b: ShelfItem) => {
@@ -597,6 +705,7 @@ export default function App() {
             onCategory={setCategory}
             tab={tab}
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
+            mangadex={mdOn !== false}
             shelfName={libraryName(sharing, showing)}
             canAdd={books.length > 0}
             onTab={setTab}
@@ -644,6 +753,17 @@ export default function App() {
               }}
             />
           ))}
+          {lib.ready && mdOn !== false && seen.has('mangadex') && (
+            <Browse
+              id="library-mangadex"
+              labelledBy="tab-mangadex"
+              hidden={!manga || tab !== 'mangadex'}
+              have={haveSeries}
+              prefs={mdPrefs}
+              onPrefs={setMdPrefs}
+              onPick={setSheet}
+            />
+          )}
         </div>
       )}
 
@@ -655,7 +775,8 @@ export default function App() {
             title={lib.edits[shown.id]?.title}
             color={normColor(lib.edits[shown.id]?.color ?? shownRec.color, shownRec.title)}
             book={shown.book}
-            initial={lib.reads[shown.id]}
+            // A chapter picked in its sheet: there, whatever place was kept.
+            initial={startAt?.id === shown.id ? { ...(lib.reads[shown.id] ?? { progress: 0, line: '', lastOpened: now }), pos: startAt.pos } : lib.reads[shown.id]}
             closing={!!leaving}
             onBack={back}
             onSave={onSave}
@@ -715,7 +836,19 @@ export default function App() {
         )}
         {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
         {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} />}
-        {freshKey && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
+        {/* A key made as a series was read waits for the library. */}
+        {freshKey && route.name === 'library' && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
+        {sheet && route.name === 'library' && (
+          <SeriesSheet
+            key={`sheet-${sheet.id}`}
+            card={sheet}
+            prefs={mdPrefs}
+            had={remoteSeries.get(sheet.id)}
+            onRead={(s, lang, from, rect) => void readSeries(s, lang, from, rect)}
+            onAdd={(s, lang) => void addSeriesOnly(s, lang)}
+            onClose={() => setSheet(null)}
+          />
+        )}
         {login && (
           <LoginDialog
             key="login"

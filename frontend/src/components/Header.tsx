@@ -6,14 +6,17 @@ import { IconCaret, IconKey, IconPlus } from './icons';
 import { Logo } from './Logo';
 import './header.css';
 
-export type Tab = 'mine' | 'shelf';
+/** mangadex: the Manga shelf's way into MangaDex (features/manga/Browse.tsx). */
+export type Tab = 'mine' | 'shelf' | 'mangadex';
 
 interface Props {
   /** Books or manga: the tabs, their counts and the Add button are the category's. */
   category: Category;
   onCategory: (c: Category) => void;
   tab: Tab;
-  counts: Record<Tab, number>;
+  counts: Record<'mine' | 'shelf', number>;
+  /** The laptop has MangaDex, so the Manga shelf has its tab. */
+  mangadex: boolean;
   /** The shared library the second tab shows: the reader's own, or someone's from their list. */
   shelfName: string;
   /** False while the open tab is empty: the empty library has its own centred Add button. */
@@ -27,13 +30,13 @@ interface Props {
   account: ReactNode;
 }
 
-const TABS: Tab[] = ['mine', 'shelf'];
-
-export function Header({ category, onCategory, tab, counts, shelfName, canAdd, onTab, onAdd, onKey, libraries, account }: Props) {
+export function Header({ category, onCategory, tab, counts, mangadex, shelfName, canAdd, onTab, onAdd, onKey, libraries, account }: Props) {
   const [menu, setMenu] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const manga = category === 'manga';
-  const label = (t: Tab) => (t === 'mine' ? (manga ? 'My manga' : 'My books') : shelfName);
+  // MangaDex sits between the reader's own and the shared library, whose list opens beside it.
+  const TABS: Tab[] = manga && mangadex ? ['mine', 'mangadex', 'shelf'] : ['mine', 'shelf'];
+  const label = (t: Tab) => (t === 'mine' ? (manga ? 'My manga' : 'My books') : t === 'mangadex' ? 'MangaDex' : shelfName);
 
   useEffect(() => {
     if (!menu) return;
@@ -96,7 +99,7 @@ export function Header({ category, onCategory, tab, counts, shelfName, canAdd, o
               id={`tab-${t}`}
               role="tab"
               type="button"
-              className="tab"
+              className={`tab${t === 'shelf' ? ' is-shelf' : ''}`}
               aria-selected={tab === t}
               aria-controls={`library-${t}`}
               tabIndex={tab === t ? 0 : -1}
@@ -105,8 +108,12 @@ export function Header({ category, onCategory, tab, counts, shelfName, canAdd, o
             >
               {t === 'shelf' && <span className="sr-only">Shared library: </span>}
               <span className="tab-name">{label(t)}</span>
-              <span className="tab-count" aria-hidden="true">{counts[t]}</span>
-              <span className="sr-only">, {countOf(counts[t], category)}</span>
+              {t !== 'mangadex' && (
+                <>
+                  <span className="tab-count" aria-hidden="true">{counts[t]}</span>
+                  <span className="sr-only">, {countOf(counts[t], category)}</span>
+                </>
+              )}
               {tab === t && <motion.span className="tab-line" layoutId="tab-line" transition={springs.snappy} />}
             </button>
           ))}

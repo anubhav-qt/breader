@@ -50,7 +50,9 @@
 .cat-on { position: absolute; inset: 0; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
 .cat-name { position: relative; }
 
-.tab { white-space: nowrap; min-width: 0; }
+.tab { flex: none; white-space: nowrap; min-width: 0; }
+/* Short of room, only the shared library's name gives way. */
+.tab.is-shelf { flex: 0 1 auto; }
 /* The shared tab goes by its library's name, which can be long. */
 .tab-name { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
 .tab-caret { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); transition: color 140ms ease, background-color 140ms ease, transform 160ms ease; }
@@ -70,6 +72,9 @@
   .hdr-label { display: none; }
   .hdr-actions { gap: 4px; }
   .hdr-actions .btn { padding: 0 12px; }
+}
+@media (max-width: 480px) {
+  .tabs { gap: 18px; }
 }
 @media (max-width: 400px) {
   .hdr { column-gap: 10px; }
