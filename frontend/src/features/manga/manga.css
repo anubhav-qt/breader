@@ -1,17 +1,16 @@
 /* The Browse tab (Browse.tsx) and a series' sheets (SeriesSheet.tsx, SourceSheet.tsx), in the library's own look. */
+/* The search on a line of its own; under it, one line with the order, the dots and the language. */
 .mdx-bar {
   position: sticky;
   top: 0;
   z-index: 6;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
   padding: 12px 0 18px;
   background: linear-gradient(var(--canvas) 82%, transparent);
 }
 .mdx-search {
-  flex: 1 1 260px;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -28,7 +27,7 @@
 .mdx-search input { flex: 1; width: 0; min-width: 0; height: 100%; border: 0; background: none; outline: none; font-family: var(--read); font-size: 25px; line-height: 1; color: var(--ink); }
 .mdx-search input::placeholder { color: var(--ink-2); }
 .mdx-search input::-webkit-search-cancel-button { filter: grayscale(1); }
-.mdx-tools { display: flex; align-items: center; gap: 14px; min-width: 0; margin-left: auto; }
+.mdx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; min-width: 0; }
 .mdx-sorts { flex: none; display: flex; padding: 3px; border-radius: 12px; background: var(--fill); }
 .mdx-sort { height: 32px; padding: 0 11px; border-radius: 9px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); white-space: nowrap; transition: color 140ms ease; }
 .mdx-sort:hover:not(:disabled) { color: var(--ink); }
@@ -49,7 +48,17 @@
   cursor: pointer;
 }
 .mdx-lang select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.mdx-switch { flex: none; display: inline-flex; align-items: center; gap: 8px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); white-space: nowrap; }
+/* The dots and the language keep together, on the right, or on a line of their own when there's no room. */
+.mdx-right { flex: none; display: flex; align-items: center; gap: 12px; margin-left: auto; }
+/* Kinds, then Doujin and 18+: a dot each that lights when it's on, as the genre tiles do. */
+.mdx-dots { flex: none; display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 12px; background: var(--fill); }
+.mdx-dot { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 9px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); white-space: nowrap; transition: color 140ms ease; }
+.mdx-dot:hover { color: var(--ink); }
+.mdx-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mdx-dot[aria-pressed="true"] { color: var(--ink); }
+.mdx-led { flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--tile-border-hover); transition: background-color 140ms ease, box-shadow 140ms ease; }
+.mdx-dot[aria-pressed="true"] .mdx-led { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mdx-rule { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--tile-border); }
 
 .mdx-grid { list-style: none; margin-block: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 18px; }
 .mdx-card { display: grid; align-content: start; gap: 8px; width: 100%; text-align: left; }
@@ -133,10 +142,10 @@
 .mds-credit { margin: 18px 0 0; font: var(--ui-w) 11.5px/1.5 var(--ui); color: var(--ink-2); }
 
 @media (max-width: 720px) {
-  .mdx-search { flex: 1 1 0; }
-  .mdx-tools { flex-wrap: wrap; gap: 10px 12px; }
-  .mdx-sorts { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .mdx-sorts::-webkit-scrollbar { display: none; }
+  /* The line slides sideways instead of wrapping. */
+  .mdx-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .mdx-row::-webkit-scrollbar { display: none; }
+  .mdx-sorts { flex: none; }
   .mdx-sort { padding: 0 10px; }
   .mdx-lang select { max-width: 170px; }
   .mdx-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 20px 12px; }

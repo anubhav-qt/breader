@@ -5,7 +5,7 @@ import { Modal } from '../../components/Modal';
 import { IconCheck, IconOut } from '../../components/icons';
 import { laidOut, madeBy, pickChapters, startOf } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
-import { sources, STATUS_NAME } from '../../lib/mangadex';
+import { KIND_NAME, sources, STATUS_NAME } from '../../lib/mangadex';
 
 /*
  * A series on one of Breader's Suwayomi sources: what it is, where it's from, and its chapters,
@@ -63,6 +63,7 @@ export function SourceSheet({ card, adult, had, onRead, onAdd, onClose }: Props)
   // Opened from My manga, the card knows little until the series comes.
   const status = s?.status ?? card.status;
   const meta: string[] = [];
+  if (s?.kind) meta.push(KIND_NAME[s.kind]);
   if (status) meta.push(STATUS_NAME[status]);
   if (s) meta.push(s.source);
   const isAdult = s?.adult ?? card.adult;

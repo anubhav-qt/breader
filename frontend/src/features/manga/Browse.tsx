@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MangaCard, MangaFound, MangaSort, SourceCard } from '@breader/shared/manga';
+import { MANGA_KINDS, type MangaCard, type MangaFound, type MangaKind, type MangaSort, type SourceCard } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
-import { LANGS, langName, mangadex, RATING_NAME, sources, STATUS_NAME, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
+import { KIND_NAME, LANGS, langName, mangadex, RATING_NAME, sources, STATUS_NAME, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
 import './manga.css';
 
 /*
  * The Manga shelf's Browse tab: one search across every place Breader's computer looks (MangaDex
  * and its Suwayomi sources), by name or by what's popular, new or just updated, in a language. The
- * same series found in two places is two cards, each naming its place under the title. Series for
- * adults show only once 18+ is on. Picking one opens its sheet (SeriesSheet.tsx, SourceSheet.tsx),
- * to read it or add it to My manga.
+ * same series found in two places is two cards, each naming its place under the title. Under the
+ * search, one line holds the order, the kinds to show, Doujinshi, 18+ and the language, each a dot
+ * that lights when it's on. Series for adults show only once 18+ is on. Picking one opens its sheet
+ * (SeriesSheet.tsx, SourceSheet.tsx), to read it or add it to My manga.
  */
 
 interface Props {
@@ -29,6 +30,13 @@ const SORTS: Array<{ v: MangaSort; label: string }> = [
   { v: 'latest', label: 'Updated' },
   { v: 'new', label: 'New' },
   { v: 'rated', label: 'Top rated' },
+];
+
+const KINDS: Array<{ v: MangaKind; label: string; about: string }> = [
+  { v: 'manga', label: 'Manga', about: 'Manga: from Japan' },
+  { v: 'manhwa', label: 'Manhwa', about: 'Manhwa: from Korea, mostly webtoons' },
+  { v: 'manhua', label: 'Manhua', about: 'Manhua: from China' },
+  { v: 'comics', label: 'Comics', about: 'Comics: from everywhere else' },
 ];
 
 interface Item {
@@ -63,7 +71,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
   // Searching, the best match comes first; otherwise the order picked.
   let sort: MangaSort = prefs.sort;
   if (q) sort = 'relevance';
-  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, doujinshi: prefs.doujinshi });
+  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, kinds: prefs.kinds });
 
   // A pause in typing searches.
   useEffect(() => {
@@ -74,7 +82,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
   const itemOf = (f: MangaFound): Item => {
     if (f.kind === 'mangadex') {
       const c = f.card;
-      const meta = [f.source];
+      const meta = [f.source, KIND_NAME[c.kind]];
       if (c.year) meta.push(String(c.year));
       if (c.status) meta.push(STATUS_NAME[c.status]);
       if (c.rating === 'suggestive') meta.push(RATING_NAME.suggestive);
@@ -96,6 +104,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
     }
     const c = f.card;
     const meta = [f.source];
+    if (c.kind) meta.push(KIND_NAME[c.kind]);
     if (c.status) meta.push(STATUS_NAME[c.status]);
     let cover: Item['cover'] = null;
     if (c.cover) cover = { src: sources.coverUrl(c.cover), srcSet: undefined };
@@ -115,7 +124,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
    * read here show, and a slow place shows with the next lot, so a lot can be short or even empty.
    */
   const fetchLot = async (next: string | null): Promise<{ items: Item[]; next: string | null }> => {
-    const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, next: next ?? undefined });
+    const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, kinds: prefs.kinds, next: next ?? undefined });
     return { items: r.items.map(itemOf), next: r.next };
   };
 
@@ -165,6 +174,16 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
     const next = { ...prefs, ...p };
     writeMangaPrefs(next);
     onPrefs(next);
+  };
+
+  const flipKind = (kind: MangaKind) => {
+    const on = prefs.kinds.includes(kind);
+    // One kind stays on, as a search for none would find nothing.
+    if (on && prefs.kinds.length === 1) return;
+    let kinds: MangaKind[];
+    if (on) kinds = prefs.kinds.filter((k) => k !== kind);
+    else kinds = MANGA_KINDS.filter((k) => k === kind || prefs.kinds.includes(k));
+    set({ kinds });
   };
 
   let nothing = 'Nothing here yet.';
@@ -225,27 +244,38 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
           <span className="sr-only">Search manga</span>
           <input type="search" value={text} placeholder="Search manga" enterKeyHint="search" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setQ(text.trim()); }} />
         </label>
-        <div className="mdx-tools">
+        <div className="mdx-row">
           <div className="mdx-sorts" role="radiogroup" aria-label="Order">
             {SORTS.map((s) => (
               <button key={s.v} type="button" role="radio" aria-checked={!q && prefs.sort === s.v} className="mdx-sort" disabled={!!q} onClick={() => set({ sort: s.v })}>{s.label}</button>
             ))}
           </div>
-          <label className="mdx-lang">
-            <span className="sr-only">Language</span>
-            <select value={prefs.lang} onChange={(e) => set({ lang: e.target.value })}>
-              <option value="">Any language</option>
-              {LANGS.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
-            </select>
-          </label>
-          <span className="mdx-switch">
-            <span id={`${id}-doujinshi`}>Doujinshi</span>
-            <button type="button" className="switch" role="switch" aria-checked={prefs.doujinshi} aria-labelledby={`${id}-doujinshi`} title="Show doujinshi (fan-made works) and anthologies too" onClick={() => set({ doujinshi: !prefs.doujinshi })} />
-          </span>
-          <span className="mdx-switch">
-            <span id={`${id}-adult`}>18+</span>
-            <button type="button" className="switch" role="switch" aria-checked={prefs.adult} aria-labelledby={`${id}-adult`} title="Show series for adults too" onClick={() => set({ adult: !prefs.adult })} />
-          </span>
+          <div className="mdx-right">
+            <div className="mdx-dots" role="group" aria-label="Show">
+              {KINDS.map((k) => (
+                <button key={k.v} type="button" className="mdx-dot" aria-pressed={prefs.kinds.includes(k.v)} title={k.about} onClick={() => flipKind(k.v)}>
+                  <span className="mdx-led" />
+                  {k.label}
+                </button>
+              ))}
+              <span className="mdx-rule" />
+              <button type="button" className="mdx-dot" aria-pressed={prefs.doujinshi} title="Doujinshi (fan-made works) and anthologies too" onClick={() => set({ doujinshi: !prefs.doujinshi })}>
+                <span className="mdx-led" />
+                Doujin
+              </button>
+              <button type="button" className="mdx-dot" aria-pressed={prefs.adult} title="Series for adults too" onClick={() => set({ adult: !prefs.adult })}>
+                <span className="mdx-led" />
+                18+
+              </button>
+            </div>
+            <label className="mdx-lang">
+              <span className="sr-only">Language</span>
+              <select value={prefs.lang} onChange={(e) => set({ lang: e.target.value })}>
+                <option value="">Any language</option>
+                {LANGS.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 

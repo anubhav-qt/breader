@@ -6,7 +6,7 @@ import { IconCheck, IconOut } from '../../components/icons';
 import { laidOut, madeBy, pickChapters, remoteOf, startOf } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
-import { byLang, langName, mangadex, RATING_NAME, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
+import { byLang, KIND_NAME, langName, mangadex, RATING_NAME, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
 
 /*
  * A MangaDex series: what it is, where its publisher has it, and its chapters in a language, each
@@ -94,7 +94,7 @@ export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props)
           {alt && <p className="mds-alt">{alt}</p>}
           {people.length > 0 && <p className="mds-by">{people.join(', ')}</p>}
           <p className="mds-meta">
-            {[shown.year, shown.status ? STATUS_NAME[shown.status] : null, s?.demographic ? s.demographic[0].toUpperCase() + s.demographic.slice(1) : null, s ? `From ${langName(s.original)}` : null]
+            {[shown.year, shown.status ? STATUS_NAME[shown.status] : null, s ? KIND_NAME[s.kind] : null, s?.demographic ? s.demographic[0].toUpperCase() + s.demographic.slice(1) : null, s ? `From ${langName(s.original)}` : null]
               .filter(Boolean)
               .join(' · ')}
           </p>

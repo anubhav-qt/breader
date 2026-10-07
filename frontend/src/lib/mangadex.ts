@@ -1,4 +1,4 @@
-import type { MangaChapters, MangaSearchResult, MangaSeries, MangaSort, MangaState, SourceSeries } from '@breader/shared/manga';
+import { MANGA_KINDS, type MangaChapters, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
 import { api, ApiError, laptopUrl } from './api';
 import { readLocal, writeLocal } from './store';
 
@@ -26,8 +26,17 @@ export interface MangaSearch {
   adult?: boolean;
   /** Doujinshi and anthologies too, which stay out unless asked for. */
   doujinshi?: boolean;
+  /** Only these kinds; every kind when left out. */
+  kinds?: MangaKind[];
   /** Where the search carries on, as the last answer said. */
   next?: string;
+}
+
+/** The kinds as a search asks for them, or nothing when it's every kind. */
+function kindsOf(kinds: MangaKind[] | undefined): string | undefined {
+  if (!kinds) return undefined;
+  if (kinds.length === MANGA_KINDS.length) return undefined;
+  return kinds.join(',');
 }
 
 const query = (q: Record<string, string | number | undefined>) => {
@@ -40,7 +49,7 @@ const query = (q: Record<string, string | number | undefined>) => {
 export const mangadex = {
   state: () => ask(() => api.laptop.get<MangaState>('/v1/manga')),
   search: (s: MangaSearch) =>
-    ask(() => api.laptop.get<MangaSearchResult>(`/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, next: s.next })}`, 20_000)),
+    ask(() => api.laptop.get<MangaSearchResult>(`/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, kinds: kindsOf(s.kinds), next: s.next })}`, 20_000)),
   series: (id: string, adult: boolean) => ask(() => api.laptop.get<MangaSeries>(`/v1/manga/series/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter in a language. A long series is several calls to MangaDex, so it can take a while. */
   chapters: (id: string, lang: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),
@@ -90,22 +99,31 @@ export const sources = {
 };
 
 /**
- * How this device looks for manga: in what language and order, whether 18+ series and doujinshi
- * (and anthologies) show, and data saver.
+ * How this device looks for manga: in what language and order, which kinds, whether 18+ series and
+ * doujinshi (and anthologies) show, and data saver.
  */
 export interface MangaPrefs {
   lang: string;
   adult: boolean;
   /** Doujinshi (fan-made works) and anthologies show in the results too. */
   doujinshi: boolean;
+  /** At least one, in MANGA_KINDS' order. */
+  kinds: MangaKind[];
   sort: MangaSort;
   saver: boolean;
 }
 
 const PREFS = 'breader.mangadex.v1';
-const DEFAULTS: MangaPrefs = { lang: 'en', adult: false, doujinshi: false, sort: 'popular', saver: false };
+const DEFAULTS: MangaPrefs = { lang: 'en', adult: false, doujinshi: false, kinds: [...MANGA_KINDS], sort: 'popular', saver: false };
 
-export const readMangaPrefs = (): MangaPrefs => ({ ...DEFAULTS, ...readLocal<Partial<MangaPrefs>>(PREFS, {}) });
+export function readMangaPrefs(): MangaPrefs {
+  const prefs = { ...DEFAULTS, ...readLocal<Partial<MangaPrefs>>(PREFS, {}) };
+  // Kept before there were kinds, or by hand: only real ones, and every one when none is left.
+  let kinds: MangaKind[] = [];
+  if (Array.isArray(prefs.kinds)) kinds = MANGA_KINDS.filter((k) => prefs.kinds.includes(k));
+  if (kinds.length === 0) kinds = [...MANGA_KINDS];
+  return { ...prefs, kinds };
+}
 export const writeMangaPrefs = (p: MangaPrefs) => writeLocal(PREFS, p);
 
 /** Languages by name, as MangaDex has them. */
@@ -197,3 +215,5 @@ export const genreOf = (tags: Array<{ name: string }>) =>
 
 export const STATUS_NAME: Record<string, string> = { ongoing: 'Ongoing', completed: 'Completed', hiatus: 'On hiatus', cancelled: 'Cancelled' };
 export const RATING_NAME: Record<string, string> = { safe: 'All ages', suggestive: 'Suggestive', erotica: '18+', pornographic: '18+ explicit' };
+/** One series' kind, under its title. */
+export const KIND_NAME: Record<MangaKind, string> = { manga: 'Manga', manhwa: 'Manhwa', manhua: 'Manhua', comics: 'Comic' };
