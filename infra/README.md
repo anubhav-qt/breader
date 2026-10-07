@@ -139,7 +139,23 @@ Mihon's extensions, from the Keiyoushi store. The API asks it itself, so a manga
 each installed extension as well as MangaDex, the same for everyone; readers never reach it. Its
 web page answers on the laptop only, so from elsewhere it's reached through SSH
 (`ssh -L 4567:localhost:4567 laptop`). At http://localhost:4567, install the extensions to read
-from (adult ones show only with 18+).
+from:
+
+- **MangaFire** (the "all" one) and **Weeb Central**: in a trial each had all ten well-known series
+  asked for, pages 1067x1600 or sharper. Between them a series is almost never missing, so either
+  can close without much being lost.
+- **Asura Scans**, for manhwa.
+- If one of those closes for good, **MangaKatana** stands in best (ten of ten too, pages of mixed
+  sizes). Install it then; no settings change.
+- Leave out Comick and Mangakakalot (they need a Cloudflare bypass Suwayomi doesn't run here),
+  Flame Comics (it fails every search) and Atsumaru (it tags series loosely, so well-known ones
+  would be hidden as loli).
+
+Keiyoushi marks most big sites 18+, as each has some series for adults, but Breader judges each
+series by its own genres: one marked Adult, Hentai, Smut, Erotica or Pornographic shows only with
+**Show 18+**, and one marked loli or shota never shows. Each series' kind (manga, manhwa, manhua or
+comic) comes from its type among those genres too; one whose site doesn't say shows only while
+every kind is on in Browse.
 
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
 **Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged
