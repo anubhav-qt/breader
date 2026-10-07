@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { Header, type Tab } from './components/Header';
-import { IconPlus } from './components/icons';
+import { IconPlus, IconSearch } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { categoryOf, countOf, type Category } from './books/category';
@@ -126,14 +126,14 @@ export default function App() {
   const [sheet, setSheet] = useState<MangaFound[] | null>(null);
   /** A chapter picked in a sheet: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
-  // Whether the Manga shelf has a MangaDex tab: the laptop says. Out of reach, the tab stays and says so.
+  // Whether the Manga shelf has its Browse button: the laptop says. Out of reach, it stays and Browse says so.
   useEffect(() => {
     if (category !== 'manga' || mdOn !== null) return;
     let live = true;
     mangadex.state().then((st) => { if (live) setMdOn(st.on); }, () => { if (live) setMdOn(true); });
     return () => { live = false; };
   }, [category, mdOn]);
-  if ((category !== 'manga' || mdOn === false) && tab === 'mangadex') setTab('mine');
+  if ((category !== 'manga' || mdOn === false) && tab === 'browse') setTab('mine');
   // Each tab's library stays once it's been seen, so switching back finds it as it was.
   const [seen, setSeen] = useState<ReadonlySet<Tab>>(() => new Set([tab]));
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
@@ -758,11 +758,15 @@ export default function App() {
     });
   }, [recordById, lib, say]);
   const manga = category === 'manga';
+  /** Manga is found in Browse, which this opens, where the laptop has anywhere to look. */
+  const browseButton = mdOn !== false && (
+    <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconSearch /> Browse</button>
+  );
   /** An empty shared library: the reader's own says how to share; someone else's, why it's empty. */
   const emptyShelf = showing === 'own' ? (
     <div className="gallery-empty">
       <p>You don’t share any {manga ? 'manga' : 'books'} yet. Switch on <b>Share with your key</b> in {manga ? 'a manga’s' : 'a book’s'} ⋯ menu, or as you add one, and anyone you give your key to can read it here.</p>
-      <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> {manga ? 'Add manga' : 'Add a book'}</button>
+      {manga ? browseButton : <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>}
     </div>
   ) : others?.state === 'closed' ? (
     <div className="gallery-empty">
@@ -774,8 +778,8 @@ export default function App() {
   /** No manga yet: what goes here, and how. */
   const emptyManga = (
     <div className="gallery-empty">
-      <p>Manga and comics go here. Add their <b>CBZ</b> files, a volume or a chapter each, and they sync and open offline like your books.</p>
-      <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add manga</button>
+      <p>Manga and comics go here. Find a series in <b>Browse</b> and add it to My manga.</p>
+      {browseButton}
     </div>
   );
 
@@ -788,11 +792,12 @@ export default function App() {
             onCategory={setCategory}
             tab={tab}
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
-            mangadex={mdOn !== false}
+            browse={mdOn !== false}
             shelfName={libraryName(sharing, showing)}
             canAdd={books.length > 0}
             onTab={setTab}
             onAdd={() => setAdding({ mode: 'file' })}
+            onBrowse={() => setTab('browse')}
             onKey={() => setKeyOpen(true)}
             libraries={(close) => (
               <LibraryMenu
@@ -813,8 +818,9 @@ export default function App() {
               seriesNames={allSeries}
               // Manga keeps its own view below Recent; books keep the one they always had.
               place={manga ? `${t}-manga` : t}
-              // Shared libraries are browsed by genre; one's own books, by series.
-              view={t === 'shelf' ? 'genre' : 'series'}
+              // Shared libraries are browsed by genre; one's own books, by series. Manga has no series.
+              view={t === 'shelf' || manga ? 'genre' : 'series'}
+              noSeries={manga}
               now={now}
               id={`library-${t}`}
               labelledBy={`tab-${t}`}
@@ -837,11 +843,9 @@ export default function App() {
               }}
             />
           ))}
-          {lib.ready && mdOn !== false && seen.has('mangadex') && (
+          {lib.ready && mdOn !== false && seen.has('browse') && (
             <Browse
-              id="library-mangadex"
-              labelledBy="tab-mangadex"
-              hidden={!manga || tab !== 'mangadex'}
+              hidden={!manga || tab !== 'browse'}
               have={haveSeries}
               prefs={mdPrefs}
               onPrefs={setMdPrefs}

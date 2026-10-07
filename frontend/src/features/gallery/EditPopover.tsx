@@ -16,6 +16,8 @@ interface Props {
   book: ShelfItem;
   /** Series in either library, offered as the name is typed. */
   seriesNames: SeriesName[];
+  /** Manga has no series: no Series field. */
+  noSeries?: boolean;
   anchor: HTMLElement;
   /** The rest of its series in the reader's library, which a genre can go on all at once. */
   others?: ShelfItem[];
@@ -52,7 +54,7 @@ function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
  * A small popover beside the card's corner button: rename, put in a series, file under a genre,
  * recolour, share, let an AI read along, mark finished, favourite or remove.
  */
-export function EditPopover({ book, seriesNames, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onChapters, onClose }: Props) {
+export function EditPopover({ book, seriesNames, noSeries = false, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onChapters, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [name, setName] = useState(book.title);
   const numText = book.seriesIndex !== undefined ? String(book.seriesIndex) : '';
@@ -190,8 +192,12 @@ export function EditPopover({ book, seriesNames, anchor, others = [], onChange, 
         spellCheck={false}
         autoComplete="off"
       />
-      <label className="ep-label" htmlFor="ep-series">Series</label>
-      <SeriesField id="ep-series" value={series} known={seriesNames} inputClass="ep-input" onChange={setSeries} onDone={commitSeries} />
+      {!noSeries && (
+        <>
+          <label className="ep-label" htmlFor="ep-series">Series</label>
+          <SeriesField id="ep-series" value={series} known={seriesNames} inputClass="ep-input" onChange={setSeries} onDone={commitSeries} />
+        </>
+      )}
       <label className="ep-label" htmlFor="ep-genre">Genres</label>
       <GenreField
         id="ep-genre"

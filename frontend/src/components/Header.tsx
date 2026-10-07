@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { AnimatePresence, motion } from 'motion/react';
 import { CATEGORIES, countOf, type Category } from '../books/category';
 import { springs } from '../lib/springs';
-import { IconCaret, IconKey, IconPlus } from './icons';
+import { IconCaret, IconKey, IconPlus, IconSearch } from './icons';
 import { Logo } from './Logo';
 import './header.css';
 
-/** mangadex: the Manga shelf's way into MangaDex (features/manga/Browse.tsx). */
-export type Tab = 'mine' | 'shelf' | 'mangadex';
+/** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened by its button, not a tab. */
+export type Tab = 'mine' | 'shelf' | 'browse';
+
+const TABS: Array<'mine' | 'shelf'> = ['mine', 'shelf'];
 
 interface Props {
   /** Books or manga: the tabs, their counts and the Add button are the category's. */
@@ -15,14 +17,15 @@ interface Props {
   onCategory: (c: Category) => void;
   tab: Tab;
   counts: Record<'mine' | 'shelf', number>;
-  /** The laptop has MangaDex, so the Manga shelf has its tab. */
-  mangadex: boolean;
+  /** The laptop has places to find manga, so the Manga shelf has its Browse button. */
+  browse: boolean;
   /** The shared library the second tab shows: the reader's own, or someone's from their list. */
   shelfName: string;
-  /** False while the open tab is empty: the empty library has its own centred Add button. */
+  /** False while the open tab is empty: the empty library has its own centred button. */
   canAdd: boolean;
   onTab: (t: Tab) => void;
   onAdd: () => void;
+  onBrowse: () => void;
   onKey: () => void;
   /** The list of shared libraries, under the second tab (features/shared/LibraryMenu.tsx). */
   libraries: (close: () => void) => ReactNode;
@@ -30,13 +33,14 @@ interface Props {
   account: ReactNode;
 }
 
-export function Header({ category, onCategory, tab, counts, mangadex, shelfName, canAdd, onTab, onAdd, onKey, libraries, account }: Props) {
+export function Header({ category, onCategory, tab, counts, browse, shelfName, canAdd, onTab, onAdd, onBrowse, onKey, libraries, account }: Props) {
   const [menu, setMenu] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const manga = category === 'manga';
-  // MangaDex sits between the reader's own and the shared library, whose list opens beside it.
-  const TABS: Tab[] = manga && mangadex ? ['mine', 'mangadex', 'shelf'] : ['mine', 'shelf'];
-  const label = (t: Tab) => (t === 'mine' ? (manga ? 'My manga' : 'My books') : t === 'mangadex' ? 'Browse' : shelfName);
+  const label = (t: 'mine' | 'shelf') => (t === 'mine' ? (manga ? 'My manga' : 'My books') : shelfName);
+  // With Browse open, no tab is chosen: My manga keeps the Tab stop.
+  let focusable: 'mine' | 'shelf' = 'mine';
+  if (tab === 'shelf') focusable = 'shelf';
 
   useEffect(() => {
     if (!menu) return;
@@ -52,7 +56,7 @@ export function Header({ category, onCategory, tab, counts, mangadex, shelfName,
 
   // One Tab stop for both tabs; the arrow keys switch between them.
   const onArrow = (e: KeyboardEvent) => {
-    const i = TABS.indexOf(tab);
+    const i = TABS.indexOf(focusable);
     const moves: Record<string, number> = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 };
     const to = moves[e.key];
     if (to === undefined) return;
@@ -102,18 +106,14 @@ export function Header({ category, onCategory, tab, counts, mangadex, shelfName,
               className={`tab${t === 'shelf' ? ' is-shelf' : ''}`}
               aria-selected={tab === t}
               aria-controls={`library-${t}`}
-              tabIndex={tab === t ? 0 : -1}
+              tabIndex={focusable === t ? 0 : -1}
               // The shared tab, chosen already, opens its list of libraries.
               onClick={() => (t === 'shelf' && tab === 'shelf' ? setMenu((m) => !m) : onTab(t))}
             >
               {t === 'shelf' && <span className="sr-only">Shared library: </span>}
               <span className="tab-name">{label(t)}</span>
-              {t !== 'mangadex' && (
-                <>
-                  <span className="tab-count" aria-hidden="true">{counts[t]}</span>
-                  <span className="sr-only">, {countOf(counts[t], category)}</span>
-                </>
-              )}
+              <span className="tab-count" aria-hidden="true">{counts[t]}</span>
+              <span className="sr-only">, {countOf(counts[t], category)}</span>
               {tab === t && <motion.span className="tab-line" layoutId="tab-line" transition={springs.snappy} />}
             </button>
           ))}
@@ -134,9 +134,14 @@ export function Header({ category, onCategory, tab, counts, mangadex, shelfName,
       <div className="hdr-actions">
         {/* Not animated: a fading copy would sit beside the empty library's own Add button,
             and on phones that fade can stall and leave both on screen. */}
-        {canAdd && (
-          <button type="button" className="btn btn-primary" onClick={onAdd} aria-label={manga ? 'Add manga' : 'Add book'}>
-            <IconPlus /> <span className="hdr-label">{manga ? 'Add manga' : 'Add book'}</span>
+        {canAdd && manga && browse && (
+          <button type="button" className="btn btn-primary" onClick={onBrowse} aria-label="Browse" aria-pressed={tab === 'browse'}>
+            <IconSearch /> <span className="hdr-label">Browse</span>
+          </button>
+        )}
+        {canAdd && !manga && (
+          <button type="button" className="btn btn-primary" onClick={onAdd} aria-label="Add book">
+            <IconPlus /> <span className="hdr-label">Add book</span>
           </button>
         )}
         <button type="button" className="btn btn-ghost" onClick={onKey} title="Library key" aria-label="Library key">

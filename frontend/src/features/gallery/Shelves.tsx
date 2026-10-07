@@ -25,6 +25,8 @@ interface Props {
   place: string;
   /** The view it starts with until the reader picks one. */
   initial: View;
+  /** The views it has: manga has no series, so no Series. */
+  views: View[];
   /** The library's scroller, which brings in more shelves. */
   root: RefObject<HTMLElement | null>;
   now: number;
@@ -44,12 +46,14 @@ interface Props {
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, views, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: Props) {
   const key = `breader.view.${place}.v1`;
   const [picked, setPicked] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
-    return isView(v) ? v : null;
+    if (isView(v) && views.includes(v)) return v;
+    return null;
   });
+  const shown = VIEWS.filter((v) => views.includes(v.id));
   // A library with no series yet starts on its genres.
   const view = picked ?? (initial === 'series' && !series.size ? 'genre' : initial);
   const section = useRef<HTMLElement>(null);
@@ -75,11 +79,11 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
     return () => cancelAnimationFrame(f);
   }, [view]);
   const onArrow = (e: KeyboardEvent) => {
-    const i = VIEWS.findIndex((v) => v.id === view);
-    const to = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: VIEWS.length - 1 } as Record<string, number>)[e.key];
+    const i = shown.findIndex((v) => v.id === view);
+    const to = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: shown.length - 1 } as Record<string, number>)[e.key];
     if (to === undefined) return;
     e.preventDefault();
-    const next = VIEWS[(to + VIEWS.length) % VIEWS.length].id;
+    const next = shown[(to + shown.length) % shown.length].id;
     pick(next);
     tabs.current?.querySelector<HTMLElement>(`[data-view="${next}"]`)?.focus();
   };
@@ -110,7 +114,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
           </AnimatePresence>
         </div>
         <div ref={tabs} className="views" role="tablist" aria-label="Shelve by" onKeyDown={onArrow}>
-          {VIEWS.map((v) => (
+          {shown.map((v) => (
             <button
               key={v.id}
               type="button"

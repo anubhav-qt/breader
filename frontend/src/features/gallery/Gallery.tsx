@@ -8,10 +8,10 @@ import { EditPopover } from './EditPopover';
 import { Bento } from './layouts/Bento';
 import { RECENT } from './layouts/slots';
 import { cardAuthor, cardAuthors } from './names';
-import { findSeries, seriesAuthors, type SeriesName } from './series';
+import { findSeries, seriesAuthors, type Series, type SeriesName } from './series';
 import { SeriesDialog } from './SeriesDialog';
 import { Shelves } from './Shelves';
-import type { View } from './shelving';
+import { VIEWS, type View } from './shelving';
 import { TitleHint } from './TitleHint';
 import type { GalleryItem } from './types';
 import './gallery.css';
@@ -25,6 +25,8 @@ interface Props {
   place: string;
   /** The view below Recent until the reader picks one. */
   view: View;
+  /** Manga has no series: no series' cards, no Series view, no series in a card's menu. */
+  noSeries?: boolean;
   /** The panel's id, and the id of the tab that labels it. */
   id: string;
   labelledBy: string;
@@ -54,7 +56,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
+export function Gallery({ books, seriesNames, place, view, noSeries = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -69,7 +71,10 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
     setShowing(null);
   }, [hidden]);
 
-  const series = useMemo(() => findSeries(books, 1), [books]);
+  const series = useMemo(() => {
+    if (noSeries) return new Map<string, Series>();
+    return findSeries(books, 1);
+  }, [books, noSeries]);
   const stacks = useMemo(() => new Map([...series].filter(([, s]) => s.books.length > 1)), [series]);
   // A series' cards all go by the name most of its books give first.
   const authors = useMemo(() => seriesAuthors(stacks, (raw) => cardAuthor(raw).author, cardAuthors), [stacks]);
@@ -125,6 +130,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
           authors={authors}
           place={place}
           initial={view}
+          views={VIEWS.map((v) => v.id).filter((v) => !noSeries || v !== 'series')}
           root={scrollRef}
           indexBase={RECENT}
           onSeries={openSeries}
@@ -138,6 +144,7 @@ export function Gallery({ books, seriesNames, place, view, now, id, labelledBy, 
             key={editing.id}
             book={editingBook}
             seriesNames={seriesNames}
+            noSeries={noSeries}
             anchor={editing.anchor}
             others={editingOthers}
             // By the book's own id: a started shared book's card goes by the sharer's, its copy by its own.

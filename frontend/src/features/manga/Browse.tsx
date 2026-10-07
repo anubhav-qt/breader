@@ -6,7 +6,7 @@ import { entriesOf, viewOf } from './found';
 import './manga.css';
 
 /*
- * The Manga shelf's Browse tab: one search across every place Breader's computer looks (MangaDex
+ * The Manga shelf's Browse, opened by its button in the header: one search across every place Breader's computer looks (MangaDex
  * and its Suwayomi sources), by name or by what's popular, new or just updated, in a language. The
  * same series found in several places is one card (found.ts), saying where under the title. Under
  * the search, one line holds the order, the kinds to show, Doujinshi, 18+ and the language, each a
@@ -15,8 +15,6 @@ import './manga.css';
  */
 
 interface Props {
-  id: string;
-  labelledBy: string;
   hidden: boolean;
   /** Series already in My manga: MangaDex ids, and source ids (sw:44). */
   have: ReadonlySet<string>;
@@ -54,7 +52,7 @@ function messageOf(e: unknown): string {
   return 'Breader couldn’t reach it.';
 }
 
-export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }: Props) {
+export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
   const [found, setFound] = useState<Found>({ state: 'loading' });
@@ -222,7 +220,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
               <button type="button" className="mdx-card" onClick={c.pick}>
                 <span className="mdx-cover">
                   {c.cover ? (
-                    <img src={c.cover.src} srcSet={c.cover.srcSet} sizes="(max-width: 640px) 45vw, 190px" alt="" loading="lazy" decoding="async" draggable={false} />
+                    <img src={c.cover.src} srcSet={c.cover.srcSet} sizes="(max-width: 720px) 32vw, 190px" alt="" loading="lazy" decoding="async" draggable={false} />
                   ) : (
                     <span className="mdx-nocover">{c.title}</span>
                   )}
@@ -241,7 +239,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
   }
 
   return (
-    <div id={id} role="tabpanel" aria-labelledby={labelledBy} hidden={hidden} className="gallery mdx" ref={scroller}>
+    <section aria-label="Browse" hidden={hidden} className="gallery mdx" ref={scroller}>
       <div className="mdx-bar">
         <label className="mdx-search">
           <IconSearch />
@@ -288,6 +286,6 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
       <p className="mdx-credit">
         Series come from <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a>, and the sites Breader’s Suwayomi reads, each card saying which. Chapters credit the scanlation groups that made them, and where a publisher puts a series up itself, its sheet links there.
       </p>
-    </div>
+    </section>
   );
 }

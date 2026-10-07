@@ -1,4 +1,4 @@
-/* The Browse tab (Browse.tsx) and a series' sheets (SeriesSheet.tsx, SourceSheet.tsx), in the library's own look. */
+/* Browse (Browse.tsx) and a series' sheet (MangaSheet.tsx), in the library's own look. */
 /* The search on a line of its own; under it, one line with the order, the dots and the language. */
 .mdx-bar {
   position: sticky;
@@ -24,7 +24,8 @@
 }
 .mdx-search:focus-within { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .mdx-search svg { flex: none; width: 18px; height: 18px; }
-.mdx-search input { flex: 1; width: 0; min-width: 0; height: 100%; border: 0; background: none; outline: none; font-family: var(--read); font-size: 25px; line-height: 1; color: var(--ink); }
+/* 16px at least, or a phone zooms in on it. */
+.mdx-search input { flex: 1; width: 0; min-width: 0; height: 100%; border: 0; background: none; outline: none; font: var(--ui-w) 16px/1 var(--ui); color: var(--ink); }
 .mdx-search input::placeholder { color: var(--ink-2); }
 .mdx-search input::-webkit-search-cancel-button { filter: grayscale(1); }
 .mdx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; min-width: 0; }
@@ -182,8 +183,10 @@
   .mdx-sorts { flex: none; }
   .mdx-sort { padding: 0 10px; }
   .mdx-lang select { max-width: 170px; }
-  .mdx-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 20px 12px; }
-  .mdx-title { font-size: 21px; }
+  /* Three across on a phone, as manga apps have them. */
+  .mdx-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 18px 10px; }
+  .mdx-title { font-size: 20px; }
+  .mdx-meta { font-size: 10.5px; }
   .mds-top { grid-template-columns: 116px minmax(0, 1fr); grid-template-rows: auto auto; grid-template-areas: "cover info" "actions actions"; column-gap: 14px; }
   .mds-actions .btn { flex: 1; }
   .mds-alt { font-size: 22px; }
