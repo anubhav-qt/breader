@@ -45,7 +45,9 @@ export function mangaRoutes(deps: Deps) {
 
   r.get('/manga/search', rateLimit({ name: 'manga-search', max: 120, windowMs: 60_000 }), async (c) => {
     const q = parse(MangaSearchQuery, c.req.query());
-    c.header('Cache-Control', 'private, max-age=300');
+    // Never kept by the browser: a lot where every place was late answers differently a moment
+    // later, and a kept copy would be shown instead, over and over. The server keeps its own.
+    c.header('Cache-Control', 'private, no-store');
     return c.json(await manga!.search(q));
   });
 

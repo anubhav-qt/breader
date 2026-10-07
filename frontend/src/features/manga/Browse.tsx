@@ -47,6 +47,11 @@ type Found = { state: 'loading' } | { state: 'error'; message: string } | { stat
 /** What one lot found, and where the one after it starts. */
 type Lot = { items: MangaFound[]; next: string | null };
 
+/** How long a lot that got nowhere, every place late, waits before it's asked for again. */
+const STILL_MS = 5_000;
+
+const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+
 function messageOf(e: unknown): string {
   if (e instanceof Error) return e.message;
   return 'Breader couldn’t reach it.';
@@ -138,7 +143,10 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       if (!entries[0].isIntersecting || loadingMore.current === ask) return;
       loadingMore.current = ask;
       lotAt(ask, at).then(
-        (r) => {
+        async (r) => {
+          // Every place was late, so the search is where it was. Asked again straight away, an
+          // answer that comes at once (a kept copy, say) would be asked for thousands of times.
+          if (r.next === at && r.items.length === 0) await wait(STILL_MS);
           setFound((f) => {
             if (f.state !== 'ready' || f.ask !== ask || f.next !== at) return f;
             const seen = new Set(f.items.map((x) => x.card.id));
