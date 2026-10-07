@@ -7,15 +7,17 @@ import {
   type MangaChapters,
   type MangaLink,
   type MangaRating,
-  type MangaSearchResult,
   type MangaSeries,
   type MangaSort,
 } from '@breader/shared';
 import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
-import { Disk, pictureType, type Picture } from './disk.ts';
+import { pictureType, type Disk, type Picture } from './disk.ts';
+import type { Found, Lot, Place, Wanted } from './find.ts';
+import { web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
+import { caughtUp, firstMissing, highest } from './readable.ts';
 
 /*
  * MangaDex, as its rules ask (api.mangadex.org/docs): a User-Agent that says who's asking, about
@@ -24,7 +26,8 @@ import { Busy, Gate, Pace } from './pace.ts';
  * with each chapter). Answers are kept a while (in Redis when there's one, lib/cache.ts), pages on
  * disk (disk.ts), so readers ask it little.
  * Series tagged loli or shota are never shown, whatever else is allowed. A search shows only series
- * every chapter of can be read here, as a reader would otherwise find most of one is links or gaps.
+ * every chapter of can be read here (readable.ts), as a reader would otherwise find most of one is
+ * links or gaps. It's one of the places a search looks (find.ts).
  */
 
 export const USER_AGENT = 'Breader/1.0 (+https://breader.site)';
@@ -47,8 +50,6 @@ const FEED = 500;
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-/** An ongoing series still shows while its newest chapters, up to this many, aren't here yet. */
-const SPARE = 2;
 /** A search finding nothing readable goes on to MangaDex's next results, this many lots at most… */
 const LOTS = 6;
 /** …and not once it has taken this long, so the reader sees something. */
@@ -116,8 +117,9 @@ interface AtHome {
   chapter: { hash: string; data: string[]; dataSaver: string[] };
 }
 
-export interface Manga {
-  search(q: { q?: string; lang?: string; sort?: MangaSort; adult?: boolean; doujinshi?: boolean; offset: number }): Promise<MangaSearchResult>;
+export interface MangaDex {
+  /** Where a search looks in MangaDex. */
+  place(w: Wanted): Place;
   series(id: string, adult: boolean): Promise<MangaSeries>;
   chapters(id: string, lang: string): Promise<MangaChapters>;
   /** Page n of a chapter (from 0), or its data-saver copy. */
@@ -127,9 +129,9 @@ export interface Manga {
   warm(): Promise<void>;
 }
 
-export interface MangaOptions {
-  dir: string;
-  cacheBytes: number;
+export interface MangaDexOptions {
+  /** Where pages and covers are kept. */
+  disk: Disk;
   fetch?: typeof fetch;
   /** Calls a window: MangaDex's API overall, and its page servers' addresses. Tests go faster. */
   pace?: { api: [number, number]; home: [number, number] };
@@ -166,17 +168,6 @@ function pick(text: Record<string, string> | undefined, lang = 'en'): string | u
 const rels = (x: { relationships?: Rel[] }, type: string) => (x.relationships ?? []).filter((r) => r.type === type);
 const names = (x: { relationships?: Rel[] }, type: string) =>
   [...new Set(rels(x, type).map((r) => String(r.attributes?.name ?? '').trim()).filter(Boolean))];
-
-/** Only web links: MangaDex's are typed in by its users. */
-function web(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null;
-  } catch {
-    return null;
-  }
-}
 
 /** Markdown and BBCode, as MangaDex's descriptions are written, to plain text. */
 export function plain(s: string): string {
@@ -248,7 +239,17 @@ function card(m: RawManga): MangaCard {
     langs: [...new Set((a.availableTranslatedLanguages ?? []).filter((l): l is string => !!l))],
     original: a.originalLanguage ?? 'ja',
     authors: names(m, 'author'),
+    side: (a.tags ?? []).some((t) => SIDE_WORKS.includes(t.id)),
   };
+}
+
+/** Every name a series goes by: its title and its other titles, in every language. */
+function namesOf(m: RawManga): string[] {
+  const out: string[] = [];
+  for (const t of [m.attributes.title ?? {}, ...(m.attributes.altTitles ?? [])]) {
+    for (const name of Object.values(t)) out.push(name);
+  }
+  return out;
 }
 
 function details(m: RawManga): MangaSeries {
@@ -290,45 +291,6 @@ function chapterOf(c: RawChapter): MangaChapter | null {
   };
 }
 
-/** The first chapter from 1 that none of these is, or is part of (12.1 and 12.2 make up 12). */
-function firstMissing(chapters: MangaChapter[]): number {
-  const have = new Set<number>();
-  for (const c of chapters) {
-    if (c.chapter === null) continue;
-    const n = Math.floor(Number(c.chapter));
-    if (Number.isFinite(n)) have.add(n);
-  }
-  let n = 1;
-  while (have.has(n)) n++;
-  return n;
-}
-
-/** The newest whole number among these chapters: 0 when none is numbered. */
-function highest(chapters: MangaChapter[]): number {
-  let top = 0;
-  for (const c of chapters) {
-    if (c.chapter === null) continue;
-    const n = Math.floor(Number(c.chapter));
-    if (n > top) top = n;
-  }
-  return top;
-}
-
-/**
- * The chapters run unbroken past the newest: past an ended series' last too, when MangaDex says it,
- * and for an ongoing one, past all but its newest two.
- */
-function caughtUp(m: RawManga, missing: number, newest: number): boolean {
-  const status = m.attributes.status;
-  if (status === 'completed' || status === 'cancelled') {
-    let need = newest;
-    const last = Math.floor(Number(m.attributes.lastChapter));
-    if (last > need) need = last;
-    return missing > need;
-  }
-  return missing > newest - SPARE;
-}
-
 /** The language a series is read in when any will do: English when it has it, or else the first it lists. */
 function readingLanguage(m: RawManga): string | null {
   const langs = card(m).langs;
@@ -343,9 +305,9 @@ const query = (q: Query): Array<[string, string]> =>
     v === undefined ? [] : Array.isArray(v) ? v.map((x) => [`${k}[]`, x]) : [[k, String(v)]],
   );
 
-export function makeManga(opts: MangaOptions): Manga {
+export function makeMangaDex(opts: MangaDexOptions): MangaDex {
   const fetchFn = opts.fetch ?? fetch;
-  const disk = new Disk(opts.dir, opts.cacheBytes);
+  const disk = opts.disk;
   const [apiCount, apiPer] = opts.pace?.api ?? [4, 1000];
   const [homeCount, homePer] = opts.pace?.home ?? [35, MINUTE];
   const apiPace = new Pace(apiCount, apiPer, 20_000);
@@ -367,7 +329,6 @@ export function makeManga(opts: MangaOptions): Manga {
   /** The series each chapter is in, so its pages can be checked: from its series' list, or asked. */
   const chapterSeries = memo<string>('chapter-series', 7 * DAY, 100_000);
   const tags = memo<string[]>('tags', DAY, 1);
-  const fetching = new Map<string, Promise<Picture>>();
   let warming = false;
 
   async function get(url: string, timeout: number, init: RequestInit = {}): Promise<Response> {
@@ -531,10 +492,12 @@ export function makeManga(opts: MangaOptions): Manga {
     const { chapters } = await feed(m.id, lang, fresh);
     const here = chapters.filter((c) => !c.external);
     if (here.length === 0) return false;
+    const status = card(m).status;
+    const last = Math.floor(Number(m.attributes.lastChapter));
     const missing = firstMissing(here);
     // Its own list already lacks one, so there's nothing more to ask.
-    if (!caughtUp(m, missing, highest(here))) return false;
-    return caughtUp(m, missing, await newest(m.id));
+    if (!caughtUp(status, last, missing, highest(here))) return false;
+    return caughtUp(status, last, missing, await newest(m.id));
   }
 
   /** check(), kept until the series gets a new upload (its chapters are asked again then), or a day at most. */
@@ -601,57 +564,52 @@ export function makeManga(opts: MangaOptions): Manga {
     }
   }
 
-  /** Kept on disk, or fetched once however many ask for it at the same time, then kept. */
-  async function kept(key: string, make: () => Promise<Picture>): Promise<Picture> {
-    const hit = await disk.get(key);
-    if (hit) return hit;
-    let going = fetching.get(key);
-    if (!going) {
-      going = make()
-        .then(async (pic) => {
-          await disk.put(key, pic.data);
-          return pic;
-        })
-        .finally(() => fetching.delete(key));
-      fetching.set(key, going);
+  /** A series a search found, as find.ts takes it. */
+  async function foundOf(m: RawManga, lang: string | undefined): Promise<Found | null> {
+    const c = await readableCard(m, lang);
+    if (!c) return null;
+    return { item: { kind: 'mangadex', source: 'MangaDex', card: c }, names: namesOf(m) };
+  }
+
+  /** A search's next lot from MangaDex, from that far into its results. */
+  async function search(w: Wanted, offset: number): Promise<Lot> {
+    const by = ORDER[w.sort ?? (w.q ? 'relevance' : 'popular')];
+    // Relevance needs words to be relevant to.
+    const field = by === 'relevance' && !w.q ? 'followedCount' : by;
+    const ask: Ask = { q: w.q, lang: w.lang, field, adult: w.adult, doujinshi: w.doujinshi };
+    const started = Date.now();
+    const found: Found[] = [];
+    let failed: unknown = null;
+    let total = 0;
+    let at = offset;
+    for (let lot = 0; lot < LOTS; lot++) {
+      const listed = await list(ask, at);
+      total = listed.total;
+      at += MANGA_PAGE;
+      const each = await Promise.all(
+        listed.data.map((m) =>
+          foundOf(m, w.lang).catch((e) => {
+            failed = e;
+            return null;
+          }),
+        ),
+      );
+      for (const f of each) {
+        if (f) found.push(f);
+      }
+      if (found.length > 0 || failed || at >= total) break;
+      if (Date.now() - started > BUDGET) break;
     }
-    return going;
+    // Nothing found, and some couldn't be checked (MangaDex busy, say): that, not an empty lot.
+    if (found.length === 0 && failed) throw failed;
+    let next: string | null = String(at);
+    if (at >= total || at > MANGA_LAST_OFFSET) next = null;
+    return { found, next };
   }
 
   return {
-    async search({ q, lang, sort, adult, doujinshi, offset }) {
-      const by = ORDER[sort ?? (q ? 'relevance' : 'popular')];
-      // Relevance needs words to be relevant to.
-      const field = by === 'relevance' && !q ? 'followedCount' : by;
-      const ask: Ask = { q, lang, field, adult: !!adult, doujinshi: !!doujinshi };
-      const started = Date.now();
-      const items: MangaCard[] = [];
-      let failed: unknown = null;
-      let total = 0;
-      let at = offset;
-      for (let lot = 0; lot < LOTS; lot++) {
-        const found = await list(ask, at);
-        total = found.total;
-        at += MANGA_PAGE;
-        const cards = await Promise.all(
-          found.data.map((m) =>
-            readableCard(m, lang).catch((e) => {
-              failed = e;
-              return null;
-            }),
-          ),
-        );
-        for (const c of cards) {
-          if (c) items.push(c);
-        }
-        if (items.length > 0 || failed || at >= total) break;
-        if (Date.now() - started > BUDGET) break;
-      }
-      // Nothing found, and some couldn't be checked (MangaDex busy, say): that, not an empty lot.
-      if (items.length === 0 && failed) throw failed;
-      let next: number | null = at;
-      if (at >= total || at > MANGA_LAST_OFFSET) next = null;
-      return { total, offset, next, items };
+    place(w) {
+      return { key: 'md', name: 'MangaDex', lot: (at) => search(w, Number(at)) };
     },
 
     async series(id, adult) {
@@ -667,7 +625,7 @@ export function makeManga(opts: MangaOptions): Manga {
 
     async page(chapterId, n, saver) {
       await allowChapter(chapterId);
-      return kept(`page:${chapterId}:${saver ? 's' : 'd'}:${n}`, async () => {
+      return disk.keep(`page:${chapterId}:${saver ? 's' : 'd'}:${n}`, async () => {
         const from = async (fresh: boolean) => {
           const home = await atHome(chapterId, fresh);
           const files = saver ? home.chapter.dataSaver : home.chapter.data;
@@ -687,7 +645,7 @@ export function makeManga(opts: MangaOptions): Manga {
 
     async cover(mangaId, file, size) {
       await allowed(mangaId);
-      return kept(`cover:${mangaId}:${file}:${size}`, () => picture(`${UPLOADS}/covers/${mangaId}/${file}.${size}.jpg`, false));
+      return disk.keep(`cover:${mangaId}:${file}:${size}`, () => picture(`${UPLOADS}/covers/${mangaId}/${file}.${size}.jpg`, false));
     },
 
     async warm() {

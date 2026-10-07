@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
-import { MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, type MangaState } from '@breader/shared';
+import { MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type MangaState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, signedOut } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
@@ -8,10 +8,11 @@ import { readSession } from '../lib/session.ts';
 import type { Picture } from '../manga/disk.ts';
 
 /*
- * MangaDex through the laptop (manga/mangadex.ts). Anyone may look through it; its pages, the most
+ * Manga through the laptop (manga/): one search across MangaDex, Breader's Suwayomi sources and its
+ * Komga library, and each series from wherever it is. Anyone may look through it; pages, the most
  * of what it sends, are for browsers signed in to a library, as a series is read once it's added
- * to one. Pages go through here because MangaDex only lets its own site fetch them from a browser.
- * The fallback has no MangaDex: it answers that it's off.
+ * to one. Pages go through here because MangaDex only lets its own site fetch them from a browser,
+ * and Suwayomi and Komga aren't open to readers. The fallback has no manga: it answers that it's off.
  */
 export function mangaRoutes(deps: Deps) {
   const { env, manga } = deps;
@@ -23,7 +24,7 @@ export function mangaRoutes(deps: Deps) {
   });
 
   r.use('/manga/*', async (_c, next) => {
-    if (!manga) throw new ApiError(503, 'manga_off', 'MangaDex isn’t on, on this server.');
+    if (!manga) throw new ApiError(503, 'manga_off', 'Manga isn’t on, on this server.');
     await next();
   });
   // The signed cookie is enough to tell a reader from a stranger, and asks nothing of the database,
@@ -32,8 +33,13 @@ export function mangaRoutes(deps: Deps) {
     if (!readSession(c, env)) throw signedOut();
     await next();
   });
+  r.use('/manga/source/chapter/*', async (c, next) => {
+    if (!readSession(c, env)) throw signedOut();
+    await next();
+  });
 
   const id = (c: Context<AppEnv>, name = 'id') => parse(MangaId, c.req.param(name));
+  const sourceId = (c: Context<AppEnv>) => parse(SourceId, c.req.param('id'));
   const picture = (c: Context<AppEnv>, pic: Picture, maxAge: number) =>
     c.body(pic.data as Uint8Array<ArrayBuffer>, 200, { 'content-type': pic.type, 'cache-control': `private, max-age=${maxAge}` });
 
@@ -64,6 +70,31 @@ export function mangaRoutes(deps: Deps) {
   r.get('/manga/cover/:id/:file{[\\w-]{1,80}\\.(?:jpe?g|png|webp|gif)}', rateLimit({ name: 'manga-cover', max: 600, windowMs: 60_000 }), async (c) => {
     const { size } = parse(MangaCoverQuery, c.req.query());
     return picture(c, await manga!.cover(id(c), c.req.param('file'), size), 604_800);
+  });
+
+  // A series on Suwayomi or in Komga, by ids like sw:12 and kg:0RVCY8NST343X.
+  r.get('/manga/source/chapter/:id', rateLimit({ name: 'manga-source-pages', max: 120, windowMs: 60_000 }), async (c) => {
+    c.header('Cache-Control', 'private, max-age=300');
+    return c.json({ pages: await manga!.sourcePages(sourceId(c)) });
+  });
+
+  r.get('/manga/source/chapter/:id/:n{[0-9]{1,4}}', rateLimit({ name: 'manga-page', max: 600, windowMs: 60_000 }), async (c) => {
+    return picture(c, await manga!.sourcePage(sourceId(c), Number(c.req.param('n'))), 86_400);
+  });
+
+  r.get('/manga/source/:id', rateLimit({ name: 'manga-series', max: 120, windowMs: 60_000 }), async (c) => {
+    const { adult } = parse(MangaSeriesQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=600');
+    return c.json(await manga!.sourceSeries(sourceId(c), !!adult));
+  });
+
+  r.get('/manga/source/:id/chapters', rateLimit({ name: 'manga-chapters', max: 60, windowMs: 60_000 }), async (c) => {
+    c.header('Cache-Control', 'private, max-age=300');
+    return c.json(await manga!.sourceChapters(sourceId(c)));
+  });
+
+  r.get('/manga/source/:id/cover', rateLimit({ name: 'manga-cover', max: 600, windowMs: 60_000 }), async (c) => {
+    return picture(c, await manga!.sourceCover(sourceId(c)), 86_400);
   });
 
   return r;

@@ -7,7 +7,8 @@ import { makeApp } from '../src/app.ts';
 import { connectRedis, type Store } from '../src/lib/cache.ts';
 import { log } from '../src/log.ts';
 import { Disk } from '../src/manga/disk.ts';
-import { ANTHOLOGY_ID, DOUJINSHI_ID, makeManga, plain, USER_AGENT } from '../src/manga/mangadex.ts';
+import { makeManga } from '../src/manga/index.ts';
+import { ANTHOLOGY_ID, DOUJINSHI_ID, plain, USER_AGENT } from '../src/manga/mangadex.ts';
 import { Gate, Pace } from '../src/manga/pace.ts';
 import { app as plainApp, browser, deps } from './helpers.ts';
 
@@ -85,7 +86,8 @@ function shelf(n: number, status: string, newest: number, hosted: Array<number |
   const manga = series(sid(n), { title: { en: `Series ${n}` }, status, latestUploadedChapter: ch(n * 1000), ...over });
   return { manga, feed, newest };
 }
-const titles = (body: { items: Array<{ title: string }> }) => body.items.map((x) => x.title);
+const titles = (body: { items: Array<{ card: { title: string } }> }) => body.items.map((x) => x.card.title);
+const ids = (body: { items: Array<{ card: { id: string } }> }) => body.items.map((x) => x.card.id);
 
 const png = (n: number) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, n]);
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 1]);
@@ -245,8 +247,10 @@ describe('MangaDex through the laptop', () => {
     const { b, dex } = await setup();
     const r = await b.get('/v1/manga/search?q=frieren&lang=en');
     expect(r.status).toBe(200);
-    expect(r.body.items.map((x: { id: string }) => x.id)).toEqual([FRIEREN]);
-    expect(r.body.items[0]).toEqual({
+    expect(ids(r.body)).toEqual([FRIEREN]);
+    expect(r.body.items[0].kind).toBe('mangadex');
+    expect(r.body.items[0].source).toBe('MangaDex');
+    expect(r.body.items[0].card).toEqual({
       id: FRIEREN,
       title: 'Sousou no Frieren',
       cover: 'cover-1.jpg',
@@ -257,6 +261,7 @@ describe('MangaDex through the laptop', () => {
       original: 'ja',
       authors: ['Yamada Kanehito'],
       readIn: 'en',
+      side: false,
     });
     const [search] = dex.asked('api.mangadex.org', /^\/manga$/);
     expect(search.ua).toBe(USER_AGENT);
@@ -268,7 +273,7 @@ describe('MangaDex through the laptop', () => {
     expect(search.url.searchParams.get('order[relevance]')).toBe('desc');
 
     const adult = await b.get('/v1/manga/search?adult=1&sort=latest');
-    expect(adult.body.items.map((x: { id: string }) => x.id)).toEqual([FRIEREN, ADULT]);
+    expect(ids(adult.body)).toEqual([FRIEREN, ADULT]);
     const asked = dex.asked('api.mangadex.org', /^\/manga$/).at(-1)!;
     expect(asked.url.searchParams.getAll('contentRating[]')).toEqual(['safe', 'suggestive', 'erotica', 'pornographic']);
     expect(asked.url.searchParams.get('order[latestUploadedChapter]')).toBe('desc');
@@ -316,7 +321,7 @@ describe('MangaDex through the laptop', () => {
     const r = await b.get('/v1/manga/search?lang=en');
     expect(r.status).toBe(200);
     expect(titles(r.body)).toEqual(['Series 1', 'Series 2', 'Series 7', 'Series 8', 'Series 9']);
-    expect(r.body.items[0].readIn).toBe('en');
+    expect(r.body.items[0].card.readIn).toBe('en');
     expect(r.body.next).toBeNull();
     expect(dex.asked('api.mangadex.org', /^\/manga$/)[0].url.searchParams.get('limit')).toBe('10');
     // The index of every language's chapters only for series whose own list has no gap.
@@ -346,7 +351,7 @@ describe('MangaDex through the laptop', () => {
     const { b, dex } = await setup();
     dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20)), shelf(2, 'ongoing', 20, upTo(20), [], { availableTranslatedLanguages: ['pt-br', 'es'] })];
     const r = await b.get('/v1/manga/search');
-    expect(r.body.items.map((x: { title: string; readIn: string }) => [x.title, x.readIn])).toEqual([['Series 1', 'en'], ['Series 2', 'pt-br']]);
+    expect(r.body.items.map((x: { card: { title: string; readIn: string } }) => [x.card.title, x.card.readIn])).toEqual([['Series 1', 'en'], ['Series 2', 'pt-br']]);
     const langs = dex.asked('api.mangadex.org', /\/feed$/).map((c) => c.url.searchParams.get('translatedLanguage[]'));
     expect(langs.sort()).toEqual(['en', 'pt-br']);
   });
@@ -357,13 +362,13 @@ describe('MangaDex through the laptop', () => {
     dex.state.catalogue = [...unreadable.slice(0, 23), shelf(1, 'ongoing', 20, upTo(20)), ...unreadable.slice(23)];
     const r = await b.get('/v1/manga/search?lang=en');
     expect(titles(r.body)).toEqual(['Series 1']);
-    expect(r.body.next).toBe(30);
+    expect(r.body.next).toBe('md:30');
     expect(dex.asked('api.mangadex.org', /^\/manga$/).map((c) => c.url.searchParams.get('offset'))).toEqual(['0', '10', '20']);
     // Six lots of nothing: an empty answer, and where to carry on from.
-    const more = await b.get('/v1/manga/search?lang=en&offset=30');
+    const more = await b.get('/v1/manga/search?lang=en&next=md:30');
     expect(more.body.items).toEqual([]);
-    expect(more.body.next).toBe(90);
-    const end = await b.get('/v1/manga/search?lang=en&offset=90');
+    expect(more.body.next).toBe('md:90');
+    const end = await b.get('/v1/manga/search?lang=en&next=md:90');
     expect(end.body.items).toEqual([]);
     expect(end.body.next).toBeNull();
   });

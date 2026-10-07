@@ -53,8 +53,8 @@ interface Item {
   pick: () => void;
 }
 
-/** next: where the next lot starts, MangaDex's offset after what it looked through. */
-type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; items: Item[]; more: boolean; next: number };
+/** next: where the next lot starts, as the server said. */
+type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; items: Item[]; more: boolean; next: string };
 
 const messageOf = (e: unknown) =>
   e instanceof ApiError && e.code === 'laptop_off'
@@ -124,18 +124,24 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
   });
 
   /**
-   * A lot of results: MangaDex's from an offset, only the series that can be read here, so it can
+   * A lot of results: MangaDex's from where the search had got to, only the series that can be read here, so it can
    * be short or even empty; a server source's by page.
    */
-  const fetchLot = async (offset: number): Promise<{ items: Item[]; more: boolean; next: number }> => {
+  const fetchLot = async (at: string): Promise<{ items: Item[]; more: boolean; next: string }> => {
     if (where === 'mangadex') {
-      const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, offset });
-      return { items: r.items.map(mdItem), more: r.next !== null, next: r.next ?? offset };
+      let next: string | undefined = undefined;
+      if (at) next = at;
+      const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, next });
+      const cards: MangaCard[] = [];
+      for (const f of r.items) {
+        if (f.kind === 'mangadex') cards.push(f.card);
+      }
+      return { items: cards.map(mdItem), more: r.next !== null, next: r.next ?? at };
     }
-    const n = offset === 0 ? 1 : page.current + 1;
+    const n = at === '' ? 1 : page.current + 1;
     const r = await suwayomi.browse(source!.id, q ? 'SEARCH' : serverSort, n, q || undefined);
     page.current = n;
-    return { items: r.mangas.map(swItem), more: r.hasNextPage && r.mangas.length > 0, next: offset + r.mangas.length };
+    return { items: r.mangas.map(swItem), more: r.hasNextPage && r.mangas.length > 0, next: String(n) };
   };
 
   useEffect(() => {
@@ -144,7 +150,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
     setFound({ state: 'loading' });
     scroller.current?.scrollTo({ top: 0 });
     page.current = 1;
-    fetchLot(0).then(
+    fetchLot('').then(
       (r) => { if (live) setFound({ state: 'ready', ...r }); },
       (e) => { if (live) setFound({ state: 'error', message: messageOf(e) }); },
     );
@@ -160,11 +166,11 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting || loadingMore.current) return;
       loadingMore.current = true;
-      const offset = ready.next;
-      fetchLot(offset).then(
+      const at = ready.next;
+      fetchLot(at).then(
         (r) => {
           setFound((f) => {
-            if (f.state !== 'ready' || f.next !== offset) return f;
+            if (f.state !== 'ready' || f.next !== at) return f;
             const seen = new Set(f.items.map((x) => x.key));
             return { state: 'ready', items: [...f.items, ...r.items.filter((x) => !seen.has(x.key))], more: r.more, next: r.next };
           });

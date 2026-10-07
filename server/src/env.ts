@@ -87,9 +87,9 @@ const Env = z.object({
   SPEECH_THREADS: z.coerce.number().int().min(1).max(16).optional(),
 
   /**
-   * Manga from MangaDex, through the laptop (src/manga/): on unless this says false, and always off
-   * on the fallback. Pages read are kept in MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used
-   * longest ago going first.
+   * Manga through the laptop (src/manga/): on unless this says false, and always off on the
+   * fallback. Pages read are kept in MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used longest
+   * ago going first.
    */
   MANGADEX: bool.default(true),
   MANGA_CACHE_DIR: z.string().default('/data/manga'),
@@ -99,6 +99,14 @@ const Env = z.object({
    * Without it they're kept in memory. Redis not answering never stops a reader.
    */
   REDIS_URL: z.string().url().optional(),
+  /**
+   * Breader's own Suwayomi server (http://suwayomi:4567), whose sources a manga search looks in too,
+   * and its Komga library (http://komga:25600), with the API key Komga made for Breader. Each is off
+   * without its address.
+   */
+  SUWAYOMI_URL: z.string().url().optional(),
+  KOMGA_URL: z.string().url().optional(),
+  KOMGA_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof Env>;

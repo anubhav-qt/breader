@@ -86,6 +86,11 @@ services:
       SPEECH_EMAILS: "${SPEECH_EMAILS:-}"
       # MangaDex's answers are kept here. Stop "redis" to watch the API carry on without it.
       REDIS_URL: "redis://redis:6379"
+      # A manga search looks in Suwayomi's sources and Komga's library too. Komga answers with the API
+      # key it makes for Breader (README.md › Manga sources): KOMGA_API_KEY=… npm run stack
+      SUWAYOMI_URL: "http://suwayomi:4567"
+      KOMGA_URL: "http://komga:25600"
+      KOMGA_API_KEY: "${KOMGA_API_KEY:-}"
     ports: ["8787:8787"]
     volumes: ["voices:/data/voices", "manga:/data/manga"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }

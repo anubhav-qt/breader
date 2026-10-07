@@ -4,7 +4,7 @@ import type { Db } from './db/client.ts';
 import type { libraries } from './db/schema.ts';
 import type { Env } from './env.ts';
 import type { Storage } from './lib/storage.ts';
-import type { Manga } from './manga/mangadex.ts';
+import type { Manga } from './manga/index.ts';
 import type { Speech } from './speech/index.ts';
 
 export interface Deps {
@@ -18,7 +18,7 @@ export interface Deps {
   auth: Auth;
   /** The server voice (speech/); null where it's off, as on the fallback. */
   speech: Speech | null;
-  /** MangaDex (manga/); null where it's off, as on the fallback. */
+  /** Manga: MangaDex, and Suwayomi and Komga when set up (manga/); null where it's off, as on the fallback. */
   manga: Manga | null;
 }
 

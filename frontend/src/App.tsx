@@ -436,7 +436,7 @@ export default function App() {
   /** A MangaDex series in My manga: its sheet, from what the card knows until the rest comes. */
   const chaptersOf = useCallback((b: ShelfItem) => {
     const w = remoteOf(b.url);
-    if (w?.kind === 'mangadex') setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [] });
+    if (w?.kind === 'mangadex') setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [], side: false });
     else if (w?.kind === 'suwayomi') {
       if (readServer()) setServerSheet({ id: w.id, title: b.title, thumbnailUrl: `/api/v1/manga/${w.id}/thumbnail`, inLibrary: false });
       else setConnecting(true);

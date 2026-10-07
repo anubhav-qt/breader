@@ -8,7 +8,7 @@ import { connectRedis, type Redis } from './lib/cache.ts';
 import { startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
-import { makeManga } from './manga/mangadex.ts';
+import { makeManga, type MangaOptions } from './manga/index.ts';
 import { makeSpeech } from './speech/index.ts';
 
 const env = loadEnv();
@@ -20,12 +20,16 @@ const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // The server voice runs on the laptop only: Render's free plan hasn't the processor for it.
 const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(env) : null;
-// MangaDex too: its pages go through here, and the fallback's free plan hasn't the bandwidth.
+// Manga too: its pages go through here, and the fallback's free plan hasn't the bandwidth.
 const mangaOn = env.ROLE === 'laptop' && env.MANGADEX;
 // Its answers are kept in Redis when there's one, so they outlast a restart.
 let redis: Redis | null = null;
 if (mangaOn && env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
-const manga = mangaOn ? makeManga({ dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024, store: redis }) : null;
+const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024, store: redis };
+if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
+if (env.KOMGA_URL && env.KOMGA_API_KEY) mangaOptions.komga = { url: env.KOMGA_URL, key: env.KOMGA_API_KEY };
+if (mangaOn && env.KOMGA_URL && !env.KOMGA_API_KEY) log.warn('KOMGA_URL is set without KOMGA_API_KEY, so manga searches leave Komga out');
+const manga = mangaOn ? makeManga(mangaOptions) : null;
 const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
@@ -36,7 +40,7 @@ const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.
 // Both roles prune feed records the laptop never read, so a long absence can't fill Supabase.
 const chores = setInterval(() => void pruneStaleFeed(primary.pool).catch((err) => log.warn({ err }, 'feed prune failed')), 3_600_000);
 
-// Browse's first screens of manga are checked ahead of readers, and again every 15 minutes.
+// Browse's first screens of MangaDex are checked ahead of readers, and again every 15 minutes.
 let warming: NodeJS.Timeout | undefined;
 if (manga) {
   void manga.warm();

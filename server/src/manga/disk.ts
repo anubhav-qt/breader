@@ -5,7 +5,7 @@ import { log } from '../log.ts';
 
 /*
  * Pages and covers kept on the laptop's disk, up to a size, so a page read twice (or by two
- * readers) is asked of MangaDex once. When it's full, the pages used longest ago go. A file's time
+ * readers) is asked of MangaDex or a Suwayomi source once. When it's full, the pages used longest ago go. A file's time
  * is when it was last used, so that survives a restart.
  */
 
@@ -28,6 +28,7 @@ export function pictureType(b: Uint8Array): string | null {
 export class Disk {
   private index = new Map<string, { size: number; used: number }>();
   private total = 0;
+  private fetching = new Map<string, Promise<Picture>>();
   private readonly ready: Promise<void>;
   private readonly dir: string;
   private readonly budget: number;
@@ -98,6 +99,23 @@ export class Disk {
     this.index.set(name, { size: data.byteLength, used: Date.now() });
     this.total += data.byteLength;
     await this.trim();
+  }
+
+  /** Kept, or else make()'s picture, fetched once however many ask for it at the same time, then kept. */
+  async keep(key: string, make: () => Promise<Picture>): Promise<Picture> {
+    const hit = await this.get(key);
+    if (hit) return hit;
+    let going = this.fetching.get(key);
+    if (!going) {
+      going = make()
+        .then(async (pic) => {
+          await this.put(key, pic.data);
+          return pic;
+        })
+        .finally(() => this.fetching.delete(key));
+      this.fetching.set(key, going);
+    }
+    return going;
   }
 
   /** Over budget: down to nine tenths of it, so it isn't trimmed again with every page. */

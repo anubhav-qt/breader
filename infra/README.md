@@ -135,12 +135,15 @@ again; if Redis stops answering, the API asks MangaDex instead and logs a warnin
 Render never has it: its free plan hasn't the bandwidth for pages.
 
 **Manga sources: Suwayomi and Komga.** Two more services hold manga for every reader. `suwayomi`
-runs Mihon's extensions, from the Keiyoushi store; `komga` is a library of comic files. Their web
-pages answer on the laptop only, so from elsewhere they're reached through SSH
+runs Mihon's extensions, from the Keiyoushi store; `komga` is a library of comic files. The API
+asks them itself, so a manga search looks in each installed extension and in Komga as well as
+MangaDex, the same for everyone; readers never reach them. Their web pages answer on the laptop
+only, so from elsewhere they're reached through SSH
 (`ssh -L 4567:localhost:4567 -L 25600:localhost:25600 laptop`). In Suwayomi
-(http://localhost:4567), install the extensions to read from. In Komga (http://localhost:25600),
-make the admin account, copy the comic files into the `komga-books` volume, add a library at
-`/books`, and make an API key under the account's settings for `KOMGA_API_KEY`.
+(http://localhost:4567), install the extensions to read from (adult ones show only with 18+). In
+Komga (http://localhost:25600), make the admin account, copy the comic files into the
+`komga-books` volume, add a library at `/books`, and make an API key under the account's settings
+for `KOMGA_API_KEY`. Without the key the API leaves Komga out, and says so in its log.
 
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
 **Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged

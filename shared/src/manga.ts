@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
 /*
- * MangaDex through the laptop (server routes/manga.ts): series to find, their chapters in a
- * language, and each chapter's pages as pictures. MangaDex's own shapes are the server's business;
- * these are what it answers. Scanlation groups made the chapters, so they're credited wherever a
- * chapter is read, and a series' official releases are linked from it.
+ * Manga through the laptop (server routes/manga.ts): one search across every place it looks
+ * (MangaDex, the sources of Breader's Suwayomi server, its Komga library), each series' chapters,
+ * and each chapter's pages as pictures. Their own shapes are the server's business; these are what
+ * it answers. Scanlation groups made the chapters, so they're credited wherever a chapter is read,
+ * and a MangaDex series' official releases are linked from it.
  */
 
 /** MangaDex's ids are UUIDs. */
@@ -16,10 +17,19 @@ const Flag = z.enum(['0', '1']).transform((v) => v === '1');
 export const MANGA_SORTS = ['relevance', 'popular', 'latest', 'new', 'rated'] as const;
 export type MangaSort = (typeof MANGA_SORTS)[number];
 
-/** MangaDex's results a search looks at a time, keeping only those that can be read here. */
+/** Results a search looks at a time in each place, keeping only those that can be read here. */
 export const MANGA_PAGE = 10;
 /** The furthest into MangaDex's results a search can ask, as it stops at 10,000. */
 export const MANGA_LAST_OFFSET = 9_900;
+
+/** A series on Breader's Suwayomi (sw:12) or in its Komga library (kg:0RVCY8NST343X), or one of their chapters. */
+export const SourceId = z.string().regex(/^(sw:[1-9]\d{0,9}|kg:[0-9A-Z]{8,20})$/, 'Not a series or chapter of a source');
+/**
+ * Where a search carries on, place by place: md:30 (MangaDex's offset), kg:2 (Komga's page),
+ * sw<source>:3.10 (a Suwayomi source's page, and how many of it were looked at). A place left out
+ * has nothing more.
+ */
+const Next = z.string().regex(/^[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?(,[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?){0,49}$/, 'Not where a search carries on');
 
 export const MangaSearchQuery = z.object({
   q: z.string().trim().max(200).optional(),
@@ -29,9 +39,10 @@ export const MangaSearchQuery = z.object({
   sort: z.enum(MANGA_SORTS).optional(),
   /** 18+ series too (erotica and pornographic). The loli and shota tags stay out whatever this says. */
   adult: Flag.optional(),
-  /** Doujinshi (fan-made works) and anthologies too, MangaDex's format tags, which stay out unless asked. */
+  /** Doujinshi (fan-made works) and anthologies too, which stay out unless asked. */
   doujinshi: Flag.optional(),
-  offset: z.coerce.number().int().min(0).max(MANGA_LAST_OFFSET).default(0),
+  /** Where the last lot said to carry on from; the first lot without it. */
+  next: Next.optional(),
 });
 export type MangaSearchQuery = z.input<typeof MangaSearchQuery>;
 
@@ -65,6 +76,8 @@ export interface MangaCard {
   authors: string[];
   /** The language a search found every chapter of it readable in here, which its sheet opens in. */
   readIn?: string;
+  /** A doujinshi or an anthology, which a search shows only when asked, after the rest. */
+  side: boolean;
 }
 
 export interface MangaLink {
@@ -107,15 +120,44 @@ export interface MangaChapter {
   at: number;
 }
 
+/** A series on Breader's Suwayomi or in its Komga library, as a search lists it. */
+export interface SourceCard {
+  /** sw:12 or kg:0RVCY8NST343X. */
+  id: string;
+  title: string;
+  /** Its cover through the laptop (/v1/manga/source/:id/cover), or null when it has none. */
+  cover: string | null;
+  status: MangaCard['status'];
+  /** From a source for adults, or rated 18+ in Komga. */
+  adult: boolean;
+  /** A doujinshi or an anthology, by its genres. */
+  side: boolean;
+}
+
+export interface SourceSeries extends SourceCard {
+  /** Where it's from: the source's name (Asura Scans), or Komga. */
+  source: string;
+  authors: string[];
+  description: string;
+  genres: string[];
+  /** Its page on its source's own site, when there's one. */
+  link: string | null;
+}
+
 /**
- * Only series every chapter of can be read here (an ongoing one may lack its newest two), so a lot
- * can hold fewer than it looked at. next is the offset to ask for after it, or null at the end.
+ * A series a search found, and where: the same series found in two places is two of these, each
+ * naming its own. source is the place's name, shown under the title.
+ */
+export type MangaFound = { kind: 'mangadex'; source: string; card: MangaCard } | { kind: 'source'; source: string; card: SourceCard };
+
+/**
+ * A lot from every place at once, the real series first. Only series every chapter of can be read
+ * here (an ongoing one may lack its newest two), so a lot can hold fewer than it looked at, or
+ * none. next says where to carry on, or null once every place is done.
  */
 export interface MangaSearchResult {
-  total: number;
-  offset: number;
-  next: number | null;
-  items: MangaCard[];
+  items: MangaFound[];
+  next: string | null;
 }
 
 export interface MangaChapters {
