@@ -100,13 +100,10 @@ const Env = z.object({
    */
   REDIS_URL: z.string().url().optional(),
   /**
-   * Breader's own Suwayomi server (http://suwayomi:4567), whose sources a manga search looks in too,
-   * and its Komga library (http://komga:25600), with the API key Komga made for Breader. Each is off
-   * without its address.
+   * Breader's own Suwayomi server (http://suwayomi:4567), whose sources a manga search looks in too.
+   * It's off without its address.
    */
   SUWAYOMI_URL: z.string().url().optional(),
-  KOMGA_URL: z.string().url().optional(),
-  KOMGA_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof Env>;

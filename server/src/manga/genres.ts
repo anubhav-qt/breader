@@ -1,5 +1,5 @@
 /*
- * What a series' genres and tags say, by name, as Suwayomi's sources and Komga write them (MangaDex
+ * What a series' genres and tags say, by name, as Suwayomi's sources write them (MangaDex
  * has tag ids of its own, mangadex.ts): which keep it out always, which mark it for adults, and
  * which make it a side work (a doujinshi or an anthology).
  */

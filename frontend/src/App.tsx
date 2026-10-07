@@ -126,7 +126,7 @@ export default function App() {
   const [sheet, setSheet] = useState<MangaCard | null>(null);
   /** A chapter picked in a sheet: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
-  /** A series' sheet from one of Breader's Suwayomi sources or its Komga library, open over the library too. */
+  /** A series' sheet from one of Breader's Suwayomi sources, open over the library too. */
   const [sourceSheet, setSourceSheet] = useState<SourceCard | null>(null);
   // Whether the Manga shelf has a MangaDex tab: the laptop says. Out of reach, the tab stays and says so.
   useEffect(() => {
@@ -435,7 +435,7 @@ export default function App() {
     }
   }, []);
 
-  /** A series from one of Breader's sources or its Komga library into My manga, with its cover from there. */
+  /** A series from one of Breader's Suwayomi sources into My manga, with its cover from there. */
   const addSourceSeries = useCallback(async (s: SourceSeries): Promise<BookRecord> => {
     const now = Date.now();
     let cover: Blob | undefined = undefined;

@@ -151,21 +151,20 @@ describe('sync', () => {
     expect(odd.status).toBe(400);
   });
 
-  it('syncs a series on Breader’s Suwayomi server or in its Komga library by its id there', async () => {
+  it('syncs a series on Breader’s Suwayomi server by its id there', async () => {
     const { b } = await registered();
     const r = await b.post(
       '/v1/sync/push',
       push(
         'c',
         { type: 'book.put', book: book({ id: 'sw-42', format: 'CBZ', source: 'remote', url: 'sw:42' }) },
-        { type: 'book.put', book: book({ id: 'kg-1', format: 'CBZ', source: 'remote', url: 'kg:0RVCY8NST343X' }) },
         { type: 'book.put', book: book({ url: 'sw:42' }) },
       ),
     );
     expect(r.body.rejected.map((x: { code: string }) => x.code)).toEqual(['bad_book']);
     const urls = (await b.get('/v1/sync/pull?since=0')).body.books.map((x: { url: string }) => x.url);
-    expect(urls.sort()).toEqual(['kg:0RVCY8NST343X', 'sw:42']);
-    for (const url of ['suwayomi:42', 'sw:0', 'sw:abc', 'sw:12345678901', 'sw:', 'kg:short', 'kg:0rvcy8nst343x', 'kg:']) {
+    expect(urls).toEqual(['sw:42']);
+    for (const url of ['suwayomi:42', 'sw:0', 'sw:abc', 'sw:12345678901', 'sw:', 'kg:0RVCY8NST343X']) {
       expect((await b.post('/v1/sync/push', push('c3', { type: 'book.put', book: book({ source: 'remote', url }) }))).status, url).toBe(400);
     }
   });

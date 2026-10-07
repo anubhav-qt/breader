@@ -4,8 +4,8 @@ import { readLocal, writeLocal } from './store';
 
 /*
  * Manga, through Breader's own computer (server routes/manga.ts): MangaDex lets only its own site
- * fetch its pages in a browser, and Breader's Suwayomi and Komga aren't open to readers. The laptop
- * alone has them, so it's asked and nothing else.
+ * fetch its pages in a browser, and Breader's Suwayomi isn't open to readers. The laptop alone has
+ * them, so it's asked and nothing else.
  */
 
 const OFF = 'Manga comes through Breader’s own computer, which can’t be reached just now. Chapters kept offline still open.';
@@ -59,8 +59,8 @@ export const mangadex = {
 };
 
 /**
- * A series on Breader's Suwayomi or in its Komga library, by its id there (sw:44, kg:0RVCY8NST343X),
- * and its chapters (ids like those too) and pages.
+ * A series on Breader's Suwayomi, by its id there (sw:44), and its chapters (ids like that too) and
+ * its pages.
  */
 export const sources = {
   series: (id: string, adult: boolean) => ask(() => api.laptop.get<SourceSeries>(`/v1/manga/source/${id}${adult ? '?adult=1' : ''}`, 20_000)),

@@ -8,11 +8,11 @@ import { readSession } from '../lib/session.ts';
 import type { Picture } from '../manga/disk.ts';
 
 /*
- * Manga through the laptop (manga/): one search across MangaDex, Breader's Suwayomi sources and its
- * Komga library, and each series from wherever it is. Anyone may look through it; pages, the most
- * of what it sends, are for browsers signed in to a library, as a series is read once it's added
- * to one. Pages go through here because MangaDex only lets its own site fetch them from a browser,
- * and Suwayomi and Komga aren't open to readers. The fallback has no manga: it answers that it's off.
+ * Manga through the laptop (manga/): one search across MangaDex and Breader's Suwayomi sources, and
+ * each series from wherever it is. Anyone may look through it; pages, the most of what it sends,
+ * are for browsers signed in to a library, as a series is read once it's added to one. Pages go
+ * through here because MangaDex only lets its own site fetch them from a browser, and Suwayomi
+ * isn't open to readers. The fallback has no manga: it answers that it's off.
  */
 export function mangaRoutes(deps: Deps) {
   const { env, manga } = deps;
@@ -72,7 +72,7 @@ export function mangaRoutes(deps: Deps) {
     return picture(c, await manga!.cover(id(c), c.req.param('file'), size), 604_800);
   });
 
-  // A series on Suwayomi or in Komga, by ids like sw:12 and kg:0RVCY8NST343X.
+  // A series on Suwayomi, by ids like sw:12.
   r.get('/manga/source/chapter/:id', rateLimit({ name: 'manga-source-pages', max: 120, windowMs: 60_000 }), async (c) => {
     c.header('Cache-Control', 'private, max-age=300');
     return c.json({ pages: await manga!.sourcePages(sourceId(c)) });

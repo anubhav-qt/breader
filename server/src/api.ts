@@ -27,8 +27,6 @@ let redis: Redis | null = null;
 if (mangaOn && env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024, store: redis };
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
-if (env.KOMGA_URL && env.KOMGA_API_KEY) mangaOptions.komga = { url: env.KOMGA_URL, key: env.KOMGA_API_KEY };
-if (mangaOn && env.KOMGA_URL && !env.KOMGA_API_KEY) log.warn('KOMGA_URL is set without KOMGA_API_KEY, so manga searches leave Komga out');
 const manga = mangaOn ? makeManga(mangaOptions) : null;
 const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');

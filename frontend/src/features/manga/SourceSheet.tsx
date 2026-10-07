@@ -8,9 +8,9 @@ import type { BookRecord, Position } from '../../books/types';
 import { sources, STATUS_NAME } from '../../lib/mangadex';
 
 /*
- * A series on one of Breader's Suwayomi sources or in its Komga library: what it is, where it's
- * from, and its chapters, each with the group that made it. Read starts it (or carries on) in the
- * reader, adding it to My manga; a chapter tapped starts there.
+ * A series on one of Breader's Suwayomi sources: what it is, where it's from, and its chapters,
+ * each with the group that made it. Read starts it (or carries on) in the reader, adding it to My
+ * manga; a chapter tapped starts there.
  */
 
 interface Props {

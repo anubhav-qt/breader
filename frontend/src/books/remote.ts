@@ -8,8 +8,8 @@ import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './
 
 /*
  * A manga read from a catalogue, its chapters one after another in one book, so it scrolls on from
- * chapter to chapter like a webtoon app. From MangaDex or Breader's Komga library, that's the whole
- * series, each chapter's pages coming through the laptop as they're read. From a Suwayomi source,
+ * chapter to chapter like a webtoon app. From MangaDex, that's the whole series, each chapter's
+ * pages coming through the laptop as they're read. From a Suwayomi source,
  * which only learns a chapter's pages by asking the site it reads, it's a few chapters around the
  * place, the rest a tap away. Either way, chapters kept offline come from this browser, and places
  * are kept by chapter number, so they stay put as chapters are added, uploads change, or the
@@ -24,8 +24,8 @@ export type Remote =
 export function remoteOf(url: string | undefined): Remote | null {
   const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?$/.exec(url ?? '');
   if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', key: md[1] };
-  // A series on Breader's Suwayomi or in its Komga library: its url is its id there.
-  const source = /^(sw:[1-9]\d{0,9}|kg:[0-9A-Z]{8,20})$/.exec(url ?? '');
+  // A series on Breader's Suwayomi: its url is its id there.
+  const source = /^(sw:[1-9]\d{0,9})$/.exec(url ?? '');
   if (source) return { kind: 'source', id: source[1], key: source[1] };
   return null;
 }
@@ -200,7 +200,6 @@ async function aboutSource(id: string): Promise<{ name: string; page: string | n
     const s = await kept<SourceSeries>(`srcseries:${id}`, () => sources.series(id, true));
     return { name: s.source, page: s.link };
   } catch {
-    if (id.startsWith('kg:')) return { name: 'Komga', page: null };
     return { name: 'its source', page: null };
   }
 }
@@ -212,12 +211,6 @@ async function openSource(rec: BookRecord, id: string, at?: Position): Promise<M
   ]);
   const picked = pickChapters(list);
   if (!picked.length) throw new Error('There are no chapters of this series yet.');
-
-  // Komga knows every chapter's pages, so the whole series opens, as from MangaDex.
-  if (picked.every((c) => c.pages > 0)) {
-    const { chapters, total } = laidOut(picked);
-    return bookOf(rec, { name: about.name, series: id, page: about.page, chapters }, total, (c, n) => pageFor(c.id, n));
-  }
 
   // Suwayomi learns a chapter's pages by asking its source, so a few chapters around the place open.
   const all = picked.map((c) => ({ ...c, number: numberOf(c) }));

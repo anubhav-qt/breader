@@ -38,8 +38,8 @@ export async function keptPage(chapter: string, n: number): Promise<Blob | undef
   }
 }
 
-/** A chapter on Breader's Suwayomi or in its Komga library (sw:22, kg:0RVCY8NSY301F), not on MangaDex. */
-const onSource = (chapter: string) => chapter.startsWith('sw:') || chapter.startsWith('kg:');
+/** A chapter on Breader's Suwayomi (sw:22), not on MangaDex. */
+const onSource = (chapter: string) => chapter.startsWith('sw:');
 
 /** A page through the laptop: from a source as it is, or from MangaDex, smaller with data saver on. */
 function askPage(chapter: string, n: number): Promise<Blob> {

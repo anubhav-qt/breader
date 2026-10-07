@@ -21,9 +21,9 @@ export const Source = z.enum(['file', 'sample', 'remote']);
 /**
  * A remote book's url: a MangaDex series by its id, with the language its chapters are read in
  * after a colon when it isn't English (mangadex:<id>:pt-br), or a series on Breader's Suwayomi
- * server or in its Komga library by its id there (sw:42, kg:0RVCY8NST343X, as SourceId in manga.ts).
+ * server by its id there (sw:42, as SourceId in manga.ts).
  */
-export const REMOTE_URL = /^(mangadex:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[a-z]{2,3}(-[a-z]{2,3})?)?|sw:[1-9]\d{0,9}|kg:[0-9A-Z]{8,20})$/;
+export const REMOTE_URL = /^(mangadex:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[a-z]{2,3}(-[a-z]{2,3})?)?|sw:[1-9]\d{0,9})$/;
 
 export const Position = z.object({
   section: z.number().int().nonnegative(),

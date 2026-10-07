@@ -5,18 +5,18 @@ import { LANGS, langName, mangadex, RATING_NAME, sources, STATUS_NAME, writeMang
 import './manga.css';
 
 /*
- * The Manga shelf's Browse tab: one search across every place Breader's computer looks (MangaDex,
- * its Suwayomi sources, its Komga library), by name or by what's popular, new or just updated, in a
- * language. The same series found in two places is two cards, each naming its place under the
- * title. Series for adults show only once 18+ is on. Picking one opens its sheet (SeriesSheet.tsx,
- * SourceSheet.tsx), to read it or add it to My manga.
+ * The Manga shelf's Browse tab: one search across every place Breader's computer looks (MangaDex
+ * and its Suwayomi sources), by name or by what's popular, new or just updated, in a language. The
+ * same series found in two places is two cards, each naming its place under the title. Series for
+ * adults show only once 18+ is on. Picking one opens its sheet (SeriesSheet.tsx, SourceSheet.tsx),
+ * to read it or add it to My manga.
  */
 
 interface Props {
   id: string;
   labelledBy: string;
   hidden: boolean;
-  /** Series already in My manga: MangaDex ids, and source ids (sw:44, kg:0RVCY8NST343X). */
+  /** Series already in My manga: MangaDex ids, and source ids (sw:44). */
   have: ReadonlySet<string>;
   prefs: MangaPrefs;
   onPrefs: (p: MangaPrefs) => void;
@@ -252,7 +252,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
       {body}
 
       <p className="mdx-credit">
-        Series come from <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a>, Breader’s Suwayomi sources and its Komga library, each card saying which. Chapters credit the scanlation groups that made them, and where a publisher puts a series up itself, its sheet links there.
+        Series come from <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a>, and the sites Breader’s Suwayomi reads, each card saying which. Chapters credit the scanlation groups that made them, and where a publisher puts a series up itself, its sheet links there.
       </p>
     </div>
   );

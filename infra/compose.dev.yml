@@ -43,9 +43,7 @@ services:
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 30 }
 
   # Manga sources the API asks for every reader. Suwayomi runs Mihon's extensions: install them in
-  # its web UI at http://localhost:4567. Komga is a library of comic files: at http://localhost:25600
-  # make its admin, a library (files copied into the komga-books volume, at /books), and an API key
-  # for KOMGA_API_KEY.
+  # its web UI at http://localhost:4567.
   suwayomi:
     image: ghcr.io/suwayomi/suwayomi-server:v2.4.2366
     environment:
@@ -55,12 +53,6 @@ services:
       KCEF_ENABLED: "false"
     ports: ["127.0.0.1:4567:4567"]
     volumes: ["suwayomi:/home/suwayomi/.local/share/Tachidesk"]
-
-  komga:
-    image: gotson/komga:1.28.1
-    environment: { JAVA_TOOL_OPTIONS: "-Xmx512m" }
-    ports: ["127.0.0.1:25600:25600"]
-    volumes: ["komga:/config", "komga-books:/books"]
 
   # Brings both databases to the latest schema (and makes the buckets), then exits.
   migrate:
@@ -86,11 +78,8 @@ services:
       SPEECH_EMAILS: "${SPEECH_EMAILS:-}"
       # MangaDex's answers are kept here. Stop "redis" to watch the API carry on without it.
       REDIS_URL: "redis://redis:6379"
-      # A manga search looks in Suwayomi's sources and Komga's library too. Komga answers with the API
-      # key it makes for Breader (README.md › Manga sources): KOMGA_API_KEY=… npm run stack
+      # A manga search looks in Suwayomi's sources too.
       SUWAYOMI_URL: "http://suwayomi:4567"
-      KOMGA_URL: "http://komga:25600"
-      KOMGA_API_KEY: "${KOMGA_API_KEY:-}"
     ports: ["8787:8787"]
     volumes: ["voices:/data/voices", "manga:/data/manga"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
@@ -125,5 +114,3 @@ volumes:
   manga: {}
   redis: {}
   suwayomi: {}
-  komga: {}
-  komga-books: {}

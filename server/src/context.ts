@@ -18,7 +18,7 @@ export interface Deps {
   auth: Auth;
   /** The server voice (speech/); null where it's off, as on the fallback. */
   speech: Speech | null;
-  /** Manga: MangaDex, and Suwayomi and Komga when set up (manga/); null where it's off, as on the fallback. */
+  /** Manga: MangaDex, and Suwayomi when set up (manga/); null where it's off, as on the fallback. */
   manga: Manga | null;
 }
 

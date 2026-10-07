@@ -2,9 +2,9 @@ import type { MangaFound, MangaSearchResult, MangaSort } from '@breader/shared';
 import { log } from '../log.ts';
 
 /*
- * One search across every place Breader looks for manga: MangaDex, each source of its Suwayomi
- * server, and its Komga library. Every place is asked at once, each for its next lot, and what they
- * found is shown together. The same series found in three places is three cards, each naming its
+ * One search across every place Breader looks for manga: MangaDex and each source of its Suwayomi
+ * server. Every place is asked at once, each for its next lot, and what they found is shown
+ * together. The same series found in three places is three cards, each naming its
  * place, side by side: those whose title is what was searched for first, then those found in more
  * places, then the places taken in turn. No place goes first because of what it is.
  */
@@ -37,7 +37,7 @@ export interface Lot {
 
 /** One place a search looks. */
 export interface Place {
-  /** Its part of where a search carries on: md, kg, or sw and the source's id. */
+  /** Its part of where a search carries on: md, or sw and the source's id. */
   key: string;
   /** Shown under the title of each series it found. */
   name: string;

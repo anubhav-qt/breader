@@ -10,8 +10,8 @@ import { makeManga } from '../src/manga/index.ts';
 import { browser, deps } from './helpers.ts';
 
 /*
- * One search across MangaDex, Breader's Suwayomi sources and its Komga library, each a server of
- * our own answering as the real one does, so what a search shows, in what order, and how it reads
+ * One search across MangaDex and Breader's Suwayomi sources, each a server of our own answering
+ * as the real one does, so what a search shows, in what order, and how it reads
  * a series from each can be checked.
  */
 
@@ -147,81 +147,8 @@ function fakeSuwayomi() {
   return { state, calls, answer };
 }
 
-interface KgSeries {
-  id: string;
-  title: string;
-  ageRating?: number | null;
-  genres?: string[];
-  language?: string;
-  /** Its books: pictures (DIVINA) or text (EPUB). */
-  profile?: string;
-  books?: number;
-}
-
-/** Komga with a library, answering only with Breader's key. */
-function fakeKomga() {
-  const KEY = 'komga-test-key';
-  const state = { series: [] as KgSeries[] };
-  const calls: URL[] = [];
-  const raw = (s: KgSeries) => ({
-    id: s.id,
-    name: s.title,
-    booksCount: s.books ?? 2,
-    metadata: { title: s.title, status: 'ENDED', ageRating: s.ageRating ?? null, language: s.language ?? '', summary: 'A comic.', genres: s.genres ?? [], tags: [], alternateTitles: [], links: [{ url: 'javascript:alert(1)' }] },
-    booksMetadata: { authors: [{ name: 'An Artist', role: 'penciller' }], tags: [] },
-  });
-  const books = (s: KgSeries) =>
-    Array.from({ length: s.books ?? 2 }, (_, i) => ({
-      id: `${s.id}B${i + 1}`,
-      seriesId: s.id,
-      created: '2026-10-07T05:39:46Z',
-      metadata: { number: String(i + 1), title: `${s.title} v0${i + 1}` },
-      media: { pagesCount: 8, mediaProfile: s.profile ?? 'DIVINA', epubDivinaCompatible: false },
-    }));
-  function answer(url: URL, init: RequestInit) {
-    calls.push(url);
-    if (new Headers(init.headers).get('x-api-key') !== KEY) return new Response('{}', { status: 401 });
-    const path = url.pathname;
-    if (path === '/api/v1/series') {
-      let list = state.series;
-      const search = url.searchParams.get('search');
-      if (search) list = list.filter((s) => s.title.toLowerCase().includes(search.toLowerCase()));
-      const page = Number(url.searchParams.get('page'));
-      const size = Number(url.searchParams.get('size'));
-      const content = list.slice(page * size, page * size + size).map(raw);
-      return json({ content, last: page * size + size >= list.length });
-    }
-    let m = /^\/api\/v1\/series\/([0-9A-Z]+)$/.exec(path);
-    if (m) {
-      const s = state.series.find((x) => x.id === m![1]);
-      if (!s) return json({}, 404);
-      return json(raw(s));
-    }
-    m = /^\/api\/v1\/series\/([0-9A-Z]+)\/books$/.exec(path);
-    if (m) {
-      const s = state.series.find((x) => x.id === m![1])!;
-      let content = books(s);
-      if (url.searchParams.get('size') === '1') content = content.slice(0, 1);
-      return json({ content, last: true });
-    }
-    m = /^\/api\/v1\/books\/([0-9A-Z]+)$/.exec(path);
-    if (m) {
-      const all = state.series.flatMap(books);
-      const b = all.find((x) => x.id === m![1]);
-      if (!b) return json({}, 404);
-      return json(b);
-    }
-    m = /^\/api\/v1\/books\/([0-9A-Z]+)\/pages\/(\d+)$/.exec(path);
-    if (m) return new Response(png(Number(m[2])));
-    if (/^\/api\/v1\/series\/[0-9A-Z]+\/thumbnail$/.test(path)) return new Response(png(7));
-    return json({}, 404);
-  }
-  return { state, calls, answer };
-}
-
 async function setup(dexTitles: string[] = [], store?: Store) {
   const sw = fakeSuwayomi();
-  const kg = fakeKomga();
   const dex = fakeDex(dexTitles);
   const dexCalls: URL[] = [];
   const fetch = (async (input: string | URL | Request, init: RequestInit = {}) => {
@@ -231,7 +158,6 @@ async function setup(dexTitles: string[] = [], store?: Store) {
       return dex(url);
     }
     if (url.host === 'suwayomi.test') return sw.answer(url, init);
-    if (url.host === 'komga.test') return kg.answer(url, init);
     return new Response('no such host', { status: 502 });
   }) as typeof globalThis.fetch;
   const dir = await mkdtemp(join(tmpdir(), 'breader-sources-'));
@@ -242,47 +168,43 @@ async function setup(dexTitles: string[] = [], store?: Store) {
     pace: { api: [1000, 1000], home: [1000, 1000] },
     store,
     suwayomi: 'http://suwayomi.test/',
-    komga: { url: 'http://komga.test', key: 'komga-test-key' },
   });
   const app = makeApp({ ...deps, manga });
   const b = browser(undefined, app);
   const r = await b.post('/v1/libraries', { libraryId: crypto.randomUUID(), key: newLibraryKey() });
   expect(r.status).toBe(201);
-  return { sw, kg, dexCalls, app, b };
+  return { sw, dexCalls, app, b };
 }
 
 const shown = (body: { items: MangaFound[] }) => body.items.map((x) => `${x.source}: ${x.card.title}`);
 
 describe('one search everywhere', () => {
   it('shows the same series once for each place that has it, side by side, the one searched for first', async () => {
-    const { b, sw, kg } = await setup(['Omniscient Reader’s Viewpoint', 'Omniscient Reader Fan Club']);
+    const { b, sw } = await setup(['Omniscient Reader’s Viewpoint', 'Omniscient Reader Fan Club']);
     sw.state.series = [
       { id: 1, source: '11', title: 'Omniscient Reader’s Viewpoint' },
       { id: 2, source: '22', title: 'Omniscient' },
       { id: 3, source: '22', title: "Omniscient Reader's Viewpoint" },
     ];
-    kg.state.series = [{ id: 'KSERIES001', title: "OMNISCIENT READER'S VIEWPOINT" }];
     const r = await b.get('/v1/manga/search?q=omniscient&lang=en');
     expect(r.status).toBe(200);
     expect(shown(r.body)).toEqual([
       'Manga Demon: Omniscient',
       'Asura Scans: Omniscient Reader’s Viewpoint',
-      "Komga: OMNISCIENT READER'S VIEWPOINT",
       'MangaDex: Omniscient Reader’s Viewpoint',
       "Manga Demon: Omniscient Reader's Viewpoint",
       'MangaDex: Omniscient Reader Fan Club',
     ]);
     const kinds = r.body.items.map((x: MangaFound) => x.kind);
-    expect(kinds).toEqual(['source', 'source', 'source', 'mangadex', 'source', 'mangadex']);
+    expect(kinds).toEqual(['source', 'source', 'mangadex', 'source', 'mangadex']);
     expect(r.body.items[1].card).toEqual({ id: 'sw:1', title: 'Omniscient Reader’s Viewpoint', cover: '/v1/manga/source/sw:1/cover', status: 'ongoing', adult: false, side: false });
-    expect(r.body.items[2].card).toMatchObject({ id: 'kg:KSERIES001', status: 'completed' });
     // Every place had nothing more.
     expect(r.body.next).toBeNull();
     expect(sw.calls.filter((c) => c.op === 'search').map((c) => c.type)).toEqual(['SEARCH', 'SEARCH', 'SEARCH']);
   });
 
   it('goes on without a source that fails, and answers an empty lot when the rest found nothing', async () => {
-    const { b, sw, kg } = await setup();
+    const { b, sw } = await setup();
     sw.state.series = [{ id: 1, source: '11', title: 'Solo Leveling' }];
     sw.state.broken.add('33');
     const r = await b.get('/v1/manga/search?q=solo&lang=en');
@@ -290,9 +212,8 @@ describe('one search everywhere', () => {
     expect(shown(r.body)).toEqual(['Asura Scans: Solo Leveling']);
 
     sw.state.broken = new Set(['11', '22', '33']);
-    kg.state.series = [];
     const none = await b.get('/v1/manga/search?q=none&lang=en');
-    // MangaDex and Komga answered, with nothing: an empty lot, not an error.
+    // MangaDex answered, with nothing: an empty lot, not an error.
     expect(none.status).toBe(200);
     expect(none.body).toEqual({ items: [], next: null });
   });
@@ -312,7 +233,7 @@ describe('one search everywhere', () => {
   });
 
   it('keeps 18+ out unless asked, loli and shota always, and doujinshi and anthologies unless asked, after the rest', async () => {
-    const { b, sw, kg } = await setup();
+    const { b, sw } = await setup();
     sw.state.series = [
       { id: 1, source: '11', title: 'Plain' },
       { id: 2, source: '11', title: 'Spicy', genre: ['Hentai'] },
@@ -321,16 +242,11 @@ describe('one search everywhere', () => {
       { id: 5, source: '11', title: 'Many hands', genre: ['Anthology'] },
       { id: 6, source: '44', title: 'Late show' },
     ];
-    kg.state.series = [
-      { id: 'KSERIES001', title: 'Grown-up comic', ageRating: 18 },
-      { id: 'KSERIES002', title: 'A novel', profile: 'EPUB' },
-      { id: 'KSERIES003', title: 'Shota thing', genres: ['shota'] },
-    ];
     const plain = await b.get('/v1/manga/search');
     expect(shown(plain.body)).toEqual(['Asura Scans: Plain']);
     const adult = await b.get('/v1/manga/search?adult=1');
-    expect(shown(adult.body).sort()).toEqual(['Asura Scans: Plain', 'Asura Scans: Spicy', 'Komga: Grown-up comic', 'Late Night: Late show']);
-    expect(adult.body.items.filter((x: MangaFound) => x.kind === 'source' && x.card.adult)).toHaveLength(3);
+    expect(shown(adult.body).sort()).toEqual(['Asura Scans: Plain', 'Asura Scans: Spicy', 'Late Night: Late show']);
+    expect(adult.body.items.filter((x: MangaFound) => x.kind === 'source' && x.card.adult)).toHaveLength(2);
     const side = await b.get('/v1/manga/search?doujinshi=1');
     expect(shown(side.body)).toEqual(['Asura Scans: Plain', 'Asura Scans: Fan work', 'Asura Scans: Many hands']);
     expect(side.body.items.map((x: MangaFound) => x.card.side)).toEqual([false, true, true]);
@@ -351,18 +267,17 @@ describe('one search everywhere', () => {
 
   it('carries on where each place got to, and asks only those with more', async () => {
     const titles = Array.from({ length: 15 }, (_, i) => `Dex ${i + 1}`);
-    const { b, sw, kg, dexCalls } = await setup(titles);
+    const { b, sw, dexCalls } = await setup(titles);
     sw.state.series = Array.from({ length: 25 }, (_, i) => ({ id: i + 1, source: '22', title: `Demon ${i + 1}` }));
-    kg.state.series = Array.from({ length: 12 }, (_, i) => ({ id: `KSERIES${String(i + 1).padStart(3, '0')}`, title: `Comic ${i + 1}` }));
     const first = await b.get('/v1/manga/search?lang=en&sort=latest');
-    expect(first.body.items).toHaveLength(30);
-    expect(first.body.next).toBe('kg:1,sw22:1.10,md:10');
+    expect(first.body.items).toHaveLength(20);
+    expect(first.body.next).toBe('sw22:1.10,md:10');
     // Manga Demon has no Latest, so its Popular instead.
     expect(sw.calls.find((c) => c.source === '22')?.type).toBe('POPULAR');
 
     const second = await b.get(`/v1/manga/search?lang=en&sort=latest&next=${first.body.next}`);
-    expect(shown(second.body).slice(0, 3)).toEqual(['Komga: Comic 11', 'Manga Demon: Demon 11', 'MangaDex: Dex 11']);
-    expect(second.body.items).toHaveLength(17);
+    expect(shown(second.body).slice(0, 3)).toEqual(['Manga Demon: Demon 11', 'MangaDex: Dex 11', 'Manga Demon: Demon 12']);
+    expect(second.body.items).toHaveLength(15);
     expect(second.body.next).toBe('sw22:2');
 
     const asked = dexCalls.length;
@@ -401,7 +316,6 @@ describe('one search everywhere', () => {
     expect(keys.get('manga:v1:sw-series:1')).toBe(6 * HOUR);
     expect(keys.get('manga:v1:sw-chapters:1')).toBe(10 * MIN);
     expect(keys.get('manga:v1:sw-readable:1')).toBe(24 * HOUR);
-    expect(keys.get('manga:v1:kg-search:page=0&size=10&sort=metadata.titleSort%2Casc')).toBe(MIN);
     // Which series a chapter is in is kept only once a reader opens it, not for every chapter a search checks.
     const chapterKeys = [...keys.keys()].filter((k) => k.startsWith('manga:v1:sw-chapter-series:'));
     expect(chapterKeys).toEqual([]);
@@ -462,34 +376,6 @@ describe('a series from a source', () => {
     }
     expect((await b.get('/v1/manga/source/sw:abc')).status).toBe(400);
   });
-
-  it('opens a Komga series, its books as chapters and their pages, and leaves books as text out', async () => {
-    const { b, app, kg } = await setup();
-    kg.state.series = [
-      { id: 'KSERIES001', title: 'Komga Test Comic', language: 'en' },
-      { id: 'KSERIES002', title: 'Alice', profile: 'EPUB' },
-    ];
-    const r = await b.get('/v1/manga/source/kg:KSERIES001');
-    expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ id: 'kg:KSERIES001', title: 'Komga Test Comic', status: 'completed', source: 'Komga', authors: ['An Artist'], description: 'A comic.', link: null });
-    const list = await b.get('/v1/manga/source/kg:KSERIES001/chapters');
-    expect(list.body.chapters.map((c: { id: string; chapter: string; pages: number }) => [c.id, c.chapter, c.pages])).toEqual([
-      ['kg:KSERIES001B1', '1', 8],
-      ['kg:KSERIES001B2', '2', 8],
-    ]);
-    expect((await browser(undefined, app).get('/v1/manga/source/chapter/kg:KSERIES001B2/0')).status).toBe(401);
-    expect((await b.get('/v1/manga/source/chapter/kg:KSERIES001B2')).body).toEqual({ pages: 8 });
-    const page = await b.get('/v1/manga/source/chapter/kg:KSERIES001B2/0');
-    expect(page.status).toBe(200);
-    // Komga counts pages from 1.
-    expect(kg.calls.at(-1)!.pathname).toBe('/api/v1/books/KSERIES001B2/pages/1');
-    const past = await b.get('/v1/manga/source/chapter/kg:KSERIES001B2/8');
-    expect(past.status).toBe(404);
-    expect(past.body.message).toBe('That chapter has no page there.');
-    expect((await b.get('/v1/manga/source/kg:KSERIES001/cover')).status).toBe(200);
-    expect((await b.get('/v1/manga/source/kg:KSERIES002')).status).toBe(404);
-    expect((await b.get('/v1/manga/source/chapter/kg:KSERIES002B1/0')).status).toBe(404);
-  });
 });
 
 describe('how a search ranks', () => {
@@ -523,13 +409,13 @@ describe('how a search ranks', () => {
 
   it('asks a late place again with the next lot, and leaves out one that failed', async () => {
     const quick = place('md', 'MangaDex', async () => ({ found: [found('MangaDex', 'Quick')], next: '10' }));
-    const late = place('kg', 'Komga', () => new Promise(() => {}));
+    const late = place('sw7', 'Late Scans', () => new Promise(() => {}));
     const broken = place('sw5', 'Broken', async () => {
       throw new Error('nope');
     });
     const r = await find([quick, late, broken], undefined, undefined, 50);
     expect(titlesOf(r.items)).toEqual(['MangaDex: Quick']);
-    expect(r.next).toBe('kg:0,md:10');
+    expect(r.next).toBe('sw7:0,md:10');
 
     const asked: string[] = [];
     const watch = (p: Place): Place => place(p.key, p.name, (at) => {

@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 /*
  * Manga through the laptop (server routes/manga.ts): one search across every place it looks
- * (MangaDex, the sources of Breader's Suwayomi server, its Komga library), each series' chapters,
- * and each chapter's pages as pictures. Their own shapes are the server's business; these are what
+ * (MangaDex and the sources of Breader's Suwayomi server), each series' chapters, and each
+ * chapter's pages as pictures. Their own shapes are the server's business; these are what
  * it answers. Scanlation groups made the chapters, so they're credited wherever a chapter is read,
  * and a MangaDex series' official releases are linked from it.
  */
@@ -22,12 +22,11 @@ export const MANGA_PAGE = 10;
 /** The furthest into MangaDex's results a search can ask, as it stops at 10,000. */
 export const MANGA_LAST_OFFSET = 9_900;
 
-/** A series on Breader's Suwayomi (sw:12) or in its Komga library (kg:0RVCY8NST343X), or one of their chapters. */
-export const SourceId = z.string().regex(/^(sw:[1-9]\d{0,9}|kg:[0-9A-Z]{8,20})$/, 'Not a series or chapter of a source');
+/** A series on Breader's Suwayomi (sw:12), or one of its chapters. */
+export const SourceId = z.string().regex(/^sw:[1-9]\d{0,9}$/, 'Not a series or chapter of a source');
 /**
- * Where a search carries on, place by place: md:30 (MangaDex's offset), kg:2 (Komga's page),
- * sw<source>:3.10 (a Suwayomi source's page, and how many of it were looked at). A place left out
- * has nothing more.
+ * Where a search carries on, place by place: md:30 (MangaDex's offset), sw<source>:3.10 (a
+ * Suwayomi source's page, and how many of it were looked at). A place left out has nothing more.
  */
 const Next = z.string().regex(/^[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?(,[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?){0,49}$/, 'Not where a search carries on');
 
@@ -120,22 +119,22 @@ export interface MangaChapter {
   at: number;
 }
 
-/** A series on Breader's Suwayomi or in its Komga library, as a search lists it. */
+/** A series on one of Breader's Suwayomi sources, as a search lists it. */
 export interface SourceCard {
-  /** sw:12 or kg:0RVCY8NST343X. */
+  /** sw:12. */
   id: string;
   title: string;
   /** Its cover through the laptop (/v1/manga/source/:id/cover), or null when it has none. */
   cover: string | null;
   status: MangaCard['status'];
-  /** From a source for adults, or rated 18+ in Komga. */
+  /** From a source for adults, or for adults by its genres. */
   adult: boolean;
   /** A doujinshi or an anthology, by its genres. */
   side: boolean;
 }
 
 export interface SourceSeries extends SourceCard {
-  /** Where it's from: the source's name (Asura Scans), or Komga. */
+  /** Where it's from: the source's name (Asura Scans). */
   source: string;
   authors: string[];
   description: string;
