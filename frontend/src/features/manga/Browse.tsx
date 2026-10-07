@@ -92,10 +92,17 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
     if (a && a.ask === ask && a.at === at) return a.lot;
     const lot = fetchLot(at);
     ahead.current = { ask, at, lot };
-    // One asked for ahead may fail before it's wanted. It's forgotten, so it's asked for again then.
-    void lot.catch(() => {
+    // One asked for ahead may fail before it's wanted, or get nowhere as every place was late. It's
+    // forgotten, so it's asked for again then.
+    const forget = () => {
       if (ahead.current && ahead.current.lot === lot) ahead.current = null;
-    });
+    };
+    void lot.then(
+      (r) => {
+        if (r.next === at) forget();
+      },
+      forget,
+    );
     return lot;
   };
 

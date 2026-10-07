@@ -12,6 +12,8 @@ import { log } from '../log.ts';
 
 /** How long a search waits for each place. One slower is asked again with the next lot, by when what it found is kept. */
 export const DEADLINE = 12_000;
+/** How long a lot waits in all when every place is late, for the first to come: within the app's 20 s for a search. */
+const LONGEST = 18_000;
 /** Series checked ahead of readers in Popular and in Updated, in each place browsed: their first 12 lots. */
 export const WARM = 120;
 /** The most places one search asks. */
@@ -91,6 +93,29 @@ function within(going: Promise<Lot>, ms: number): Promise<Answer> {
   });
 }
 
+/** Waits until the first of these lots comes or fails, or ms pass. */
+function firstOf(going: Promise<Lot>[], ms: number): Promise<void> {
+  return new Promise((done) => {
+    const timer = setTimeout(done, ms);
+    const stop = () => {
+      clearTimeout(timer);
+      done();
+    };
+    for (const g of going) {
+      g.then(stop, stop);
+    }
+  });
+}
+
+/** Whether every place asked was late. */
+function allLate(answers: Answer[]): boolean {
+  if (answers.length === 0) return false;
+  for (const a of answers) {
+    if (!a.late) return false;
+  }
+  return true;
+}
+
 /** Where each place had got to, by its key. Without next, every place from the start. */
 function startsAt(places: Place[], next: string | undefined): Map<string, string> {
   const at = new Map<string, string>();
@@ -167,14 +192,21 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
 /**
  * The next lot from every place, from where next says each had got to. A place that fails is left
  * out from then on; one that's late is asked again next time. Only when every place failed is that
- * the answer.
+ * the answer. When every place is late, a lot with nothing in it would only be asked for again, so
+ * it waits a while longer for the first to come.
  */
 export async function find(places: Place[], q: string | undefined, next: string | undefined, deadline = DEADLINE): Promise<MangaSearchResult> {
   const byName = [...places].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
   const known = byName.slice(0, MOST_PLACES);
   const at = startsAt(known, next);
   const asked = known.filter((p) => at.has(p.key));
-  const answers = await Promise.all(asked.map((p) => within(p.lot(at.get(p.key)!), deadline)));
+  const going = asked.map((p) => p.lot(at.get(p.key)!));
+  let answers = await Promise.all(going.map((g) => within(g, deadline)));
+  if (allLate(answers)) {
+    await firstOf(going, LONGEST - deadline);
+    // Those come by now answer straight away; the rest are late.
+    answers = await Promise.all(going.map((g) => within(g, 0)));
+  }
 
   const lots: Array<{ place: Place; found: Found[] }> = [];
   const carry: string[] = [];

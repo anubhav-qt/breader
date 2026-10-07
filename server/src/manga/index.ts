@@ -11,7 +11,9 @@ import { makeSuwayomi, type Suwayomi } from './suwayomi.ts';
 /*
  * Manga through the laptop: one search across MangaDex and the sources of Breader's Suwayomi server
  * (find.ts), and each series, its chapters and their pages from wherever it is. Suwayomi is on when
- * the server is given its address.
+ * the server is given its address. Browsing (a list, not a search by name) shows its sources only,
+ * and MangaDex only when there's none to browse: none in the language asked, or Suwayomi off or
+ * down.
  */
 
 export interface Manga {
@@ -30,7 +32,7 @@ export interface Manga {
   sourcePage(chapterId: string, n: number): Promise<Picture>;
   /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:12) in its own. */
   copies(id: string, lang: string): Promise<MangaCopies>;
-  /** Checks the Popular and Updated first lots ahead of readers: MangaDex's, and each source's quick enough to browse. */
+  /** Checks the Popular and Updated first lots ahead of readers: each source's quick enough to browse, or MangaDex's without Suwayomi. */
   warm(): Promise<void>;
 }
 
@@ -131,7 +133,7 @@ export function makeManga(opts: MangaOptions): Manga {
       const w: Wanted = { lang: q.lang, sort: q.sort, adult: !!q.adult, doujinshi: !!q.doujinshi, kinds };
       if (q.q) w.q = q.q;
       if (q.names) w.names = q.names;
-      const places: Place[] = [dex.place(w)];
+      const places: Place[] = [];
       if (suwayomi) {
         try {
           places.push(...(await suwayomi.places(w)));
@@ -139,6 +141,8 @@ export function makeManga(opts: MangaOptions): Manga {
           log.warn({ err }, 'Suwayomi’s sources couldn’t be listed, so the search goes on without them');
         }
       }
+      // A search by name asks MangaDex too. Browsing asks it only when there's no source to browse.
+      if (w.q || places.length === 0) places.push(dex.place(w));
       return find(places, w.q, q.next);
     },
 
@@ -147,9 +151,8 @@ export function makeManga(opts: MangaOptions): Manga {
     page: (chapterId, n, saver) => dex.page(chapterId, n, saver),
     cover: (mangaId, file, size) => dex.cover(mangaId, file, size),
     async warm() {
-      const going = [dex.warm()];
-      if (suwayomi) going.push(suwayomi.warm());
-      await Promise.all(going);
+      if (suwayomi) await suwayomi.warm();
+      else await dex.warm();
     },
 
     async sourceSeries(id, adult) {

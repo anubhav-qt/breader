@@ -96,6 +96,8 @@ function fakeSuwayomi() {
     slowDown: new Set<string>(),
     /** Sources whose site takes this long (ms) over every call. */
     lag: new Map<string, number>(),
+    /** Suwayomi itself not answering. */
+    down: false,
     perPage: 20,
   };
   const calls: Array<{ op: string; source?: string; type?: string; page?: number }> = [];
@@ -160,6 +162,7 @@ function fakeSuwayomi() {
   }
 
   async function answer(url: URL, init: RequestInit) {
+    if (state.down) return new Response('Bad Gateway', { status: 502 });
     if (url.pathname === '/api/graphql') {
       const body = JSON.parse(String(init.body));
       const source = sourceOfCall(body.query, body.variables);
@@ -307,7 +310,7 @@ describe('one search everywhere', () => {
       { id: 4, source: '11', title: 'Source Untyped', genre: ['Action'] },
     ];
     const kinds = (body: { items: MangaFound[] }) => body.items.map((x) => `${x.card.title}: ${x.card.kind}`).sort();
-    const all = await b.get('/v1/manga/search');
+    const all = await b.get('/v1/manga/search?q=source');
     expect(kinds(all.body)).toEqual([
       'Dex Comic: comics',
       'Dex Manga: manga',
@@ -317,9 +320,9 @@ describe('one search everywhere', () => {
       'Source Manhwa: manhwa',
       'Source Untyped: null',
     ]);
-    const some = await b.get('/v1/manga/search?kinds=manhwa,manga');
+    const some = await b.get('/v1/manga/search?q=source&kinds=manhwa,manga');
     expect(kinds(some.body)).toEqual(['Dex Manga: manga', 'Dex Manhwa: manhwa', 'Source Manga: manga', 'Source Manhwa: manhwa']);
-    const comics = await b.get('/v1/manga/search?kinds=comics');
+    const comics = await b.get('/v1/manga/search?q=source&kinds=comics');
     expect(kinds(comics.body)).toEqual(['Dex Comic: comics']);
     // MangaDex is asked for those first published in their languages, or for any but the others'.
     const lists = dexCalls.filter((u) => u.pathname === '/manga');
@@ -345,25 +348,28 @@ describe('one search everywhere', () => {
   });
 
   it('carries on where each place got to, and asks only those with more', async () => {
-    const titles = Array.from({ length: 15 }, (_, i) => `Dex ${i + 1}`);
-    const { b, sw, dexCalls } = await setup(titles);
-    sw.state.series = Array.from({ length: 25 }, (_, i) => ({ id: i + 1, source: '22', title: `Demon ${i + 1}` }));
+    const { b, sw, dexCalls } = await setup(['Dex 1']);
+    sw.state.series = [
+      ...Array.from({ length: 15 }, (_, i) => ({ id: 101 + i, source: '11', title: `Asura ${i + 1}` })),
+      ...Array.from({ length: 25 }, (_, i) => ({ id: i + 1, source: '22', title: `Demon ${i + 1}` })),
+    ];
     const first = await b.get('/v1/manga/search?lang=en&sort=latest');
     expect(first.body.items).toHaveLength(20);
-    expect(first.body.next).toBe('sw22:1.10,md:10');
+    expect(first.body.next).toBe('sw11:1.10,sw22:1.10');
     // Manga Demon has no Latest, so its Popular instead.
+    expect(sw.calls.find((c) => c.source === '11')?.type).toBe('LATEST');
     expect(sw.calls.find((c) => c.source === '22')?.type).toBe('POPULAR');
 
     const second = await b.get(`/v1/manga/search?lang=en&sort=latest&next=${first.body.next}`);
-    expect(shown(second.body).slice(0, 3)).toEqual(['Manga Demon: Demon 11', 'MangaDex: Dex 11', 'Manga Demon: Demon 12']);
+    expect(shown(second.body).slice(0, 3)).toEqual(['Asura Scans: Asura 11', 'Manga Demon: Demon 11', 'Asura Scans: Asura 12']);
     expect(second.body.items).toHaveLength(15);
     expect(second.body.next).toBe('sw22:2');
 
-    const asked = dexCalls.length;
     const third = await b.get(`/v1/manga/search?lang=en&sort=latest&next=${second.body.next}`);
     expect(shown(third.body)).toEqual(['Manga Demon: Demon 21', 'Manga Demon: Demon 22', 'Manga Demon: Demon 23', 'Manga Demon: Demon 24', 'Manga Demon: Demon 25']);
     expect(third.body.next).toBeNull();
-    expect(dexCalls).toHaveLength(asked);
+    // Browsing, MangaDex isn't asked beside the sources.
+    expect(dexCalls).toEqual([]);
     expect(sw.calls.filter((c) => c.op === 'search' && c.source === '22').map((c) => c.page)).toEqual([1, 2]);
     expect((await b.get('/v1/manga/search?next=nope')).status).toBe(400);
   });
@@ -578,6 +584,14 @@ describe('how a search ranks', () => {
     expect(asked).toEqual(['md:10']);
   });
 
+  it('waits a while longer for the first place to come when every one is late', async () => {
+    const slow = place('sw1', 'Slow Scans', () => new Promise((done) => setTimeout(() => done({ found: [found('Slow Scans', 'Slow')], next: '10' }), 100)));
+    const stuck = place('sw2', 'Stuck Scans', () => new Promise(() => {}));
+    const r = await find([slow, stuck], undefined, undefined, 20);
+    expect(titlesOf(r.items)).toEqual(['Slow Scans: Slow']);
+    expect(r.next).toBe('sw1:10,sw2:0');
+  });
+
   it('says why when every place failed', async () => {
     const broken = place('sw5', 'Broken', async () => {
       throw new Error('nope');
@@ -614,6 +628,40 @@ describe('browsing the quick sources, searching every one', () => {
     expect(shown(r.body)).toContain('Manga Demon: Slow 1');
   });
 
+  it('browses the sources only, and MangaDex too in a search by name', async () => {
+    const { b, sw, dexCalls } = await setup(['Dex One']);
+    sw.state.series = [{ id: 1, source: '11', title: 'Asura One' }];
+    let r = await b.get('/v1/manga/search?lang=en');
+    expect(shown(r.body)).toEqual(['Asura Scans: Asura One']);
+    expect(dexCalls).toEqual([]);
+
+    r = await b.get('/v1/manga/search?q=one&lang=en');
+    expect(shown(r.body).sort()).toEqual(['Asura Scans: Asura One', 'MangaDex: Dex One']);
+  });
+
+  it('browses MangaDex when Suwayomi is down', async () => {
+    const { b, sw } = await setup(['Dex One']);
+    sw.state.down = true;
+    const r = await b.get('/v1/manga/search?lang=en');
+    expect(r.status).toBe(200);
+    expect(shown(r.body)).toEqual(['MangaDex: Dex One']);
+  });
+
+  it('browses the quickest source when not one is quick enough', async () => {
+    const { b, sw } = await setup([], undefined, {}, 500);
+    sw.state.sources = sw.state.sources.filter((s) => s.id === '11' || s.id === '22');
+    quickAndSlow(sw);
+    sw.state.lag.set('11', 100);
+    // Not timed yet: both asked, and both found too slow.
+    let r = await b.get('/v1/manga/search?lang=en');
+    expect(shown(r.body)).toContain('Manga Demon: Slow 1');
+    const lists = listsOf(sw, '22');
+
+    r = await b.get('/v1/manga/search?lang=en&sort=new');
+    expect(shown(r.body)).toEqual(['Asura Scans: Quick 1', 'Asura Scans: Quick 2', 'Asura Scans: Quick 3', 'Asura Scans: Quick 4']);
+    expect(listsOf(sw, '22')).toBe(lists);
+  });
+
   it('looking for one series’ copies, checks only the series going by its name', async () => {
     const { b, sw, dexCalls } = await setup(['Haikyuu!!', 'Haikyu Fan Book']);
     sw.state.series = [
@@ -642,9 +690,11 @@ describe('browsing the quick sources, searching every one', () => {
   });
 
   it('checks each quick source’s Popular and Updated first lots ahead of readers, and stops at a slow one', async () => {
-    const { b, sw, manga } = await setup([], undefined, {}, 500);
+    const { b, sw, manga, dexCalls } = await setup(['Dex One'], undefined, {}, 500);
     quickAndSlow(sw);
     await manga.warm();
+    // MangaDex isn't browsed beside the sources, so isn't checked ahead either.
+    expect(dexCalls).toEqual([]);
     // Asura Scans: Popular and Updated. Manga Demon has no Updated, and one lot showed it slow.
     expect(listsOf(sw, '11')).toBe(2);
     expect(listsOf(sw, '22')).toBe(1);

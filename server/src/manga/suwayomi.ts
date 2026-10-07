@@ -4,7 +4,7 @@ import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
-import { DEADLINE, WARM, wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
+import { WARM, wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { adultGenre, kindGenre, neverGenre, sideGenre, web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
 import { caughtUp, firstMissing, highest } from './readable.ts';
@@ -19,13 +19,19 @@ import { Speeds } from './speed.ts';
  * those for adults only with 18+, doujinshi and anthologies only when asked, and only the kinds
  * asked for. Each series is judged by its own genres: a site that has some series for adults
  * isn't kept out whole. Pages and covers are kept on disk. Some sites let only so many calls
- * through, so each lot is timed (speed.ts), and browsing leaves out a source too slow for find.ts's
- * DEADLINE; a search by name asks every one.
+ * through, so each lot is timed (speed.ts), and browsing leaves out a source too slow, or keeps the
+ * quickest when every one is; a search by name asks every one.
  */
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+/**
+ * How long a lot it hasn't seen may take a source for it to be browsed. A lot waits only so long
+ * for each place (find.ts), and one that's late shows with the next, but its first lots are checked
+ * ahead of readers (warm), so most come straight away.
+ */
+const BROWSE_WITHIN = 25_000;
 /** Suwayomi's own folder of files, not a site: never a place to look. */
 const LOCAL = '0';
 /** The calls a lot is making of its source's site, counted as they're made, to time it by (lot()). */
@@ -108,7 +114,7 @@ export interface SuwayomiOptions {
   pace?: [number, number];
   /** Where its answers are kept: Redis, when the server has one. Without, in memory. */
   store?: Store | null;
-  /** How long a lot it hasn't seen may take a source for it to be browsed: find.ts's DEADLINE. Tests go faster. */
+  /** How long a lot it hasn't seen may take a source for it to be browsed (BROWSE_WITHIN). Tests go faster. */
   browseWithin?: number;
 }
 
@@ -182,7 +188,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   const paces = new Map<string, Pace>();
   const images = new Gate(8, 30_000);
   const speeds = new Speeds();
-  const within = opts.browseWithin ?? DEADLINE;
+  const within = opts.browseWithin ?? BROWSE_WITHIN;
   /** Whether each source timed was quick enough to browse, to say so when that changes. */
   const browsing = new Map<string, boolean>();
   let warming = false;
@@ -369,6 +375,23 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     return { item: { kind: 'source', source: source.name, card }, names: [m.title] };
   }
 
+  /** The sources a browse asks: those quick enough, or when not one is, the quickest. */
+  function browsed(all: RawSource[]): RawSource[] {
+    const quick = all.filter((s) => speeds.quick(s.id, within));
+    if (quick.length > 0) return quick;
+    if (all.length === 0) return [];
+    let best = all[0];
+    let bestMs = speeds.lotTime(best.id) ?? 0;
+    for (const s of all) {
+      const ms = speeds.lotTime(s.id) ?? 0;
+      if (ms < bestMs) {
+        best = s;
+        bestMs = ms;
+      }
+    }
+    return [best];
+  }
+
   /** Says in the log when a source is left out of browsing, or comes back. */
   function sayIfChanged(source: RawSource) {
     const quick = speeds.quick(source.id, within);
@@ -431,10 +454,10 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
   /**
    * A source's Popular and Updated first lots, checked ahead of readers as Browse first opens: in
-   * English, nothing else on. Lot by lot, timed like a reader's, so a source found too slow is left
-   * there.
+   * English, nothing else on. Lot by lot, timed like a reader's, so a source no longer browsed (one
+   * of `english`) is left there.
    */
-  async function warmSource(source: RawSource) {
+  async function warmSource(source: RawSource, english: RawSource[]) {
     const sorts: MangaSort[] = ['popular'];
     if (source.supportsLatest) sorts.push('latest');
     try {
@@ -443,7 +466,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
         let at: string | null = '0';
         for (let n = 0; n < WARM / MANGA_PAGE; n++) {
           if (at === null) break;
-          if (!speeds.quick(source.id, within)) return;
+          if (!browsed(english).includes(source)) return;
           const answer: Lot = await lot(source, w, at);
           at = answer.next;
         }
@@ -478,11 +501,15 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
   return {
     async places(w) {
-      const out: Place[] = [];
+      let asked: RawSource[] = [];
       for (const s of await sources()) {
         if (w.lang && s.lang.toLowerCase() !== w.lang) continue;
-        // Browsing, only the sources quick enough. A search by name asks every one.
-        if (!w.q && !speeds.quick(s.id, within)) continue;
+        asked.push(s);
+      }
+      // Browsing, only the sources quick enough. A search by name asks every one.
+      if (!w.q) asked = browsed(asked);
+      const out: Place[] = [];
+      for (const s of asked) {
         out.push({ key: `sw${s.id}`, name: s.name, lot: (at) => lot(s, w, at) });
       }
       return out;
@@ -493,7 +520,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       warming = true;
       try {
         const english = (await sources()).filter((s) => s.lang.toLowerCase() === 'en');
-        await Promise.all(english.map((s) => warmSource(s)));
+        await Promise.all(english.map((s) => warmSource(s, english)));
       } catch (err) {
         log.warn({ err }, 'checking the sources’ first lots ahead stopped');
       } finally {

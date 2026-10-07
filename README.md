@@ -34,7 +34,7 @@ Open [breader.site](https://breader.site), add a book, read. Nothing to install,
 ## Manga
 
 - **A shelf of its own.** Switch the library from Books to Manga. CBZ files, a volume or a chapter each, open in a reader made for pictures: down the screen, or a page at a time, two side by side when the screen is wide enough, right to left or left to right.
-- **One search, through Breader.** Browse looks on MangaDex and on the sites Breader's own Suwayomi reads, in English or any language they have, each card saying where it's from. Series read chapter after chapter in one long scroll, crediting the group that made each chapter and linking to where its publisher puts it up. Series for adults stay hidden until you turn on 18+. Keep chapters to read offline.
+- **One search, through Breader.** Browse lists the sites Breader's own Suwayomi reads (those quick enough to keep up), and a search by name looks on MangaDex too, in English or any language they have, each card saying where it's from. Series read chapter after chapter in one long scroll, crediting the group that made each chapter and linking to where its publisher puts it up. Series for adults stay hidden until you turn on 18+. Keep chapters to read offline.
 
 ## Your library
 
