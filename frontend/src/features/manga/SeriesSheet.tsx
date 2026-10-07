@@ -7,11 +7,13 @@ import { laidOut, madeBy, pickChapters, remoteOf, startOf } from '../../books/re
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
 import { byLang, KIND_NAME, langName, mangadex, RATING_NAME, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
+import { Elsewhere, type MoveTo } from './Elsewhere';
 
 /*
  * A MangaDex series: what it is, where its publisher has it, and its chapters in a language, each
  * with the group that made it. Read starts it (or carries on) in the reader, adding it to My manga;
- * a chapter tapped starts there. A chapter its publisher puts up itself opens on their site.
+ * a chapter tapped starts there. A chapter its publisher puts up itself opens on their site. One in
+ * My manga can move to another site (Elsewhere.tsx).
  */
 
 interface Props {
@@ -19,6 +21,8 @@ interface Props {
   prefs: MangaPrefs;
   /** This series in My manga already. */
   had?: BookRecord;
+  /** Moving it to another site, once it's in My manga. */
+  move?: MoveTo;
   onRead: (series: MangaSeries, lang: string, from: Position | undefined, rect: DOMRect | undefined) => void;
   onAdd: (series: MangaSeries, lang: string) => void;
   onClose: () => void;
@@ -33,9 +37,10 @@ const errorText = (e: unknown) =>
 
 const dateText = (at: number) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
-export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props) {
+export function SeriesSheet({ card, prefs, had, move, onRead, onAdd, onClose }: Props) {
   const [series, setSeries] = useState<Load<MangaSeries>>({ state: 'loading' });
   const [more, setMore] = useState(false);
+  const [looking, setLooking] = useState(move?.first ?? false);
   const s = series.state === 'ready' ? series.value : null;
   // Opened from My manga, the card knows little until the series comes.
   const shown: MangaCard = s ?? card;
@@ -114,8 +119,13 @@ export function SeriesSheet({ card, prefs, had, onRead, onAdd, onClose }: Props)
           ) : (
             <button type="button" className="btn btn-quiet" disabled={!s} onClick={() => s && onAdd(s, lang)}>Add to My manga</button>
           )}
+          {had && move && (
+            <button type="button" className="btn btn-quiet" aria-expanded={looking} onClick={() => setLooking(!looking)}>Elsewhere</button>
+          )}
         </div>
       </div>
+
+      {had && move && looking && <Elsewhere title={card.title} from={card.id} {...move} />}
 
       {series.state === 'error' && <p className="mds-error">{series.message}</p>}
       {s?.description && (

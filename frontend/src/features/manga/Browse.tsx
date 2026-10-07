@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MANGA_KINDS, type MangaCard, type MangaFound, type MangaKind, type MangaSort, type SourceCard } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
-import { KIND_NAME, LANGS, langName, mangadex, RATING_NAME, sources, STATUS_NAME, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
+import { LANGS, langName, mangadex, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
+import { viewOf, type FoundView } from './found';
 import './manga.css';
 
 /*
@@ -39,15 +40,8 @@ const KINDS: Array<{ v: MangaKind; label: string; about: string }> = [
   { v: 'comics', label: 'Comics', about: 'Comics: from everywhere else' },
 ];
 
-interface Item {
-  key: string;
-  title: string;
-  /** The quiet line under the title: where it's from, then what else is known. */
-  meta: string;
-  /** A MangaDex cover comes in two sizes, a source's in one. */
-  cover: { src: string; srcSet: string | undefined } | null;
+interface Item extends FoundView {
   have: boolean;
-  adult: boolean;
   pick: () => void;
 }
 
@@ -84,43 +78,15 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
   }, [text]);
 
   const itemOf = (f: MangaFound): Item => {
+    let pick: () => void;
     if (f.kind === 'mangadex') {
-      const c = f.card;
-      const meta = [f.source, KIND_NAME[c.kind]];
-      if (c.year) meta.push(String(c.year));
-      if (c.status) meta.push(STATUS_NAME[c.status]);
-      if (c.rating === 'suggestive') meta.push(RATING_NAME.suggestive);
-      let cover: Item['cover'] = null;
-      if (c.cover) {
-        const small = mangadex.coverUrl(c.id, c.cover, 256);
-        const big = mangadex.coverUrl(c.id, c.cover, 512);
-        cover = { src: small, srcSet: `${small} 256w, ${big} 512w` };
-      }
-      return {
-        key: c.id,
-        title: c.title,
-        meta: meta.join(' · '),
-        cover,
-        have: false,
-        adult: c.rating === 'erotica' || c.rating === 'pornographic',
-        pick: () => onPick(c),
-      };
+      const card = f.card;
+      pick = () => onPick(card);
+    } else {
+      const card = f.card;
+      pick = () => onPickSource(card);
     }
-    const c = f.card;
-    const meta = [f.source];
-    if (c.kind) meta.push(KIND_NAME[c.kind]);
-    if (c.status) meta.push(STATUS_NAME[c.status]);
-    let cover: Item['cover'] = null;
-    if (c.cover) cover = { src: sources.coverUrl(c.cover), srcSet: undefined };
-    return {
-      key: c.id,
-      title: c.title,
-      meta: meta.join(' · '),
-      cover,
-      have: false,
-      adult: c.adult,
-      pick: () => onPickSource(c),
-    };
+    return { ...viewOf(f), have: false, pick };
   };
 
   /**

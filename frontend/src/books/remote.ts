@@ -111,6 +111,12 @@ export function laidOut(picked: MangaChapter[]): { chapters: RemoteChapter[]; to
 /** The start of a chapter, as a place the book finds again whatever's changed before it. */
 export const startOf = (c: Pick<RemoteChapter, 'number' | 'first'>): Position => ({ section: Math.max(0, c.first), block: blockOf(c), offset: 0 });
 
+/** The number of the chapter a place is in, or null when it names none. It's the same on every site. */
+export function placeChapter(pos: Position | undefined): number | null {
+  if (!pos || pos.block < PER) return null;
+  return (Math.floor(pos.block / PER) - 1) / 100;
+}
+
 /** The chapter a place names, by its number: or, gone, the next one after it. */
 function chapterAt<T extends Pick<RemoteChapter, 'number'>>(chapters: T[], pos: Position): T | undefined {
   if (pos.block < PER) return undefined;

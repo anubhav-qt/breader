@@ -114,6 +114,13 @@
 .mds-links .btn svg { width: 15px; height: 15px; }
 .mds-link { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); text-underline-offset: 2px; }
 .mds-link:hover { color: var(--ink); }
+/* Elsewhere (Elsewhere.tsx): the same series on the other sites, smaller covers, the one picked ringed. */
+.mde-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 20px 14px; margin-top: 16px; }
+.mde-grid .mdx-title { font-size: 20px; }
+.mdx-card[aria-pressed="true"] .mdx-cover::after { box-shadow: inset 0 0 0 2px var(--accent); }
+.mde-further { margin-top: 16px; }
+.mde-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
+.mde-ask p { flex: 1 1 240px; margin: 0; font: var(--ui-w) 13px/1.45 var(--ui); }
 .mds-ch-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font: var(--ui-w-strong) 14px/1 var(--ui); }
 .mds-chapters { list-style: none; margin: 4px 0 0; padding: 0; }
 .mds-ch {

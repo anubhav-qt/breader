@@ -10,12 +10,12 @@ import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
-import { remoteOf, remoteUrl } from './books/remote';
+import { placeChapter, remoteOf, remoteUrl } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
 import type { AccountResponse } from '@breader/shared/protocol';
-import type { MangaCard, MangaSeries, SourceCard, SourceSeries } from '@breader/shared/manga';
+import type { MangaCard, MangaFound, MangaSeries, SourceCard, SourceSeries } from '@breader/shared/manga';
 import { addLibrary, libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
@@ -30,6 +30,7 @@ import { fillGaps, genreFor } from './features/gallery/fill';
 import { Reader } from './features/reader/Reader';
 import { Browse } from './features/manga/Browse';
 import { SeriesSheet } from './features/manga/SeriesSheet';
+import type { MoveTo } from './features/manga/Elsewhere';
 import { SourceSheet } from './features/manga/SourceSheet';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
@@ -128,6 +129,8 @@ export default function App() {
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
   /** A series' sheet from one of Breader's Suwayomi sources, open over the library too. */
   const [sourceSheet, setSourceSheet] = useState<SourceCard | null>(null);
+  /** The sheet open shows the series on the other sites straight away, as it wouldn't open. */
+  const [lookFirst, setLookFirst] = useState(false);
   // Whether the Manga shelf has a MangaDex tab: the laptop says. Out of reach, the tab stays and says so.
   useEffect(() => {
     if (category !== 'manga' || mdOn !== null) return;
@@ -299,6 +302,23 @@ export default function App() {
     setOpening(null);
   }, []);
 
+  /** A series in My manga: its sheet, from what the card knows until the rest comes. */
+  const chaptersOf = useCallback((b: BookRecord) => {
+    const w = remoteOf(b.url);
+    setLookFirst(false);
+    if (w?.kind === 'mangadex') {
+      setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', kind: 'manga', authors: b.author ? [b.author] : [], side: false });
+    } else if (w?.kind === 'source') {
+      setSourceSheet({ id: w.id, title: b.title, cover: `/v1/manga/source/${w.id}/cover`, status: null, adult: false, side: false, kind: null });
+    }
+  }, []);
+
+  /** A series in My manga that wouldn't open: its sheet, at the same series on the other sites. */
+  const lookElsewhere = useCallback((b: BookRecord) => {
+    chaptersOf(b);
+    setLookFirst(true);
+  }, [chaptersOf]);
+
   const startLoad = useCallback(async (id: string, given?: BookRecord, at?: Position) => {
     const rec = given ?? recordById.get(id);
     if (!rec) return null;
@@ -316,10 +336,14 @@ export default function App() {
       return book;
     } catch (e) {
       console.error(e);
-      say(e instanceof Error ? e.message : 'Couldn’t open this book.');
+      let text = 'Couldn’t open this book.';
+      if (e instanceof Error) text = e.message;
+      // A manga's site may be down or gone: the same series may be on another.
+      if (rec.source === 'remote') say(text, { action: { label: 'Find it elsewhere', run: () => lookElsewhere(rec) } });
+      else say(text);
       return null;
     }
-  }, [recordById, lib, say]);
+  }, [recordById, lib, say, lookElsewhere]);
 
   const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect) => {
     openAnimDone.current = false;
@@ -425,16 +449,6 @@ export default function App() {
     });
   }, [remoteSeries, lib, addSeries, startLoad, finishOpen]);
 
-  /** A series in My manga: its sheet, from what the card knows until the rest comes. */
-  const chaptersOf = useCallback((b: ShelfItem) => {
-    const w = remoteOf(b.url);
-    if (w?.kind === 'mangadex') {
-      setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', kind: 'manga', authors: b.author ? [b.author] : [], side: false });
-    } else if (w?.kind === 'source') {
-      setSourceSheet({ id: w.id, title: b.title, cover: `/v1/manga/source/${w.id}/cover`, status: null, adult: false, side: false, kind: null });
-    }
-  }, []);
-
   /** A series from one of Breader's Suwayomi sources into My manga, with its cover from there. */
   const addSourceSeries = useCallback(async (s: SourceSeries): Promise<BookRecord> => {
     const now = Date.now();
@@ -480,6 +494,35 @@ export default function App() {
       else if (openAnimDone.current) finishOpen(id);
     });
   }, [remoteSeries, addSourceSeries, startLoad, finishOpen]);
+
+  /**
+   * Reads a series in My manga from another site from now on (features/manga/Elsewhere.tsx). Its
+   * place stays, as places go by chapter number; what it kept offline goes the next time the app
+   * opens (sweepKept).
+   */
+  const moveSeries = useCallback((rec: BookRecord, to: MangaFound) => {
+    let url = to.card.id;
+    if (to.kind === 'mangadex') {
+      let lang = 'en';
+      if (mdPrefs.lang) lang = mdPrefs.lang;
+      if (to.card.readIn) lang = to.card.readIn;
+      url = remoteUrl(to.card.id, lang);
+    }
+    lib.setRemoteUrl(rec.id, url);
+    setSheet(null);
+    setSourceSheet(null);
+    setLookFirst(false);
+    say(`“${rec.title}” is read from ${to.source} now.`);
+  }, [lib, mdPrefs.lang, say]);
+
+  /** What a sheet needs to move its series to another site: only one in My manga can. */
+  const moveTo = (rec: BookRecord | undefined): MoveTo | undefined => {
+    if (!rec) return undefined;
+    const n = placeChapter(lib.reads[rec.id]?.pos);
+    let place: string | null = null;
+    if (n !== null) place = `Ch. ${n}`;
+    return { prefs: mdPrefs, have: haveSeries, place, first: lookFirst, onMove: (to) => moveSeries(rec, to) };
+  };
 
   const addSeriesOnly = useCallback(async (s: MangaSeries, lang: string) => {
     if (remoteSeries.has(s.id)) return;
@@ -937,9 +980,13 @@ export default function App() {
             card={sheet}
             prefs={mdPrefs}
             had={remoteSeries.get(sheet.id)}
+            move={moveTo(remoteSeries.get(sheet.id))}
             onRead={(s, lang, from, rect) => void readSeries(s, lang, from, rect)}
             onAdd={(s, lang) => void addSeriesOnly(s, lang)}
-            onClose={() => setSheet(null)}
+            onClose={() => {
+              setSheet(null);
+              setLookFirst(false);
+            }}
           />
         )}
         {sourceSheet && route.name === 'library' && (
@@ -948,9 +995,13 @@ export default function App() {
             card={sourceSheet}
             adult={mdPrefs.adult}
             had={remoteSeries.get(sourceSheet.id)}
+            move={moveTo(remoteSeries.get(sourceSheet.id))}
             onRead={(s, from, rect) => void readSourceSeries(s, from, rect)}
             onAdd={(s) => { if (!remoteSeries.has(s.id)) void addSourceSeries(s).then((rec) => say(`Added “${rec.title}” to My manga`)); }}
-            onClose={() => setSourceSheet(null)}
+            onClose={() => {
+              setSourceSheet(null);
+              setLookFirst(false);
+            }}
           />
         )}
         {login && (

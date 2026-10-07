@@ -6,11 +6,12 @@ import { IconCheck, IconOut } from '../../components/icons';
 import { laidOut, madeBy, pickChapters, startOf } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
 import { KIND_NAME, sources, STATUS_NAME } from '../../lib/mangadex';
+import { Elsewhere, type MoveTo } from './Elsewhere';
 
 /*
  * A series on one of Breader's Suwayomi sources: what it is, where it's from, and its chapters,
  * each with the group that made it. Read starts it (or carries on) in the reader, adding it to My
- * manga; a chapter tapped starts there.
+ * manga; a chapter tapped starts there. One in My manga can move to another site (Elsewhere.tsx).
  */
 
 interface Props {
@@ -19,6 +20,8 @@ interface Props {
   adult: boolean;
   /** This series in My manga already. */
   had?: BookRecord;
+  /** Moving it to another site, once it's in My manga. */
+  move?: MoveTo;
   onRead: (series: SourceSeries, from: Position | undefined, rect: DOMRect | undefined) => void;
   onAdd: (series: SourceSeries) => void;
   onClose: () => void;
@@ -33,10 +36,11 @@ function errorText(e: unknown): string {
 
 const dateText = (at: number) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
-export function SourceSheet({ card, adult, had, onRead, onAdd, onClose }: Props) {
+export function SourceSheet({ card, adult, had, move, onRead, onAdd, onClose }: Props) {
   const [series, setSeries] = useState<Load<SourceSeries>>({ state: 'loading' });
   const [list, setList] = useState<Load<MangaChapter[]>>({ state: 'loading' });
   const [more, setMore] = useState(false);
+  const [looking, setLooking] = useState(move?.first ?? false);
   const coverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -101,8 +105,13 @@ export function SourceSheet({ card, adult, had, onRead, onAdd, onClose }: Props)
           ) : (
             <button type="button" className="btn btn-quiet" disabled={!s} onClick={() => s && onAdd(s)}>Add to My manga</button>
           )}
+          {had && move && (
+            <button type="button" className="btn btn-quiet" aria-expanded={looking} onClick={() => setLooking(!looking)}>Elsewhere</button>
+          )}
         </div>
       </div>
+
+      {had && move && looking && <Elsewhere title={card.title} from={card.id} {...move} />}
 
       {series.state === 'error' && <p className="mds-error">{series.message}</p>}
       {s?.description && (
