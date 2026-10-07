@@ -5,8 +5,8 @@ import { readLocal, writeLocal } from './store';
  * The reader's own OPDS catalog (Komga, Kavita, Calibre's content server and the like), asked
  * straight from this browser: its feeds, a search when it has one, and each book's files. A book
  * added from it is downloaded into the library like any file. Its address and login stay in this
- * browser. Browsers only let Breader read a catalog that allows it (CORS): Komga does with
- * KOMGA_CORS_ALLOWED_ORIGINS, and a reverse proxy can add the header for any other.
+ * browser. Browsers only let Breader read a catalog that allows it (CORS): Komga does once its
+ * komga.cors.allowed-origins setting names Breader, and a reverse proxy can add the header for any other.
  */
 
 export interface CatalogLogin {

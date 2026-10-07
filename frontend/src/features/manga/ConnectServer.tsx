@@ -23,7 +23,7 @@ type State = { kind: 'idle' } | { kind: 'checking' } | { kind: 'error'; message:
 
 const INTRO: Record<ServerKind, string> = {
   suwayomi: 'A Suwayomi server of yours, with the sources installed there (Mihon’s extensions): their series read here a few chapters at a time.',
-  opds: 'An OPDS catalog of yours, such as Komga, Kavita or Calibre’s: its books and comics, added to your library as files. It has to let Breader ask it (CORS); Komga does with KOMGA_CORS_ALLOWED_ORIGINS.',
+  opds: 'An OPDS catalog of yours, such as Komga, Kavita or Calibre’s: its books and comics, added to your library as files. It has to let Breader ask it (CORS): Komga does once its komga.cors.allowed-origins setting names Breader.',
 };
 const PLACEHOLDER: Record<ServerKind, string> = { suwayomi: 'https://manga.example.com', opds: 'https://books.example.com/opds/v1.2/catalog' };
 
