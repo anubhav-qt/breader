@@ -279,7 +279,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
           {where === 'mangadex' && (
             <span className="mdx-switch">
               <span id={`${id}-doujinshi`}>Doujinshi</span>
-              <button type="button" className="switch" role="switch" aria-checked={prefs.doujinshi} aria-labelledby={`${id}-doujinshi`} title="Show doujinshi, fan-made works, too" onClick={() => set({ doujinshi: !prefs.doujinshi })} />
+              <button type="button" className="switch" role="switch" aria-checked={prefs.doujinshi} aria-labelledby={`${id}-doujinshi`} title="Show doujinshi (fan-made works) and anthologies too" onClick={() => set({ doujinshi: !prefs.doujinshi })} />
             </span>
           )}
           <span className="mdx-switch">

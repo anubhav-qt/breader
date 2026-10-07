@@ -23,7 +23,7 @@ export interface MangaSearch {
   lang?: string;
   sort?: MangaSort;
   adult?: boolean;
-  /** Doujinshi too, which stay out unless asked for. */
+  /** Doujinshi and anthologies too, which stay out unless asked for. */
   doujinshi?: boolean;
   offset?: number;
 }
@@ -58,13 +58,13 @@ export const mangadex = {
 
 /**
  * How this device looks for manga: where (MangaDex, or a source on the reader's own server, sw:<id>),
- * in what language and order, whether 18+ series and doujinshi show, and data saver.
+ * in what language and order, whether 18+ series and doujinshi (and anthologies) show, and data saver.
  */
 export interface MangaPrefs {
   source: string;
   lang: string;
   adult: boolean;
-  /** Doujinshi (fan-made works) show in MangaDex's results too. */
+  /** Doujinshi (fan-made works) and anthologies show in MangaDex's results too. */
   doujinshi: boolean;
   sort: MangaSort;
   /** A source on the reader's server: its popular series, or its latest. */

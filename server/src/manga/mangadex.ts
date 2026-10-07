@@ -34,8 +34,12 @@ const REPORT = 'https://api.mangadex.network/report';
 
 const NEVER_NAMES = new Set(['loli', 'shota']);
 const NEVER_IDS = ['2d1f5d56-a1e5-4d0d-a961-2193588b08ec', 'ddefd648-5140-4e5f-ba18-4eca4071d19b'];
-/** MangaDex's "Doujinshi" format tag: fan-made works, left out of a search unless it asks for them. */
+/** MangaDex's "Doujinshi" format tag: fan-made works. */
 export const DOUJINSHI_ID = 'b13b2a48-c720-44a9-9c77-39c9979373fb';
+/** MangaDex's "Anthology" format tag: short works by many hands, around a series or a theme. */
+export const ANTHOLOGY_ID = '51d83883-4103-437c-b4b1-731cb73d786c';
+/** Left out of a search unless it asks for them (its doujinshi switch). */
+const SIDE_WORKS = [DOUJINSHI_ID, ANTHOLOGY_ID];
 const SAFE: MangaRating[] = ['safe', 'suggestive'];
 const ALL: MangaRating[] = [...SAFE, ...ADULT_RATINGS];
 /** A chapter list comes this many at a time, MangaDex's most. */
@@ -462,7 +466,7 @@ export function makeManga(opts: MangaOptions): Manga {
     return lists.get(key, async () => {
       // A new list, so the kept never-list stays as it is.
       const excluded = [...(await neverIds())];
-      if (!a.doujinshi) excluded.push(DOUJINSHI_ID);
+      if (!a.doujinshi) excluded.push(...SIDE_WORKS);
       const r = await call<{ data: RawManga[]; total: number }>('/manga', [
         ...query({
           limit: MANGA_PAGE,
