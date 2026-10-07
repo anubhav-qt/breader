@@ -62,8 +62,8 @@ const DAY = 24 * HOUR;
 const LOTS = 6;
 /** …and not once it has taken this long, so the reader sees something. */
 const BUDGET = 8_000;
-/** Series checked ahead of readers in Popular and in Updated: their first screens. */
-const WARM = 60;
+/** Series checked ahead of readers in Popular and in Updated: their first 12 lots, a few screens' scrolling. */
+const WARM = 120;
 
 const ORDER: Record<MangaSort, string> = {
   relevance: 'relevance',
