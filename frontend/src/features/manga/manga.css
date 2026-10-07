@@ -114,13 +114,36 @@
 .mds-links .btn svg { width: 15px; height: 15px; }
 .mds-link { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); text-underline-offset: 2px; }
 .mds-link:hover { color: var(--ink); }
-/* Elsewhere (Elsewhere.tsx): the same series on the other sites, smaller covers, the one picked ringed. */
-.mde-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 20px 14px; margin-top: 16px; }
-.mde-grid .mdx-title { font-size: 20px; }
-.mdx-card[aria-pressed="true"] .mdx-cover::after { box-shadow: inset 0 0 0 2px var(--accent); }
-.mde-further { margin-top: 16px; }
-.mde-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
-.mde-ask p { flex: 1 1 240px; margin: 0; font: var(--ui-w) 13px/1.45 var(--ui); }
+/* Copies (MangaSheet.tsx): every way to read the series, its dot lit at the one it's read in. */
+.mdc-note { display: inline-flex; align-items: center; gap: 8px; font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); }
+.mdc-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.mdc-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 170px) minmax(0, 1fr) 110px 96px 76px;
+  grid-template-areas: "led site group ch px best";
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  text-align: left;
+  color: var(--ink-2);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.mdc-row:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
+.mdc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mdc-row[aria-pressed="true"] { color: var(--ink); }
+.mdc-row[aria-pressed="true"] .mdx-led { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mdc-row .mdx-led { grid-area: led; }
+.mdc-site { grid-area: site; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 22px; line-height: 1; }
+.mdc-group { grid-area: group; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 11.5px/1.2 var(--ui); }
+.mdc-ch, .mdc-px { justify-self: end; white-space: nowrap; font: var(--ui-w) 12px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.mdc-ch { grid-area: ch; }
+.mdc-px { grid-area: px; }
+.mdc-best { grid-area: best; justify-self: end; font: var(--ui-w-strong) 11px/1 var(--ui); color: var(--accent); white-space: nowrap; }
+.mdc-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
+.mdc-ask p { flex: 1 1 240px; margin: 0; font: var(--ui-w) 13px/1.45 var(--ui); }
 .mds-ch-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font: var(--ui-w-strong) 14px/1 var(--ui); }
 .mds-chapters { list-style: none; margin: 4px 0 0; padding: 0; }
 .mds-ch {
@@ -167,4 +190,5 @@
   .mds-ch-d { grid-area: d; }
   .mds-ch-t:empty { display: none; }
   .mds-ch:has(.mds-ch-t:empty) { grid-template-areas: "n g d"; }
+  .mdc-row { grid-template-columns: 8px minmax(0, 1fr) auto auto; grid-template-areas: "led site site best" "led group ch px"; row-gap: 4px; }
 }

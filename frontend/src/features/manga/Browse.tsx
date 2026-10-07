@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MANGA_KINDS, type MangaCard, type MangaFound, type MangaKind, type MangaSort, type SourceCard } from '@breader/shared/manga';
+import { MANGA_KINDS, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
 import { LANGS, langName, mangadex, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
-import { viewOf, type FoundView } from './found';
+import { entriesOf, viewOf } from './found';
 import './manga.css';
 
 /*
  * The Manga shelf's Browse tab: one search across every place Breader's computer looks (MangaDex
  * and its Suwayomi sources), by name or by what's popular, new or just updated, in a language. The
- * same series found in two places is two cards, each naming its place under the title. Under the
- * search, one line holds the order, the kinds to show, Doujinshi, 18+ and the language, each a dot
- * that lights when it's on. Series for adults show only once 18+ is on. Picking one opens its sheet
- * (SeriesSheet.tsx, SourceSheet.tsx), to read it or add it to My manga.
+ * same series found in several places is one card (found.ts), saying where under the title. Under
+ * the search, one line holds the order, the kinds to show, Doujinshi, 18+ and the language, each a
+ * dot that lights when it's on. Series for adults show only once 18+ is on. Picking one opens its
+ * sheet (MangaSheet.tsx), to pick a copy, read it or add it to My manga.
  */
 
 interface Props {
@@ -22,8 +22,8 @@ interface Props {
   have: ReadonlySet<string>;
   prefs: MangaPrefs;
   onPrefs: (p: MangaPrefs) => void;
-  onPick: (card: MangaCard) => void;
-  onPickSource: (card: SourceCard) => void;
+  /** A series picked: everywhere it was found, the first the one it opens at. */
+  onPick: (found: MangaFound[]) => void;
 }
 
 const SORTS: Array<{ v: MangaSort; label: string }> = [
@@ -40,23 +40,18 @@ const KINDS: Array<{ v: MangaKind; label: string; about: string }> = [
   { v: 'comics', label: 'Comics', about: 'Comics: from everywhere else' },
 ];
 
-interface Item extends FoundView {
-  have: boolean;
-  pick: () => void;
-}
-
 /**
  * ask: the search these are for (askKey), so a lot asked for by an earlier one is never added.
  * next: where the next lot starts, as the server said, or null once every place is done.
  */
-type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; ask: string; items: Item[]; next: string | null };
+type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; ask: string; items: MangaFound[]; next: string | null };
 
 function messageOf(e: unknown): string {
   if (e instanceof Error) return e.message;
   return 'Breader couldn’t reach it.';
 }
 
-export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, onPickSource }: Props) {
+export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }: Props) {
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
   const [found, setFound] = useState<Found>({ state: 'loading' });
@@ -77,25 +72,13 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
     return () => window.clearTimeout(t);
   }, [text]);
 
-  const itemOf = (f: MangaFound): Item => {
-    let pick: () => void;
-    if (f.kind === 'mangadex') {
-      const card = f.card;
-      pick = () => onPick(card);
-    } else {
-      const card = f.card;
-      pick = () => onPickSource(card);
-    }
-    return { ...viewOf(f), have: false, pick };
-  };
-
   /**
    * A lot of results from every place, from where the search had got to. Only series that can be
    * read here show, and a slow place shows with the next lot, so a lot can be short or even empty.
    */
-  const fetchLot = async (next: string | null): Promise<{ items: Item[]; next: string | null }> => {
+  const fetchLot = async (next: string | null): Promise<{ items: MangaFound[]; next: string | null }> => {
     const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, kinds: prefs.kinds, next: next ?? undefined });
-    return { items: r.items.map(itemOf), next: r.next };
+    return { items: r.items, next: r.next };
   };
 
   useEffect(() => {
@@ -126,8 +109,8 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
         (r) => {
           setFound((f) => {
             if (f.state !== 'ready' || f.ask !== ask || f.next !== at) return f;
-            const seen = new Set(f.items.map((x) => x.key));
-            const fresh = r.items.filter((x) => !seen.has(x.key));
+            const seen = new Set(f.items.map((x) => x.card.id));
+            const fresh = r.items.filter((x) => !seen.has(x.card.id));
             return { state: 'ready', ask, items: [...f.items, ...fresh], next: r.next };
           });
         },
@@ -146,8 +129,16 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, hidden, askKey]);
 
-  // What's in My manga shows as it changes, without asking again.
-  const items = useMemo(() => (ready ? ready.items.map((x) => ({ ...x, have: have.has(x.key) })) : []), [ready, have]);
+  // One card a series, however many places have it. A later lot's copy joins the card it's the
+  // same series as. What's in My manga shows as it changes, without asking again.
+  const items = useMemo(() => {
+    if (!ready) return [];
+    return entriesOf(ready.items).map((e) => ({
+      ...viewOf(e),
+      have: e.found.some((f) => have.has(f.card.id)),
+      pick: () => onPick(e.found),
+    }));
+  }, [ready, have, onPick]);
 
   const set = (p: Partial<MangaPrefs>) => {
     const next = { ...prefs, ...p };

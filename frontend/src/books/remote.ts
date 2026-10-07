@@ -16,20 +16,48 @@ import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './
  * language does.
  */
 
+/** group: the group whose uploads it's read in (its copy), or null for whichever. */
 export type Remote =
-  | { kind: 'mangadex'; series: string; lang: string; key: string }
-  | { kind: 'source'; id: string; key: string };
+  | { kind: 'mangadex'; series: string; lang: string; group: string | null; key: string }
+  | { kind: 'source'; id: string; group: string | null; key: string };
+
+/** The group at the end of a url, after a #. */
+function groupOf(part: string | undefined): string | null {
+  if (!part) return null;
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return null;
+  }
+}
 
 /** Where a remote book is read from, by its url. `key` names it for what's kept offline. */
 export function remoteOf(url: string | undefined): Remote | null {
-  const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?$/.exec(url ?? '');
-  if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', key: md[1] };
+  const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?(?:#(.+))?$/.exec(url ?? '');
+  if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', group: groupOf(md[3]), key: md[1] };
   // A series on Breader's Suwayomi: its url is its id there.
-  const source = /^(sw:[1-9]\d{0,9})$/.exec(url ?? '');
-  if (source) return { kind: 'source', id: source[1], key: source[1] };
+  const source = /^(sw:[1-9]\d{0,9})(?:#(.+))?$/.exec(url ?? '');
+  if (source) return { kind: 'source', id: source[1], group: groupOf(source[2]), key: source[1] };
   return null;
 }
-export const remoteUrl = (series: string, lang: string) => (lang === 'en' ? `mangadex:${series}` : `mangadex:${series}:${lang}`);
+
+/** The end of a url naming the group a series is read in, or nothing for whichever. */
+function groupPart(group: string | null): string {
+  if (group === null) return '';
+  return `#${encodeURIComponent(group)}`;
+}
+
+/** A MangaDex series' url, in a language, in a group's uploads when one's given. */
+export function remoteUrl(series: string, lang: string, group: string | null = null): string {
+  let url = `mangadex:${series}`;
+  if (lang !== 'en') url += `:${lang}`;
+  return url + groupPart(group);
+}
+
+/** A source's series' url (sw:44), in a group's uploads when one's given. */
+export function sourceUrl(id: string, group: string | null = null): string {
+  return id + groupPart(group);
+}
 
 /** Its number: 12, 12.5; null for a oneshot or an extra. */
 export function numberOf(c: { chapter: string | null }): number | null {
@@ -44,18 +72,20 @@ const keyOf = (c: MangaChapter) => {
 
 /**
  * One upload of each chapter, in order. Of several, one that can be read here before one read on
- * its publisher's site; then the one by the group that made the most of the series, so names and
- * style carry on from chapter to chapter; then the newest.
+ * its publisher's site; then the one by the group picked (the copy it's read in), where it has
+ * one; then the one by the group that made the most of the series, so names and style carry on
+ * from chapter to chapter; then the newest.
  */
-export function pickChapters(all: MangaChapter[]): MangaChapter[] {
+export function pickChapters(all: MangaChapter[], prefer: string | null = null): MangaChapter[] {
   const made = new Map<string, Set<string>>();
   for (const c of all) for (const g of c.groups) {
     if (!made.has(g.id)) made.set(g.id, new Set());
     made.get(g.id)!.add(keyOf(c));
   }
   const weight = (c: MangaChapter) => Math.max(0, ...c.groups.map((g) => made.get(g.id)?.size ?? 0));
+  const preferred = (c: MangaChapter) => Number(c.groups.some((g) => g.id === prefer));
   const better = (a: MangaChapter, b: MangaChapter) =>
-    Number(!a.external) - Number(!b.external) || weight(a) - weight(b) || a.at - b.at;
+    Number(!a.external) - Number(!b.external) || preferred(a) - preferred(b) || weight(a) - weight(b) || a.at - b.at;
   const best = new Map<string, MangaChapter>();
   for (const c of all) {
     const k = keyOf(c);
@@ -172,8 +202,9 @@ function bookOf(rec: BookRecord, remote: NonNullable<MangaBook['remote']>, total
   };
 }
 
-async function openMangaDex(rec: BookRecord, series: string, lang: string): Promise<MangaBook> {
-  const { chapters, total } = laidOut(pickChapters(await kept(`mdlist:${series}:${lang}`, async () => (await mangadex.chapters(series, lang)).chapters)));
+async function openMangaDex(rec: BookRecord, series: string, lang: string, group: string | null): Promise<MangaBook> {
+  const list = await kept(`mdlist:${series}:${lang}`, async () => (await mangadex.chapters(series, lang)).chapters);
+  const { chapters, total } = laidOut(pickChapters(list, group));
   if (!total) {
     throw new Error(chapters.length
       ? 'Every chapter of this manga in this language is read on its publisher’s own site. The links are in its chapter list.'
@@ -210,12 +241,12 @@ async function aboutSource(id: string): Promise<{ name: string; page: string | n
   }
 }
 
-async function openSource(rec: BookRecord, id: string, at?: Position): Promise<MangaBook> {
+async function openSource(rec: BookRecord, id: string, group: string | null, at?: Position): Promise<MangaBook> {
   const [about, list] = await Promise.all([
     aboutSource(id),
     kept(`srclist:${id}`, async () => (await sources.chapters(id)).chapters),
   ]);
-  const picked = pickChapters(list);
+  const picked = pickChapters(list, group);
   if (!picked.length) throw new Error('There are no chapters of this series yet.');
 
   // Suwayomi learns a chapter's pages by asking its source, so a few chapters around the place open.
@@ -284,6 +315,6 @@ async function openSource(rec: BookRecord, id: string, at?: Position): Promise<M
 export async function openRemote(rec: BookRecord, at?: Position): Promise<MangaBook> {
   const where = remoteOf(rec.url);
   if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
-  if (where.kind === 'mangadex') return openMangaDex(rec, where.series, where.lang);
-  return openSource(rec, where.id, at);
+  if (where.kind === 'mangadex') return openMangaDex(rec, where.series, where.lang, where.group);
+  return openSource(rec, where.id, where.group, at);
 }

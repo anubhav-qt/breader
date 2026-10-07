@@ -1,4 +1,4 @@
-import { MANGA_KINDS, type MangaChapters, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
+import { MANGA_KINDS, type MangaChapters, type MangaCopies, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
 import { api, ApiError, laptopUrl } from './api';
 import { readLocal, writeLocal } from './store';
 
@@ -53,6 +53,8 @@ export const mangadex = {
   series: (id: string, adult: boolean) => ask(() => api.laptop.get<MangaSeries>(`/v1/manga/series/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter in a language. A long series is several calls to MangaDex, so it can take a while. */
   chapters: (id: string, lang: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),
+  /** Its copies in a language, each group's pages measured: a few pages fetched the first time. */
+  copies: (id: string, lang: string) => ask(() => api.laptop.get<MangaCopies>(`/v1/manga/series/${id}/copies?lang=${lang}`, 90_000)),
   /** A page's picture; the data saver's copy is smaller. */
   page: async (chapterId: string, n: number, saver: boolean) =>
     (await ask(() => api.laptop.raw(`/v1/manga/chapter/${chapterId}/${n}${saver ? '?saver=1' : ''}`, undefined, 45_000))).blob(),
@@ -75,6 +77,8 @@ export const sources = {
   series: (id: string, adult: boolean) => ask(() => api.laptop.get<SourceSeries>(`/v1/manga/source/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter. Suwayomi asks its source for them, so it can take a while. */
   chapters: (id: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/source/${id}/chapters`, 60_000)),
+  /** Its copies, each group's pages measured: a few pages fetched the first time. */
+  copies: (id: string) => ask(() => api.laptop.get<MangaCopies>(`/v1/manga/source/${id}/copies`, 90_000)),
   /** How many pages a chapter has. Suwayomi learns it from its source, a chapter at a time. */
   async pages(chapterId: string): Promise<number> {
     const r = await ask(() => api.laptop.get<{ pages: number }>(`/v1/manga/source/chapter/${chapterId}`, 45_000));
