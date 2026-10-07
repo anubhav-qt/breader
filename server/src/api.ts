@@ -4,6 +4,7 @@ import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
 import { loadEnv } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
+import { connectRedis, type Redis } from './lib/cache.ts';
 import { startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
@@ -20,7 +21,11 @@ const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // The server voice runs on the laptop only: Render's free plan hasn't the processor for it.
 const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(env) : null;
 // MangaDex too: its pages go through here, and the fallback's free plan hasn't the bandwidth.
-const manga = env.ROLE === 'laptop' && env.MANGADEX ? makeManga({ dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024 }) : null;
+const mangaOn = env.ROLE === 'laptop' && env.MANGADEX;
+// Its answers are kept in Redis when there's one, so they outlast a restart.
+let redis: Redis | null = null;
+if (mangaOn && env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
+const manga = mangaOn ? makeManga({ dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024, store: redis }) : null;
 const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
@@ -43,6 +48,7 @@ const stop = () => {
   clearInterval(chores);
   clearInterval(warming);
   void speech?.close();
+  void redis?.close();
   server.close(() => {
     void Promise.all([primary.pool.end(), mirror?.pool.end()]).finally(() => process.exit(0));
   });

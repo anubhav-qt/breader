@@ -2,8 +2,10 @@ import { mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { newLibraryKey } from '@breader/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeApp } from '../src/app.ts';
+import { connectRedis, type Store } from '../src/lib/cache.ts';
+import { log } from '../src/log.ts';
 import { Disk } from '../src/manga/disk.ts';
 import { DOUJINSHI_ID, makeManga, plain, USER_AGENT } from '../src/manga/mangadex.ts';
 import { Gate, Pace } from '../src/manga/pace.ts';
@@ -190,10 +192,26 @@ function fakeDex() {
   return { fetch, calls, state, asked: (host: string, re: RegExp) => calls.filter((c) => c.url.host === host && re.test(c.url.pathname)) };
 }
 
-async function setup() {
+/** Redis as the server sees it: each answer kept as JSON text, with how long it's kept. */
+function fakeRedis() {
+  const keys = new Map<string, { text: string; ttl: number }>();
+  const store: Store = {
+    async get(key) {
+      const hit = keys.get(key);
+      if (!hit) return undefined;
+      return JSON.parse(hit.text);
+    },
+    async set(key, value, ttl) {
+      keys.set(key, { text: JSON.stringify(value), ttl });
+    },
+  };
+  return { store, keys };
+}
+
+async function setup(store?: Store) {
   const dex = fakeDex();
   const dir = await mkdtemp(join(tmpdir(), 'breader-manga-'));
-  const manga = makeManga({ dir, cacheBytes: 64 * 1024 * 1024, fetch: dex.fetch, pace: { api: [1000, 1000], home: [1000, 1000] } });
+  const manga = makeManga({ dir, cacheBytes: 64 * 1024 * 1024, fetch: dex.fetch, pace: { api: [1000, 1000], home: [1000, 1000] }, store });
   const app = makeApp({ ...deps, manga });
   const b = browser(undefined, app);
   const r = await b.post('/v1/libraries', { libraryId: crypto.randomUUID(), key: newLibraryKey() });
@@ -511,6 +529,68 @@ describe('MangaDex through the laptop', () => {
     const r = await b.get('/v1/manga/search?q=busy');
     expect(r.status).toBe(503);
     expect(r.body.code).toBe('manga_busy');
+  });
+});
+
+describe('answers kept in Redis', () => {
+  const MIN = 60_000;
+  const HOUR = 60 * MIN;
+
+  it('keeps each kind of answer as long as its kind keeps, and asks once for two at a time', async () => {
+    const redis = fakeRedis();
+    const { b, dex } = await setup(redis.store);
+    dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20))];
+    dex.state.slow = 5;
+    const [one, two] = await Promise.all([b.get('/v1/manga/search?lang=en'), b.get('/v1/manga/search?lang=en')]);
+    expect(titles(one.body)).toEqual(['Series 1']);
+    expect(two.body).toEqual(one.body);
+    await b.get('/v1/manga/search?lang=en');
+    expect(dex.asked('api.mangadex.org', /^\/manga$/)).toHaveLength(1);
+    expect(dex.asked('api.mangadex.org', /\/feed$/)).toHaveLength(1);
+    expect((await b.get(`/v1/manga/chapter/${ch(1000)}/0`)).status).toBe(200);
+
+    const ttl = (key: string) => redis.keys.get(`manga:v1:${key}`)?.ttl;
+    expect(ttl('search:en:followedCount:safe:plain:0:')).toBe(10 * MIN);
+    expect(ttl(`series:${sid(1)}`)).toBe(6 * HOUR);
+    expect(ttl(`chapters:${sid(1)}:en`)).toBe(10 * MIN);
+    expect(ttl(`readable:${sid(1)}:en`)).toBe(24 * HOUR);
+    expect(ttl('tags:never')).toBe(24 * HOUR);
+    expect(ttl(`chapter-series:${ch(1000)}`)).toBe(7 * 24 * HOUR);
+    expect(ttl(`at-home:${ch(1000)}`)).toBe(10 * MIN);
+  });
+
+  it('answers from Redis after a restart, asking MangaDex nothing', async () => {
+    const redis = fakeRedis();
+    const first = await setup(redis.store);
+    first.dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20)), shelf(3, 'ongoing', 20, upTo(17))];
+    const found = await first.b.get('/v1/manga/search?lang=en');
+    expect(titles(found.body)).toEqual(['Series 1']);
+
+    // The server again, its memory empty, and Redis as it was.
+    const again = await setup(redis.store);
+    again.dex.state.catalogue = first.dex.state.catalogue;
+    expect((await again.b.get('/v1/manga/search?lang=en')).body).toEqual(found.body);
+    expect((await again.b.get(`/v1/manga/series/${sid(1)}`)).body.title).toBe('Series 1');
+    expect((await again.b.get(`/v1/manga/series/${sid(1)}/chapters?lang=en`)).body.chapters).toHaveLength(20);
+    expect(again.dex.calls).toHaveLength(0);
+  });
+
+  it('answers from MangaDex when Redis can’t be reached, and says so', async () => {
+    const warn = vi.spyOn(log, 'warn');
+    const redis = connectRedis('redis://127.0.0.1:1');
+    try {
+      const { b, dex } = await setup(redis);
+      dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20))];
+      const r = await b.get('/v1/manga/search?lang=en');
+      expect(r.status).toBe(200);
+      expect(titles(r.body)).toEqual(['Series 1']);
+      expect((await b.get(`/v1/manga/series/${sid(1)}/chapters?lang=en`)).body.chapters).toHaveLength(20);
+      const said = warn.mock.calls.map((c) => String(c[1]));
+      expect(said).toContain('Redis isn’t answering, so answers are fetched again instead of kept');
+    } finally {
+      warn.mockRestore();
+      await redis.close();
+    }
   });
 });
 

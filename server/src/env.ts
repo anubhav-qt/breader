@@ -94,6 +94,11 @@ const Env = z.object({
   MANGADEX: bool.default(true),
   MANGA_CACHE_DIR: z.string().default('/data/manga'),
   MANGA_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).default(2048),
+  /**
+   * Redis (redis://redis:6379), where MangaDex's answers are kept so they outlast a restart.
+   * Without it they're kept in memory. Redis not answering never stops a reader.
+   */
+  REDIS_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof Env>;

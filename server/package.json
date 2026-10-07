@@ -21,6 +21,7 @@
     "@breader/shared": "*",
     "@breezystack/lamejs": "1.2.7",
     "@hono/node-server": "^2.1.1",
+    "@redis/client": "^6.3.0",
     "age-encryption": "^0.3.1",
     "better-auth": "^1.7.6",
     "drizzle-orm": "^0.45.3",

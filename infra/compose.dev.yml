@@ -64,6 +64,8 @@ services:
       PUBLIC_URL: "http://localhost:8787"
       # The server voice, for these accounts: SPEECH_EMAILS=you@example.com npm run stack
       SPEECH_EMAILS: "${SPEECH_EMAILS:-}"
+      # MangaDex's answers are kept here. Stop "redis" to watch the API carry on without it.
+      REDIS_URL: "redis://redis:6379"
     ports: ["8787:8787"]
     volumes: ["voices:/data/voices", "manga:/data/manga"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }

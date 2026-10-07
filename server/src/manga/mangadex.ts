@@ -11,16 +11,18 @@ import {
   type MangaSeries,
   type MangaSort,
 } from '@breader/shared';
+import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { Disk, pictureType, type Picture } from './disk.ts';
-import { Busy, Gate, Memo, Pace } from './pace.ts';
+import { Busy, Gate, Pace } from './pace.ts';
 
 /*
  * MangaDex, as its rules ask (api.mangadex.org/docs): a User-Agent that says who's asking, about
  * five calls a second from one address and forty a minute for a chapter's pages, every page
  * fetched from MangaDex@Home reported back, and its scanlation groups credited (the app shows them
- * with each chapter). Answers are kept a while, pages on disk (disk.ts), so readers ask it little.
+ * with each chapter). Answers are kept a while (in Redis when there's one, lib/cache.ts), pages on
+ * disk (disk.ts), so readers ask it little.
  * Series tagged loli or shota are never shown, whatever else is allowed. A search shows only series
  * every chapter of can be read here, as a reader would otherwise find most of one is links or gaps.
  */
@@ -40,6 +42,7 @@ const ALL: MangaRating[] = [...SAFE, ...ADULT_RATINGS];
 const FEED = 500;
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 /** An ongoing series still shows while its newest chapters, up to this many, aren't here yet. */
 const SPARE = 2;
 /** A search finding nothing readable goes on to MangaDex's next results, this many lots at most… */
@@ -126,6 +129,8 @@ export interface MangaOptions {
   fetch?: typeof fetch;
   /** Calls a window: MangaDex's API overall, and its page servers' addresses. Tests go faster. */
   pace?: { api: [number, number]; home: [number, number] };
+  /** Where its answers are kept: Redis, when the server has one. Without, in memory. */
+  store?: Store | null;
 }
 
 const notFound = () => new ApiError(404, 'manga_not_found', 'MangaDex doesn’t have that, or it’s been taken down.');
@@ -343,15 +348,21 @@ export function makeManga(opts: MangaOptions): Manga {
   const homePace = new Pace(homeCount, homePer, 30_000);
   const images = new Gate(8, 30_000);
 
-  const lists = new Memo<{ data: RawManga[]; total: number }>(10 * MINUTE, 300);
-  const seriesMemo = new Memo<RawManga>(HOUR, 3000);
-  const feeds = new Memo<MangaChapters>(10 * MINUTE, 300);
-  const verdicts = new Memo<Verdict>(24 * HOUR, 20_000);
-  const homes = new Memo<AtHome>(10 * MINUTE, 500);
-  const chapterInfo = new Memo<string>(HOUR, 5000);
-  const tags = new Memo<string[]>(24 * HOUR, 1);
-  /** The series each chapter seen in a list is in, so its pages can be checked without asking. */
-  const chapterSeries = new Map<string, string>();
+  /** Answers of a kind, kept so long: in the store when there's one, or else in memory, up to `max` of them. */
+  function memo<T>(kind: string, ttl: number, max: number): Memo<T> {
+    let store: Store;
+    if (opts.store) store = opts.store;
+    else store = new MemoryStore(max);
+    return new Memo<T>(store, `manga:v1:${kind}`, ttl);
+  }
+  const lists = memo<{ data: RawManga[]; total: number }>('search', 10 * MINUTE, 300);
+  const seriesMemo = memo<RawManga>('series', 6 * HOUR, 3000);
+  const feeds = memo<MangaChapters>('chapters', 10 * MINUTE, 300);
+  const verdicts = memo<Verdict>('readable', DAY, 20_000);
+  const homes = memo<AtHome>('at-home', 10 * MINUTE, 500);
+  /** The series each chapter is in, so its pages can be checked: from its series' list, or asked. */
+  const chapterSeries = memo<string>('chapter-series', 7 * DAY, 100_000);
+  const tags = memo<string[]>('tags', DAY, 1);
   const fetching = new Map<string, Promise<Picture>>();
   let warming = false;
 
@@ -383,6 +394,7 @@ export function makeManga(opts: MangaOptions): Manga {
     }
     const qs = new URLSearchParams(params).toString();
     const res = await get(`${API}${path}${qs ? `?${qs}` : ''}`, 15_000, { headers: { accept: 'application/json' } });
+    log.debug({ path, status: res.status }, 'asked MangaDex');
     if (res.status === 429) {
       const at = Number(res.headers.get('x-ratelimit-retry-after')) * 1000;
       apiPace.hold(Math.min(Date.now() + MINUTE, at > Date.now() ? at : Date.now() + 10_000));
@@ -417,22 +429,13 @@ export function makeManga(opts: MangaOptions): Manga {
     return m;
   }
 
-  function remember(chapterId: string, seriesId: string) {
-    chapterSeries.delete(chapterId);
-    chapterSeries.set(chapterId, seriesId);
-    if (chapterSeries.size > 100_000) chapterSeries.delete(chapterSeries.keys().next().value!);
-  }
-
   async function allowChapter(chapterId: string) {
-    const seriesId =
-      chapterSeries.get(chapterId) ??
-      (await chapterInfo.get(chapterId, async () => {
-        const r = await call<{ data: RawChapter }>(`/chapter/${chapterId}`, query({ includes: ['manga'] }));
-        const id = rels(r.data, 'manga')[0]?.id;
-        if (!id) throw notFound();
-        return id;
-      }));
-    remember(chapterId, seriesId);
+    const seriesId = await chapterSeries.get(chapterId, async () => {
+      const r = await call<{ data: RawChapter }>(`/chapter/${chapterId}`, query({ includes: ['manga'] }));
+      const id = rels(r.data, 'manga')[0]?.id;
+      if (!id) throw notFound();
+      return id;
+    });
     await allowed(seriesId);
   }
 
@@ -452,7 +455,10 @@ export function makeManga(opts: MangaOptions): Manga {
 
   /** One lot of MangaDex's results, kept a while. */
   function list(a: Ask, offset: number) {
-    const key = JSON.stringify([a.q ?? '', a.lang ?? '', a.field, a.adult, a.doujinshi, offset]);
+    const rating = a.adult ? 'adult' : 'safe';
+    const doujinshi = a.doujinshi ? 'doujinshi' : 'plain';
+    // Readable in redis-cli: en:followedCount:safe:plain:0:frieren
+    const key = [a.lang || 'any', a.field, rating, doujinshi, offset, a.q ?? ''].join(':');
     return lists.get(key, async () => {
       // A new list, so the kept never-list stays as it is.
       const excluded = [...(await neverIds())];
@@ -491,7 +497,7 @@ export function makeManga(opts: MangaOptions): Manga {
           const c = chapterOf(raw);
           if (!c) continue;
           chapters.push(c);
-          remember(c.id, id);
+          chapterSeries.set(c.id, id);
         }
         if (offset + FEED >= r.total) break;
       }
@@ -531,12 +537,11 @@ export function makeManga(opts: MangaOptions): Manga {
   async function readable(m: RawManga, lang: string): Promise<boolean> {
     const upload = m.attributes.latestUploadedChapter ?? null;
     const key = `${m.id}:${lang}`;
+    const kept = await verdicts.peek(key);
+    if (kept && kept.upload === upload) return kept.ok;
+    // Found out before its newest upload: checked again, its chapters asked again too.
     let fresh = false;
-    const kept = verdicts.peek(key);
-    if (kept) {
-      const was = await kept.catch(() => null);
-      if (was && was.upload !== upload) fresh = true;
-    }
+    if (kept) fresh = true;
     const v = await verdicts.get(key, async () => ({ upload, ok: await check(m, lang, fresh) }), fresh);
     return v.ok;
   }
