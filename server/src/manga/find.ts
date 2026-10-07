@@ -1,12 +1,13 @@
-import { MANGA_KINDS, type MangaFound, type MangaKind, type MangaSearchResult, type MangaSort } from '@breader/shared';
+import { MANGA_KINDS, namesOf, sameKind, seriesName, type MangaFound, type MangaFoundIn, type MangaKind, type MangaSearchResult, type MangaSort } from '@breader/shared';
 import { log } from '../log.ts';
 
 /*
  * One search across every place Breader looks for manga: MangaDex and each source of its Suwayomi
  * server. Every place is asked at once, each for its next lot, and what they found is shown
- * together. The same series found in three places is three cards, each naming its
- * place, side by side: those whose title is what was searched for first, then those found in more
- * places, then the places taken in turn. No place goes first because of what it is.
+ * together. The same series found in three places comes three times, side by side, each with the
+ * names it goes by keyed (seriesName), so the app shows it as one: those whose title is what was
+ * searched for first, then those found in more places, then the places taken in turn. No place
+ * goes first because of what it is.
  */
 
 /** How long a search waits for each place. One slower is asked again with the next lot, by when what it found is kept. */
@@ -33,7 +34,7 @@ export function wantedKind(kind: MangaKind | null, w: Wanted): boolean {
 
 /** A series a place found, and the names it goes by there, to tell the same series in another place. */
 export interface Found {
-  item: MangaFound;
+  item: MangaFoundIn;
   names: string[];
 }
 
@@ -77,14 +78,6 @@ function within(going: Promise<Lot>, ms: number): Promise<Answer> {
   });
 }
 
-/** A title as letters and digits only, lower case, without accents: "Omniscient Reader’s Viewpoint" is omniscientreadersviewpoint. */
-export function plainTitle(title: string): string {
-  const bare = title.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
-  const parts = bare.match(/[\p{L}\p{N}]+/gu);
-  if (!parts) return '';
-  return parts.join('');
-}
-
 /** Where each place had got to, by its key. Without next, every place from the start. */
 function startsAt(places: Place[], next: string | undefined): Map<string, string> {
   const at = new Map<string, string>();
@@ -102,6 +95,8 @@ function startsAt(places: Place[], next: string | undefined): Map<string, string
 /** Series that go by the same name, found in one place or several. */
 interface Group {
   side: boolean;
+  /** The first known kind of its series: one of another kind is another series. */
+  kind: MangaKind | null;
   names: Set<string>;
   places: Set<string>;
   /** Its first series' turn. */
@@ -124,19 +119,22 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
 
   const groups: Group[] = [];
   for (const turn of turns) {
-    const side = turn.found.item.card.side;
-    const names = turn.found.names.map(plainTitle).filter(Boolean);
-    let group = groups.find((g) => g.side === side && names.some((n) => g.names.has(n)));
+    const item: MangaFound = { ...turn.found.item, ...namesOf(turn.found.names) };
+    const side = item.card.side;
+    const kind = item.card.kind;
+    const names = item.keys;
+    let group = groups.find((g) => g.side === side && sameKind(g.kind, kind) && names.some((n) => g.names.has(n)));
     if (!group) {
-      group = { side, names: new Set(), places: new Set(), first: turn.at, items: [] };
+      group = { side, kind, names: new Set(), places: new Set(), first: turn.at, items: [] };
       groups.push(group);
     }
+    if (group.kind === null) group.kind = kind;
     for (const n of names) group.names.add(n);
     group.places.add(turn.place);
-    group.items.push(turn.found.item);
+    group.items.push(item);
   }
 
-  const wanted = plainTitle(q ?? '');
+  const wanted = seriesName(q ?? '').key;
   const exact = (g: Group) => wanted !== '' && g.names.has(wanted);
   groups.sort((a, b) => {
     if (a.side !== b.side) {

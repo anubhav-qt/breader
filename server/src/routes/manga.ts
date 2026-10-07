@@ -61,6 +61,13 @@ export function mangaRoutes(deps: Deps) {
     return c.json(await manga!.chapters(id(c), lang));
   });
 
+  // Its copies, each group's pages measured: a few pages fetched the first time, kept a day.
+  r.get('/manga/series/:id/copies', rateLimit({ name: 'manga-copies', max: 60, windowMs: 60_000 }), async (c) => {
+    const { lang } = parse(MangaChaptersQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=3600');
+    return c.json(await manga!.copies(id(c), lang));
+  });
+
   // A page each second or two, and a chapter or a few at once when they're kept to read offline.
   r.get('/manga/chapter/:id/:n{[0-9]{1,4}}', rateLimit({ name: 'manga-page', max: 600, windowMs: 60_000 }), async (c) => {
     const { saver } = parse(MangaPageQuery, c.req.query());
@@ -91,6 +98,11 @@ export function mangaRoutes(deps: Deps) {
   r.get('/manga/source/:id/chapters', rateLimit({ name: 'manga-chapters', max: 60, windowMs: 60_000 }), async (c) => {
     c.header('Cache-Control', 'private, max-age=300');
     return c.json(await manga!.sourceChapters(sourceId(c)));
+  });
+
+  r.get('/manga/source/:id/copies', rateLimit({ name: 'manga-copies', max: 60, windowMs: 60_000 }), async (c) => {
+    c.header('Cache-Control', 'private, max-age=3600');
+    return c.json(await manga!.copies(sourceId(c), ''));
   });
 
   r.get('/manga/source/:id/cover', rateLimit({ name: 'manga-cover', max: 600, windowMs: 60_000 }), async (c) => {

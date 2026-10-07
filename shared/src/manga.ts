@@ -161,11 +161,63 @@ export interface SourceSeries extends SourceCard {
   link: string | null;
 }
 
+/** A series a place found, and the place's name (source), shown under the title. */
+export type MangaFoundIn = { kind: 'mangadex'; source: string; card: MangaCard } | { kind: 'source'; source: string; card: SourceCard };
+
+/** The names a series goes by, as seriesName keys them, to tell it on another site. */
+export interface SeriesNames {
+  keys: string[];
+  /** An edition its title names (Color), or null. */
+  edition: string | null;
+}
+
 /**
- * A series a search found, and where: the same series found in two places is two of these, each
- * naming its own. source is the place's name, shown under the title.
+ * A series a search found, and where. The same series found in two places, or twice in one, is
+ * two of these, each naming its own place; they share a key, so the app shows them as one.
  */
-export type MangaFound = { kind: 'mangadex'; source: string; card: MangaCard } | { kind: 'source'; source: string; card: SourceCard };
+export type MangaFound = MangaFoundIn & SeriesNames;
+
+/** An edition named at the end of a title: Haikyu!! (Color), One Piece: Digital Colored Comics. */
+const EDITION = /[\s([{:.\-\u2013\u2014]*\b(?:official\s+)?(?:digital\s+)?(?:full[\s-]+)?colou?r(?:ed|ized)?(?:\s+edition)?(?:\s+comics?)?\s*[)\]}]?\s*$/i;
+
+/**
+ * A series' name as every site spells it: letters and digits only, in lower case, without accents
+ * or a leading The, and with the doubled vowels romaji is spelt both ways shortened (Haikyuu and
+ * Haikyu, Shounen and Shonen). An edition named at its end isn't part of the name, but said apart.
+ */
+export function seriesName(title: string): { key: string; edition: string | null } {
+  let edition: string | null = null;
+  let name = title;
+  const named = EDITION.exec(title);
+  if (named && named.index > 0) {
+    edition = 'Color';
+    name = title.slice(0, named.index);
+  }
+  let bare = name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+  bare = bare.replace(/^\s*the\s+/, '');
+  const parts = bare.match(/[\p{L}\p{N}]+/gu);
+  if (!parts) return { key: '', edition };
+  const key = parts.join('').replace(/uu/g, 'u').replace(/ou/g, 'o');
+  return { key, edition };
+}
+
+/** Two kinds one series could have: the same, or either not known. */
+export function sameKind(a: MangaKind | null, b: MangaKind | null): boolean {
+  if (a === null || b === null) return true;
+  return a === b;
+}
+
+/** Every name a series goes by, keyed; its edition as its first name says. */
+export function namesOf(titles: string[]): SeriesNames {
+  const keys: string[] = [];
+  for (const t of titles) {
+    const { key } = seriesName(t);
+    if (key && !keys.includes(key)) keys.push(key);
+  }
+  let edition: string | null = null;
+  if (titles.length > 0) edition = seriesName(titles[0]).edition;
+  return { keys, edition };
+}
 
 /**
  * A lot from every place at once, the real series first. Only series every chapter of can be read
@@ -180,4 +232,24 @@ export interface MangaSearchResult {
 export interface MangaChapters {
   lang: string;
   chapters: MangaChapter[];
+}
+
+/**
+ * One way to read a series in one place: the uploads of one group that made most of its chapters,
+ * or, when no group did, the series as it comes. Its pages are measured on one of its chapters.
+ */
+export interface MangaCopy {
+  /** Null when no one group made most of it. */
+  group: MangaGroup | null;
+  /** How many of its chapters this copy has. */
+  chapters: number;
+  /** A page's size in pixels, or null when none could be measured. */
+  width: number | null;
+  height: number | null;
+}
+
+export interface MangaCopies {
+  /** How many chapters the series has in this place, so a copy with fewer can say so. */
+  chapters: number;
+  copies: MangaCopy[];
 }

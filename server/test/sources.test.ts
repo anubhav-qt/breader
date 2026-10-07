@@ -1,11 +1,11 @@
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { newLibraryKey, type MangaFound } from '@breader/shared';
+import { newLibraryKey, seriesName, type MangaFound } from '@breader/shared';
 import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app.ts';
 import type { Store } from '../src/lib/cache.ts';
-import { find, plainTitle, rank, type Found, type Place } from '../src/manga/find.ts';
+import { find, rank, type Found, type Place } from '../src/manga/find.ts';
 import { makeManga } from '../src/manga/index.ts';
 import { browser, deps } from './helpers.ts';
 
@@ -16,6 +16,15 @@ import { browser, deps } from './helpers.ts';
  */
 
 const png = (n: number) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, n]);
+
+/** The start of a PNG this wide, 1600 tall, as a page whose size can be read. */
+function pageOf(width: number): Uint8Array {
+  const b = new Uint8Array(33);
+  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  new DataView(b.buffer).setUint32(16, width);
+  new DataView(b.buffer).setUint32(20, 1600);
+  return b;
+}
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -65,6 +74,8 @@ interface SwSeries {
   genre?: string[];
   /** Its chapters' numbers: 1, 2 and 3 when left out. */
   chapters?: number[];
+  /** Its uploads instead, each by a group, its pages this wide. */
+  uploads?: Array<{ n: number; by: string; width: number }>;
 }
 
 /** Suwayomi with a few sources, answering GraphQL as it does. */
@@ -119,6 +130,10 @@ function fakeSuwayomi() {
     if (query.includes('fetchChapters')) {
       const s = seriesById(v.mangaId ?? v.id)!;
       calls.push({ op: 'chapters' });
+      if (s.uploads) {
+        const chapters = s.uploads.map((u, i) => ({ id: s.id * 1000 + i, name: `Chapter ${u.n}`, chapterNumber: u.n, scanlator: u.by, uploadDate: '1700000000000', sourceOrder: i + 1 }));
+        return { data: { fetchChapters: { chapters } } };
+      }
       const numbers = s.chapters ?? [1, 2, 3];
       const chapters = numbers.map((n, i) => ({ id: s.id * 1000 + i, name: `Chapter ${n}`, chapterNumber: n, scanlator: i === 0 ? 'Some Scans' : null, uploadDate: '1700000000000', sourceOrder: i + 1 }));
       return { data: { fetchChapters: { chapters } } };
@@ -127,7 +142,7 @@ function fakeSuwayomi() {
     if (query.includes('fetchChapterPages')) {
       calls.push({ op: 'pages' });
       const manga = Math.floor(v.id / 1000);
-      return { data: { fetchChapterPages: { pages: [0, 1, 2].map((p) => `/api/v1/manga/${manga}/chapter/1/page/${p}`) } } };
+      return { data: { fetchChapterPages: { pages: [0, 1, 2].map((p) => `/api/v1/manga/${manga}/chapter/${v.id}/page/${p}`) } } };
     }
     return refuse('Unknown query');
   }
@@ -142,10 +157,13 @@ function fakeSuwayomi() {
       calls.push({ op: 'thumbnail' });
       return new Response(png(9));
     }
-    m = /^\/api\/v1\/manga\/(\d+)\/chapter\/\d+\/page\/(\d+)$/.exec(url.pathname);
+    m = /^\/api\/v1\/manga\/(\d+)\/chapter\/(\d+)\/page\/(\d+)$/.exec(url.pathname);
     if (m) {
       calls.push({ op: 'picture' });
-      return new Response(png(Number(m[2])));
+      const s = seriesById(Number(m[1]));
+      const upload = s?.uploads?.[Number(m[2]) - s.id * 1000];
+      if (upload) return new Response(pageOf(upload.width));
+      return new Response(png(Number(m[3])));
     }
     return new Response('nope', { status: 404 });
   }
@@ -425,6 +443,76 @@ describe('a series from a source', () => {
   });
 });
 
+describe('a series’ copies', () => {
+  const uploadsBy = (groups: Array<[string, number]>) => {
+    const out: Array<{ n: number; by: string; width: number }> = [];
+    for (const [by, width] of groups) {
+      for (let n = 1; n <= 4; n++) out.push({ n, by, width });
+    }
+    return out;
+  };
+
+  it('measures each group’s pages on the same chapter, and keeps what it found a day', async () => {
+    const keys = new Map<string, number>();
+    const store: Store = {
+      async get() {
+        return undefined;
+      },
+      async set(key, _value, ttl) {
+        keys.set(key, ttl);
+      },
+    };
+    const { b, sw } = await setup([], store);
+    sw.state.series = [{ id: 7, source: '11', title: 'Haikyu!!', uploads: uploadsBy([['official', 700], ['unofficial', 1067]]) }];
+    const r = await b.get('/v1/manga/source/sw:7/copies');
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({
+      chapters: 4,
+      copies: [
+        { group: { id: 'official', name: 'official' }, chapters: 4, width: 700, height: 1600 },
+        { group: { id: 'unofficial', name: 'unofficial' }, chapters: 4, width: 1067, height: 1600 },
+      ],
+    });
+    // Two pages from the middle of chapter 3 in each.
+    expect(sw.calls.filter((c) => c.op === 'picture')).toHaveLength(4);
+    expect(keys.get('manga:v1:copies:sw:7:')).toBe(24 * HOUR);
+  });
+
+  it('says so when not one page could be measured, and keeps nothing', async () => {
+    const keys = new Map<string, number>();
+    const store: Store = {
+      async get() {
+        return undefined;
+      },
+      async set(key, _value, ttl) {
+        keys.set(key, ttl);
+      },
+    };
+    const { b, sw } = await setup([], store);
+    // Its pages are too short to say their size.
+    sw.state.series = [{ id: 8, source: '11', title: 'Blank' }];
+    const r = await b.get('/v1/manga/source/sw:8/copies');
+    expect(r.status).toBe(503);
+    expect(r.body.code).toBe('manga_unreachable');
+    expect(keys.has('manga:v1:copies:sw:8:')).toBe(false);
+    expect((await b.get('/v1/manga/source/sw:abc/copies')).status).toBe(400);
+  });
+
+  it('keys each series a search finds by its names, an edition said apart', async () => {
+    const { b, sw } = await setup();
+    sw.state.series = [
+      { id: 7, source: '11', title: 'Haikyuu!!' },
+      { id: 9, source: '33', title: 'Haikyu!! (Color)' },
+    ];
+    const r = await b.get('/v1/manga/search?q=haikyu&lang=en');
+    const named = r.body.items.map((x: MangaFound) => [x.card.title, x.keys, x.edition]);
+    expect(named).toEqual([
+      ['Haikyuu!!', ['haikyu'], null],
+      ['Haikyu!! (Color)', ['haikyu'], 'Color'],
+    ]);
+  });
+});
+
 describe('how a search ranks', () => {
   const found = (source: string, title: string, side = false, names = [title]): Found => ({
     item: { kind: 'source', source, card: { id: `sw:${title.length}`, title, cover: null, status: null, adult: false, side, kind: null } },
@@ -451,7 +539,7 @@ describe('how a search ranks', () => {
       { place: md, found: [found('MangaDex', 'Sousou no Frieren', false, ['Sousou no Frieren', 'Frieren: Beyond Journey’s End'])] },
     ]);
     expect(titlesOf(items)).toEqual(['MangaDex: Sousou no Frieren', 'Asura Scans: Frieren: Beyond Journey’s End', 'Asura Scans: Other']);
-    expect(plainTitle('Omniscient Reader’s Viewpoint')).toBe(plainTitle("OMNISCIENT  reader's viewpoint!"));
+    expect(seriesName('Omniscient Reader’s Viewpoint').key).toBe(seriesName("OMNISCIENT  reader's viewpoint!").key);
   });
 
   it('asks a late place again with the next lot, and leaves out one that failed', async () => {

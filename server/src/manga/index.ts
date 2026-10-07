@@ -1,7 +1,8 @@
-import { MANGA_KINDS, type MangaChapters, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
-import type { Store } from '../lib/cache.ts';
+import { MANGA_KINDS, type MangaChapter, type MangaChapters, type MangaCopies, type MangaCopy, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
+import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
+import { copiesOf, measure } from './copies.ts';
 import { Disk, type Picture } from './disk.ts';
 import { find, type Place, type Wanted } from './find.ts';
 import { makeMangaDex } from './mangadex.ts';
@@ -27,6 +28,8 @@ export interface Manga {
   /** How many pages a chapter of a source has. */
   sourcePages(chapterId: string): Promise<number>;
   sourcePage(chapterId: string, n: number): Promise<Picture>;
+  /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:12) in its own. */
+  copies(id: string, lang: string): Promise<MangaCopies>;
   /** Checks MangaDex's Popular and Updated first screens ahead of readers. */
   warm(): Promise<void>;
 }
@@ -45,6 +48,10 @@ export interface MangaOptions {
 }
 
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
+const unmeasured = () => new ApiError(503, 'manga_unreachable', 'Its pages couldn’t be measured just now. Try again in a minute.');
+
+/** How long a series' copies are kept: groups come and go slowly, and a page's size never changes. */
+const COPIES_KEPT = 24 * 3_600_000;
 
 export function makeManga(opts: MangaOptions): Manga {
   const disk = new Disk(opts.dir, opts.cacheBytes);
@@ -58,6 +65,59 @@ export function makeManga(opts: MangaOptions): Manga {
   function onSuwayomi(id: string): { suwayomi: Suwayomi; n: number } {
     if (!suwayomi) throw off();
     return { suwayomi, n: Number(id.slice(3)) };
+  }
+
+  let copyStore: Store = new MemoryStore(500);
+  if (store) copyStore = store;
+  const copyMemo = new Memo<MangaCopies>(copyStore, 'manga:v1:copies', COPIES_KEPT);
+
+  /** A series' chapters, and how to count and fetch a chapter's pages, wherever it is. */
+  async function readFrom(id: string, lang: string) {
+    let chapters: MangaChapter[];
+    let count: (c: MangaChapter) => Promise<number>;
+    let page: (c: MangaChapter, n: number) => Promise<Picture>;
+    if (id.startsWith('sw:')) {
+      const { suwayomi, n } = onSuwayomi(id);
+      chapters = (await suwayomi.chapters(n)).chapters;
+      count = (c) => suwayomi.pages(Number(c.id.slice(3)));
+      page = (c, i) => suwayomi.page(Number(c.id.slice(3)), i);
+    } else {
+      chapters = (await dex.chapters(id, lang)).chapters;
+      count = async (c) => c.pages;
+      page = (c, i) => dex.page(c.id, i, false);
+    }
+    return { chapters, count, page };
+  }
+
+  /** Each copy measured. When not one could be, the site is likely down: that's the answer, and it isn't kept. */
+  async function measureCopies(id: string, lang: string): Promise<MangaCopies> {
+    const { chapters, count, page } = await readFrom(id, lang);
+    const { total, plans } = copiesOf(chapters);
+    const copies: MangaCopy[] = [];
+    let tried = 0;
+    let measured = 0;
+    for (const plan of plans) {
+      const copy: MangaCopy = { group: plan.group, chapters: plan.chapters, width: null, height: null };
+      const sample = plan.sample;
+      if (sample) {
+        tried += 1;
+        let pages = 0;
+        try {
+          pages = await count(sample);
+        } catch {
+          // Measured as no pages.
+        }
+        const size = await measure(pages, (n) => page(sample, n));
+        if (size) {
+          measured += 1;
+          copy.width = size.width;
+          copy.height = size.height;
+        }
+      }
+      copies.push(copy);
+    }
+    if (tried > 0 && measured === 0) throw unmeasured();
+    return { chapters: total, copies };
   }
 
   return {
@@ -109,5 +169,7 @@ export function makeManga(opts: MangaOptions): Manga {
       const { suwayomi, n } = onSuwayomi(chapterId);
       return suwayomi.page(n, page);
     },
+
+    copies: (id, lang) => copyMemo.get(`${id}:${lang}`, () => measureCopies(id, lang)),
   };
 }
