@@ -51,8 +51,11 @@ interface Item {
   pick: () => void;
 }
 
-/** next: where the next lot starts, as the server said, or null once every place is done. */
-type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; items: Item[]; next: string | null };
+/**
+ * ask: the search these are for (askKey), so a lot asked for by an earlier one is never added.
+ * next: where the next lot starts, as the server said, or null once every place is done.
+ */
+type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; ask: string; items: Item[]; next: string | null };
 
 function messageOf(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -66,7 +69,8 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
   const [tries, setTries] = useState(0);
   const end = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const loadingMore = useRef(false);
+  /** The search a next lot is being fetched for, if any. */
+  const loadingMore = useRef<string | null>(null);
 
   // Searching, the best match comes first; otherwise the order picked.
   let sort: MangaSort = prefs.sort;
@@ -133,7 +137,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
     setFound({ state: 'loading' });
     scroller.current?.scrollTo({ top: 0 });
     fetchLot(null).then(
-      (r) => { if (live) setFound({ state: 'ready', ...r }); },
+      (r) => { if (live) setFound({ state: 'ready', ask: askKey, ...r }); },
       (e) => { if (live) setFound({ state: 'error', message: messageOf(e) }); },
     );
     return () => { live = false; };
@@ -141,26 +145,35 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick, o
   }, [askKey, tries]);
 
   // Near the end of what's shown, the next lot comes. A lot that came back empty leaves the end in
-  // view, so the one after it is asked for straight away.
+  // view, so the one after it is asked for straight away. Another search started meanwhile (a dot
+  // flipped, say) may have got just as far, so a lot is added only to the search it's for.
   const ready = found.state === 'ready' ? found : null;
   useEffect(() => {
     const el = end.current;
     if (!el || !ready?.next || hidden) return;
+    const ask = ready.ask;
     const io = new IntersectionObserver((entries) => {
-      if (!entries[0].isIntersecting || loadingMore.current) return;
-      loadingMore.current = true;
+      if (!entries[0].isIntersecting || loadingMore.current === ask) return;
+      loadingMore.current = ask;
       const at = ready.next;
       fetchLot(at).then(
         (r) => {
           setFound((f) => {
-            if (f.state !== 'ready' || f.next !== at) return f;
+            if (f.state !== 'ready' || f.ask !== ask || f.next !== at) return f;
             const seen = new Set(f.items.map((x) => x.key));
             const fresh = r.items.filter((x) => !seen.has(x.key));
-            return { state: 'ready', items: [...f.items, ...fresh], next: r.next };
+            return { state: 'ready', ask, items: [...f.items, ...fresh], next: r.next };
           });
         },
-        () => setFound((f) => (f.state === 'ready' ? { ...f, next: null } : f)),
-      ).finally(() => { loadingMore.current = false; });
+        () => {
+          setFound((f) => {
+            if (f.state !== 'ready' || f.ask !== ask) return f;
+            return { ...f, next: null };
+          });
+        },
+      ).finally(() => {
+        if (loadingMore.current === ask) loadingMore.current = null;
+      });
     }, { root: scroller.current, rootMargin: '600px 0px' });
     io.observe(el);
     return () => io.disconnect();
