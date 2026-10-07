@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MangaChapter, MangaFound, MangaSeries, SourceSeries } from '@breader/shared/manga';
 import { Modal } from '../../components/Modal';
-import { IconCheck, IconOut } from '../../components/icons';
+import { IconCheck, IconChevron, IconOut } from '../../components/icons';
 import { keptNote } from '../../books/kept';
 import { laidOut, madeBy, pickChapters, remoteOf, startOf } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
@@ -95,6 +95,30 @@ function startLang(found: MangaFound[], recordOf: Props['recordOf'], prefs: Mang
   return langs[0];
 }
 
+/** A copy as the sheet lists it. waiting: still being measured. */
+interface Row {
+  key: string;
+  site: string;
+  group: string;
+  chapters: string;
+  width: string;
+  best: boolean;
+  waiting: boolean;
+}
+
+function RowBody({ row }: { row: Row }) {
+  return (
+    <>
+      <span className="mdx-led" />
+      <span className="mdc-site">{row.site}</span>
+      <span className="mdc-group">{row.group}</span>
+      <span className="mdc-ch">{row.chapters}</span>
+      <span className="mdc-px">{row.width}</span>
+      <span className="mdc-best">{row.best ? 'Sharpest' : ''}</span>
+    </>
+  );
+}
+
 /** "402 chapters", or "444 of 484" when the place has more than this copy. */
 function chaptersText(c: Copy): string {
   if (c.chapters >= c.of) return `${c.chapters} ch`;
@@ -108,6 +132,7 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
   const [list, setList] = useState<Load<MangaChapter[]>>({ state: 'loading' });
   const [chosen, setChosen] = useState<string | null>(null);
   const [asking, setAsking] = useState<Copy | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [kept, setKept] = useState(0);
   const [more, setMore] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
@@ -197,6 +222,7 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
 
   // Not in My manga, a copy picked is read. In it, moving there is asked first.
   const pick = (key: string) => {
+    setListOpen(false);
     if (!had) {
       setChosen(key);
       return;
@@ -273,7 +299,7 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
   }
 
   // The copies, in the order they were found while they're measured, then sharpest first.
-  const rows: Array<{ key: string; site: string; group: string; chapters: string; width: string; best: boolean; waiting: boolean }> = [];
+  const rows: Row[] = [];
   const waitingRow = (p: Place) => {
     let text = 'Measuring…';
     if (p.state === 'failed') text = 'Not measured';
@@ -301,6 +327,11 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
 
   let copiesTitle = `${rows.length} copies`;
   if (rows.length === 1) copiesTitle = '1 copy';
+
+  // The copy read shows on its own; the others drop down under it.
+  const others = rows.filter((r) => r.key !== lit);
+  let current = rows.find((r) => r.key === lit);
+  if (!current) current = { key: lit, site: siteOf(shown), group: '', chapters: '', width: '', best: false, waiting: false };
 
   let askText = '';
   if (asking) {
@@ -358,20 +389,30 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
           <span>{copiesTitle}</span>
           {!settled && <span className="mdc-note"><span className="add-spinner" /> Measuring pages</span>}
         </div>
-        <ol className="mdc-list">
-          {rows.map((r) => (
-            <li key={r.key}>
-              <button type="button" className="mdc-row" aria-pressed={r.key === lit} disabled={r.waiting && !had} onClick={() => pick(r.key)}>
-                <span className="mdx-led" />
-                <span className="mdc-site">{r.site}</span>
-                <span className="mdc-group">{r.group}</span>
-                <span className="mdc-ch">{r.chapters}</span>
-                <span className="mdc-px">{r.width}</span>
-                <span className="mdc-best">{r.best ? 'Sharpest' : ''}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
+        <div className={`mdc-pick${listOpen ? ' is-open' : ''}`}>
+          <button
+            type="button"
+            className="mdc-row is-current"
+            aria-expanded={listOpen}
+            aria-controls="mdc-others"
+            disabled={others.length === 0}
+            onClick={() => setListOpen(!listOpen)}
+          >
+            <RowBody row={current} />
+            {others.length > 0 && <IconChevron className="mdc-go" aria-hidden="true" />}
+          </button>
+          {listOpen && (
+            <ol className="mdc-list" id="mdc-others">
+              {others.map((r) => (
+                <li key={r.key}>
+                  <button type="button" className="mdc-row" disabled={r.waiting && !had} onClick={() => pick(r.key)}>
+                    <RowBody row={r} />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
         {asking && (
           <div className="mdc-ask" role="group" aria-label="Move it">
             <p>{askText}</p>

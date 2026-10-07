@@ -114,13 +114,14 @@
 .mds-links .btn svg { width: 15px; height: 15px; }
 .mds-link { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); text-underline-offset: 2px; }
 .mds-link:hover { color: var(--ink); }
-/* Copies (MangaSheet.tsx): every way to read the series, its dot lit at the one it's read in. */
+/* Copies (MangaSheet.tsx): the one it's read in, its dot lit, and every other way to read it dropping down under it. */
 .mdc-note { display: inline-flex; align-items: center; gap: 8px; font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); }
-.mdc-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.mdc-pick { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.mdc-list { list-style: none; margin: 0; padding: 4px; border-top: 1px solid var(--line); }
 .mdc-row {
   display: grid;
-  grid-template-columns: 8px minmax(0, 170px) minmax(0, 1fr) 110px 96px 76px;
-  grid-template-areas: "led site group ch px best";
+  grid-template-columns: 8px minmax(0, 170px) minmax(0, 1fr) 110px 96px 76px 16px;
+  grid-template-areas: "led site group ch px best go";
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -133,8 +134,11 @@
 }
 .mdc-row:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
 .mdc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.mdc-row[aria-pressed="true"] { color: var(--ink); }
-.mdc-row[aria-pressed="true"] .mdx-led { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mdc-row.is-current { min-height: 52px; padding: 6px 14px; border-radius: 0; color: var(--ink); }
+.mdc-row.is-current:disabled { cursor: default; }
+.mdc-row.is-current .mdx-led { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mdc-go { grid-area: go; width: 16px; height: 16px; color: var(--ink-2); transform: rotate(90deg); transition: transform 160ms ease; }
+.mdc-pick.is-open .mdc-go { transform: rotate(-90deg); }
 .mdc-row .mdx-led { grid-area: led; }
 .mdc-site { grid-area: site; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 22px; line-height: 1; }
 .mdc-group { grid-area: group; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 11.5px/1.2 var(--ui); }
@@ -190,5 +194,5 @@
   .mds-ch-d { grid-area: d; }
   .mds-ch-t:empty { display: none; }
   .mds-ch:has(.mds-ch-t:empty) { grid-template-areas: "n g d"; }
-  .mdc-row { grid-template-columns: 8px minmax(0, 1fr) auto auto; grid-template-areas: "led site site best" "led group ch px"; row-gap: 4px; }
+  .mdc-row { grid-template-columns: 8px minmax(0, 1fr) auto auto 16px; grid-template-areas: "led site site best go" "led group ch px go"; row-gap: 4px; }
 }
