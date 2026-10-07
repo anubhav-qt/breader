@@ -7,6 +7,7 @@ import { makeApp } from '../src/app.ts';
 import type { Store } from '../src/lib/cache.ts';
 import { find, rank, type Found, type Place } from '../src/manga/find.ts';
 import { makeManga } from '../src/manga/index.ts';
+import { chapterTitle } from '../src/manga/suwayomi.ts';
 import { browser, deps } from './helpers.ts';
 
 /*
@@ -289,16 +290,28 @@ describe('one search everywhere', () => {
       // A site with some series for adults isn't for adults whole.
       { id: 6, source: '44', title: 'Late show' },
       { id: 7, source: '44', title: 'After hours', genre: ['Romance', 'Smut'] },
+      // Fans' own works, some named so but not tagged so; a DJ in capitals is a story about one.
+      { id: 8, source: '11', title: 'Plain dj - Fan story' },
+      { id: 9, source: '11', title: 'Plain - Sushi (Doujinshi)' },
+      { id: 10, source: '11', title: 'DJ Kid' },
     ];
     const plain = await b.get('/v1/manga/search');
-    expect(shown(plain.body).sort()).toEqual(['Asura Scans: Plain', 'Late Night: Late show']);
+    expect(shown(plain.body).sort()).toEqual(['Asura Scans: DJ Kid', 'Asura Scans: Plain', 'Late Night: Late show']);
     const adult = await b.get('/v1/manga/search?adult=1');
-    expect(shown(adult.body).sort()).toEqual(['Asura Scans: Plain', 'Asura Scans: Spicy', 'Late Night: After hours', 'Late Night: Late show']);
+    expect(shown(adult.body).sort()).toEqual(['Asura Scans: DJ Kid', 'Asura Scans: Plain', 'Asura Scans: Spicy', 'Late Night: After hours', 'Late Night: Late show']);
     const marked = adult.body.items.filter((x: MangaFound) => x.kind === 'source' && x.card.adult);
     expect(shown({ items: marked }).sort()).toEqual(['Asura Scans: Spicy', 'Late Night: After hours']);
     const side = await b.get('/v1/manga/search?doujinshi=1');
-    expect(shown(side.body)).toEqual(['Asura Scans: Plain', 'Late Night: Late show', 'Asura Scans: Fan work', 'Asura Scans: Many hands']);
-    expect(side.body.items.map((x: MangaFound) => x.card.side)).toEqual([false, false, true, true]);
+    expect(shown(side.body)).toEqual([
+      'Asura Scans: Plain',
+      'Late Night: Late show',
+      'Asura Scans: DJ Kid',
+      'Asura Scans: Fan work',
+      'Asura Scans: Many hands',
+      'Asura Scans: Plain dj - Fan story',
+      'Asura Scans: Plain - Sushi (Doujinshi)',
+    ]);
+    expect(side.body.items.map((x: MangaFound) => x.card.side)).toEqual([false, false, false, true, true, true, true]);
   });
 
   it('shows only the kinds asked, by a series’ genres or first language, one of no known kind only with every kind', async () => {
@@ -435,8 +448,8 @@ describe('a series from a source', () => {
     const list = await b.get('/v1/manga/source/sw:7/chapters');
     expect(list.body.lang).toBe('en');
     expect(list.body.chapters).toEqual([
-      { id: 'sw:7000', chapter: '1', volume: null, title: 'Chapter 1', pages: 0, external: null, groups: [{ id: 'Some Scans', name: 'Some Scans' }], at: 1700000000000 },
-      { id: 'sw:7001', chapter: '2', volume: null, title: 'Chapter 2', pages: 0, external: null, groups: [], at: 1700000000000 },
+      { id: 'sw:7000', chapter: '1', volume: null, title: null, pages: 0, external: null, groups: [{ id: 'Some Scans', name: 'Some Scans' }], at: 1700000000000 },
+      { id: 'sw:7001', chapter: '2', volume: null, title: null, pages: 0, external: null, groups: [], at: 1700000000000 },
     ]);
 
     const stranger = browser(undefined, app);
@@ -704,5 +717,26 @@ describe('browsing the quick sources, searching every one', () => {
     const r = await b.get('/v1/manga/search?lang=en');
     expect(shown(r.body)).toEqual(['Asura Scans: Quick 1', 'Asura Scans: Quick 2', 'Asura Scans: Quick 3', 'Asura Scans: Quick 4']);
     expect(sw.calls.slice(before).filter((c) => c.op === 'series' || c.op === 'chapters')).toEqual([]);
+  });
+});
+
+describe('a source chapter’s title', () => {
+  it('drops the number it starts with, which the reader shows already', () => {
+    expect(chapterTitle('Ch. 4 - (Stick)', 4)).toBe('(Stick)');
+    expect(chapterTitle('Chapter 8 - Message', 8)).toBe('Message');
+    expect(chapterTitle('Chapter 12: Signal', 12)).toBe('Signal');
+    expect(chapterTitle('Vol.1 Ch.2 Start', 2)).toBe('Start');
+    expect(chapterTitle('Episode 007 \u2014 Back', 7)).toBe('Back');
+    expect(chapterTitle('Ch. 4.5 - Extra', 4.5)).toBe('Extra');
+    expect(chapterTitle('Chapter 4', 4)).toBeNull();
+    expect(chapterTitle('4', 4)).toBeNull();
+  });
+
+  it('keeps a name that only looks like it starts with a number', () => {
+    expect(chapterTitle('4 Seconds', 4)).toBe('4 Seconds');
+    expect(chapterTitle('Chapter 4.5', 4)).toBe('Chapter 4.5');
+    expect(chapterTitle('Ch. 40 - Later', 4)).toBe('Ch. 40 - Later');
+    expect(chapterTitle('Prologue', -1)).toBe('Prologue');
+    expect(chapterTitle('  ', -1)).toBeNull();
   });
 });

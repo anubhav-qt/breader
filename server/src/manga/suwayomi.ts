@@ -5,7 +5,7 @@ import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
 import { WARM, wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
-import { adultGenre, kindGenre, neverGenre, sideGenre, web } from './genres.ts';
+import { adultGenre, kindGenre, neverGenre, sideGenre, sideTitle, web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
 import { caughtUp, firstMissing, highest } from './readable.ts';
 import { Speeds } from './speed.ts';
@@ -141,7 +141,7 @@ function cardOf(m: RawSeries): SourceCard {
     cover: `/v1/manga/source/sw:${m.id}/cover`,
     status,
     adult: adultGenre(m.genre),
-    side: sideGenre(m.genre),
+    side: sideGenre(m.genre) || sideTitle(m.title),
     kind: kindGenre(m.genre),
   };
 }
@@ -163,6 +163,21 @@ function about(m: RawSeries): string {
   return text.trim().slice(0, 6000);
 }
 
+/**
+ * A chapter's name without the number it starts with, which the reader shows already: "Ch. 4 - Message"
+ * is "Message", and "Chapter 4" is no title at all. A name that's only its number is none.
+ */
+export function chapterTitle(name: string, n: number): string | null {
+  const t = name.trim();
+  if (n < 0) return t || null;
+  const num = String(n).replace('.', '\\.');
+  const lead = new RegExp(`^(?:vol(?:ume)?\\.?\\s*\\d+\\s*[-:,.]?\\s*)?(?:ch(?:apter|ap)?|ep(?:isode)?)\\.?\\s*0*${num}(?!\\d|\\.\\d)\\s*(?:[-:|.\\u2013\\u2014]\\s*)?`, 'i');
+  const only = new RegExp(`^0*${num}$`);
+  if (only.test(t)) return null;
+  const rest = t.replace(lead, '').trim();
+  return rest || null;
+}
+
 function chapterOf(c: RawChapter): MangaChapter {
   let chapter: string | null = null;
   if (c.chapterNumber >= 0) chapter = String(c.chapterNumber);
@@ -172,7 +187,7 @@ function chapterOf(c: RawChapter): MangaChapter {
   let at = Number(c.uploadDate);
   if (!Number.isFinite(at)) at = 0;
   // Its pages are counted once it's opened (/v1/manga/source/chapter/:id).
-  return { id: `sw:${c.id}`, chapter, volume: null, title: c.name.trim() || null, pages: 0, external: null, groups, at };
+  return { id: `sw:${c.id}`, chapter, volume: null, title: chapterTitle(c.name, c.chapterNumber), pages: 0, external: null, groups, at };
 }
 
 /** By number, oldest first, those without one first of all. */

@@ -43,6 +43,17 @@ export function sideGenre(genres: string[]): boolean {
   return any(genres, SIDE);
 }
 
+/**
+ * Titles that name a doujinshi where its genres don't: "Blue Lock dj - Lock", "Sushi (Doujinshi)".
+ * Only "dj" in small letters, as fans write it, so a title about a DJ is left be.
+ */
+const SIDE_TITLES = [/\bdoujin(?:shi)?\b/i, /(?:^|\s)dj(?=\s|$)/];
+
+/** A doujinshi by its title, where a source's genres don't say. */
+export function sideTitle(title: string): boolean {
+  return SIDE_TITLES.some((r) => r.test(title));
+}
+
 /** The first kind its genres name, or null when none does. */
 export function kindGenre(genres: string[]): MangaKind | null {
   for (const g of genres) {
