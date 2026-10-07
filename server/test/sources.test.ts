@@ -409,11 +409,12 @@ describe('one search everywhere', () => {
     const { b, sw } = await setup([], store);
     sw.state.series = [{ id: 1, source: '11', title: 'Kept' }];
     await b.get('/v1/manga/search?lang=en');
-    expect(keys.get('manga:v1:sw-sources:all')).toBe(10 * MIN);
-    expect(keys.get('manga:v1:sw-search:11:POPULAR:1:')).toBe(10 * MIN);
-    expect(keys.get('manga:v1:sw-series:1')).toBe(6 * HOUR);
-    expect(keys.get('manga:v1:sw-chapters:1')).toBe(10 * MIN);
-    expect(keys.get('manga:v1:sw-readable:1')).toBe(24 * HOUR);
+    // Kept on for three days, given while fetched again (lib/cache.ts).
+    expect(keys.get('manga:v1:sw-sources:all')).toBe(72 * HOUR);
+    expect(keys.get('manga:v1:sw-search:11:POPULAR:1:')).toBe(72 * HOUR);
+    expect(keys.get('manga:v1:sw-series:1')).toBe(72 * HOUR);
+    expect(keys.get('manga:v1:sw-chapters:1')).toBe(72 * HOUR);
+    expect(keys.get('manga:v1:sw-readable:1')).toBe(72 * HOUR);
     // Which series a chapter is in is kept only once a reader opens it, not for every chapter a search checks.
     const chapterKeys = [...keys.keys()].filter((k) => k.startsWith('manga:v1:sw-chapter-series:'));
     expect(chapterKeys).toEqual([]);
@@ -511,7 +512,8 @@ describe('a series’ copies', () => {
     });
     // Two pages from the middle of chapter 3 in each.
     expect(sw.calls.filter((c) => c.op === 'picture')).toHaveLength(4);
-    expect(keys.get('manga:v1:copies:sw:7:')).toBe(24 * HOUR);
+    // Fresh a day, and kept on for three.
+    expect(keys.get('manga:v1:copies:sw:7:')).toBe(72 * HOUR);
   });
 
   it('says so when not one page could be measured, and keeps nothing', async () => {

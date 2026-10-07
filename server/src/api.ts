@@ -4,11 +4,13 @@ import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
 import { loadEnv } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
+import { due, recordError, recordOk } from './jobs/runs.ts';
 import { connectRedis, type Redis } from './lib/cache.ts';
-import { startReporting } from './lib/report.ts';
+import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
+import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makeSpeech } from './speech/index.ts';
 
 const env = loadEnv();
@@ -45,10 +47,45 @@ if (manga) {
   warming = setInterval(() => void manga.warm(), 15 * 60_000);
 }
 
+// And once a day, at 04:00 in India, the first 50 of each of Browse's lists and everything
+// their sheets ask for (manga/prefetch.ts). Here, not in the worker, as MangaDex's limits are one
+// address's and this process keeps to them. Also soon after a start, when the last was over a day
+// ago: the laptop may have been off at that hour.
+const prefetching = new AbortController();
+let prefetchAt: NodeJS.Timeout | undefined;
+if (manga) {
+  let running = false;
+  const run = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const r = await prefetch(manga, prefetching.signal);
+      log.info(r, 'prefetched Browse’s first screens');
+      if (!prefetching.signal.aborted) await recordOk(primary.pool, 'manga-prefetch', r);
+    } catch (err) {
+      log.error({ err }, 'manga prefetch failed');
+      report(err, { job: 'manga-prefetch' });
+      await recordError(primary.pool, 'manga-prefetch', err).catch(() => {});
+    } finally {
+      running = false;
+    }
+  };
+  const daily = () => {
+    prefetchAt = setTimeout(() => void run().finally(daily), untilPrefetch());
+  };
+  daily();
+  const soon = setTimeout(() => {
+    void due(primary.pool, 'manga-prefetch', 1).then((yes) => { if (yes) void run(); }, (err) => log.warn({ err }, 'manga prefetch check failed'));
+  }, 5 * 60_000);
+  prefetching.signal.addEventListener('abort', () => clearTimeout(soon));
+}
+
 const stop = () => {
   log.info('shutting down');
   clearInterval(chores);
   clearInterval(warming);
+  clearTimeout(prefetchAt);
+  prefetching.abort();
   void speech?.close();
   void redis?.close();
   server.close(() => {

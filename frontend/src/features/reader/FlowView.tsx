@@ -177,7 +177,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   const swap = swaps(turnStyle);
 
   const pagesMode = s.layout === 'pages';
-  const colW = Math.max(260, Math.min(s.measure, size.w - 96));
+  // On a phone the words run to 12px from each edge: every bit of a small screen goes to the text.
+  const colW = Math.max(260, Math.min(s.measure, size.w - (size.w < 640 ? 24 : 96)));
   const spread = style === 'book' && pagesMode && size.w >= 2 * s.measure + GAP + 160;
   const viewW = spread ? colW * 2 + GAP : colW;
   const step = viewW + GAP;

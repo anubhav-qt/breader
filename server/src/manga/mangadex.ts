@@ -58,10 +58,18 @@ const FEED = 500;
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+/**
+ * How long a list, a series, its chapters and whether it can be read are kept on past their time,
+ * given at once while they're fetched again behind (lib/cache.ts): a day's prefetch (prefetch.ts)
+ * and readers keep them current, and no one waits for them.
+ */
+const KEPT = 3 * DAY;
 /** A search finding nothing readable goes on to MangaDex's next results, this many lots at most… */
 const LOTS = 6;
 /** …and not once it has taken this long, so the reader sees something. */
 const BUDGET = 8_000;
+/** Browsing, a lot goes on till it has this many, so the first screen isn't one card. A search by name stops at the first. */
+const ENOUGH = 6;
 
 const ORDER: Record<MangaSort, string> = {
   relevance: 'relevance',
@@ -347,17 +355,17 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
   const homePace = new Pace(homeCount, homePer, 30_000);
   const images = new Gate(8, 30_000);
 
-  /** Answers of a kind, kept so long: in the store when there's one, or else in memory, up to `max` of them. */
-  function memo<T>(kind: string, ttl: number, max: number): Memo<T> {
+  /** Answers of a kind, kept so long (and on until `keep`): in the store when there's one, or else in memory, up to `max` of them. */
+  function memo<T>(kind: string, ttl: number, max: number, keep = ttl): Memo<T> {
     let store: Store;
     if (opts.store) store = opts.store;
     else store = new MemoryStore(max);
-    return new Memo<T>(store, `manga:v1:${kind}`, ttl);
+    return new Memo<T>(store, `manga:v1:${kind}`, ttl, keep);
   }
-  const lists = memo<{ data: RawManga[]; total: number }>('search', 10 * MINUTE, 300);
-  const seriesMemo = memo<RawManga>('series', 6 * HOUR, 3000);
-  const feeds = memo<MangaChapters>('chapters', 10 * MINUTE, 300);
-  const verdicts = memo<Verdict>('readable', DAY, 20_000);
+  const lists = memo<{ data: RawManga[]; total: number }>('search', 10 * MINUTE, 300, KEPT);
+  const seriesMemo = memo<RawManga>('series', 6 * HOUR, 3000, KEPT);
+  const feeds = memo<MangaChapters>('chapters', 10 * MINUTE, 300, KEPT);
+  const verdicts = memo<Verdict>('readable', DAY, 20_000, KEPT);
   const homes = memo<AtHome>('at-home', 10 * MINUTE, 500);
   /** The series each chapter is in, so its pages can be checked: from its series' list, or asked. */
   const chapterSeries = memo<string>('chapter-series', 7 * DAY, 100_000);
@@ -620,6 +628,8 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
     let failed: unknown = null;
     let total = 0;
     let at = offset;
+    let enough = ENOUGH;
+    if (w.q) enough = 1;
     for (let lot = 0; lot < LOTS; lot++) {
       const listed = await list(ask, at);
       total = listed.total;
@@ -637,7 +647,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       for (const f of each) {
         if (f) found.push(f);
       }
-      if (found.length > 0 || failed || at >= total) break;
+      if (found.length >= enough || failed || at >= total) break;
       // Looking for one series' copies, a lot without them is no reason to look further.
       if (w.names) break;
       if (Date.now() - started > BUDGET) break;

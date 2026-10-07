@@ -77,8 +77,9 @@ export interface ChromeProps {
     pick: (p: Paragraph) => void;
   } | null;
   /**
-   * Focus mode: everything but the text hides until the mouse moves or a tap mid-page. `ask`: the
-   * voice bar, left on its own, asking whether to hide too (focus.ts).
+   * Full screen: everything but the page hides until the mouse moves or a tap mid-page, and the page
+   * fills the screen where the browser allows (fullscreen.ts). `ask`: the voice bar, left on its
+   * own, asking whether to hide too (focus.ts).
    */
   focus: { on: boolean; toggle: () => void; ask: BarAsk | null };
   /** Finding words in the book (search.ts): its text, read once (hearing how far it's got), and going to a match. */

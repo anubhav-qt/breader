@@ -8,6 +8,7 @@ import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { log } from '../log.ts';
 import { lapsedIn } from '../lib/shelf.ts';
+import { spreadAi } from '../sync/ai.ts';
 import { applyMutation, type Tx } from '../sync/apply.ts';
 
 const Since = z.coerce.number().int().min(0).default(0);
@@ -35,6 +36,8 @@ export function syncRoutes(deps: Deps) {
   r.post('/sync/push', async (c) => {
     const body = parse(PushRequest, await readJson(c));
     const libraryId = c.var.library.id;
+    // Files whose AI switch is on in this push, to turn on in the other libraries holding them.
+    const ai = new Set<string>();
 
     const result = await db.transaction(async (tx): Promise<PushResponse> => {
       const [lib] = await tx.select({ rev: libraries.rev }).from(libraries).where(eq(libraries.id, libraryId)).for('update');
@@ -52,7 +55,9 @@ export function syncRoutes(deps: Deps) {
       for (const m of fresh) {
         try {
           // A savepoint per change, so one bad change doesn't undo the rest of the batch.
-          await tx.transaction((sp) => applyMutation(sp, libraryId, rev, m));
+          const mine = new Set<string>();
+          await tx.transaction((sp) => applyMutation(sp, libraryId, rev, m, mine));
+          for (const sha of mine) ai.add(sha);
         } catch (e) {
           if (!permanent(e)) throw e;
           const err = e instanceof ApiError ? e : new ApiError(400, 'rejected', 'The server couldn’t save this change.');
@@ -69,6 +74,7 @@ export function syncRoutes(deps: Deps) {
         .where(and(eq(syncClients.libraryId, libraryId), eq(syncClients.clientId, body.clientId)));
       return { rev: applied ? rev : lib.rev, lastMutationId, rejected, ...(await timeline(tx)) };
     });
+    await spreadAi(db, ai);
     return c.json(result);
   });
 

@@ -10,8 +10,8 @@ import { InstrumentChrome } from './chrome/Instrument';
 import { opens, readTo, threadOf, useTalk } from './comments';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
-import { useBarAsk, useFocusMode, useWake } from './focus';
-import { useFullscreenReading } from './fullscreen';
+import { useBarAsk, useWake } from './focus';
+import { useFullscreen, useFullscreenReading } from './fullscreen';
 import { loadRevisit, useAiStatus, useVoiceMarks } from './ai';
 import { keepLooking, looking, stopLook } from './look';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
@@ -116,9 +116,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const busy = useCallback(() => speaking() || lighting(), [speaking, lighting]);
   useReadingClock(!closing, onReadTime, busy);
   useFullscreenReading(!closing);
-  const [focus, toggleFocus] = useFocusMode();
+  // Full screen: the page to itself, the controls asleep until they're wanted (fullscreen.ts).
+  const [focus, toggleFocus] = useFullscreen();
   const { awake, still, wake, sleep } = useWake(!closing);
-  // Opening in focus mode shows where the controls are before they go.
+  // Opening full screen shows where the controls are before they go.
   useEffect(() => { if (focus) wake(1800); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // An Immersive voice or the light gets the page to itself: the controls step away, as in focus
   // mode, until it stops.
@@ -265,7 +266,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (h && overlaps(h.s, s)) carryOn();
     else beginAt(view.current?.listen.paragraphs?.().find((p) => p.s.block === s.block)?.s ?? s);
   };
-  /** The light stops at a tap anywhere: it moves on too quickly to aim at. Controls hidden in focus mode come back. */
+  /** The light stops at a tap anywhere: it moves on too quickly to aim at. Controls hidden in full screen come back. */
   const pauseLight = () => {
     pacing.pause();
     if (focus) wake(3500);
@@ -410,7 +411,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   };
   // In Immersive without a voice, a tap anywhere stops the light, and a tap on a sentence starts it
   // there. Otherwise touch screens, which have no mouse to wake the controls, wake them with a tap
-  // mid-page in focus mode (or while it reads), and hide them again. On a picture the voice or the
+  // mid-page in full screen (or while it reads), and hide them again. On a picture the voice or the
   // light waits at, a tap goes on, and a press keeps it there until it's let go (look.ts).
   const touched = useRef(false);
   const pressed = useRef<number | null>(null);

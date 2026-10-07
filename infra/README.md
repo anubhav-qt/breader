@@ -129,8 +129,14 @@ read at once, the laptop keeps to MangaDex's limits for its one address (four ca
 chapters opened a minute), so a busy minute waits instead of getting the address blocked. Pages
 read lately are kept in the `manga` volume, up to `MANGA_CACHE_MB` (2048 by default), the ones
 used longest ago going first; none go to R2. Its answers (searches, series, chapter lists) are kept
-in the `redis` service (`REDIS_URL`), 256 MB at most, so a restart doesn't ask MangaDex for them
-again; if Redis stops answering, the API asks MangaDex instead and logs a warning. Series for adults show only to readers who turn on
+in the `redis` service (`REDIS_URL`), 1 GB at most, so a restart doesn't ask MangaDex for them
+again; if Redis stops answering, the API asks MangaDex instead and logs a warning. The API sets
+Redis's room itself each time it connects, so a laptop on an older `compose.yml` gets the 1 GB too.
+What was asked lately is given straight away for three days, and fetched again behind the reader
+once it's old. Once a day at 04:00 in India (and soon after a start, if the last run was over a day
+ago), the API fetches the first 50 series of each of Browse's orders, with every kind on and with
+each kind alone, and everything their sheets ask for: other places, copies, chapters and covers.
+The status page shows it as **Manga prefetch**. Series for adults show only to readers who turn on
 **Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
 Render never has it: its free plan hasn't the bandwidth for pages.
 

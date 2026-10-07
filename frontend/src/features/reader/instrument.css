@@ -96,6 +96,10 @@
 .i3-head { top: 0; grid-template-columns: 1fr auto 1fr; gap: 12px; }
 /* minmax(0, …): the dots follow the bar's width instead of holding it open. */
 .i3-foot { bottom: 0; grid-template-columns: 96px minmax(0, 1fr) 96px; gap: 16px; }
+/* On a phone the lines run the screen's full width, so a page running edge to edge never shows past their ends. */
+@media (max-width: 639.98px) {
+  .i3-head, .i3-foot { width: 100%; padding: 0 16px; }
+}
 .i3-side {
   padding: 9px 10px;
   border-radius: 8px;
@@ -232,7 +236,7 @@
 
 /* ------------------------------------------------------------------ */
 /* Waking and focus (focus.ts). A mouse moved a little over an inch wakes the controls, arrows
-   included; in focus mode everything but the text sleeps until then, and the pointer too. */
+   included; in full screen everything but the page sleeps until then, and the pointer too. */
 
 .rd.is-awake .i3-head .i3-side { opacity: 1; transform: none; }
 .rd.is-awake .i3-head .i3-mid { color: var(--r-fg); }
@@ -249,7 +253,7 @@
 /* Immersive. The page dims to a third of its ink around the lit sentence, which comes up full and
    takes the book's colour word by word: as a voice says it, or without one, at the reader's pace
    (pacing.ts). A click or tap on a sentence lights it. While it moves on, the controls sleep as in
-   focus mode, all but the dot row, where you are in the book now beats with the words. Pictures
+   full screen, all but the dot row, where you are in the book now beats with the words. Pictures
    keep their full colour, and each one is stopped at (look.ts). */
 
 .rd .fv-flow { transition: color 600ms ease; }
@@ -299,7 +303,7 @@
 .i3-say .i3-dots-icon { flex: none; }
 /* Nothing lit yet: Begin, filled like Keep. Pressed, the paragraphs take numbers and the line
    offers the top of the page or one by its number. Choosing where to begin is a call to act, so the
-   line stays in sight in focus mode too. */
+   line stays in sight in full screen too. */
 .rd.is-focus:not(.is-awake) .i3-foot:is(.is-waiting, .is-choosing) { opacity: 1; pointer-events: auto; }
 .i3-foot.is-choosing { grid-template-columns: minmax(0, 1fr); }
 .i3-start { justify-self: center; display: flex; align-items: center; gap: 8px; }

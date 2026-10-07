@@ -54,8 +54,10 @@ export interface MangaOptions {
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
 const unmeasured = () => new ApiError(503, 'manga_unreachable', 'Its pages couldn’t be measured just now. Try again in a minute.');
 
-/** How long a series' copies are kept: groups come and go slowly, and a page's size never changes. */
-const COPIES_KEPT = 24 * 3_600_000;
+/** How long a series' copies are fresh: groups come and go slowly, and a page's size never changes. */
+const COPIES_FOR = 24 * 3_600_000;
+/** And kept on after, given at once while they're measured again (lib/cache.ts). */
+const COPIES_KEPT = 3 * COPIES_FOR;
 
 export function makeManga(opts: MangaOptions): Manga {
   const disk = new Disk(opts.dir, opts.cacheBytes);
@@ -73,7 +75,7 @@ export function makeManga(opts: MangaOptions): Manga {
 
   let copyStore: Store = new MemoryStore(500);
   if (store) copyStore = store;
-  const copyMemo = new Memo<MangaCopies>(copyStore, 'manga:v1:copies', COPIES_KEPT);
+  const copyMemo = new Memo<MangaCopies>(copyStore, 'manga:v1:copies', COPIES_FOR, COPIES_KEPT);
 
   /** A series' chapters, and how to count and fetch a chapter's pages, wherever it is. */
   async function readFrom(id: string, lang: string) {

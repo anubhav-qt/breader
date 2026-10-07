@@ -1,16 +1,20 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { readLocal, writeLocal } from '../../lib/store';
 
 /*
- * Full screen for reading, where a browser lets a page take the whole screen: Android and desktop
- * browsers, and Safari on iPad. Safari on iPhone allows it only for video; there Breader reads
- * without Safari's bars once it's on the Home Screen, which opens it as an app (index.html).
+ * Full screen for reading: the page has the screen to itself. Everything but the words or pictures
+ * steps away until the mouse moves or a tap mid-page wakes it (focus.ts useWake), and where a
+ * browser lets a page take the whole screen (Android and desktop browsers, and Safari on iPad), it
+ * does. Safari on iPhone allows that only for video; there Breader reads without Safari's bars once
+ * it's on the Home Screen, which opens it as an app (index.html), and full screen hides the controls.
  *
  * Whether to read full screen is kept per device, not synced: a phone and a laptop want different
  * things. It's asked for when a book opens, on the tap that opened it, and left when the book closes.
  */
 
 const KEY = 'breader.fullscreen.v1';
+/** Focus mode, before it became part of full screen: on there, it opens full screen here. */
+const OLD_FOCUS = 'breader.focus.v1';
 
 type Doc = Document & {
   webkitFullscreenEnabled?: boolean;
@@ -24,7 +28,11 @@ const current = () => doc.fullscreenElement ?? doc.webkitFullscreenElement ?? nu
 
 export const canFullscreen = () => !!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled);
 
-let wanted = readLocal<boolean>(KEY, false);
+let wanted = readLocal<boolean>(KEY, false) || readLocal<boolean>(OLD_FOCUS, false);
+if (readLocal<boolean | null>(OLD_FOCUS, null) !== null) {
+  writeLocal(KEY, wanted);
+  try { localStorage.removeItem(OLD_FOCUS); } catch { /* storage blocked: it's read again next time */ }
+}
 /** Leaving because the book closed, not because the reader asked the browser to. */
 let leaving = false;
 const subscribers = new Set<() => void>();
@@ -32,6 +40,7 @@ const subscribers = new Set<() => void>();
 function want(on: boolean) {
   wanted = on;
   writeLocal(KEY, on);
+  subscribers.forEach((s) => s());
 }
 
 async function enter() {
@@ -58,11 +67,10 @@ function leave() {
 
 function changed() {
   if (!current()) {
-    // Left from outside (the back gesture, Esc): the next book opens with the bars too.
+    // Left from outside (the back gesture, Esc): the controls come back, and the next book opens with them.
     if (leaving) leaving = false;
     else if (wanted) want(false);
   }
-  subscribers.forEach((s) => s());
 }
 document.addEventListener('fullscreenchange', changed);
 document.addEventListener('webkitfullscreenchange', changed);
@@ -71,15 +79,18 @@ const subscribe = (fn: () => void) => {
   subscribers.add(fn);
   return () => { subscribers.delete(fn); };
 };
-const isOn = () => !!current();
+const isOn = () => wanted;
 
-/** Whether the page is full screen now, and a switch for it (called from a tap). */
+/**
+ * Whether the book is read full screen, and a switch for it (called from a tap, which a browser
+ * needs before it lets a page fill the screen).
+ */
 export function useFullscreen() {
   const on = useSyncExternalStore(subscribe, isOn);
-  const toggle = () => {
-    if (on) { want(false); leave(); }
-    else { want(true); void enter(); }
-  };
+  const toggle = useCallback(() => {
+    if (wanted) { want(false); leave(); }
+    else { want(true); if (canFullscreen()) void enter(); }
+  }, []);
   return [on, toggle] as const;
 }
 

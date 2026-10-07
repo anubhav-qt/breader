@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MANGA_KINDS, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
 import { LANGS, langName, mangadex, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
@@ -52,17 +52,29 @@ const STILL_MS = 5_000;
 
 const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
+/**
+ * What Browse last showed, and how far down it was. Reading a chapter takes the library off the
+ * screen, Browse with it, so coming back finds the same series where they were, not asked for again.
+ */
+let kept: { text: string; found: Extract<Found, { state: 'ready' }>; top: number } | null = null;
+
 function messageOf(e: unknown): string {
   if (e instanceof Error) return e.message;
   return 'Breader couldn’t reach it.';
 }
 
 export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
-  const [text, setText] = useState('');
-  const [q, setQ] = useState('');
-  const [found, setFound] = useState<Found>({ state: 'loading' });
+  const [text, setText] = useState(() => kept?.text ?? '');
+  const [q, setQ] = useState(() => kept?.text.trim() ?? '');
+  const [found, setFound] = useState<Found>(() => kept?.found ?? { state: 'loading' });
+  /** Where to scroll back to, once Browse is on screen, and what it came back with. */
+  const back = useRef(kept?.top ?? 0);
+  const restored = useRef(kept?.found);
   const [tries, setTries] = useState(0);
   const end = useRef<HTMLDivElement>(null);
+  const row = useRef<HTMLDivElement>(null);
+  /** The line of dots, sliding sideways on a phone: whether there's more of it either way. */
+  const [more, setMore] = useState({ l: false, r: false });
   const scroller = useRef<HTMLDivElement>(null);
   /** The search a next lot is being added to, if any. */
   const loadingMore = useRef<string | null>(null);
@@ -110,7 +122,10 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   };
 
   useEffect(() => {
+    // Back from a chapter, with what was showing: it stays.
+    if (found === restored.current && found.ask === askKey && !tries) return;
     let live = true;
+    back.current = 0;
     setFound({ state: 'loading' });
     scroller.current?.scrollTo({ top: 0 });
     fetchLot(null).then(
@@ -120,6 +135,34 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askKey, tries]);
+
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || hidden || !back.current) return;
+    el.scrollTop = back.current;
+    back.current = 0;
+  }, [hidden]);
+
+  // The line fades out at an edge it goes on past, so it's plain that it slides.
+  useEffect(() => {
+    const el = row.current;
+    if (!el || hidden) return;
+    const look = () => {
+      const l = el.scrollLeft > 2;
+      const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+      setMore((m) => (m.l === l && m.r === r ? m : { l, r }));
+    };
+    look();
+    const ro = new ResizeObserver(look);
+    ro.observe(el);
+    el.addEventListener('scroll', look, { passive: true });
+    return () => { ro.disconnect(); el.removeEventListener('scroll', look); };
+  }, [hidden]);
+
+  useEffect(() => {
+    if (found.state !== 'ready') return;
+    kept = { text, found, top: kept?.found.ask === found.ask ? kept.top : 0 };
+  }, [text, found]);
 
   // The next lot is asked for as soon as one comes, so it's mostly here before the end is.
   const ready = found.state === 'ready' ? found : null;
@@ -247,14 +290,14 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   }
 
   return (
-    <section aria-label="Browse" hidden={hidden} className="gallery mdx" ref={scroller}>
+    <section aria-label="Browse" hidden={hidden} className="gallery mdx" ref={scroller} onScroll={(e) => { if (kept) kept.top = e.currentTarget.scrollTop; }}>
       <div className="mdx-bar">
         <label className="mdx-search">
           <IconSearch />
           <span className="sr-only">Search manga</span>
           <input type="search" value={text} placeholder="Search manga" enterKeyHint="search" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setQ(text.trim()); }} />
         </label>
-        <div className="mdx-row">
+        <div className={`mdx-row${more.l ? ' is-more-l' : ''}${more.r ? ' is-more-r' : ''}`} ref={row}>
           <div className="mdx-sorts" role="radiogroup" aria-label="Order">
             {SORTS.map((s) => (
               <button key={s.v} type="button" role="radio" aria-checked={!q && prefs.sort === s.v} className="mdx-sort" disabled={!!q} onClick={() => set({ sort: s.v })}>{s.label}</button>

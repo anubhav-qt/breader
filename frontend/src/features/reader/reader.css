@@ -143,6 +143,7 @@ label.clbl { display: block; }
 }
 .tg[aria-checked="true"] { background: var(--r-acc); }
 .tg[aria-checked="true"]::after { transform: translateX(18px); background: var(--r-bg); }
+.tg:disabled { opacity: 0.55; cursor: default; }
 
 /* Stage */
 .rd-stage { position: absolute; inset: 0; }
@@ -189,6 +190,9 @@ label.clbl { display: block; }
 }
 .fv.is-pages .fv-flow { height: 100%; column-width: var(--cw); column-gap: var(--gap); column-fill: auto; }
 .fv.is-scroll .fv-flow { width: var(--cw); max-width: calc(100% - 48px); margin: 0 auto; padding: 88px 0 24px; }
+@media (max-width: 639.98px) {
+  .fv.is-scroll .fv-flow { max-width: calc(100% - 24px); }
+}
 .fv.is-justified .fv-flow { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
 .fv-flow p { margin: 0; text-wrap: pretty; }
 .fv-flow img, .fv-flow svg { max-width: 100%; height: auto; display: block; margin: 0.8em auto; break-inside: avoid; }
@@ -268,15 +272,24 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-spread.is-rtl { flex-direction: row-reverse; }
 .mg-pg { position: relative; flex: none; background: var(--r-fill); }
 .mg-pg img { display: block; width: 100%; height: 100%; object-fit: contain; background: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* A page whose shape is known has a box that shape to the pixel, so it fills it: drawn inside, the
+   fraction of a pixel left over showed the white behind it as a line across a webtoon's strip. */
+.mg-pg.is-sized img { object-fit: fill; }
+/* Scrolled, each page runs a pixel under the next one, so no seam shows however the screen's pixels fall. */
+.mg-scroll .mg-pg.is-sized img { height: calc(100% + 1px); }
 .mg-broken { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 12px; text-align: center; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
 .mg-broken button { height: 34px; padding: 0 14px; border-radius: 10px; background: var(--r-fill); box-shadow: 0 0 0 1px var(--r-line); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
 .mg-broken button:hover { background: var(--r-line); }
 /* A tap on a picture brings its panel closer (MangaView.tsx). */
 .mg-pg img { cursor: zoom-in; }
 .mg-scroll { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+/* On a phone the pages run edge to edge (MangaView.tsx sideOf), with no scrollbar taking a strip of them. */
+@media (max-width: 639.98px) {
+  .mg-scroll { scrollbar-width: none; }
+  .mg-scroll::-webkit-scrollbar { display: none; }
+}
 .mg-column { position: relative; margin: 0 auto; }
 .mg-scroll .mg-pg { position: absolute; left: 0; right: 0; }
-.mg-scroll:not(.is-strip) .mg-pg { box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); }
 /* The space beside the page turns it: a tap on the page is for its panels. Keys and swipes turn it too. */
 .mgv .fv-zone { width: max(44px, calc(50% - var(--vw) / 2)); }
 /* A chapter of a series from MangaDex starts under its name and who made it. */

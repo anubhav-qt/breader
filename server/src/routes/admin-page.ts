@@ -96,7 +96,7 @@ function render(s) {
     ['Stored', ready ? ready.files + ' files, ' + mb(ready.bytes) + pct(ready.bytes, s.files.freeBytes) : 'none'],
     ...files.map((f) => [f.status, f.files + ' files, ' + mb(f.bytes) + (f.unused ? ', ' + f.unused + ' waiting for clean-up' : '')]),
   ]));
-  const names = { 'backup': 'Nightly backup', 'restore-drill': 'Restore test', 'clean-up': 'Clean-up', 'storage-check': 'R2 check', 'extensions': 'Manga extensions' };
+  const names = { 'backup': 'Nightly backup', 'restore-drill': 'Restore test', 'clean-up': 'Clean-up', 'storage-check': 'R2 check', 'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch' };
   out.push(...section('Worker jobs', s.jobs.length ? s.jobs.flatMap((j) => {
     const failing = j.last_error_at && (!j.last_ok_at || new Date(j.last_error_at) > new Date(j.last_ok_at));
     const rows = [[names[j.name] || j.name, 'worked ' + since(j.last_ok_at), !j.last_ok_at]];

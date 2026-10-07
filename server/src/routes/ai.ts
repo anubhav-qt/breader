@@ -20,7 +20,10 @@ export function aiRoutes(deps: Deps) {
   const r = new Hono<AppEnv>();
   r.use('/books/:bookId/*', requireLibrary(deps));
 
-  /** The book's notes, if this library may have them: its own copy, still on its shelf, with the switch on. */
+  /**
+   * The book's notes, if this library may have them: its own copy, still on its shelf, with the
+   * switch on, here or for the file anywhere (ai_books), should the switch not have reached here yet.
+   */
   async function notes<T extends Record<string, unknown>>(libraryId: string, bookId: string, pick: SQL) {
     if (bookId.length > 200) return undefined;
     const { rows: [row] } = await db.execute<T>(sql`
@@ -30,7 +33,7 @@ export function aiRoutes(deps: Deps) {
         JOIN ai_notes n ON n.sha256 = b.sha256
         LEFT JOIN reading_states rs ON rs.library_id = li.library_id AND rs.book_id = li.book_id
        WHERE li.library_id = ${libraryId} AND li.book_id = ${bookId}
-         AND li.ai AND li.removed_at IS NULL AND NOT li.shared_only
+         AND (li.ai OR EXISTS (SELECT 1 FROM ai_books a WHERE a.sha256 = b.sha256)) AND li.removed_at IS NULL AND NOT li.shared_only
     `);
     return row;
   }

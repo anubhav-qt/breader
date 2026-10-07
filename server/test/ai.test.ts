@@ -79,13 +79,13 @@ describe('ai notes', () => {
     expect(JSON.stringify(res.body)).not.toMatch(/Anna|Tomas|stranger/);
   });
 
-  it('serves one file’s notes to every library that holds it and said yes', async () => {
+  it('serves one file’s notes to every library that holds it, once any of them said yes', async () => {
     const one = await reader();
     await notes(one.sha256);
     const two = await reader(one.bytes);
     expect((await two.b.get(`/v1/books/${two.a.id}/ai`)).body.revisit).toBe(true);
     const three = await reader(one.bytes, false);
-    expect((await three.b.get(`/v1/books/${three.a.id}/ai`)).body.revisit).toBe(false);
+    expect((await three.b.get(`/v1/books/${three.a.id}/ai`)).body.revisit).toBe(true);
   });
 
   it('keeps them from anyone else, and from a book taken off the shelf', async () => {
@@ -98,5 +98,40 @@ describe('ai notes', () => {
 
     await b.post('/v1/sync/push', push('r', { type: 'book.remove', bookId: a.id }));
     expect((await b.get(`/v1/books/${a.id}/revisit`)).status).toBe(404);
+  });
+});
+
+describe('the AI switch', () => {
+  const pull = async (b: Reader, since = 0) => (await b.get(`/v1/sync/pull?since=${since}`)).body;
+  const aiOf = async (b: Reader, bookId: string, since = 0) =>
+    (await pull(b, since)).books.find((x: { id: string }) => x.id === bookId)?.edit.ai as boolean | undefined;
+
+  it('goes on in every library that already holds the same file, in a new revision for each', async () => {
+    const bytes = Buffer.from(`a book ${Math.random()}`);
+    const one = await reader(bytes, false);
+    const two = await reader(bytes, false);
+    const other = await reader(undefined, false);
+    const since = (await pull(two.b)).rev;
+    expect(await aiOf(two.b, two.a.id)).toBe(false);
+
+    await one.b.post('/v1/sync/push', push('r', { type: 'edit.put', bookId: one.a.id, edit: { ai: true } }));
+    expect(await aiOf(two.b, two.a.id, since)).toBe(true);
+    expect((await pull(two.b)).rev).toBeGreaterThan(since);
+    expect(await aiOf(other.b, other.a.id)).toBe(false);
+  });
+
+  it('is on already for a library that gets the file later', async () => {
+    const one = await reader();
+    const later = await reader(one.bytes, false);
+    expect(await aiOf(later.b, later.a.id)).toBe(true);
+  });
+
+  it('stays on when someone turns it off', async () => {
+    const one = await reader();
+    const two = await reader(one.bytes, false);
+    await one.b.post('/v1/sync/push', push('r', { type: 'edit.put', bookId: one.a.id, edit: { ai: false } }));
+    await two.b.post('/v1/sync/push', push('r', { type: 'edit.put', bookId: two.a.id, edit: { ai: false } }));
+    expect(await aiOf(one.b, one.a.id)).toBe(true);
+    expect(await aiOf(two.b, two.a.id)).toBe(true);
   });
 });

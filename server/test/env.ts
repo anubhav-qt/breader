@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 // Tests run against the local Docker stack (npm run stack), in their own databases and bucket.
 const dev = Object.fromEntries(
   readFileSync(new URL('../../infra/dev.env', import.meta.url), 'utf8')
-    .split('\n')
+    .split(/\r?\n/)
     .filter((l) => /^[A-Z0-9_]+=/.test(l))
     .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
 );

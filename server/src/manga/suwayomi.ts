@@ -26,6 +26,8 @@ import { Speeds } from './speed.ts';
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+/** How long lists, series, chapters and verdicts are kept on past their time, as MangaDex's are (mangadex.ts). */
+const KEPT = 3 * DAY;
 /**
  * How long a lot it hasn't seen may take a source for it to be browsed. A lot waits only so long
  * for each place (find.ts), and one that's late shows with the next, but its first lots are checked
@@ -208,18 +210,18 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   const browsing = new Map<string, boolean>();
   let warming = false;
 
-  /** Answers of a kind, kept so long: in the store when there's one, or else in memory, up to `max` of them. */
-  function memo<T>(kind: string, ttl: number, max: number): Memo<T> {
+  /** Answers of a kind, kept so long (and on until `keep`): in the store when there's one, or else in memory, up to `max` of them. */
+  function memo<T>(kind: string, ttl: number, max: number, keep = ttl): Memo<T> {
     let store: Store;
     if (opts.store) store = opts.store;
     else store = new MemoryStore(max);
-    return new Memo<T>(store, `manga:v1:sw-${kind}`, ttl);
+    return new Memo<T>(store, `manga:v1:sw-${kind}`, ttl, keep);
   }
-  const sourceList = memo<RawSource[]>('sources', 10 * MINUTE, 1);
-  const searches = memo<SearchPage>('search', 10 * MINUTE, 300);
-  const seriesMemo = memo<RawSeries>('series', 6 * HOUR, 3000);
-  const chapterLists = memo<MangaChapter[]>('chapters', 10 * MINUTE, 300);
-  const verdicts = memo<boolean>('readable', DAY, 20_000);
+  const sourceList = memo<RawSource[]>('sources', 10 * MINUTE, 1, KEPT);
+  const searches = memo<SearchPage>('search', 10 * MINUTE, 300, KEPT);
+  const seriesMemo = memo<RawSeries>('series', 6 * HOUR, 3000, KEPT);
+  const chapterLists = memo<MangaChapter[]>('chapters', 10 * MINUTE, 300, KEPT);
+  const verdicts = memo<boolean>('readable', DAY, 20_000, KEPT);
   const pageLists = memo<string[]>('pages', 10 * MINUTE, 500);
   /** Which source each series is from, and which series each chapter is in: they never change. */
   const seriesSource = memo<string>('series-source', 30 * DAY, 100_000);

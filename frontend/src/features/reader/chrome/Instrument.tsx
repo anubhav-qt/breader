@@ -3,14 +3,13 @@ import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from 'mot
 import { duration, minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, pad2, type Chapter } from '../chapters';
-import { canFullscreen, useFullscreen } from '../fullscreen';
 import { paceLevel } from '../pacing';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
 import { level, useLoadState } from '../voice/speaker';
 import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
-import { CHECK, CROSS, FOCUS, FOCUSED, GROW, MINUS, PAUSE, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
+import { CHECK, CROSS, GROW, MINUS, PAUSE, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
 import { CommentsPanel, TalkButton } from './Comments';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { RevisitMenu, RevisitWindow, type Scope } from './Revisit';
@@ -33,7 +32,6 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  */
 export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit, two, letAi, talk }: ChromeProps) {
   const [head, setHead] = useState(false);
-  const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
   const progress = loc?.progress ?? 0;
@@ -136,14 +134,9 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
             </button>
           )}
           <button type="button" className={`i3-side i3-aa${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip={book.kind === 'manga' ? 'Layout, direction and theme' : 'Typeface, size, spacing and theme'}>Aa</button>
-          <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Focus" aria-pressed={focus.on} data-tip={focus.on ? 'Keep the controls in sight' : `Hide everything but the ${book.kind === 'manga' ? 'pages' : 'words'}`}>
-            <DotIcon rows={focus.on ? FOCUSED : FOCUS} />
+          <button type="button" className={`i3-side i3-icon${focus.on ? ' is-open' : ''}`} onClick={focus.toggle} aria-label="Full screen" aria-pressed={focus.on} data-tip={focus.on ? 'Leave full screen' : `Just the ${book.kind === 'manga' ? 'pages' : 'words'}, on the whole screen`}>
+            <DotIcon rows={focus.on ? SHRINK : GROW} />
           </button>
-          {canFullscreen() && (
-            <button type="button" className={`i3-side i3-icon${full ? ' is-open' : ''}`} onClick={toggleFull} aria-label="Full screen" aria-pressed={full} data-tip={full ? 'Leave full screen' : 'Fill the whole screen'}>
-              <DotIcon rows={full ? SHRINK : GROW} />
-            </button>
-          )}
         </div>
       </div>
 

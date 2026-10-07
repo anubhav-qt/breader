@@ -2,32 +2,19 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { readLocal, writeLocal } from '../../lib/store';
 
 /*
- * Focus mode hides everything but the text: the margins' readouts, the controls and the page-turn
- * arrows. Kept per device, like full screen.
+ * Full screen (fullscreen.ts), an Immersive voice and the light hide everything but the page: the
+ * margins' readouts, the controls and the page-turn arrows.
  *
- * In either mode the controls wake when the mouse travels a little over an inch in one go, and
- * sleep again once it rests. Clicks never wake them, so turning pages doesn't bring them back. On
- * touch screens, where there's no mouse, a tap in the middle of the page does.
+ * Then the controls wake when the mouse travels a little over an inch in one go, and sleep again
+ * once it rests. Clicks never wake them, so turning pages doesn't bring them back. On touch
+ * screens, where there's no mouse, a tap in the middle of the page does.
  */
 
-const KEY = 'breader.focus.v1';
-
-let focus = readLocal<boolean>(KEY, false);
 const subscribers = new Set<() => void>();
 const subscribe = (fn: () => void) => {
   subscribers.add(fn);
   return () => { subscribers.delete(fn); };
 };
-
-export function useFocusMode() {
-  const on = useSyncExternalStore(subscribe, () => focus);
-  const toggle = useCallback(() => {
-    focus = !focus;
-    writeLocal(KEY, focus);
-    subscribers.forEach((s) => s());
-  }, []);
-  return [on, toggle] as const;
-}
 
 /** A little over an inch, in CSS pixels (96 to the inch). */
 const WAKE_PX = 110;
@@ -40,7 +27,7 @@ const HELD = '.i3-head:hover, .i3-foot:hover, .i3-drop:hover';
 
 /**
  * Whether the controls are awake, and a way to wake them (on opening, or a tap mid-page). `still`
- * is the mouse at rest, when focus mode hides the pointer too; any movement brings it back.
+ * is the mouse at rest, when full screen hides the pointer too; any movement brings it back.
  */
 export function useWake(active: boolean) {
   const [awake, setAwake] = useState(false);
@@ -106,7 +93,7 @@ export function useWake(active: boolean) {
  * the controls sleep. Each time it's left on its own, a question above it asks for a few seconds
  * whether to hide it too. Hidden, it's gone until the voice or the light stops, and the next time
  * it asks again. From the second time it's asked, Always hide too, which Appearance undoes. Kept
- * per device, like focus mode.
+ * per device, like full screen.
  */
 
 const BAR_KEY = 'breader.focus.bar.v1';

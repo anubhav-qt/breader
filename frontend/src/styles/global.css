@@ -58,6 +58,8 @@ button:disabled { cursor: not-allowed; }
 .switch[aria-checked="true"] { background: var(--ink); }
 .switch[aria-checked="true"]::after { transform: translateX(16px); }
 .switch:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* On for good (the AI switch): shown on, not pressable. */
+.switch:disabled { opacity: 0.55; cursor: default; }
 
 .chip { display: inline-block; font: var(--ui-w) 11px/1 var(--ui); padding: 4px 6px; border-radius: 6px; background: var(--fill); color: var(--ink-2); }
 

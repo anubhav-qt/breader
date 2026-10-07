@@ -10,8 +10,8 @@ import type { Layout, MangaDir } from './settings';
 import { runTurn } from './turn';
 
 /*
- * A manga's pages. Scrolled, they're a column read downwards, with no gaps between a webtoon's
- * strips. In pages, they turn one at a time, or two side by side as the book prints them once the
+ * A manga's pages. Scrolled, they're a column read downwards, with no gaps between them, each
+ * drawn a few screens before it's reached. In pages, they turn one at a time, or two side by side as the book prints them once the
  * screen is wide enough, right to left as manga is read (or left to right, as comics are). A page's
  * picture comes out of the file as it nears the screen, and is let go once it's well behind.
  * A series read from MangaDex is its chapters one after another: scrolled, each starts under a line
@@ -42,10 +42,11 @@ interface Props {
 const RATIO = 1.42;
 /** Wider than this is a spread drawn across two pages, so it shows on its own. */
 const WIDE = 0.9;
-/** Taller than this, typically, is a webtoon's long strip, read with no gaps between its pieces. */
+/** Taller than this, typically, is a webtoon's long strip, never shown two side by side. */
 const STRIP = 1.9;
-/** Scrolled: the space between pages. */
-const GAP = 16;
+/** Scrolled: the screens above and below the one shown whose pages are drawn, ready to scroll onto. */
+const BEHIND = 1.5;
+const AHEAD = 4;
 /** Scrolled: room above the first page and below the last, clear of the lines of controls. */
 const HEAD = BAR + 12;
 const TAIL = BAR + 24;
@@ -63,8 +64,8 @@ const LONG = 450;
 /** A series opened a few chapters at a time opens again at a chapter outside them (App.tsx). */
 const reopen = (pos: Position) => window.dispatchEvent(new CustomEvent('breader:reopen', { detail: { pos } }));
 
-/** The space beside the pages: on a phone, the screen is better spent on the page (and the lines of controls cover it). */
-const sideOf = (w: number) => (w < 640 ? 16 : 48);
+/** The space beside the pages: on a phone, none, as every bit of the screen is better spent on the page. */
+const sideOf = (w: number) => (w < 640 ? 0 : 48);
 const wait = (ms: number) => new Promise<null>((done) => window.setTimeout(() => done(null), ms));
 
 /** Where a picture is drawn inside its box, which can be a little off its shape until the picture says. */
@@ -136,6 +137,8 @@ function pageAt(tops: number[], y: number): number {
 /** Pages' pictures as object URLs: opened as they're wanted, let go once they're far from the screen. */
 class Pictures {
   private urls = new Map<number, Promise<string | null>>();
+  /** Each picture drawn once off screen, and held, so a page scrolled onto shows at once, never blank while it's drawn. */
+  private drawn = new Map<number, HTMLImageElement>();
   /** The book the pictures come from: more chapters added at its end keep its pages where they are. */
   book: MangaBook;
   constructor(book: MangaBook) {
@@ -146,7 +149,17 @@ class Pictures {
   get(i: number): Promise<string | null> {
     let u = this.urls.get(i);
     if (!u) {
-      u = this.book.page(i).then((b) => URL.createObjectURL(b), () => null);
+      u = this.book.page(i).then(
+        async (b) => {
+          const url = URL.createObjectURL(b);
+          const img = new Image();
+          img.src = url;
+          this.drawn.set(i, img);
+          await img.decode().catch(() => {});
+          return url;
+        },
+        () => null,
+      );
       this.urls.set(i, u);
     }
     return u;
@@ -163,6 +176,7 @@ class Pictures {
     for (const [i, u] of this.urls) {
       if (i >= from && i <= to) continue;
       this.urls.delete(i);
+      this.drawn.delete(i);
       void u.then((url) => { if (url) URL.revokeObjectURL(url); });
     }
   }
@@ -191,8 +205,11 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const scrollRef = useRef<HTMLDivElement>(null);
   const onLocationRef = useRef(onLocation);
   onLocationRef.current = onLocation;
-  /** Scrolled: the exact place at the top of the screen, kept as pages above it change size. */
-  const anchor = useRef({ page: at.page, frac: at.frac });
+  /**
+   * Scrolled: the exact place at the top of the screen, kept as pages above it change size: how far
+   * down its page, and scrolled there on a page of known size, in pixels too.
+   */
+  const anchor = useRef<{ page: number; frac: number; off?: number }>({ page: at.page, frac: at.frac });
   /** Pages: the page a turn is on its way to, so turns pressed quickly follow on from it. */
   const goal = useRef<number | null>(null);
 
@@ -279,7 +296,6 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
 
   // Scrolled: a column of pages at its width, each at its own height.
   const colW = Math.min(width, areaW);
-  const gap = strip ? 0 : GAP;
   // Opened a few chapters at a time, the way to the chapters before and after these.
   const prev = book.remote?.prev;
   const next = book.remote?.next;
@@ -291,10 +307,10 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       y += (bands.get(i)?.length ?? 0) * BAND;
       tops.push(y);
       heights.push(Math.max(1, Math.round(colW * ratio(i))));
-      y += heights[i] + gap;
+      y += heights[i];
     }
-    return { tops, heights, height: y - gap + ((bands.get(total)?.length ?? 0) + (next ? 1 : 0)) * BAND + TAIL };
-  }, [ratio, total, colW, gap, bands, prev, next]);
+    return { tops, heights, height: y + ((bands.get(total)?.length ?? 0) + (next ? 1 : 0)) * BAND + TAIL };
+  }, [ratio, total, colW, bands, prev, next]);
 
   // The width the controls line up with: steady from page to page.
   const pageW = layout === 'pages' ? Math.min(areaW, ((two ? 2 : 1) * areaH) / typical) : colW;
@@ -308,22 +324,32 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const y = el.scrollTop + BAR;
     const i = pageAt(tops, y);
     const frac = Math.max(0, Math.min(1, (y - tops[i]) / heights[i]));
-    anchor.current = { page: i, frac };
+    // On a page whose size is still a guess, pixels down it mean nothing once it's known.
+    anchor.current = { page: i, frac, ...(ratios[i] ? { off: y - tops[i] } : {}) };
     const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
     // A tenth of a page at a time: close enough for the place kept, without a render a pixel.
     const tenth = Math.floor(frac * 10) / 10;
     setAt((a) => (a.page === i && a.frac === tenth && a.end === end ? a : { page: i, frac: tenth, end }));
-    const from = pageAt(tops, el.scrollTop - el.clientHeight);
-    const to = pageAt(tops, el.scrollTop + 2.5 * el.clientHeight);
+    const from = pageAt(tops, el.scrollTop - BEHIND * el.clientHeight);
+    const to = pageAt(tops, el.scrollTop + AHEAD * el.clientHeight);
     setWin((w) => (w[0] === from && w[1] === to ? w : [from, to]));
   };
 
   // Scrolled: the place stays put as the column is laid out again (sizes found, a new width).
+  const laidW = useRef(0);
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (layout !== 'scroll' || !el || colW <= 0) return;
     const a = anchor.current;
-    el.scrollTop = tops[a.page] + a.frac * heights[a.page] - BAR;
+    // A new width resizes every page alike, so the place goes by how far down its page it was. A page
+    // finding its size only moves the pages after it: on one already sized, the place stays as many
+    // pixels down it.
+    const into = a.off !== undefined && laidW.current === colW ? a.off : a.frac * heights[a.page];
+    laidW.current = colW;
+    const to = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, Math.round(tops[a.page] + into - BAR)));
+    // On a phone, the place written again, even the same one, stops a flick of the finger dead: it's
+    // written only when it moved, as pages coming in below as they're read never move it.
+    if (Math.abs(el.scrollTop - to) >= 1) el.scrollTop = to;
     placeFromScroll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, tops, heights, colW]);
@@ -336,7 +362,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const s = spreadAt[Math.min(total - 1, at.page)];
   const [wantFrom, wantTo] = layout === 'pages'
     ? [spreads[Math.max(0, s - 1)]?.[0] ?? 0, spreads[Math.min(spreads.length - 1, s + 2)]?.slice(-1)[0] ?? total - 1]
-    : [win[0], win[1] + 3];
+    : [win[0], win[1] + 4];
   useEffect(() => {
     let live = true;
     const from = Math.max(0, wantFrom);
@@ -637,7 +663,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
             {paired && size.w > 0 && (
               <div className={`mg-spread${rtl ? ' is-rtl' : ''}`}>
                 {fit(spread).map(({ i, w, h }) => (
-                  <div key={i} className="mg-pg" style={{ width: w, height: h }}>{picture(i)}</div>
+                  <div key={i} className={`mg-pg${ratios[i] ? ' is-sized' : ''}`} style={{ width: w, height: h }}>{picture(i)}</div>
                 ))}
               </div>
             )}
@@ -653,10 +679,10 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
           <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label={rtl ? 'Previous page' : 'Next page'} onClick={() => turn(rtl ? -1 : 1)}><span>›</span></button>
         </>
       ) : (
-        <div ref={scrollRef} className={`mg-scroll${strip ? ' is-strip' : ''}`} onScroll={placeFromScroll}>
+        <div ref={scrollRef} className="mg-scroll" onScroll={placeFromScroll}>
           <div className="mg-column" style={{ width: colW, height }} {...pageTaps}>
             {colW > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).map((i) => (
-              <div key={i} className="mg-pg" style={{ top: tops[i], height: heights[i] }}>{picture(i)}</div>
+              <div key={i} className={`mg-pg${ratios[i] ? ' is-sized' : ''}`} style={{ top: tops[i], height: heights[i] }}>{picture(i)}</div>
             ))}
             {colW > 0 && bands.size > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).flatMap((i) => bandsAt(i, tops[i]))}
             {colW > 0 && shownTo === total - 1 && bandsAt(total, tops[total - 1] + heights[total - 1] + (bands.get(total)?.length ?? 0) * BAND)}

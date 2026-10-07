@@ -35,8 +35,8 @@ interface Props {
   prefs: MangaPrefs;
   /** The series in My manga, by the id of a place it's in. */
   recordOf: (id: string) => BookRecord | undefined;
-  /** The chapter a series in My manga is at: "Ch. 42". */
-  placeOf: (rec: BookRecord) => string | null;
+  /** The number of the chapter a series in My manga is at, the same on every site. */
+  placeOf: (rec: BookRecord) => number | null;
   onRead: (about: About, picked: Picked, had: BookRecord | undefined, from: Position | undefined, rect: DOMRect | undefined) => void;
   onAdd: (about: About, picked: Picked) => void;
   /** A series in My manga, read from another copy from now on. site: where that is, for saying so. */
@@ -136,6 +136,7 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
   const [kept, setKept] = useState(0);
   const [more, setMore] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
+  const hereRef = useRef<HTMLLIElement>(null);
   const { places, settled } = useCopies(main.card.title, start, prefs, lang);
 
   useEffect(() => {
@@ -333,13 +334,21 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
   let current = rows.find((r) => r.key === lit);
   if (!current) current = { key: lit, site: siteOf(shown), group: '', chapters: '', width: '', best: false, waiting: false };
 
+  // In My manga: the chapter it's at, lit, those before it read, and a way down to it in a long list.
+  const here = had ? placeOf(had) : null;
+  let hereAt = -1;
+  if (here !== null) hereAt = chapters.findIndex((c) => c.number !== null && Math.round(c.number * 100) === Math.round(here * 100));
+  const toHere = () => {
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    hereRef.current?.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+  };
+
   let askText = '';
   if (asking) {
     askText = `Read it from ${siteOf(asking.found)}`;
     if (asking.group) askText += `, ${asking.group.name}`;
     askText += ', from now on?';
-    const at = had ? placeOf(had) : null;
-    if (at) askText += ` Your place stays at ${at}.`;
+    if (here !== null) askText += ` Your place stays at Ch. ${here}.`;
     if (kept === 1) askText += ' The chapter kept offline would need keeping again.';
     else if (kept > 1) askText += ` The ${kept} chapters kept offline would need keeping again.`;
   }
@@ -433,14 +442,17 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
 
       <div className="mds-ch-head">
         <span>{count}</span>
-        {shown.kind === 'mangadex' && (
-          <label className="mdx-lang">
-            <span className="sr-only">Chapters in</span>
-            <select value={lang} onChange={(e) => setLang(e.target.value)}>
-              {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
-            </select>
-          </label>
-        )}
+        <span className="mds-ch-tools">
+          {hereAt >= 0 && <button type="button" className="mds-here" onClick={toHere}>You’re on Ch. {here}</button>}
+          {shown.kind === 'mangadex' && (
+            <label className="mdx-lang">
+              <span className="sr-only">Chapters in</span>
+              <select value={lang} onChange={(e) => setLang(e.target.value)}>
+                {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+              </select>
+            </label>
+          )}
+        </span>
       </div>
       {list.state === 'loading' && <p className="mds-wait"><span className="add-spinner" /> Finding its chapters…</p>}
       {list.state === 'error' && <p className="mds-error">{list.message}</p>}
@@ -465,9 +477,12 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
                 </li>
               );
             }
+            let cls = 'mds-ch';
+            if (i === hereAt) cls += ' is-here';
+            else if (i < hereAt) cls += ' is-read';
             return (
-              <li key={c.id}>
-                <button type="button" className="mds-ch" disabled={!a} onClick={() => a && onRead(a, pickedNow, had, startOf(c), rect())}>{body}</button>
+              <li key={c.id} ref={i === hereAt ? hereRef : undefined}>
+                <button type="button" className={cls} aria-current={i === hereAt ? 'step' : undefined} disabled={!a} onClick={() => a && onRead(a, pickedNow, had, startOf(c), rect())}>{body}</button>
               </li>
             );
           })}

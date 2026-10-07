@@ -154,7 +154,10 @@ export const libraryItems = pgTable(
     editSeriesIndex: doublePrecision('edit_series_index'),
     /** The reader's own genre for it: '' for unset, null to go by the one it was added with. */
     editGenre: text('edit_genre'),
-    /** The reader lets an AI read the book along with them, for Revisit and 2 voices (ai_notes). */
+    /**
+     * An AI reads the book along with the reader, for Revisit and 2 voices (ai_notes). On here once
+     * any library holding the same file said yes (ai_books), and on for good.
+     */
     ai: boolean('ai').notNull().default(false),
     removedAt: at('removed_at'),
     rev: big('rev').notNull(),
@@ -275,6 +278,17 @@ export const aiNotes = pgTable('ai_notes', {
   made: at('made').notNull(),
   by: text('by').notNull(),
   importedAt: at('imported_at').notNull().defaultNow(),
+  version: version(),
+});
+
+/**
+ * A book file someone let an AI read along with them, by its SHA-256. Once one library says yes,
+ * the AI switch is on for every library holding the same file, those that had it and those that
+ * get it later, and stays on (sync/ai.ts). Fed.
+ */
+export const aiBooks = pgTable('ai_books', {
+  sha256: text('sha256').primaryKey(),
+  at: at('at').notNull().defaultNow(),
   version: version(),
 });
 
@@ -481,6 +495,7 @@ export const FED_TABLES = {
   voices: ['id'],
   voice_uses: ['library_id', 'voice_id'],
   ai_notes: ['sha256'],
+  ai_books: ['sha256'],
   commenters: ['library_id'],
   comments: ['id'],
 } as const;

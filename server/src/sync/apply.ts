@@ -5,6 +5,7 @@ import { blobs, libraryItems, librarySettings, readingStates, readingTime, voice
 import { ApiError } from '../lib/errors.ts';
 import { sharedSomewhere, usedBy } from '../lib/shelf.ts';
 import { usable } from '../lib/voices.ts';
+import { settleAi } from './ai.ts';
 
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -46,9 +47,14 @@ const item = (libraryId: string, bookId: string) => and(eq(libraryItems.libraryI
 
 /**
  * Applies one queued change inside the push transaction. Every row it touches is stamped with
- * `rev`, the library's new revision, so the next pull from any browser picks it up.
+ * `rev`, the library's new revision, so the next pull from any browser picks it up. A book whose
+ * AI switch is on after it adds its file's SHA-256 to `ai`, for the push to spread (sync/ai.ts).
  */
-export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: Mutation): Promise<void> {
+export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: Mutation, ai?: Set<string>): Promise<void> {
+  const settle = async (bookId: string) => {
+    const sha = await settleAi(tx, libraryId, bookId, rev);
+    if (sha) ai?.add(sha);
+  };
   switch (m.type) {
     case 'book.put': {
       const b = m.book;
@@ -111,6 +117,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             rev,
           },
         });
+      await settle(b.id);
       return;
     }
 
@@ -128,6 +135,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
         .where(item(libraryId, m.bookId))
         .returning({ id: libraryItems.bookId });
       if (!done.length) throw notFound();
+      await settle(m.bookId);
       return;
     }
 
@@ -154,6 +162,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
       if (m.edit.ai !== undefined) set.ai = m.edit.ai;
       const done = await tx.update(libraryItems).set(set).where(item(libraryId, m.bookId)).returning({ id: libraryItems.bookId });
       if (!done.length) throw notFound();
+      // Once on, on for good: a switch turned off goes back on.
+      if (m.edit.ai !== undefined) await settle(m.bookId);
       return;
     }
 

@@ -22,12 +22,12 @@ services:
     healthcheck: { test: ["CMD", "pg_isready", "-U", "breader", "-d", "breader"], interval: 5s, retries: 30 }
     restart: unless-stopped
 
-  # Keeps what MangaDex answered, so a restart doesn't ask again: 256 MB at most, the answers used
+  # Keeps what MangaDex answered, so a restart doesn't ask again: 1 GB at most, the answers used
   # longest ago going first. Only the API reaches it, and carries on without it. To look inside:
   #   docker compose -f infra/compose.yml exec redis redis-cli
   redis:
     image: redis:8-alpine
-    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru"]
     volumes: ["redis:/data"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 30 }
     restart: unless-stopped

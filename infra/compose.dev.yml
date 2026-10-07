@@ -38,7 +38,7 @@ services:
   # inside: docker compose -f infra/compose.dev.yml exec redis redis-cli
   redis:
     image: redis:8-alpine
-    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru"]
     volumes: ["redis:/data"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 30 }
 

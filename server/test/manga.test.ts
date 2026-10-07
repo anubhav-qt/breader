@@ -359,17 +359,18 @@ describe('MangaDex through the laptop', () => {
 
   it('goes on through MangaDex’s results while none can be read, and says where to carry on', async () => {
     const { b, dex } = await setup();
-    const unreadable = Array.from({ length: 100 }, (_, i) => shelf(100 + i, 'ongoing', 20, [], upTo(20)));
+    const unreadable = Array.from({ length: 160 }, (_, i) => shelf(100 + i, 'ongoing', 20, [], upTo(20)));
     dex.state.catalogue = [...unreadable.slice(0, 23), shelf(1, 'ongoing', 20, upTo(20)), ...unreadable.slice(23)];
     const r = await b.get('/v1/manga/search?lang=en');
     expect(titles(r.body)).toEqual(['Series 1']);
-    expect(r.body.next).toBe('md:30');
-    expect(dex.asked('api.mangadex.org', /^\/manga$/).map((c) => c.url.searchParams.get('offset'))).toEqual(['0', '10', '20']);
+    // Browsing, a lot goes on till it has six series, six of MangaDex's at most.
+    expect(r.body.next).toBe('md:60');
+    expect(dex.asked('api.mangadex.org', /^\/manga$/).map((c) => c.url.searchParams.get('offset'))).toEqual(['0', '10', '20', '30', '40', '50']);
     // Six lots of nothing: an empty answer, and where to carry on from.
-    const more = await b.get('/v1/manga/search?lang=en&next=md:30');
+    const more = await b.get('/v1/manga/search?lang=en&next=md:60');
     expect(more.body.items).toEqual([]);
-    expect(more.body.next).toBe('md:90');
-    const end = await b.get('/v1/manga/search?lang=en&next=md:90');
+    expect(more.body.next).toBe('md:120');
+    const end = await b.get('/v1/manga/search?lang=en&next=md:120');
     expect(end.body.items).toEqual([]);
     expect(end.body.next).toBeNull();
   });
@@ -557,10 +558,11 @@ describe('answers kept in Redis', () => {
     expect((await b.get(`/v1/manga/chapter/${ch(1000)}/0`)).status).toBe(200);
 
     const ttl = (key: string) => redis.keys.get(`manga:v1:${key}`)?.ttl;
-    expect(ttl('search:en:followedCount:safe:plain:all:0:')).toBe(10 * MIN);
-    expect(ttl(`series:${sid(1)}`)).toBe(6 * HOUR);
-    expect(ttl(`chapters:${sid(1)}:en`)).toBe(10 * MIN);
-    expect(ttl(`readable:${sid(1)}:en`)).toBe(24 * HOUR);
+    // Lists, series, chapters and verdicts are kept on for three days, given while fetched again (lib/cache.ts).
+    expect(ttl('search:en:followedCount:safe:plain:all:0:')).toBe(72 * HOUR);
+    expect(ttl(`series:${sid(1)}`)).toBe(72 * HOUR);
+    expect(ttl(`chapters:${sid(1)}:en`)).toBe(72 * HOUR);
+    expect(ttl(`readable:${sid(1)}:en`)).toBe(72 * HOUR);
     expect(ttl('tags:never')).toBe(24 * HOUR);
     expect(ttl(`chapter-series:${ch(1000)}`)).toBe(7 * 24 * HOUR);
     expect(ttl(`at-home:${ch(1000)}`)).toBe(10 * MIN);

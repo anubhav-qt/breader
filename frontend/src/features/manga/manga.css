@@ -60,6 +60,10 @@
 .mdx-led { flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--tile-border-hover); transition: background-color 140ms ease, box-shadow 140ms ease; }
 .mdx-dot[aria-pressed="true"] .mdx-led { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .mdx-rule { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--tile-border); }
+/* Where the line goes on past an edge (a phone's), it fades out there. */
+.mdx-row.is-more-r { mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
+.mdx-row.is-more-l { mask-image: linear-gradient(to left, #000 calc(100% - 48px), transparent); }
+.mdx-row.is-more-l.is-more-r { mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent); }
 
 .mdx-grid { list-style: none; margin-block: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 18px; }
 .mdx-card { display: grid; align-content: start; gap: 8px; width: 100%; text-align: left; }
@@ -172,13 +176,23 @@
 .mds-ch-d { justify-self: end; display: flex; font: var(--ui-w) 11.5px/1 var(--ui); color: var(--ink-2); white-space: nowrap; }
 .mds-ch-d svg { width: 15px; height: 15px; }
 .mds-ch.is-out .mds-ch-n, .mds-ch.is-out .mds-ch-t { color: var(--ink-2); }
+/* In My manga: the chapter it's at, lit as the copy read is, and those before it quieter. */
+.mds-ch.is-read .mds-ch-n, .mds-ch.is-read .mds-ch-t { color: var(--ink-2); }
+.mds-ch.is-here { background: var(--accent-soft); }
+.mds-ch.is-here .mds-ch-n { color: var(--accent); font-weight: var(--ui-w-strong); }
+.mds-ch-tools { display: flex; align-items: center; gap: 12px; min-width: 0; margin-left: auto; }
+/* The count keeps to one line; the place and the language go under it when there's no room. */
+.mds-ch-head { flex-wrap: wrap; row-gap: 8px; }
+.mds-ch-head > span:first-child { white-space: nowrap; }
+.mds-here { font: var(--ui-w) 12.5px/1 var(--ui); color: var(--accent); white-space: nowrap; text-decoration: underline; text-underline-offset: 3px; }
+.mds-here:hover { color: var(--ink); }
 .mds-wait, .mds-error { display: flex; align-items: center; gap: 10px; margin: 14px 0; font: var(--ui-w) 13px/1.4 var(--ui); color: var(--ink-2); }
 .mds-error { color: var(--danger); }
 .mds-credit { margin: 18px 0 0; font: var(--ui-w) 11.5px/1.5 var(--ui); color: var(--ink-2); }
 
 @media (max-width: 720px) {
-  /* The line slides sideways instead of wrapping. */
-  .mdx-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  /* The line slides sideways instead of wrapping, from one edge of the screen to the other. */
+  .mdx-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; margin-inline: -16px; padding-inline: 16px; }
   .mdx-row::-webkit-scrollbar { display: none; }
   .mdx-sorts { flex: none; }
   .mdx-sort { padding: 0 10px; }

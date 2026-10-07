@@ -479,12 +479,8 @@ export default function App() {
 
   const recordOf = useCallback((id: string) => remoteSeries.get(id), [remoteSeries]);
 
-  /** The chapter a series in My manga is at: "Ch. 42". */
-  const placeOf = useCallback((rec: BookRecord) => {
-    const n = placeChapter(lib.reads[rec.id]?.pos);
-    if (n === null) return null;
-    return `Ch. ${n}`;
-  }, [lib.reads]);
+  /** The number of the chapter a series in My manga is at. */
+  const placeOf = useCallback((rec: BookRecord) => placeChapter(lib.reads[rec.id]?.pos), [lib.reads]);
 
   // A series added on another device brings its cover here once, through the laptop.
   const coverAsked = useRef(new Set<string>());
@@ -892,7 +888,7 @@ export default function App() {
             onReadTime={(seconds) => lib.addReadTime(shown.id, seconds)}
             onRemove={canRemove(shownRec) ? removeOpen : undefined}
             ai={!!lib.edits[shown.id]?.ai}
-            onAi={(on) => void editBook(shown.id, { ai: on })}
+            onAi={(on) => on && void editBook(shown.id, { ai: true })}
             // A series opened a few chapters at a time, with the next few added as it's read on.
             onBook={(grown) => setLoaded((l) => (l && l.id === shown.id ? { id: l.id, book: grown } : l))}
           />

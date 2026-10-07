@@ -316,9 +316,9 @@ function TwoVoicesSoon({ off, onAi, onClose }: { off: boolean; onAi?: (on: boole
             <p className="p-note">To get each line right, an AI reads the whole book first, noting who says what. Let one read along with this book, and it joins the queue.</p>
             <div className="ctl tgrow vs-soon-ai">
               <span className="clbl" id="vs-soon-ai">{AI_LABEL}</span>
-              <button type="button" className="tg" role="switch" aria-checked={!off} aria-labelledby="vs-soon-ai" ref={first} onClick={() => onAi!(off)} />
+              <button type="button" className="tg" role="switch" aria-checked={!off} aria-labelledby="vs-soon-ai" ref={first} disabled={!off} onClick={() => onAi!(true)} />
             </div>
-            <p className="p-note" aria-live="polite">{off ? 'It never keeps your book or learns from it.' : 'It’s in the queue. Once it’s ready, 2 voices turns on here by itself. Thank you for bearing with us.'}</p>
+            <p className="p-note" aria-live="polite">{off ? 'It never keeps your book or learns from it. Once on, it stays on, for everyone who has this book.' : 'It’s in the queue. Once it’s ready, 2 voices turns on here by itself. Thank you for bearing with us.'}</p>
           </>
         ) : (
           <>
