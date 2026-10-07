@@ -128,7 +128,9 @@ signed in to a library, which a series joins as it's read. However many
 read at once, the laptop keeps to MangaDex's limits for its one address (four calls a second, 35
 chapters opened a minute), so a busy minute waits instead of getting the address blocked. Pages
 read lately are kept in the `manga` volume, up to `MANGA_CACHE_MB` (2048 by default), the ones
-used longest ago going first; none go to R2. Series for adults show only to readers who turn on
+used longest ago going first; none go to R2. Its answers (searches, series, chapter lists) are kept
+in the `redis` service (`REDIS_URL`), 256 MB at most, so a restart doesn't ask MangaDex for them
+again; if Redis stops answering, the API asks MangaDex instead and logs a warning. Series for adults show only to readers who turn on
 **Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
 Render never has it: its free plan hasn't the bandwidth for pages.
 

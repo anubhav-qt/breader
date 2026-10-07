@@ -22,6 +22,16 @@ services:
     healthcheck: { test: ["CMD", "pg_isready", "-U", "breader", "-d", "breader"], interval: 5s, retries: 30 }
     restart: unless-stopped
 
+  # Keeps what MangaDex answered, so a restart doesn't ask again: 256 MB at most, the answers used
+  # longest ago going first. Only the API reaches it, and carries on without it. To look inside:
+  #   docker compose -f infra/compose.yml exec redis redis-cli
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes: ["redis:/data"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 30 }
+    restart: unless-stopped
+
   # Brings Supabase and the copy to the image's schema before the new version starts, then exits.
   migrate:
     <<: *server
@@ -40,6 +50,7 @@ services:
       MIRROR_URL: *mirror-url
       # Every request arrives through the tunnel, and Cloudflare sets this header itself.
       CLIENT_IP_HEADER: cf-connecting-ip
+      REDIS_URL: "redis://redis:6379"
     # The server voice's files (SPEECH_EMAILS in .env turns it on), downloaded once, and the manga
     # pages MangaDex sent lately (MANGA_CACHE_MB).
     volumes: ["voices:/data/voices", "manga:/data/manga"]
@@ -71,3 +82,4 @@ volumes:
   backups: {}
   voices: {}
   manga: {}
+  redis: {}
