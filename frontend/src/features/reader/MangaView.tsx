@@ -168,6 +168,16 @@ class Pictures {
   }
 }
 
+/** A chapter by its number and the series' last, "Ch. 42 of 290", or by its name when it has no number. */
+function chapterOf(ch: RemoteChapter, all: RemoteChapter[]): string {
+  if (ch.number === null) return ch.label;
+  let last = ch.number;
+  for (const c of all) {
+    if (c.number !== null && c.number > last) last = c.number;
+  }
+  return `${ch.label} of ${last}`;
+}
+
 export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book, layout, dir, width, start, onLocation, onWidth, onTurn, onTap, onGrow }, ref) {
   const total = book.pages;
   // A series opened a few chapters at a time counts the words of all of it, not those open.
@@ -362,7 +372,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       progress,
       sectionWordsLeft: Math.round(Math.max(1, nextAt - exact) * per),
       bookWordsLeft: book.progressOf ? Math.round((1 - progress) * book.words) : end ? 0 : Math.round((total - (layout === 'pages' ? last + 1 : exact)) * per),
-      line: ch ? `${ch.label}, page ${first - ch.first + 1} of ${ch.pages}` : `Page ${first + 1} of ${total}`,
+      line: ch ? `${chapterOf(ch, book.remote!.chapters)}, page ${first - ch.first + 1} of ${ch.pages}` : `Page ${first + 1} of ${total}`,
       page: first,
       pages: total,
       screen: Math.round(shown.length * per),

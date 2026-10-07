@@ -2,11 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { animate, motion, useMotionValue } from 'motion/react';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
-import { IconAddBook, IconCheck, IconMore, IconStar } from '../../components/icons';
 import { blotsFor, maskFor, radiiFor } from './blots';
 import { fitCard } from './fit';
-import { cardNames } from './names';
-import { actionLabel, progressText, shortProgress, timeLeft, when } from './text';
+import { cardNames, markFor } from './names';
+import { actionLabel, chapterText, progressText, shortProgress, timeLeft, when } from './text';
+import { Tools } from './Tools';
 import type { GalleryItem } from './types';
 import { useSize } from './useSize';
 import { bookVars } from './vars';
@@ -32,6 +32,8 @@ export interface TileProps {
   number?: number;
   /** A whole series as one card, standing on the book that's next in it. */
   stack?: Stack;
+  /** A manga series: its cover big at the left, and how far it's read by chapter. */
+  manga?: boolean;
   ref?: Ref<HTMLDivElement>;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
@@ -60,7 +62,7 @@ function setMask(el: HTMLElement | null, mask: string) {
  *
  * A full-size button opens the book; the corner button (or a right-click) opens the edit popover.
  */
-export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, ref: slotRef, onOpen, onEdit, onFinish, onKeep }: TileProps) {
+export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onFinish, onKeep }: TileProps) {
   const b = item.book;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
@@ -117,7 +119,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
     void document.fonts.ready.then(() => { if (live) fitCard(ref.current); });
     return () => { live = false; };
   }, [ref]);
-  const face = <Face book={b} variant={variant} now={now} number={number} author={item.author} stack={stack} beside={hasArt || made} />;
+  const face = <Face book={b} variant={variant} now={now} number={number} author={item.author} stack={stack} beside={hasArt || made} manga={manga} />;
 
   return (
     <motion.div
@@ -134,7 +136,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
     >
       <div
         ref={ref}
-        className={`tile tile-${variant}${hasArt || made ? ' has-art' : ''}`}
+        className={`tile tile-${variant}${hasArt || made ? ' has-art' : ''}${manga ? ' is-manga' : ''}`}
         style={{ ...bookVars(b), '--tools': tools, ...(hasArt ? { '--art-ratio': artRatio } : null) } as CSSProperties}
         onContextMenu={(e) => {
           if (!moreRef.current) return;
@@ -148,7 +150,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           type="button"
           className="tile-hit"
           data-id={b.id}
-          aria-label={stack ? `${stack.name}, a series of ${stack.count} books, ${stack.finished} finished` : `${b.title}, ${progressText(b)}`}
+          aria-label={stack ? `${stack.name}, a series of ${stack.count} books, ${stack.finished} finished` : `${b.title}, ${manga ? chapterText(b) : progressText(b)}`}
           aria-haspopup={stack ? 'dialog' : undefined}
           onClick={(e) => onOpen(b, (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect())}
         />
@@ -167,45 +169,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           </span>
         )}
         {/* A series' card opens the series; its books are edited there. */}
-        {!stack && <div className="tile-tools">
-          {keepable && (
-            <button
-              type="button"
-              className={`tile-fav tile-keep${b.kept ? ' is-on' : ''}`}
-              aria-pressed={!!b.kept}
-              aria-label={b.kept ? `${b.title} is in your library` : `Add ${b.title} to your library`}
-              title={b.kept ? 'In your library' : 'Add to my library'}
-              onClick={() => { if (!b.kept) onKeep!(b); }}
-            >
-              {b.kept ? <IconCheck /> : <IconAddBook />}
-            </button>
-          )}
-          {finishable ? (
-            <button
-              type="button"
-              className={`tile-fav tile-done${done ? ' is-on' : ''}`}
-              aria-pressed={done}
-              aria-label={done ? `${b.title} is finished` : `Mark ${b.title} as finished`}
-              title={done ? 'Finished. Tap if it isn’t after all' : 'Mark as finished'}
-              onClick={() => onFinish!(b, !done)}
-            >
-              <IconCheck />
-            </button>
-          ) : done && <span className="tile-fav tile-done is-on" title="Finished"><IconCheck /></span>}
-          {b.favorite && <span className="tile-fav" title="Favourite"><IconStar /></span>}
-          {!theirs && <button
-            ref={moreRef}
-            type="button"
-            className="tile-more"
-            aria-label={`Edit ${b.title}`}
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            title="Edit"
-            onClick={(e) => onEdit(b, e.currentTarget)}
-          >
-            <IconMore />
-          </button>}
-        </div>}
+        {!stack && <Tools book={b} open={open} moreRef={moreRef} onEdit={onEdit} onFinish={onFinish} onKeep={onKeep} />}
       </div>
     </motion.div>
   );
@@ -213,20 +177,13 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
 
 const join = (...parts: Array<string | false | undefined | 0>) => parts.filter(Boolean).join(' · ');
 
-/** A cover's big dotted mark: the volume's number, or the title's first letter past "The". */
-function markFor(title: string, vol?: number) {
-  if (vol) return String(vol).padStart(2, '0');
-  const word = title.replace(/^(the|a|an|le|la|les|el|der|die|das)\s+/i, '');
-  return (word.match(/[\p{L}\p{N}]/u)?.[0] ?? '·').toUpperCase();
-}
-
 /**
  * Each card is set like a cover: the author, a big dotted mark (the volume's number, or the title's
  * first letter), the title, and how far. Names are tidied from what the file says (names.ts). Beside
  * a cover, real or drawn, the text is a column that ends on the line where the reader stopped (the
  * opening line for a new book); CSS hides it on cards too narrow or short for it.
  */
-function Face({ book: b, variant, now, number, author, stack, beside }: { book: ShelfItem; variant: Variant; now: number; number?: number; author?: string; stack?: Stack; beside: boolean }): ReactNode {
+function Face({ book: b, variant, now, number, author, stack, beside, manga }: { book: ShelfItem; variant: Variant; now: number; number?: number; author?: string; stack?: Stack; beside: boolean; manga: boolean }): ReactNode {
   const n = cardNames(b, author);
   // A card in a series row goes by its number there.
   const vol = number ?? n.vol;
@@ -240,6 +197,20 @@ function Face({ book: b, variant, now, number, author, stack, beside }: { book: 
         <span className="c-foot">
           <span>{read}</span>
           {vol ? <span>Vol. {vol}</span> : null}
+        </span>
+      </>
+    );
+  }
+  // A manga series says how far by its chapter, and opens at it.
+  if (beside && manga) {
+    return (
+      <>
+        <span className="t-eyebrow">{when(b, now)}</span>
+        <span className="t-title" data-full={n.title}>{n.title}</span>
+        {n.author && <span className="t-author">{n.author}</span>}
+        <span className="t-foot">
+          <span className="t-meta">{chapterText(b)}</span>
+          <span className="t-cta">{actionLabel(b)} ›</span>
         </span>
       </>
     );

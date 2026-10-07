@@ -31,5 +31,17 @@ export function timeLeft(b: ShelfItem) {
 
 export const shortProgress = (b: ShelfItem) => (isDone(b) ? 'Finished' : isNew(b) ? 'New' : percent(b));
 
+/**
+ * How far into a manga, by its chapter: "Ch. 42 of 290", from where the reader stopped ("Ch. 42 of
+ * 290, page 5 of 18"). A file of pages goes by its page.
+ */
+export function chapterText(b: ShelfItem) {
+  if (isDone(b)) return 'Finished';
+  if (isNew(b)) return 'New';
+  const chapter = b.line.split(', page ')[0].trim();
+  if (chapter) return chapter;
+  return percent(b);
+}
+
 
 export const actionLabel = (b: ShelfItem) => (isDone(b) ? 'Read again' : isNew(b) ? 'Start reading' : 'Continue');

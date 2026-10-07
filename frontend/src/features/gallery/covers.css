@@ -1,0 +1,141 @@
+/*
+ * Manga's library: each series as its cover (CoverCard), its title and chapter under it or on it,
+ * set out one of four ways (MangaLibrary). The manga hero's own rules are with the cards' (gallery.css).
+ */
+.cv { display: flex; flex-direction: column; gap: 9px; }
+.cv-art {
+  position: relative;
+  isolation: isolate;
+  container-type: inline-size;
+  overflow: hidden;
+  background: var(--fill);
+}
+/* With its words on it, the cover fills the card, whatever the card's shape. */
+.cv-over > .cv-art { position: absolute; inset: 0; container-type: size; }
+.cv-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--tile-border);
+  pointer-events: none;
+  transition: box-shadow 220ms ease;
+}
+.cv:hover .cv-art::after { box-shadow: inset 0 0 0 1px var(--tile-border-hover); }
+.cv-art:has(.tile-hit:focus-visible)::after { box-shadow: inset 0 0 0 2px var(--accent); }
+.cv-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Cropped to a box, a cover keeps its upper part, where the faces usually are. */
+  object-position: center 22%;
+  opacity: 0;
+  transition: opacity 260ms ease, transform 320ms ease;
+}
+.cv-art img.is-loaded { opacity: 1; }
+.cv:hover .cv-art img { transform: scale(1.03); }
+
+/* No cover, or one that won't load: one drawn in the series' colour, with its mark. */
+.cv-drawn {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 9cqw;
+  background: var(--bc);
+  color: var(--bc-ink);
+}
+.cv-mark { font: 900 46cqw/0.82 var(--ui); letter-spacing: -0.02em; }
+.cv-by {
+  order: 1;
+  max-width: 100%;
+  margin-top: 8cqw;
+  font: var(--ui-w) max(9px, 6.5cqw)/1.2 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The corner's buttons sit on the cover. */
+.cv .tile-tools { top: 8px; right: 8px; gap: 5px; }
+.cv:hover .tile-more, .cv:hover button.tile-done { opacity: 1; }
+@container (max-width: 139px) {
+  .cv .tile-tools { top: 6px; right: 6px; gap: 4px; }
+  .cv :is(.tile-more, .tile-fav) { width: 26px; height: 26px; }
+  .cv :is(.tile-more, .tile-fav) svg { width: 14px; height: 14px; }
+}
+
+/* The title, and the chapter the reader is on, in the interface's face: no colour, just the words. */
+.cv-title {
+  max-width: 100%;
+  padding-top: 0.2em;
+  margin-top: -0.2em;
+  font-family: var(--read);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  /* A word wider than a small cover breaks at a syllable, with a hyphen. */
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.cv-ch { max-width: 100%; font: var(--ui-w) 11.5px/1.2 var(--ui); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-cap { display: grid; gap: 5px; min-width: 0; padding: 0 2px; cursor: pointer; }
+
+/* On the cover: over a shade at its foot, sized to the card. */
+.cv-words {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  padding: 18cqh 7cqw max(12px, 6cqw);
+  background: linear-gradient(to top, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.5) 55%, transparent);
+  color: #FFFFFF;
+  pointer-events: none;
+}
+.cv-words .cv-title { font-size: clamp(19px, min(8cqw, 11cqh), 46px); }
+.cv-words .cv-ch { color: rgb(255 255 255 / 0.86); }
+.cv.is-drawn .cv-words { background: none; color: var(--bc-ink); }
+.cv.is-drawn .cv-words .cv-ch { color: inherit; opacity: 0.8; }
+@container (max-height: 199px) {
+  .cv-words { padding-top: 12px; }
+  .cv-words .cv-title { -webkit-line-clamp: 1; }
+}
+
+/* Covers along a shelf: a book's card's width, and a cover's height (or more, with its words under it). */
+.shelf-cover { flex: none; width: var(--shelf-w); scroll-snap-align: start; }
+.shelf-cover.cv-over { aspect-ratio: 1 / 1.42; }
+
+/* Hero + rows: the series being read, then the others read lately in a row of covers. */
+.mg-hero { height: clamp(300px, 30vw, 400px); }
+.mg-recent { margin-top: 26px; }
+
+/* Cover wall: every series, an even grid of covers, like Browse. */
+.cv-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 18px; padding-top: 16px; }
+
+/* Poster wall: covers at their own shape, in rows grouped by when they were read. */
+.posters { display: grid; gap: 30px; padding-top: 16px; }
+.poster-group { display: grid; gap: 16px; }
+.poster-rows { display: flex; flex-wrap: wrap; align-items: flex-start; row-gap: 22px; }
+.poster-rows > .cv { flex: none; }
+
+@media (max-width: 720px) {
+  .mg-hero { height: 250px; }
+  .cv-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 10px; }
+  .cv-cap .cv-title { font-size: 19px; }
+  .cv-ch { font-size: 11px; }
+}

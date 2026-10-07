@@ -4,6 +4,7 @@ import type { ShelfItem } from '../../data/useLibrary';
 import { readLocal, writeLocal } from '../../lib/store';
 import { springs } from '../../lib/springs';
 import { IconBack, IconChevron } from '../../components/icons';
+import { CoverCard, type Caption } from './CoverCard';
 import { KeepSeries } from './KeepSeries';
 import { finishedIn, type Series } from './series';
 import { VIEWS, byDate, byGenre, bySeries, isView, type Shelf, type View } from './shelving';
@@ -40,13 +41,15 @@ interface Props {
   /** Someone's shared library: a series' shelf can put all its books in the reader's own. */
   onKeepAll?: (books: ShelfItem[], series: string) => void;
   onSeries: (s: Series) => void;
+  /** Manga: each series as its cover, its title and chapter under it or on it. */
+  covers?: Caption;
 }
 
 /**
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, views, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, views, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries, covers }: Props) {
   const key = `breader.view.${place}.v1`;
   const [picked, setPicked] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
@@ -159,13 +162,14 @@ export function Shelves({ books, stacks, series, authors, place, initial, views,
           onKeep={onKeep}
           onKeepAll={onKeepAll}
           onSeries={onSeries}
+          covers={covers}
         />
       </motion.div>
     </section>
   );
 }
 
-type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onFinish' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
+type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onFinish' | 'onKeep' | 'onKeepAll' | 'onSeries' | 'covers'> & {
   shelves: Shelf[];
   lazy: boolean;
   empty?: string;
@@ -195,10 +199,10 @@ function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
   );
 }
 
-type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
+export type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: RowProps) {
+export function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries, covers }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -262,10 +266,28 @@ function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, 
           </button>
         </span>
       </header>
-      <motion.div ref={row} className="shelf-row" data-start={ends.start || undefined} data-end={ends.end || undefined} onScroll={check} layoutScroll>
+      <motion.div ref={row} className={`shelf-row${covers ? ' is-covers' : ''}`} data-start={ends.start || undefined} data-end={ends.end || undefined} onScroll={check} layoutScroll>
         <AnimatePresence mode="popLayout" initial={false}>
           {entries.map((e, k) => {
             const stack = e.stack;
+            if (covers) {
+              return (
+                <CoverCard
+                  key={e.key}
+                  item={{ key: e.key, book: e.book, author: authors.get(e.book.id) }}
+                  caption={covers}
+                  index={indexBase + index * 2 + k}
+                  enter={enter}
+                  className="shelf-cover"
+                  open={(e.book.key ?? e.book.id) === editingId}
+                  layoutKey={layoutKey}
+                  onOpen={onOpen}
+                  onEdit={onEdit}
+                  onFinish={onFinish}
+                  onKeep={onKeep}
+                />
+              );
+            }
             return (
               <Tile
                 key={e.key}

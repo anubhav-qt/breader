@@ -14,6 +14,7 @@ import { placeChapter, remoteOf } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
+import { useMangaPreview } from './data/mangaPreview';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { namesOf, type MangaFound } from '@breader/shared/manga';
 import { addLibrary, libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
@@ -24,6 +25,7 @@ import { KeyDialog } from './features/add/KeyDialog';
 import { AccountMenu } from './features/account/AccountMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
+import { MANGA_LAYOUTS, type MangaLayout } from './features/gallery/mangaLayouts';
 import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
@@ -139,6 +141,8 @@ export default function App() {
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
+  /** How manga's library is set out: one way for now, the others to try in the preview bar. */
+  const [mangaLayout, setMangaLayout] = useState<MangaLayout>(() => (devTools ? readParam('manga', MANGA_LAYOUTS.map((l) => l.id), 'rows') : 'rows'));
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
@@ -171,6 +175,7 @@ export default function App() {
     writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
+  useEffect(() => { writeParam('manga', mangaLayout, 'rows'); }, [mangaLayout]);
 
   // Back from Google, or from a link in one of Breader's emails.
   useEffect(() => {
@@ -211,6 +216,8 @@ export default function App() {
       : { all: [], series: [], mixed: [], covers: {} }),
     [now],
   );
+  // Manga for the previews of several books, from MangaDex.
+  const mangaPreview = useMangaPreview(devTools && (preview === 'few' || preview === 'many'), now);
   /*
    * Copies of shared books read too little of to keep (KEEP_WORDS) that no one shares any more.
    * The server says which, to a library on it.
@@ -234,14 +241,14 @@ export default function App() {
 
   const recordById = useMemo(() => {
     const m = new Map<string, BookRecord>();
-    for (const r of [...previewSets.all, ...previewSets.mixed, ...sharedRecords, ...lib.records]) m.set(r.id, r);
+    for (const r of [...previewSets.all, ...previewSets.mixed, ...mangaPreview.records, ...sharedRecords, ...lib.records]) m.set(r.id, r);
     // The series preview places some of the same books differently; it wins while it's showing.
     if (preview === 'series') for (const r of previewSets.series) m.set(r.id, r);
     return m;
-  }, [previewSets, sharedRecords, lib.records, preview]);
+  }, [previewSets, mangaPreview, sharedRecords, lib.records, preview]);
 
   const everything = useMemo(() => {
-    const covers = { ...previewSets.covers, ...sharing.covers, ...lib.covers };
+    const covers = { ...previewSets.covers, ...mangaPreview.covers, ...sharing.covers, ...lib.covers };
     const view = (recs: BookRecord[]) =>
       recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, covers, lib.edits)).sort(byRecent);
     const liveMine = view(lib.records.filter((r) => !lapsed.has(r.id) && !r.sharedOnly));
@@ -256,8 +263,8 @@ export default function App() {
     switch (preview) {
       case 'empty': mine = []; break;
       case 'one': mine = liveMine.slice(0, 1).length ? liveMine.slice(0, 1) : view(previewSets.all).slice(0, 1); break;
-      case 'few': mine = view(previewSets.all).slice(0, 6); break;
-      case 'many': mine = view(previewSets.all); break;
+      case 'few': mine = [...view(previewSets.all).slice(0, 6), ...view(mangaPreview.records).slice(0, 6)]; break;
+      case 'many': mine = [...view(previewSets.all), ...view(mangaPreview.records)]; break;
       case 'series': mine = view(previewSets.series); break;
       case 'mixed': mine = view(previewSets.mixed); break;
       default: mine = liveMine;
@@ -265,7 +272,7 @@ export default function App() {
     // Blank series, numbers and genres filled in from the rest of both libraries, and one name a series.
     const filled = fillGaps([...mine, ...onShelf]);
     return { mine: filled.slice(0, mine.length), shelf: filled.slice(mine.length) };
-  }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, sharing.covers, sharedRecords, keptFirsts, showing, previewSets, preview, hidden]);
+  }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, sharing.covers, sharedRecords, keptFirsts, showing, previewSets, mangaPreview, preview, hidden]);
   // Each tab shows the chosen shelf's books; series and genres are offered from both.
   const items = useMemo(() => ({
     mine: everything.mine.filter((b) => categoryOf(b) === category),
@@ -821,6 +828,7 @@ export default function App() {
               // Shared libraries are browsed by genre; one's own books, by series. Manga has no series.
               view={t === 'shelf' || manga ? 'genre' : 'series'}
               noSeries={manga}
+              mangaLayout={manga ? mangaLayout : undefined}
               now={now}
               id={`library-${t}`}
               labelledBy={`tab-${t}`}
@@ -957,7 +965,15 @@ export default function App() {
 
       <Toast toast={toast} onDone={dismissToast} />
       {devTools && route.name === 'library' && (
-        <PreviewBar mode={preview} onMode={setPreview} theme={theme} onTheme={setTheme} onReset={() => void lib.reset()} />
+        <PreviewBar
+          mode={preview}
+          onMode={setPreview}
+          theme={theme}
+          onTheme={setTheme}
+          mangaLayout={manga ? mangaLayout : undefined}
+          onMangaLayout={setMangaLayout}
+          onReset={() => void lib.reset()}
+        />
       )}
     </MotionConfig>
   );

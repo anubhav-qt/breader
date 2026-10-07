@@ -355,6 +355,46 @@ button.tile-done:hover, .tile-keep:not(.is-on):hover { background: var(--canvas)
   overflow: hidden;
 }
 
+/*
+ * Manga's hero (MangaLibrary): the cover big at the left, at any width, its corner's buttons on it,
+ * and the series' colour filling the rest of the card as it's read, as on every card.
+ */
+.tile.is-manga > :is(.tile-art, .tile-face, .tile-tools) {
+  --mg-inset: 28px;
+  --mg-gap: 34px;
+  --mg-art-w: min(44cqw, (100cqh - 2 * var(--mg-inset)) * var(--art-ratio, 0.6667));
+}
+@container (max-width: 559px) {
+  .tile.is-manga > :is(.tile-art, .tile-face, .tile-tools) { --mg-inset: 14px; --mg-gap: 18px; --mg-art-w: min(40cqw, (100cqh - 2 * var(--mg-inset)) * var(--art-ratio, 0.6667)); }
+  .tile-hero.is-manga .t-title { font-size: 28px; }
+  .tile.is-manga > .tile-face { padding-right: 18px; }
+}
+.tile.is-manga.has-art > .tile-art {
+  position: absolute;
+  top: 50%;
+  left: var(--mg-inset);
+  right: auto;
+  z-index: 3;
+  display: block;
+  width: var(--mg-art-w);
+  aspect-ratio: var(--art-ratio, 0.6667);
+  transform: translateY(-50%);
+  border-radius: 6px 14px 14px 6px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--tile-border);
+  pointer-events: none;
+}
+.tile.is-manga.has-art > .tile-art.is-made { display: flex; }
+.tile.is-manga.has-art > .tile-face { padding-left: calc(var(--mg-inset) + var(--mg-art-w) + var(--mg-gap)); }
+/* The corner's buttons on the cover's corner, so the words beside it have the card's whole width. */
+.tile.is-manga > .tile-tools {
+  top: calc(50cqh - var(--mg-art-w) / var(--art-ratio, 0.6667) / 2 + 8px);
+  right: calc(100cqw - var(--mg-inset) - var(--mg-art-w) + 8px);
+}
+.tile.is-manga > .tile-face > :first-child { padding-right: 0; }
+.tile.is-manga .t-foot { margin-top: auto; padding-top: 16px; }
+.tile.is-manga .t-meta { font-size: 14px; }
+
 /* The full title, after the pointer rests on a shortened one. */
 .title-hint {
   position: fixed;

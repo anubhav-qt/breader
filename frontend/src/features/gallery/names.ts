@@ -71,3 +71,10 @@ export const cardNames = (b: ShelfItem, author?: string): CardNames => {
   const a = cardAuthor(b.author);
   return { ...cardTitle(b.title, b.seriesIndex), ...a, author: author ?? a.author };
 };
+
+/** A cover's big dotted mark: the volume's number, or the title's first letter past "The". */
+export function markFor(title: string, vol?: number) {
+  if (vol) return String(vol).padStart(2, '0');
+  const word = title.replace(/^(the|a|an|le|la|les|el|der|die|das)\s+/i, '');
+  return (word.match(/[\p{L}\p{N}]/u)?.[0] ?? '·').toUpperCase();
+}
