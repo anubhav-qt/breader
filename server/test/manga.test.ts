@@ -66,22 +66,72 @@ const FEED = [
   chapter(504, { isUnavailable: true }),
 ];
 
+/** A series for the readable checks, its chapters here in English, and the newest MangaDex has in any language. */
+interface Shelf {
+  manga: ReturnType<typeof series>;
+  feed: Array<ReturnType<typeof chapter>>;
+  newest: number;
+}
+const sid = (n: number) => `d0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const upTo = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+/** Hosted chapters by number (null for a oneshot's), and those only on the publisher's site. */
+function shelf(n: number, status: string, newest: number, hosted: Array<number | null>, links: number[] = [], over: Record<string, unknown> = {}): Shelf {
+  const feed = [
+    ...hosted.map((c, i) => chapter(n * 1000 + i, { chapter: c === null ? null : String(c) })),
+    ...links.map((c, i) => chapter(n * 1000 + 500 + i, { chapter: String(c), externalUrl: 'https://mangaplus.shueisha.co.jp/viewer/2', pages: 0 }, [])),
+  ];
+  const manga = series(sid(n), { title: { en: `Series ${n}` }, status, latestUploadedChapter: ch(n * 1000), ...over });
+  return { manga, feed, newest };
+}
+const titles = (body: { items: Array<{ title: string }> }) => body.items.map((x) => x.title);
+
 const png = (n: number) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, n]);
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 1]);
 
 /** What our MangaDex was asked, and how it answers. */
 function fakeDex() {
   const calls: Array<{ url: URL; ua: string | null; method: string; body?: string }> = [];
-  const state = { busy: false, brokenNode: false, home: 'https://node1.mangadex.network', notPicture: false };
+  const state = {
+    busy: false,
+    brokenNode: false,
+    home: 'https://node1.mangadex.network',
+    notPicture: false,
+    /** Series a search finds instead of the usual three, in order. */
+    catalogue: [] as Shelf[],
+    /** Series whose chapter index fails. */
+    unchecked: new Set<string>(),
+    /** How long each API call takes, and the most at once so far. */
+    slow: 0,
+    most: 0,
+  };
+  let going = 0;
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  const find = (id: string) => state.catalogue.find((x) => x.manga.id === id);
   const fetch = (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input));
     const headers = new Headers(init.headers);
     calls.push({ url, ua: headers.get('user-agent'), method: init.method ?? 'GET', body: init.body as string | undefined });
+    if (url.host !== 'api.mangadex.org') return answer(url);
+    going++;
+    state.most = Math.max(state.most, going);
+    try {
+      if (state.slow) await new Promise((done) => setTimeout(done, state.slow));
+      return answer(url);
+    } finally {
+      going--;
+    }
+  }) as typeof globalThis.fetch;
+  const answer = (url: URL) => {
     const path = url.pathname;
     if (url.host === 'api.mangadex.org') {
       if (state.busy) return new Response('{}', { status: 429, headers: { 'x-ratelimit-retry-after': String(Math.floor(Date.now() / 1000) + 2) } });
       if (path === '/manga/tag') return json({ result: 'ok', data: [tag(LOLI, 'Loli'), tag(SHOTA, 'Shota'), tag('t-adv', 'Adventure', 'genre')] });
+      if (path === '/manga' && state.catalogue.length) {
+        const offset = Number(url.searchParams.get('offset'));
+        const limit = Number(url.searchParams.get('limit'));
+        const data = state.catalogue.slice(offset, offset + limit).map((x) => x.manga);
+        return json({ result: 'ok', data, total: state.catalogue.length, limit, offset });
+      }
       if (path === '/manga') {
         const adult = url.searchParams.getAll('contentRating[]').includes('erotica');
         // A series MangaDex should have left out, to check it's left out anyway.
@@ -89,12 +139,26 @@ function fakeDex() {
         return json({ result: 'ok', data, total: data.length, limit: 30, offset: 0 });
       }
       let m = /^\/manga\/([0-9a-f-]{36})$/.exec(path);
-      if (m) return SERIES[m[1]] ? json({ result: 'ok', data: SERIES[m[1]] }) : json({ result: 'error' }, 404);
+      if (m) {
+        const one = find(m[1])?.manga ?? SERIES[m[1]];
+        return one ? json({ result: 'ok', data: one }) : json({ result: 'error' }, 404);
+      }
       m = /^\/manga\/([0-9a-f-]{36})\/feed$/.exec(path);
       if (m) {
+        const feed = find(m[1])?.feed ?? FEED;
         const offset = Number(url.searchParams.get('offset'));
         const limit = Number(url.searchParams.get('limit'));
-        return json({ result: 'ok', data: FEED.slice(offset, offset + limit), total: FEED.length, limit, offset });
+        return json({ result: 'ok', data: feed.slice(offset, offset + limit), total: feed.length, limit, offset });
+      }
+      // Every chapter number in any language, newest first. The usual series has two more than
+      // it can read in English: 501, only on the publisher's site, and 502, not readable yet.
+      m = /^\/manga\/([0-9a-f-]{36})\/aggregate$/.exec(path);
+      if (m) {
+        if (state.unchecked.has(m[1])) return json({ result: 'error' }, 500);
+        const newest = find(m[1])?.newest ?? 502;
+        const chapters: Record<string, { chapter: string; id: string; others: string[]; count: number }> = {};
+        for (let n = newest; n >= 1; n--) chapters[String(n)] = { chapter: String(n), id: ch(n), others: [], count: 1 };
+        return json({ result: 'ok', volumes: newest ? { none: { volume: 'none', count: newest, chapters } } : [] });
       }
       m = /^\/chapter\/([0-9a-f-]{36})$/.exec(path);
       if (m) return json({ result: 'ok', data: { ...chapter(1), id: m[1], relationships: [{ id: m[1] === ch(999) ? NEVER : FRIEREN, type: 'manga' }] } });
@@ -116,7 +180,7 @@ function fakeDex() {
       return new Response(png(n), { headers: { 'content-type': 'image/png', 'x-cache': 'HIT' } });
     }
     return new Response('no such host', { status: 502 });
-  }) as typeof globalThis.fetch;
+  };
   return { fetch, calls, state, asked: (host: string, re: RegExp) => calls.filter((c) => c.url.host === host && re.test(c.url.pathname)) };
 }
 
@@ -128,7 +192,7 @@ async function setup() {
   const b = browser(undefined, app);
   const r = await b.post('/v1/libraries', { libraryId: crypto.randomUUID(), key: newLibraryKey() });
   expect(r.status).toBe(201);
-  return { dex, dir, app, b };
+  return { dex, dir, app, b, manga };
 }
 
 describe('MangaDex through the laptop', () => {
@@ -168,6 +232,7 @@ describe('MangaDex through the laptop', () => {
       langs: ['en', 'pt-br'],
       original: 'ja',
       authors: ['Yamada Kanehito'],
+      readIn: 'en',
     });
     const [search] = dex.asked('api.mangadex.org', /^\/manga$/);
     expect(search.ua).toBe(USER_AGENT);
@@ -205,6 +270,106 @@ describe('MangaDex through the laptop', () => {
     await b.get('/v1/manga/search?sort=popular');
     expect(dex.asked('api.mangadex.org', /^\/manga$/)).toHaveLength(1);
     expect(dex.asked('api.mangadex.org', /^\/manga$/)[0].url.searchParams.get('order[followedCount]')).toBe('desc');
+  });
+
+  it('shows only series every chapter of can be read here, an ongoing one lacking at most its newest two', async () => {
+    const { b, dex } = await setup();
+    dex.state.catalogue = [
+      shelf(1, 'ongoing', 20, upTo(20)),
+      // Its newest two only on the publisher's site.
+      shelf(2, 'ongoing', 20, upTo(18), [19, 20]),
+      shelf(3, 'ongoing', 20, upTo(17)),
+      shelf(4, 'ongoing', 20, upTo(20).filter((n) => n !== 7)),
+      shelf(5, 'ongoing', 20, [], upTo(20)),
+      shelf(6, 'completed', 19, upTo(19), [], { lastChapter: '20' }),
+      // Ended and all here, some chapters twice, an extra half one.
+      shelf(7, 'completed', 20, [1, ...upTo(20), 12.5], [1], { lastChapter: '20' }),
+      shelf(8, 'completed', 0, [null], [], { lastChapter: '' }),
+      // Chapter 5 came in two parts.
+      shelf(9, 'ongoing', 10, [1, 2, 3, 4, 5.1, 5.2, 6, 7, 8, 9, 10]),
+    ];
+    const r = await b.get('/v1/manga/search?lang=en');
+    expect(r.status).toBe(200);
+    expect(titles(r.body)).toEqual(['Series 1', 'Series 2', 'Series 7', 'Series 8', 'Series 9']);
+    expect(r.body.items[0].readIn).toBe('en');
+    expect(r.body.next).toBeNull();
+    expect(dex.asked('api.mangadex.org', /^\/manga$/)[0].url.searchParams.get('limit')).toBe('10');
+    // The index of every language's chapters only for series whose own list has no gap.
+    const indexed = dex.asked('api.mangadex.org', /\/aggregate$/).map((c) => c.url.pathname.split('/')[2]);
+    expect(indexed.sort()).toEqual([sid(1), sid(2), sid(3), sid(7), sid(8), sid(9)].sort());
+    // A sheet opened next has its chapters already.
+    const feeds = dex.asked('api.mangadex.org', /\/feed$/).length;
+    expect((await b.get(`/v1/manga/series/${sid(1)}/chapters?lang=en`)).body.chapters).toHaveLength(20);
+    expect(dex.asked('api.mangadex.org', /\/feed$/)).toHaveLength(feeds);
+  });
+
+  it('keeps what it found out until the series gets a new upload', async () => {
+    const { b, dex } = await setup();
+    dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20)), shelf(3, 'ongoing', 20, upTo(17))];
+    const feeds = () => dex.asked('api.mangadex.org', /\/feed$/).length;
+    expect(titles((await b.get('/v1/manga/search?q=a&lang=en')).body)).toEqual(['Series 1']);
+    expect(feeds()).toBe(2);
+    await b.get('/v1/manga/search?q=b&lang=en');
+    expect(feeds()).toBe(2);
+    // Series 3 caught up, as its newest upload says.
+    dex.state.catalogue[1] = shelf(3, 'ongoing', 20, upTo(20), [], { latestUploadedChapter: ch(1) });
+    expect(titles((await b.get('/v1/manga/search?q=c&lang=en')).body)).toEqual(['Series 1', 'Series 3']);
+    expect(feeds()).toBe(3);
+  });
+
+  it('checks a series in the language it’s read in, when any will do', async () => {
+    const { b, dex } = await setup();
+    dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20)), shelf(2, 'ongoing', 20, upTo(20), [], { availableTranslatedLanguages: ['pt-br', 'es'] })];
+    const r = await b.get('/v1/manga/search');
+    expect(r.body.items.map((x: { title: string; readIn: string }) => [x.title, x.readIn])).toEqual([['Series 1', 'en'], ['Series 2', 'pt-br']]);
+    const langs = dex.asked('api.mangadex.org', /\/feed$/).map((c) => c.url.searchParams.get('translatedLanguage[]'));
+    expect(langs.sort()).toEqual(['en', 'pt-br']);
+  });
+
+  it('goes on through MangaDex’s results while none can be read, and says where to carry on', async () => {
+    const { b, dex } = await setup();
+    const unreadable = Array.from({ length: 100 }, (_, i) => shelf(100 + i, 'ongoing', 20, [], upTo(20)));
+    dex.state.catalogue = [...unreadable.slice(0, 23), shelf(1, 'ongoing', 20, upTo(20)), ...unreadable.slice(23)];
+    const r = await b.get('/v1/manga/search?lang=en');
+    expect(titles(r.body)).toEqual(['Series 1']);
+    expect(r.body.next).toBe(30);
+    expect(dex.asked('api.mangadex.org', /^\/manga$/).map((c) => c.url.searchParams.get('offset'))).toEqual(['0', '10', '20']);
+    // Six lots of nothing: an empty answer, and where to carry on from.
+    const more = await b.get('/v1/manga/search?lang=en&offset=30');
+    expect(more.body.items).toEqual([]);
+    expect(more.body.next).toBe(90);
+    const end = await b.get('/v1/manga/search?lang=en&offset=90');
+    expect(end.body.items).toEqual([]);
+    expect(end.body.next).toBeNull();
+  });
+
+  it('leaves out a series it couldn’t check, without keeping that, and says so when it could check none', async () => {
+    const { b, dex } = await setup();
+    dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20)), shelf(2, 'ongoing', 20, upTo(20))];
+    dex.state.unchecked.add(sid(2));
+    expect(titles((await b.get('/v1/manga/search?lang=en')).body)).toEqual(['Series 1']);
+    dex.state.unchecked.clear();
+    expect(titles((await b.get('/v1/manga/search?lang=en')).body)).toEqual(['Series 1', 'Series 2']);
+
+    dex.state.catalogue = [shelf(3, 'ongoing', 20, upTo(20))];
+    dex.state.unchecked.add(sid(3));
+    const r = await b.get('/v1/manga/search?q=three&lang=en');
+    expect(r.status).toBe(503);
+    expect(r.body.code).toBe('manga_unreachable');
+  });
+
+  it('checks Popular and Updated ahead of readers, one call at a time', async () => {
+    const { b, dex, manga } = await setup();
+    dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20)), shelf(3, 'ongoing', 20, upTo(17))];
+    dex.state.slow = 5;
+    await manga.warm();
+    expect(dex.state.most).toBe(1);
+    const orders = dex.asked('api.mangadex.org', /^\/manga$/).map((c) => [...c.url.searchParams.keys()].find((k) => k.startsWith('order[')));
+    expect([...new Set(orders)]).toEqual(['order[followedCount]', 'order[latestUploadedChapter]']);
+    // Browse as it first opens: all from what was checked.
+    const before = dex.calls.length;
+    expect(titles((await b.get('/v1/manga/search?lang=en')).body)).toEqual(['Series 1']);
+    expect(dex.calls).toHaveLength(before);
   });
 
   it('tells a series as plain text, with its official links and only web ones', async () => {

@@ -106,6 +106,13 @@ export class Memo<T> {
     return value;
   }
 
+  /** What's kept for the key, if anything, without asking. */
+  peek(key: string): Promise<T> | undefined {
+    const hit = this.items.get(key);
+    if (hit && hit.until > Date.now()) return hit.value;
+    return undefined;
+  }
+
   /** Keeps a value found some other way (a series that came in a search). */
   set(key: string, value: T) {
     this.items.delete(key);

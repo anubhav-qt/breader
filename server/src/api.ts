@@ -31,9 +31,17 @@ const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.
 // Both roles prune feed records the laptop never read, so a long absence can't fill Supabase.
 const chores = setInterval(() => void pruneStaleFeed(primary.pool).catch((err) => log.warn({ err }, 'feed prune failed')), 3_600_000);
 
+// Browse's first screens of manga are checked ahead of readers, and again every 15 minutes.
+let warming: NodeJS.Timeout | undefined;
+if (manga) {
+  void manga.warm();
+  warming = setInterval(() => void manga.warm(), 15 * 60_000);
+}
+
 const stop = () => {
   log.info('shutting down');
   clearInterval(chores);
+  clearInterval(warming);
   void speech?.close();
   server.close(() => {
     void Promise.all([primary.pool.end(), mirror?.pool.end()]).finally(() => process.exit(0));

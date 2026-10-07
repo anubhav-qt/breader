@@ -16,8 +16,10 @@ const Flag = z.enum(['0', '1']).transform((v) => v === '1');
 export const MANGA_SORTS = ['relevance', 'popular', 'latest', 'new', 'rated'] as const;
 export type MangaSort = (typeof MANGA_SORTS)[number];
 
-/** Results a search gives at a time. */
-export const MANGA_PAGE = 30;
+/** MangaDex's results a search looks at a time, keeping only those that can be read here. */
+export const MANGA_PAGE = 10;
+/** The furthest into MangaDex's results a search can ask, as it stops at 10,000. */
+export const MANGA_LAST_OFFSET = 9_900;
 
 export const MangaSearchQuery = z.object({
   q: z.string().trim().max(200).optional(),
@@ -29,7 +31,7 @@ export const MangaSearchQuery = z.object({
   adult: Flag.optional(),
   /** Doujinshi too (fan-made works, MangaDex's Doujinshi format tag), which stay out unless asked. */
   doujinshi: Flag.optional(),
-  offset: z.coerce.number().int().min(0).max(9_900).default(0),
+  offset: z.coerce.number().int().min(0).max(MANGA_LAST_OFFSET).default(0),
 });
 export type MangaSearchQuery = z.input<typeof MangaSearchQuery>;
 
@@ -61,6 +63,8 @@ export interface MangaCard {
   /** The language it was first published in. */
   original: string;
   authors: string[];
+  /** The language a search found every chapter of it readable in here, which its sheet opens in. */
+  readIn?: string;
 }
 
 export interface MangaLink {
@@ -103,9 +107,14 @@ export interface MangaChapter {
   at: number;
 }
 
+/**
+ * Only series every chapter of can be read here (an ongoing one may lack its newest two), so a lot
+ * can hold fewer than it looked at. next is the offset to ask for after it, or null at the end.
+ */
 export interface MangaSearchResult {
   total: number;
   offset: number;
+  next: number | null;
   items: MangaCard[];
 }
 

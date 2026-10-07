@@ -53,7 +53,8 @@ interface Item {
   pick: () => void;
 }
 
-type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; items: Item[]; more: boolean };
+/** next: where the next lot starts, MangaDex's offset after what it looked through. */
+type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; items: Item[]; more: boolean; next: number };
 
 const messageOf = (e: unknown) =>
   e instanceof ApiError && e.code === 'laptop_off'
@@ -122,16 +123,19 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
     pick: () => onPickServer(c),
   });
 
-  /** A lot of results: MangaDex's from an offset, a server source's by page. */
-  const fetchLot = async (offset: number): Promise<{ items: Item[]; more: boolean }> => {
+  /**
+   * A lot of results: MangaDex's from an offset, only the series that can be read here, so it can
+   * be short or even empty; a server source's by page.
+   */
+  const fetchLot = async (offset: number): Promise<{ items: Item[]; more: boolean; next: number }> => {
     if (where === 'mangadex') {
       const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, offset });
-      return { items: r.items.map(mdItem), more: r.items.length > 0 && r.offset + r.items.length < r.total };
+      return { items: r.items.map(mdItem), more: r.next !== null, next: r.next ?? offset };
     }
     const n = offset === 0 ? 1 : page.current + 1;
     const r = await suwayomi.browse(source!.id, q ? 'SEARCH' : serverSort, n, q || undefined);
     page.current = n;
-    return { items: r.mangas.map(swItem), more: r.hasNextPage && r.mangas.length > 0 };
+    return { items: r.mangas.map(swItem), more: r.hasNextPage && r.mangas.length > 0, next: offset + r.mangas.length };
   };
 
   useEffect(() => {
@@ -156,13 +160,13 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting || loadingMore.current) return;
       loadingMore.current = true;
-      const offset = ready.items.length;
+      const offset = ready.next;
       fetchLot(offset).then(
         (r) => {
           setFound((f) => {
-            if (f.state !== 'ready' || f.items.length !== offset) return f;
+            if (f.state !== 'ready' || f.next !== offset) return f;
             const seen = new Set(f.items.map((x) => x.key));
-            return { state: 'ready', items: [...f.items, ...r.items.filter((x) => !seen.has(x.key))], more: r.more };
+            return { state: 'ready', items: [...f.items, ...r.items.filter((x) => !seen.has(x.key))], more: r.more, next: r.next };
           });
         },
         () => setFound((f) => (f.state === 'ready' ? { ...f, more: false } : f)),
@@ -296,7 +300,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
         <div className="mdx-grid" aria-busy="true">
           {Array.from({ length: 12 }, (_, i) => <span key={i} className="mdx-card is-ghost"><span className="mdx-cover" /></span>)}
         </div>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && !ready?.more ? (
         <div className="mdx-note"><p>{q ? `Nothing on ${sourceName} goes by “${q}”${where === 'mangadex' && prefs.lang ? ` in ${langName(prefs.lang)}` : ''}.` : 'Nothing here yet.'}</p></div>
       ) : (
         <>
