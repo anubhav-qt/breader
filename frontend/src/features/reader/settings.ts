@@ -29,8 +29,13 @@ export interface ReaderSettings {
   /** Manga: scrolled down a column of pages, or turned a page (or two, side by side) at a time. */
   mangaLayout: Layout;
   mangaDir: MangaDir;
-  /** Each manga's own layout and direction, by its id, on a wide screen. Those without start as the last picked. */
-  mangaOwn?: Record<string, { layout: Layout; dir: MangaDir }>;
+  /**
+   * Each manga's own layout and direction, by its id: `layout` on a wide screen, `narrow` on a narrow
+   * one (NARROW). Those without start as the last picked there.
+   */
+  mangaOwn?: Record<string, { layout: Layout; dir: MangaDir; narrow?: Layout }>;
+  /** The layout last picked for a manga on a narrow screen; scrolled until one is. */
+  mangaNarrow?: Layout;
   /** Manga scrolled on a wide screen: how wide the column of pages is (MANGA_WIDTHS). */
   mangaWidth?: number;
   /** 2 voices: the colour her lines light in, and his (book colours, data/colors.ts). */
@@ -77,7 +82,10 @@ export const MANGA_WIDTHS = [
 ];
 export const MANGA_WIDTH = 860;
 
-/** Narrower than this, a manga is scrolled: a page turned at a time is too small to read. */
+/**
+ * Narrower than this, a manga opens scrolled, as a page turned at a time is small to read, and keeps
+ * a layout for screens this narrow apart from the one it has on wider ones.
+ */
 export const NARROW = '(max-width: 899px)';
 
 /** Light pink and light blue on dark pages; their deeper shades on light ones. */
@@ -197,7 +205,7 @@ export function useNarrow(): boolean {
   return narrow;
 }
 
-/** How a manga reads: `narrow`, the screen is, so it's scrolled whatever was picked. */
+/** How a manga reads: `narrow`, the screen is, so it's in the layout picked for narrow screens. */
 export interface MangaLook {
   layout: Layout;
   dir: MangaDir;
@@ -205,17 +213,28 @@ export interface MangaLook {
   narrow: boolean;
 }
 
-/** On a narrow screen, scrolled. On a wide one, as this manga was last read, or as the last one picked. */
+/** As this manga was last read on a screen this wide or narrow, or as the last one picked there; on a narrow screen, scrolled until one is. */
 export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean): MangaLook {
   const own = s.mangaOwn?.[id];
   let layout = own?.layout ?? s.mangaLayout;
-  if (narrow) layout = 'scroll';
+  if (narrow) layout = own?.narrow ?? s.mangaNarrow ?? 'scroll';
   return { layout, dir: own?.dir ?? s.mangaDir, width: s.mangaWidth ?? MANGA_WIDTH, narrow };
 }
 
-/** A manga's own layout and direction, changed by `patch`; the next new one starts with them too. */
-export function withMangaLook(s: ReaderSettings, id: string, patch: { layout?: Layout; dir?: MangaDir }): ReaderSettings {
+/**
+ * A manga's own layout (on a screen as `narrow` as this, or not) and direction, changed by `patch`;
+ * the next new one starts with them too.
+ */
+export function withMangaLook(s: ReaderSettings, id: string, patch: { layout?: Layout; dir?: MangaDir }, narrow = false): ReaderSettings {
   const own = s.mangaOwn?.[id] ?? { layout: s.mangaLayout, dir: s.mangaDir };
-  const next = { ...own, ...patch };
-  return { ...s, mangaLayout: next.layout, mangaDir: next.dir, mangaOwn: { ...s.mangaOwn, [id]: next } };
+  const next = { ...own, dir: patch.dir ?? own.dir };
+  if (patch.layout && narrow) next.narrow = patch.layout;
+  else if (patch.layout) next.layout = patch.layout;
+  return {
+    ...s,
+    mangaLayout: next.layout,
+    mangaDir: next.dir,
+    ...(narrow && patch.layout ? { mangaNarrow: patch.layout } : {}),
+    mangaOwn: { ...s.mangaOwn, [id]: next },
+  };
 }

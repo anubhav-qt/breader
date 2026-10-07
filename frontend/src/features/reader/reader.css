@@ -280,7 +280,7 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-broken { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 12px; text-align: center; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
 .mg-broken button { height: 34px; padding: 0 14px; border-radius: 10px; background: var(--r-fill); box-shadow: 0 0 0 1px var(--r-line); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
 .mg-broken button:hover { background: var(--r-line); }
-/* A tap on a picture brings its panel closer (MangaView.tsx). */
+/* A click on a picture brings its panel closer (MangaView.tsx); on a touch screen, two taps. */
 .mg-pg img { cursor: zoom-in; }
 .mg-scroll { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
 /* On a phone the pages run edge to edge (MangaView.tsx sideOf), with no scrollbar taking a strip of them. */
@@ -290,7 +290,7 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 }
 .mg-column { position: relative; margin: 0 auto; }
 .mg-scroll .mg-pg { position: absolute; left: 0; right: 0; }
-/* The space beside the page turns it: a tap on the page is for its panels. Keys and swipes turn it too. */
+/* The space beside the page turns it: a click on the page is for its panels, a tap for the controls. Keys and swipes turn it too. */
 .mgv .fv-zone { width: max(44px, calc(50% - var(--vw) / 2)); }
 /* A chapter of a series from MangaDex starts under its name and who made it. */
 .mg-band { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; padding: 0 12px; text-align: center; font: var(--ui-w) 12px/1.3 var(--ui); color: var(--r-mu); }

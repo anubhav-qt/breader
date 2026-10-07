@@ -219,17 +219,21 @@ function DataSaver() {
   return <Segmented label="Quality" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
 }
 
-/** A manga's layout, the way its pages turn, and how wide they scroll: on a narrow screen, it's scrolled. */
+/**
+ * A manga's layout, the way its pages turn, and how wide they scroll. On a narrow screen it opens
+ * scrolled, and keeps a layout there apart from wider ones; the column of pages is as wide as the screen.
+ */
 function MangaLookControls({ look, pick, widen, saver }: MangaControls) {
-  let note = 'One page after another, down the screen. Each manga keeps its own layout.';
-  if (look.narrow) note = 'One page after another, down the screen, as pages read best on a screen this narrow.';
-  else if (look.layout === 'pages') note = 'Two pages side by side when the screen is wide enough. Manga reads right to left, comics left to right. Each manga keeps its own.';
+  const keeps = look.narrow ? 'Each manga keeps its own layout on a screen this narrow, apart from wider ones.' : 'Each manga keeps its own layout.';
+  let note = `One page after another, down the screen. ${keeps}`;
+  if (look.layout === 'pages') {
+    const shown = look.narrow ? 'One page at a time, and a spread printed across two pages whole: tap it twice to look closer.' : 'Two pages side by side when the screen is wide enough.';
+    note = `${shown} Manga reads right to left, comics left to right. ${keeps}`;
+  }
   return (
     <>
-      {!look.narrow && (
-        <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
-      )}
-      {!look.narrow && look.layout === 'pages' && (
+      <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
+      {look.layout === 'pages' && (
         <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
       )}
       {!look.narrow && look.layout === 'scroll' && (

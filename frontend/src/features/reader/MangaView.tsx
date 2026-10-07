@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { WORDS_PER_MANGA_PAGE } from '../../books/manga';
 import type { MangaBook, Position, RemoteChapter } from '../../books/types';
@@ -18,8 +18,10 @@ import { runTurn } from './turn';
  * crediting who made it, and in pages, a chapter starts on a page of its own. One opened a few
  * chapters at a time opens the next few as the reader nears the end of these.
  *
- * A tap on a panel brings it (and any drawn together with it) to the middle of the screen; three
- * taps or a long press, just the one panel. Two taps bring the page closer around them.
+ * A click on a panel brings it (and any drawn together with it) to the middle of the screen; three
+ * clicks or a long press, just the one panel. Two clicks bring the page closer around them. On a
+ * touch screen a tap is the reader's, for the controls, so it's two taps that bring the panels
+ * closer (or the page, off a panel), and three the one panel.
  */
 
 interface Props {
@@ -60,6 +62,10 @@ const BAND = 56;
 const TAPS = 280;
 /** A press held this long is a long press. */
 const LONG = 450;
+/** Scrolled: the page at rest once it's gone this long without moving. */
+const REST = 200;
+/** Scrolled: while it moves, the place is said at most this often, as each time it's saved, through the whole app. */
+const PLACE_EVERY = 1000;
 
 /** A series opened a few chapters at a time opens again at a chapter outside them (App.tsx). */
 const reopen = (pos: Position) => window.dispatchEvent(new CustomEvent('breader:reopen', { detail: { pos } }));
@@ -145,6 +151,12 @@ class Pictures {
     this.book = book;
   }
 
+  /** Page i's height over its width, once its picture is open; 0 until then. */
+  shape(i: number): number {
+    const img = this.drawn.get(i);
+    return img?.naturalWidth ? img.naturalHeight / img.naturalWidth : 0;
+  }
+
   /** Page i's picture, or null when it won't open. */
   get(i: number): Promise<string | null> {
     let u = this.urls.get(i);
@@ -155,7 +167,8 @@ class Pictures {
           const img = new Image();
           img.src = url;
           this.drawn.set(i, img);
-          await img.decode().catch(() => {});
+          // A browser drawing nothing (a tab out of sight) never says it's drawn: shown anyway, soon.
+          await Promise.race([img.decode().catch(() => {}), wait(1500)]);
           return url;
         },
         () => null,
@@ -207,11 +220,48 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   onLocationRef.current = onLocation;
   /**
    * Scrolled: the exact place at the top of the screen, kept as pages above it change size: how far
-   * down its page, and scrolled there on a page of known size, in pixels too.
+   * down its page, and once scrolled there, where its page started then, how many pixels down it
+   * (past its end, in the line before the next chapter), how tall it was and whether that was known.
    */
-  const anchor = useRef<{ page: number; frac: number; off?: number }>({ page: at.page, frac: at.frac });
+  const anchor = useRef<{ page: number; frac: number; top?: number; into?: number; h?: number; sized?: boolean }>({ page: at.page, frac: at.frac });
+  /** Scrolled: the page is moving, or still gliding from a flick, and a finger's on it. */
+  const moving = useRef(false);
+  const touching = useRef(false);
+  const restTimer = useRef(0);
+  /** Scrolled: the place to say next, and when it was said last. */
+  const place = useRef<At>(at);
+  const placedAt = useRef(0);
+  /** Scrolled: shapes found for pages above the screen while it moved, taken once it rests. */
+  const later = useRef(new Map<number, { r: number; guess: boolean }>());
   /** Pages: the page a turn is on its way to, so turns pressed quickly follow on from it. */
   const goal = useRef<number | null>(null);
+  useEffect(() => () => window.clearTimeout(restTimer.current), []);
+
+  /**
+   * Pages found to be a shape (height over width), from their pictures, or as a `guess` from their
+   * files' first bytes, which doesn't replace one known. Scrolled, a page above the screen keeps
+   * the shape it has while the page moves, and takes this once it rests: the pages under the
+   * reader's finger would jump, or, put back where they were, stop their flick dead.
+   */
+  const shaped = useCallback((found: Array<[number, number]>, guess = false) => {
+    const now = found.filter(([i, r]) => {
+      if (!r || !Number.isFinite(r)) return false;
+      if (!(moving.current || touching.current) || i >= anchor.current.page) return true;
+      const held = later.current.get(i);
+      if (!(guess && held && !held.guess)) later.current.set(i, { r, guess });
+      return false;
+    });
+    if (!now.length) return;
+    setRatios((rs) => {
+      let next = rs;
+      for (const [i, r] of now) {
+        if (guess ? rs[i] : Math.abs((rs[i] || 0) - r) < 0.005) continue;
+        if (next === rs) next = rs.slice();
+        next[i] = r;
+      }
+      return next;
+    });
+  }, []);
 
   useLayoutEffect(() => {
     const el = rootRef.current!;
@@ -235,16 +285,11 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
         const sizes = await Promise.all(chunk.map((i) => book.size(i).catch(() => null)));
         if (!live) return;
         // A series read from MangaDex says nothing here: its pictures tell their sizes as they come.
-        if (!sizes.some(Boolean)) continue;
-        setRatios((rs) => {
-          const next = rs.slice();
-          chunk.forEach((i, j) => {
-            const s = sizes[j];
-            // A size from the picture itself, once it's shown, is surer: it's kept.
-            if (s && !next[i]) next[i] = s.h / s.w;
-          });
-          return next;
-        });
+        // A size from the picture itself, once it's shown, is surer: it's kept.
+        shaped(chunk.flatMap((i, j): Array<[number, number]> => {
+          const s = sizes[j];
+          return s ? [[i, s.h / s.w]] : [];
+        }), true);
       }
     })();
     return () => { live = false; };
@@ -252,16 +297,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   }, [book, total]);
 
   /** The picture as shown can disagree with its file's header (a photo turned by its camera's note). */
-  const measured = (i: number, img: HTMLImageElement) => {
-    const r = img.naturalHeight / img.naturalWidth;
-    if (!r || !Number.isFinite(r)) return;
-    setRatios((rs) => {
-      if (Math.abs((rs[i] || 0) - r) < 0.005) return rs;
-      const next = rs.slice();
-      next[i] = r;
-      return next;
-    });
-  };
+  const measured = (i: number, img: HTMLImageElement) => shaped([[i, img.naturalHeight / img.naturalWidth]]);
 
   const typical = useMemo(() => typicalOf(ratios), [ratios]);
   const ratio = useCallback((i: number) => ratios[i] || typical, [ratios, typical]);
@@ -324,29 +360,71 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const y = el.scrollTop + BAR;
     const i = pageAt(tops, y);
     const frac = Math.max(0, Math.min(1, (y - tops[i]) / heights[i]));
-    // On a page whose size is still a guess, pixels down it mean nothing once it's known.
-    anchor.current = { page: i, frac, ...(ratios[i] ? { off: y - tops[i] } : {}) };
+    anchor.current = { page: i, frac, top: tops[i], into: y - tops[i], h: heights[i], sized: !!ratios[i] };
     const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
     // A tenth of a page at a time: close enough for the place kept, without a render a pixel.
-    const tenth = Math.floor(frac * 10) / 10;
-    setAt((a) => (a.page === i && a.frac === tenth && a.end === end ? a : { page: i, frac: tenth, end }));
+    place.current = { page: i, frac: Math.floor(frac * 10) / 10, end };
+    if (!moving.current || performance.now() - placedAt.current >= PLACE_EVERY) say();
     const from = pageAt(tops, el.scrollTop - BEHIND * el.clientHeight);
     const to = pageAt(tops, el.scrollTop + AHEAD * el.clientHeight);
     setWin((w) => (w[0] === from && w[1] === to ? w : [from, to]));
   };
+  /** Says the place: in the controls, and kept. */
+  const say = () => {
+    placedAt.current = performance.now();
+    const p = place.current;
+    setAt((a) => (a.page === p.page && a.frac === p.frac && a.end === p.end ? a : p));
+  };
+  /** At rest, unless a finger's still on the page: the shapes found meanwhile are taken, and the place said. */
+  const rest = () => {
+    if (touching.current) return;
+    moving.current = false;
+    const held = [...later.current];
+    later.current.clear();
+    shaped(held.flatMap(([i, h]): Array<[number, number]> => (h.guess ? [] : [[i, h.r]])));
+    shaped(held.flatMap(([i, h]): Array<[number, number]> => (h.guess ? [[i, h.r]] : [])), true);
+    say();
+  };
+  const restSoon = () => {
+    window.clearTimeout(restTimer.current);
+    restTimer.current = window.setTimeout(rest, REST);
+  };
+  const onScroll = () => {
+    moving.current = true;
+    restSoon();
+    placeFromScroll();
+  };
+  const onTouchStart = () => { touching.current = true; };
+  const onTouchEnd = (e: TouchEvent) => {
+    if (e.touches.length) return;
+    touching.current = false;
+    restSoon();
+  };
 
   // Scrolled: the place stays put as the column is laid out again (sizes found, a new width).
   const laidW = useRef(0);
+  const laidIn = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (layout !== 'scroll' || !el || colW <= 0) return;
     const a = anchor.current;
-    // A new width resizes every page alike, so the place goes by how far down its page it was. A page
-    // finding its size only moves the pages after it: on one already sized, the place stays as many
-    // pixels down it.
-    const into = a.off !== undefined && laidW.current === colW ? a.off : a.frac * heights[a.page];
+    const same = laidW.current === colW;
     laidW.current = colW;
-    const to = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, Math.round(tops[a.page] + into - BAR)));
+    // A new width resizes every page alike, so the place goes by how far down its page it was, as it
+    // does on a page whose size was a guess while it's still (pixels down it meant nothing once it's
+    // known). Otherwise a page finding its size only moves the pages after it: the place stays as
+    // many pixels down its page.
+    let into = a.frac * heights[a.page];
+    if (a.into !== undefined && a.h) {
+      if (same && (a.sized || moving.current || touching.current)) into = a.into;
+      else into = a.into <= a.h ? (a.into / a.h) * heights[a.page] : heights[a.page] + a.into - a.h;
+    }
+    // Opened at a place, or gone to one: there. Otherwise moved as far as the place moved down the
+    // column, from wherever it's been scrolled to since.
+    let to = tops[a.page] + into - BAR;
+    if (laidIn.current === el && a.top !== undefined && a.into !== undefined) to = el.scrollTop + tops[a.page] + into - (a.top + a.into);
+    laidIn.current = el;
+    to = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, Math.round(to)));
     // On a phone, the place written again, even the same one, stops a flick of the finger dead: it's
     // written only when it moved, as pages coming in below as they're read never move it.
     if (Math.abs(el.scrollTop - to) >= 1) el.scrollTop = to;
@@ -374,11 +452,14 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     });
     for (let i = from; i <= to; i++) {
       void pics.get(i).then((url) => {
-        if (live) setSrcs((m) => (m.get(i) === url ? m : new Map(m).set(i, url)));
+        if (!live) return;
+        // Its shape with it, so it's never shown in a box of the wrong one.
+        shaped([[i, pics.shape(i)]]);
+        setSrcs((m) => (m.get(i) === url ? m : new Map(m).set(i, url)));
       });
     }
     return () => { live = false; };
-  }, [pics, wantFrom, wantTo, total]);
+  }, [pics, wantFrom, wantTo, total, shaped]);
 
   useEffect(() => {
     const shown = layout === 'pages' ? spread : [at.page];
@@ -545,21 +626,25 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     return true;
   };
 
-  /** What taps on a picture do, once they stop coming: one, the panels there; two, the page; three, the one panel. */
-  const tapped = (n: number, img: HTMLImageElement, x: number, y: number) => {
+  /**
+   * What clicks on a picture do, once they stop coming: one, the panels there; two, the page; three,
+   * the one panel. Tapped, one is the reader's (the controls, in full screen); two, the panels there,
+   * or the page off a panel; three, the one panel.
+   */
+  const tapped = (n: number, img: HTMLImageElement, x: number, y: number, touch: boolean) => {
     if (n === 1) {
-      if (!zoom(img, x, y, 'group')) onTap?.();
+      if (touch || !zoom(img, x, y, 'group')) onTap?.();
       return;
     }
     if (n === 2) {
-      zoom(img, x, y, 'page');
+      if (!touch || !zoom(img, x, y, 'group')) zoom(img, x, y, 'page');
       return;
     }
     if (!zoom(img, x, y, 'panel')) zoom(img, x, y, 'page');
   };
 
   /** Taps on a picture, counted until they stop coming, and a press held on one. */
-  const taps = useRef<{ n: number; img: HTMLImageElement; x: number; y: number; timer: number } | null>(null);
+  const taps = useRef<{ n: number; img: HTMLImageElement; x: number; y: number; touch: boolean; timer: number } | null>(null);
   const press = useRef<{ id: number; img: HTMLImageElement; x: number; y: number; timer: number; long: boolean } | null>(null);
   const touch = useRef(false);
   useEffect(() => () => {
@@ -573,7 +658,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const onPagesDown = (e: PointerEvent) => {
     touch.current = e.pointerType === 'touch';
     const img = pictureAt(e.target);
-    if (!img || e.button !== 0 || !e.isPrimary) return;
+    // A touch that stops the page gliding from a flick is just that.
+    if (!img || e.button !== 0 || !e.isPrimary || moving.current) return;
     const p = { id: e.pointerId, img, x: e.clientX, y: e.clientY, timer: 0, long: false };
     p.timer = window.setTimeout(() => {
       p.long = true;
@@ -603,19 +689,19 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       t.n++;
     } else {
       window.clearTimeout(t?.timer);
-      t = { n: 1, img: p.img, x: p.x, y: p.y, timer: 0 };
+      t = { n: 1, img: p.img, x: p.x, y: p.y, touch: touch.current, timer: 0 };
       taps.current = t;
     }
     const done = t;
     // Three is as many as count: no need to wait for a fourth.
     if (done.n >= 3) {
       taps.current = null;
-      tapped(done.n, done.img, done.x, done.y);
+      tapped(done.n, done.img, done.x, done.y, done.touch);
       return;
     }
     done.timer = window.setTimeout(() => {
       taps.current = null;
-      tapped(done.n, done.img, done.x, done.y);
+      tapped(done.n, done.img, done.x, done.y, done.touch);
     }, TAPS);
   };
   const onPagesCancel = () => {
@@ -679,7 +765,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
           <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label={rtl ? 'Previous page' : 'Next page'} onClick={() => turn(rtl ? -1 : 1)}><span>›</span></button>
         </>
       ) : (
-        <div ref={scrollRef} className="mg-scroll" onScroll={placeFromScroll}>
+        <div ref={scrollRef} className="mg-scroll" onScroll={onScroll} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
           <div className="mg-column" style={{ width: colW, height }} {...pageTaps}>
             {colW > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).map((i) => (
               <div key={i} className={`mg-pg${ratios[i] ? ' is-sized' : ''}`} style={{ top: tops[i], height: heights[i] }}>{picture(i)}</div>

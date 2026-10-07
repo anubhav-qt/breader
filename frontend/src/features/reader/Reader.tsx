@@ -59,12 +59,14 @@ const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause
 
 export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, onAi, onBook }: Props) {
   const [settings, update] = useReaderSettings();
-  // A manga is scrolled on a narrow screen; on a wide one, each keeps its own layout and direction.
+  // Each manga keeps its own layout and direction, a layout for narrow screens (scrolled, until
+  // another's picked) apart from wide ones. Opened, it keeps the one it opened in.
   const narrow = useNarrow();
   const mangaLook = mangaLookOf(settings, record.id, narrow);
-  const ownLook = !!settings.mangaOwn?.[record.id];
+  const own = settings.mangaOwn?.[record.id];
+  const ownLook = narrow ? !!own?.narrow : !!own;
   useEffect(() => {
-    if (book.kind === 'manga' && !narrow && !ownLook) update((s) => withMangaLook(s, record.id, {}));
+    if (book.kind === 'manga' && !ownLook) update((s) => withMangaLook(s, record.id, { layout: mangaLookOf(s, record.id, narrow).layout }, narrow));
   }, [book.kind, narrow, ownLook, record.id, update]);
   const [panel, setPanel] = useState<PanelName | null>(null);
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
@@ -434,7 +436,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   };
-  /** A tap on a manga's page with no panel to zoom into (MangaView.tsx): as a tap mid-page. */
+  /** A tap on a manga's page, or a click off its panels (MangaView.tsx): as a tap mid-page. */
   const tapPage = () => {
     if (closing || !hush || !touched.current) return;
     if (awake) sleep();
@@ -534,7 +536,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     book, title, loc, chapters, current, settings, update,
     manga: book.kind === 'manga' ? {
       look: mangaLook,
-      pick: (patch) => update((s) => withMangaLook(s, record.id, patch)),
+      pick: (patch) => update((s) => withMangaLook(s, record.id, patch, narrow)),
       widen: (width) => update((s) => ({ ...s, mangaWidth: width })),
       saver: remoteOf(record.url)?.kind === 'mangadex',
     } : null,
