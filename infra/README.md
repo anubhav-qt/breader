@@ -151,6 +151,9 @@ from:
   Flame Comics (it fails every search) and Atsumaru (it tags series loosely, so well-known ones
   would be hidden as loli).
 
+The worker updates the installed extensions once a day, as a site that moves to a new address is
+mostly mended by its extension's next version (**Manga extensions** on the status page).
+
 Keiyoushi marks most big sites 18+, as each has some series for adults, but Breader judges each
 series by its own genres: one marked Adult, Hentai, Smut, Erotica or Pornographic shows only with
 **Show 18+**, and one marked loli or shota never shows. Each series' kind (manga, manhwa, manhua or

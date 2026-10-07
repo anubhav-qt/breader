@@ -102,6 +102,8 @@ services:
       TZ: Asia/Kolkata
       # Public half of infra/dev-backup.agekey (a throwaway key for local backups).
       BACKUP_RECIPIENT: "age1kfm3c08tag4t3z8hrpfp8sd2rqd0qm08sl4mpw2sudayay7h4ffqgwwud5"
+      # Suwayomi's extensions are updated once a day.
+      SUWAYOMI_URL: "http://suwayomi:4567"
     volumes: ["files:/data/files", "backups:/data/backups"]
 
 volumes:

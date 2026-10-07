@@ -4,6 +4,7 @@ import { backupIfDue } from './jobs/backup.ts';
 import { pruneReadFeed } from './jobs/chores.ts';
 import { cleanUp } from './jobs/cleanup.ts';
 import { restoreDrill } from './jobs/drill.ts';
+import { updateExtensions } from './jobs/extensions.ts';
 import { repairStorage } from './jobs/repair.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
 import { report, startReporting } from './lib/report.ts';
@@ -14,8 +15,9 @@ import { makeFileMirror } from './mirror/files.ts';
 
 /*
  * The laptop's background process: keeps the copy and the file mirror current, prunes feed
- * records it has read, cleans up, writes the nightly backup and tests that it restores, and puts
- * back files missing from R2. It never runs on the fallback.
+ * records it has read, cleans up, writes the nightly backup and tests that it restores, puts
+ * back files missing from R2, and keeps Suwayomi's extensions current. It never runs on the
+ * fallback.
  */
 const env = loadEnv();
 startReporting(env, 'worker');
@@ -70,6 +72,14 @@ const repair = job('storage-check', () => repairStorage({ mirror: mirror.pool, p
 every(24 * 3_600_000, 'storage check', repair);
 const first = setTimeout(() => void repair(), 10 * 60_000);
 stop.signal.addEventListener('abort', () => clearTimeout(first));
+// Suwayomi's extensions once a day too, the first time a quarter of an hour after start.
+if (env.SUWAYOMI_URL) {
+  const url = env.SUWAYOMI_URL;
+  const extensions = job('extensions', () => updateExtensions(url));
+  every(24 * 3_600_000, 'extension update', extensions);
+  const soon = setTimeout(() => void extensions(), 15 * 60_000);
+  stop.signal.addEventListener('abort', () => clearTimeout(soon));
+}
 // The monitor alerts when this goes quiet: the worker stopped, or the copy fell a minute behind.
 if (env.HEARTBEAT_URL) {
   const url = env.HEARTBEAT_URL;

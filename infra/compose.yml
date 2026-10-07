@@ -81,6 +81,8 @@ services:
       MIRROR_URL: *mirror-url
       # Backups run after 03:00 here.
       TZ: Asia/Kolkata
+      # Suwayomi's extensions are updated once a day.
+      SUWAYOMI_URL: "http://suwayomi:4567"
     volumes: ["files:/data/files", "backups:/data/backups"]
 
   # api.breader.example → http://api:8787, set on the tunnel's Public Hostname page in Cloudflare.
