@@ -92,7 +92,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
   const serverSort = source?.supportsLatest ? prefs.serverSort : 'POPULAR';
   // Searching, the best match comes first; otherwise the order picked.
   const sort: MangaSort = q ? 'relevance' : prefs.sort;
-  const ask = where === 'mangadex' ? { where, q, lang: prefs.lang || undefined, sort, adult: prefs.adult } : { where, q, serverSort };
+  const ask = where === 'mangadex' ? { where, q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi } : { where, q, serverSort };
   const askKey = JSON.stringify(ask);
   /** A source on the server, while the server's sources are still on their way. */
   const waiting = where.startsWith('sw:') && !source;
@@ -125,7 +125,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
   /** A lot of results: MangaDex's from an offset, a server source's by page. */
   const fetchLot = async (offset: number): Promise<{ items: Item[]; more: boolean }> => {
     if (where === 'mangadex') {
-      const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, offset });
+      const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, offset });
       return { items: r.items.map(mdItem), more: r.items.length > 0 && r.offset + r.items.length < r.total };
     }
     const n = offset === 0 ? 1 : page.current + 1;
@@ -271,6 +271,12 @@ export function Browse({ id, labelledBy, hidden, have, prefs, server, catalog, o
                 <button type="button" role="radio" aria-checked={!q && serverSort === 'LATEST'} className="mdx-sort" disabled={!!q} onClick={() => set({ serverSort: 'LATEST' })}>Latest</button>
               )}
             </div>
+          )}
+          {where === 'mangadex' && (
+            <span className="mdx-switch">
+              <span id={`${id}-doujinshi`}>Doujinshi</span>
+              <button type="button" className="switch" role="switch" aria-checked={prefs.doujinshi} aria-labelledby={`${id}-doujinshi`} title="Show doujinshi, fan-made works, too" onClick={() => set({ doujinshi: !prefs.doujinshi })} />
+            </span>
           )}
           <span className="mdx-switch">
             <span id={`${id}-adult`}>18+</span>

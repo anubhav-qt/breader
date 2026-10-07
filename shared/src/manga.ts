@@ -27,6 +27,8 @@ export const MangaSearchQuery = z.object({
   sort: z.enum(MANGA_SORTS).optional(),
   /** 18+ series too (erotica and pornographic). The loli and shota tags stay out whatever this says. */
   adult: Flag.optional(),
+  /** Doujinshi too (fan-made works, MangaDex's Doujinshi format tag), which stay out unless asked. */
+  doujinshi: Flag.optional(),
   offset: z.coerce.number().int().min(0).max(9_900).default(0),
 });
 export type MangaSearchQuery = z.input<typeof MangaSearchQuery>;

@@ -30,6 +30,8 @@ const REPORT = 'https://api.mangadex.network/report';
 
 const NEVER_NAMES = new Set(['loli', 'shota']);
 const NEVER_IDS = ['2d1f5d56-a1e5-4d0d-a961-2193588b08ec', 'ddefd648-5140-4e5f-ba18-4eca4071d19b'];
+/** MangaDex's "Doujinshi" format tag: fan-made works, left out of a search unless it asks for them. */
+export const DOUJINSHI_ID = 'b13b2a48-c720-44a9-9c77-39c9979373fb';
 const SAFE: MangaRating[] = ['safe', 'suggestive'];
 const ALL: MangaRating[] = [...SAFE, ...ADULT_RATINGS];
 /** A chapter list comes this many at a time, MangaDex's most. */
@@ -91,7 +93,7 @@ interface AtHome {
 }
 
 export interface Manga {
-  search(q: { q?: string; lang?: string; sort?: MangaSort; adult?: boolean; offset: number }): Promise<MangaSearchResult>;
+  search(q: { q?: string; lang?: string; sort?: MangaSort; adult?: boolean; doujinshi?: boolean; offset: number }): Promise<MangaSearchResult>;
   series(id: string, adult: boolean): Promise<MangaSeries>;
   chapters(id: string, lang: string): Promise<MangaChapters>;
   /** Page n of a chapter (from 0), or its data-saver copy. */
@@ -408,12 +410,15 @@ export function makeManga(opts: MangaOptions): Manga {
   }
 
   return {
-    async search({ q, lang, sort, adult, offset }) {
+    async search({ q, lang, sort, adult, doujinshi, offset }) {
       const by = ORDER[sort ?? (q ? 'relevance' : 'popular')];
       // Relevance needs words to be relevant to.
       const field = by === 'relevance' && !q ? 'followedCount' : by;
-      const key = JSON.stringify([q ?? '', lang ?? '', field, !!adult, offset]);
+      const key = JSON.stringify([q ?? '', lang ?? '', field, !!adult, !!doujinshi, offset]);
       return searches.get(key, async () => {
+        // A new list, so the kept never-list stays as it is.
+        const excluded = [...(await neverIds())];
+        if (!doujinshi) excluded.push(DOUJINSHI_ID);
         const r = await call<{ data: RawManga[]; total: number }>('/manga', [
           ...query({
             limit: MANGA_PAGE,
@@ -421,7 +426,7 @@ export function makeManga(opts: MangaOptions): Manga {
             title: q || undefined,
             includes: ['cover_art', 'author', 'artist'],
             contentRating: adult ? ALL : SAFE,
-            excludedTags: await neverIds(),
+            excludedTags: excluded,
             excludedTagsMode: 'OR',
             availableTranslatedLanguage: lang ? [lang] : undefined,
             hasAvailableChapters: 'true',

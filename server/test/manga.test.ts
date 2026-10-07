@@ -5,7 +5,7 @@ import { newLibraryKey } from '@breader/shared';
 import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app.ts';
 import { Disk } from '../src/manga/disk.ts';
-import { makeManga, plain, USER_AGENT } from '../src/manga/mangadex.ts';
+import { DOUJINSHI_ID, makeManga, plain, USER_AGENT } from '../src/manga/mangadex.ts';
 import { Gate, Pace } from '../src/manga/pace.ts';
 import { app as plainApp, browser, deps } from './helpers.ts';
 
@@ -172,7 +172,7 @@ describe('MangaDex through the laptop', () => {
     const [search] = dex.asked('api.mangadex.org', /^\/manga$/);
     expect(search.ua).toBe(USER_AGENT);
     expect(search.url.searchParams.getAll('contentRating[]')).toEqual(['safe', 'suggestive']);
-    expect(search.url.searchParams.getAll('excludedTags[]').sort()).toEqual([LOLI, SHOTA].sort());
+    expect(search.url.searchParams.getAll('excludedTags[]').sort()).toEqual([LOLI, SHOTA, DOUJINSHI_ID].sort());
     expect(search.url.searchParams.get('excludedTagsMode')).toBe('OR');
     expect(search.url.searchParams.getAll('availableTranslatedLanguage[]')).toEqual(['en']);
     expect(search.url.searchParams.get('title')).toBe('frieren');
@@ -184,6 +184,19 @@ describe('MangaDex through the laptop', () => {
     expect(asked.url.searchParams.getAll('contentRating[]')).toEqual(['safe', 'suggestive', 'erotica', 'pornographic']);
     expect(asked.url.searchParams.get('order[latestUploadedChapter]')).toBe('desc');
     expect(asked.url.searchParams.getAll('excludedTags[]')).toContain(LOLI);
+  });
+
+  it('leaves doujinshi out unless asked, and keeps the two searches apart', async () => {
+    const { b, dex } = await setup();
+    await b.get('/v1/manga/search?q=frieren');
+    const r = await b.get('/v1/manga/search?q=frieren&doujinshi=1');
+    expect(r.status).toBe(200);
+    const [off, on] = dex.asked('api.mangadex.org', /^\/manga$/);
+    expect(off.url.searchParams.getAll('excludedTags[]')).toContain(DOUJINSHI_ID);
+    // After a search that left them out, the kept never-list still hasn't the Doujinshi tag.
+    expect(on.url.searchParams.getAll('excludedTags[]').sort()).toEqual([LOLI, SHOTA].sort());
+    expect(on.url.searchParams.get('excludedTagsMode')).toBe('OR');
+    expect(dex.asked('api.mangadex.org', /^\/manga\/tag$/)).toHaveLength(1);
   });
 
   it('keeps a search a while instead of asking again', async () => {

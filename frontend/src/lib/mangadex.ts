@@ -23,6 +23,8 @@ export interface MangaSearch {
   lang?: string;
   sort?: MangaSort;
   adult?: boolean;
+  /** Doujinshi too, which stay out unless asked for. */
+  doujinshi?: boolean;
   offset?: number;
 }
 
@@ -36,7 +38,7 @@ const query = (q: Record<string, string | number | undefined>) => {
 export const mangadex = {
   state: () => ask(() => api.laptop.get<MangaState>('/v1/manga')),
   search: (s: MangaSearch) =>
-    ask(() => api.laptop.get<MangaSearchResult>(`/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, offset: s.offset || undefined })}`, 20_000)),
+    ask(() => api.laptop.get<MangaSearchResult>(`/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, offset: s.offset || undefined })}`, 20_000)),
   series: (id: string, adult: boolean) => ask(() => api.laptop.get<MangaSeries>(`/v1/manga/series/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter in a language. A long series is several calls to MangaDex, so it can take a while. */
   chapters: (id: string, lang: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),
@@ -56,12 +58,14 @@ export const mangadex = {
 
 /**
  * How this device looks for manga: where (MangaDex, or a source on the reader's own server, sw:<id>),
- * in what language and order, whether 18+ series show, and data saver.
+ * in what language and order, whether 18+ series and doujinshi show, and data saver.
  */
 export interface MangaPrefs {
   source: string;
   lang: string;
   adult: boolean;
+  /** Doujinshi (fan-made works) show in MangaDex's results too. */
+  doujinshi: boolean;
   sort: MangaSort;
   /** A source on the reader's server: its popular series, or its latest. */
   serverSort: 'POPULAR' | 'LATEST';
@@ -69,7 +73,7 @@ export interface MangaPrefs {
 }
 
 const PREFS = 'breader.mangadex.v1';
-const DEFAULTS: MangaPrefs = { source: 'mangadex', lang: 'en', adult: false, sort: 'popular', serverSort: 'POPULAR', saver: false };
+const DEFAULTS: MangaPrefs = { source: 'mangadex', lang: 'en', adult: false, doujinshi: false, sort: 'popular', serverSort: 'POPULAR', saver: false };
 
 export const readMangaPrefs = (): MangaPrefs => ({ ...DEFAULTS, ...readLocal<Partial<MangaPrefs>>(PREFS, {}) });
 export const writeMangaPrefs = (p: MangaPrefs) => writeLocal(PREFS, p);
