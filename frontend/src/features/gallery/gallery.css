@@ -386,11 +386,18 @@ button.tile-done:hover, .tile-keep:not(.is-on):hover { background: var(--canvas)
 }
 .tile.is-manga.has-art > .tile-art.is-made { display: flex; }
 .tile.is-manga.has-art > .tile-face { padding-left: calc(var(--mg-inset) + var(--mg-art-w) + var(--mg-gap)); }
-/* The corner's buttons on the cover's corner, so the words beside it have the card's whole width. */
+/*
+ * The corner's buttons on the cover's corner, so the words beside it have the card's whole width,
+ * sized with the cover, as on the wall's (covers.css).
+ */
 .tile.is-manga > .tile-tools {
-  top: calc(50cqh - var(--mg-art-w) / var(--art-ratio, 0.6667) / 2 + 8px);
-  right: calc(100cqw - var(--mg-inset) - var(--mg-art-w) + 8px);
+  --tool: clamp(20px, var(--mg-art-w) * 0.1875, 30px);
+  top: calc(50cqh - var(--mg-art-w) / var(--art-ratio, 0.6667) / 2 + var(--tool) * 0.27);
+  right: calc(100cqw - var(--mg-inset) - var(--mg-art-w) + var(--tool) * 0.27);
+  gap: calc(var(--tool) * 0.17);
 }
+.tile.is-manga :is(.tile-more, .tile-fav) { width: var(--tool); height: var(--tool); }
+.tile.is-manga .tile-tools svg { width: calc(var(--tool) * 0.53); height: calc(var(--tool) * 0.53); }
 .tile.is-manga > .tile-face > :first-child { padding-right: 0; }
 .tile.is-manga .t-foot { margin-top: auto; padding-top: 16px; }
 .tile.is-manga .t-meta { font-size: 14px; }

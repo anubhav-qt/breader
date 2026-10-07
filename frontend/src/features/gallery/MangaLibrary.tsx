@@ -1,111 +1,39 @@
-import { useMemo, type RefObject } from 'react';
+import { useState } from 'react';
+import { IconEye } from '../../components/icons';
 import type { ShelfItem } from '../../data/useLibrary';
+import { readLocal, writeLocal } from '../../lib/store';
 import { CoverCard } from './CoverCard';
-import { Bento } from './layouts/Bento';
-import { RECENT } from './layouts/slots';
-import type { MangaLayout } from './mangaLayouts';
-import { Posters } from './Posters';
-import type { Series } from './series';
-import { Row, Shelves } from './Shelves';
-import type { Shelf, View } from './shelving';
 import { Tile } from './Tile';
-import type { GalleryItem, SectionProps } from './types';
+import type { SectionProps } from './types';
 
 /*
- * Manga's library, set out by its covers, which matter more for manga than for books, one of four
- * ways (mangaLayouts.ts).
+ * Manga's library, by its covers, which matter more for manga than for books: the series being
+ * read, big, then every other one as its cover, the one read last first.
  */
 
-/** Series in the Recent row, after the one being read. */
-const RECENT_ROW = 12;
+/** Only the covers, without their titles: off until the reader turns it on, then kept on this device. */
+const COVERS_ONLY = 'breader.manga.coversOnly.v1';
 
-/** Manga has no series of books, and no one's names to put on them. */
-const NO_SERIES = new Map<string, Series>();
-const NO_NAMES = new Map<string, string>();
-const noSeries = () => {};
+type Props = Omit<SectionProps, 'items' | 'indexBase'> & { books: ShelfItem[] };
 
-type Props = Omit<SectionProps, 'items' | 'indexBase'> & {
-  layout: MangaLayout;
-  books: ShelfItem[];
-  /** Which library, for the view its shelves keep. */
-  place: string;
-  view: View;
-  /** The library's scroller, which brings in more shelves. */
-  root: RefObject<HTMLElement | null>;
-};
+export function MangaLibrary({ books, ...shared }: Props) {
+  const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
+  const [reading, ...rest] = books;
+  // Only when series join or leave the wall do its covers glide to their new places.
+  const layoutKey = rest.map((b) => b.key ?? b.id).join('|');
 
-export function MangaLibrary({ layout, books, place, view, root, ...shared }: Props) {
-  const items = useMemo(() => books.map((b): GalleryItem => ({ key: b.key ?? b.id, book: b })), [books]);
-
-  if (layout === 'wall') {
-    return (
-      <section className="cv-wall" aria-label="Your manga">
-        {items.map((item, i) => (
-          <CoverCard
-            key={item.key}
-            item={item}
-            caption="under"
-            index={i}
-            enter={shared.enter}
-            open={(item.book.key ?? item.book.id) === shared.editingId}
-            onOpen={shared.onOpen}
-            onEdit={shared.onEdit}
-            onFinish={shared.onFinish}
-            onKeep={shared.onKeep}
-          />
-        ))}
-      </section>
-    );
-  }
-
-  if (layout === 'posters') return <Posters books={books} {...shared} />;
-
-  // The rest: what's on top, then every series again by genre or date once there's more than that.
-  const top = layout === 'bento' ? RECENT : 1 + RECENT_ROW;
-  const more = books.length > top;
-  const shelves = more && (
-    <Shelves
-      books={books}
-      stacks={NO_SERIES}
-      series={NO_SERIES}
-      authors={NO_NAMES}
-      place={place}
-      initial={view}
-      views={['genre', 'date']}
-      root={root}
-      indexBase={top}
-      onSeries={noSeries}
-      covers={layout === 'bento' ? 'over' : 'under'}
-      {...shared}
-    />
-  );
-
-  if (layout === 'bento') {
-    return (
-      <>
-        <section className="recent" aria-label="Recent">
-          {more ? <div className="gallery-head"><span>Recent</span></div> : <div className="gallery-top" />}
-          <Bento items={items.slice(0, RECENT)} covers {...shared} />
-        </section>
-        {shelves}
-      </>
-    );
-  }
-
-  // The series being read, big, then the others read lately in a row of covers.
-  const [reading, ...rest] = items;
-  const recent: Shelf = {
-    key: 'recent',
-    name: 'Recent',
-    meta: '',
-    entries: rest.slice(0, RECENT_ROW).map((it) => ({ key: it.key, book: it.book })),
+  const flip = () => {
+    const next = !coversOnly;
+    setCoversOnly(next);
+    writeLocal(COVERS_ONLY, next);
   };
+
   return (
     <>
       <section className="mg-top" aria-label="Reading now">
         <div className="gallery-top" />
         <Tile
-          item={reading}
+          item={{ key: reading.key ?? reading.id, book: reading }}
           variant="hero"
           manga
           art
@@ -114,19 +42,47 @@ export function MangaLibrary({ layout, books, place, view, root, ...shared }: Pr
           now={shared.now}
           radius={26}
           className="mg-hero"
-          open={(reading.book.key ?? reading.book.id) === shared.editingId}
+          open={(reading.key ?? reading.id) === shared.editingId}
           onOpen={shared.onOpen}
           onEdit={shared.onEdit}
           onFinish={shared.onFinish}
           onKeep={shared.onKeep}
         />
       </section>
-      {recent.entries.length > 0 && (
-        <div className="mg-recent">
-          <Row shelf={recent} index={0} authors={NO_NAMES} indexBase={1} onSeries={noSeries} covers="under" {...shared} />
-        </div>
+      {rest.length > 0 && (
+        <section className="mg-wall" aria-label="Your manga">
+          <div className="mg-tools">
+            <button
+              type="button"
+              className="mg-eye"
+              aria-label="Only covers"
+              aria-pressed={coversOnly}
+              title={coversOnly ? 'Show the titles' : 'Only the covers'}
+              onClick={flip}
+            >
+              <IconEye />
+            </button>
+          </div>
+          <div className="cv-wall">
+            {rest.map((b, i) => (
+              <CoverCard
+                key={b.key ?? b.id}
+                item={{ key: b.key ?? b.id, book: b }}
+                words={!coversOnly}
+                // The entrance follows the covers in order, after the one being read.
+                index={i + 1}
+                enter={shared.enter}
+                open={(b.key ?? b.id) === shared.editingId}
+                layoutKey={layoutKey}
+                onOpen={shared.onOpen}
+                onEdit={shared.onEdit}
+                onFinish={shared.onFinish}
+                onKeep={shared.onKeep}
+              />
+            ))}
+          </div>
+        </section>
       )}
-      {shelves}
     </>
   );
 }

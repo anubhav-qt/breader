@@ -1,17 +1,16 @@
 /*
- * Manga's library: each series as its cover (CoverCard), its title and chapter under it or on it,
- * set out one of four ways (MangaLibrary). The manga hero's own rules are with the cards' (gallery.css).
+ * Manga's library (MangaLibrary): the series being read as the hero (its rules are with the cards',
+ * in gallery.css), then every other one as its cover (CoverCard), in a wall, the one read last first.
  */
-.cv { display: flex; flex-direction: column; gap: 9px; }
 .cv-art {
   position: relative;
   isolation: isolate;
   container-type: inline-size;
+  aspect-ratio: 1 / 1.42;
   overflow: hidden;
+  border-radius: 6px 14px 14px 6px;
   background: var(--fill);
 }
-/* With its words on it, the cover fills the card, whatever the card's shape. */
-.cv-over > .cv-art { position: absolute; inset: 0; container-type: size; }
 .cv-art::after {
   content: "";
   position: absolute;
@@ -63,24 +62,50 @@
   text-overflow: ellipsis;
 }
 
-/* The corner's buttons sit on the cover. */
-.cv .tile-tools { top: 8px; right: 8px; gap: 5px; }
-.cv:hover .tile-more, .cv:hover button.tile-done { opacity: 1; }
-@container (max-width: 139px) {
-  .cv .tile-tools { top: 6px; right: 6px; gap: 4px; }
-  .cv :is(.tile-more, .tile-fav) { width: 26px; height: 26px; }
-  .cv :is(.tile-more, .tile-fav) svg { width: 14px; height: 14px; }
+/* The corner's buttons on the cover, sized with it: a phone's smaller covers get smaller ones. */
+.cv .tile-tools {
+  --tool: clamp(20px, 18.75cqw, 30px);
+  top: calc(var(--tool) * 0.27);
+  right: calc(var(--tool) * 0.27);
+  gap: calc(var(--tool) * 0.17);
 }
+.cv :is(.tile-more, .tile-fav) { width: var(--tool); height: var(--tool); }
+.cv .tile-tools svg { width: calc(var(--tool) * 0.53); height: calc(var(--tool) * 0.53); }
+.cv:hover .tile-more, .cv:hover button.tile-done { opacity: 1; }
 
-/* The title, and the chapter the reader is on, in the interface's face: no colour, just the words. */
+/* On the cover, over a shade at its foot: how far it's read as a line, no words, then its title. */
+.cv-words {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  gap: 5cqw;
+  padding: 30cqw 8cqw 8cqw;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.5) 55%, transparent);
+  color: #FFFFFF;
+  pointer-events: none;
+}
+.cv.is-drawn .cv-words { background: none; color: var(--bc-ink); }
+.cv-line {
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  overflow: hidden;
+}
+.cv-line > span { display: block; height: 100%; border-radius: inherit; background: currentColor; }
+/*
+ * Two lines at most, then an ellipsis. The face's tall letters rise above their line: a little more
+ * height between lines keeps a hidden third line's tops from showing under the second.
+ */
 .cv-title {
-  max-width: 100%;
-  padding-top: 0.2em;
-  margin-top: -0.2em;
+  padding-top: 0.1em;
+  margin-top: -0.1em;
   font-family: var(--read);
   font-weight: 700;
-  font-size: 22px;
-  line-height: 1;
+  font-size: clamp(18px, 13.5cqw, 24px);
+  line-height: 1.15;
   /* A word wider than a small cover breaks at a syllable, with a hyphen. */
   -webkit-hyphens: auto;
   hyphens: auto;
@@ -90,52 +115,28 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.cv-ch { max-width: 100%; font: var(--ui-w) 11.5px/1.2 var(--ui); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cv-cap { display: grid; gap: 5px; min-width: 0; padding: 0 2px; cursor: pointer; }
 
-/* On the cover: over a shade at its foot, sized to the card. */
-.cv-words {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
-  display: grid;
-  gap: 6px;
-  padding: 18cqh 7cqw max(12px, 6cqw);
-  background: linear-gradient(to top, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.5) 55%, transparent);
-  color: #FFFFFF;
-  pointer-events: none;
-}
-.cv-words .cv-title { font-size: clamp(19px, min(8cqw, 11cqh), 46px); }
-.cv-words .cv-ch { color: rgb(255 255 255 / 0.86); }
-.cv.is-drawn .cv-words { background: none; color: var(--bc-ink); }
-.cv.is-drawn .cv-words .cv-ch { color: inherit; opacity: 0.8; }
-@container (max-height: 199px) {
-  .cv-words { padding-top: 12px; }
-  .cv-words .cv-title { -webkit-line-clamp: 1; }
-}
-
-/* Covers along a shelf: a book's card's width, and a cover's height (or more, with its words under it). */
-.shelf-cover { flex: none; width: var(--shelf-w); scroll-snap-align: start; }
-.shelf-cover.cv-over { aspect-ratio: 1 / 1.42; }
-
-/* Hero + rows: the series being read, then the others read lately in a row of covers. */
+/* The hero, then the wall: every other series, an even grid of covers. */
 .mg-hero { height: clamp(300px, 30vw, 400px); }
-.mg-recent { margin-top: 26px; }
+.mg-wall { margin-top: 14px; }
+.mg-tools { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.cv-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px; }
 
-/* Cover wall: every series, an even grid of covers, like Browse. */
-.cv-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 26px 18px; padding-top: 16px; }
-
-/* Poster wall: covers at their own shape, in rows grouped by when they were read. */
-.posters { display: grid; gap: 30px; padding-top: 16px; }
-.poster-group { display: grid; gap: 16px; }
-.poster-rows { display: flex; flex-wrap: wrap; align-items: flex-start; row-gap: 22px; }
-.poster-rows > .cv { flex: none; }
+/* Only the covers, or their titles too. */
+.mg-eye {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--ink-2);
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.mg-eye svg { width: 19px; height: 19px; }
+.mg-eye:hover { color: var(--ink); }
+.mg-eye[aria-pressed="true"] { color: var(--ink); background: var(--fill); }
 
 @media (max-width: 720px) {
   .mg-hero { height: 250px; }
-  .cv-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 10px; }
-  .cv-cap .cv-title { font-size: 19px; }
-  .cv-ch { font-size: 11px; }
+  .cv-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 }

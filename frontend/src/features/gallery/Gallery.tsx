@@ -7,13 +7,12 @@ import { IconPlus } from '../../components/icons';
 import { EditPopover } from './EditPopover';
 import { Bento } from './layouts/Bento';
 import { RECENT } from './layouts/slots';
-import type { MangaLayout } from './mangaLayouts';
 import { MangaLibrary } from './MangaLibrary';
 import { cardAuthor, cardAuthors } from './names';
 import { findSeries, seriesAuthors, type Series, type SeriesName } from './series';
 import { SeriesDialog } from './SeriesDialog';
 import { Shelves } from './Shelves';
-import { VIEWS, type View } from './shelving';
+import type { View } from './shelving';
 import { TitleHint } from './TitleHint';
 import type { GalleryItem } from './types';
 import './gallery.css';
@@ -27,10 +26,8 @@ interface Props {
   place: string;
   /** The view below Recent until the reader picks one. */
   view: View;
-  /** Manga has no series: no series' cards, no Series view, no series in a card's menu. */
-  noSeries?: boolean;
-  /** Manga, set out by its covers in one of these ways. */
-  mangaLayout?: MangaLayout;
+  /** Manga: set out by its covers (MangaLibrary), and no series anywhere, not even in a card's menu. */
+  manga?: boolean;
   /** The panel's id, and the id of the tab that labels it. */
   id: string;
   labelledBy: string;
@@ -60,7 +57,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, noSeries = false, mangaLayout, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
+export function Gallery({ books, seriesNames, place, view, manga = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -76,9 +73,9 @@ export function Gallery({ books, seriesNames, place, view, noSeries = false, man
   }, [hidden]);
 
   const series = useMemo(() => {
-    if (noSeries) return new Map<string, Series>();
+    if (manga) return new Map<string, Series>();
     return findSeries(books, 1);
-  }, [books, noSeries]);
+  }, [books, manga]);
   const stacks = useMemo(() => new Map([...series].filter(([, s]) => s.books.length > 1)), [series]);
   // A series' cards all go by the name most of its books give first.
   const authors = useMemo(() => seriesAuthors(stacks, (raw) => cardAuthor(raw).author, cardAuthors), [stacks]);
@@ -121,15 +118,15 @@ export function Gallery({ books, seriesNames, place, view, noSeries = false, man
   const more = books.length > RECENT || stacks.size > 0;
   return (
     <motion.div {...panel} ref={scrollRef} className="gallery" layoutScroll>
-      {mangaLayout && <MangaLibrary layout={mangaLayout} books={books} place={place} view={view} root={scrollRef} {...shared} />}
-      {!mangaLayout && (
+      {manga && <MangaLibrary books={books} {...shared} />}
+      {!manga && (
         <section className="recent" aria-label="Recent">
           {/* "Recent" only means something when more books follow it. */}
           {more ? <div className="gallery-head"><span>Recent</span></div> : <div className="gallery-top" />}
           <Bento items={recent} {...shared} />
         </section>
       )}
-      {!mangaLayout && more && (
+      {!manga && more && (
         <Shelves
           books={books}
           stacks={stacks}
@@ -137,7 +134,6 @@ export function Gallery({ books, seriesNames, place, view, noSeries = false, man
           authors={authors}
           place={place}
           initial={view}
-          views={VIEWS.map((v) => v.id).filter((v) => !noSeries || v !== 'series')}
           root={scrollRef}
           indexBase={RECENT}
           onSeries={openSeries}
@@ -151,7 +147,7 @@ export function Gallery({ books, seriesNames, place, view, noSeries = false, man
             key={editing.id}
             book={editingBook}
             seriesNames={seriesNames}
-            noSeries={noSeries}
+            noSeries={manga}
             anchor={editing.anchor}
             others={editingOthers}
             // By the book's own id: a started shared book's card goes by the sharer's, its copy by its own.

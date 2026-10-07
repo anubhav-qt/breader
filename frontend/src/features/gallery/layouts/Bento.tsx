@@ -1,14 +1,10 @@
 import { AnimatePresence } from 'motion/react';
-import { CoverCard } from '../CoverCard';
 import { useElementWidth } from '../useElementWidth';
 import { Tile } from '../Tile';
 import type { SectionProps } from '../types';
 import { slotsFor } from './slots';
 
-/** Manga: every box is the series' cover, edge to edge, with its title and chapter on it. */
-type Props = SectionProps & { covers?: boolean };
-
-export function Bento({ items, now, enter, editingId, covers = false, onOpen, onEdit, onFinish, onKeep }: Props) {
+export function Bento({ items, now, enter, editingId, onOpen, onEdit, onFinish, onKeep }: SectionProps) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const cols = width >= 1000 ? 6 : width >= 640 ? 4 : 2;
   const slots = slotsFor(items.length, cols);
@@ -21,26 +17,6 @@ export function Bento({ items, now, enter, editingId, covers = false, onOpen, on
         {items.map((item, i) => {
           const [col, row, spanC, spanR, v] = slots[i];
           const place = { gridColumn: `${col + 1} / span ${spanC}`, gridRow: `${row + 1} / span ${spanR}` };
-          if (covers) {
-            return (
-              <CoverCard
-                key={item.key}
-                item={item}
-                caption="over"
-                index={i}
-                enter={enter}
-                className={`cv-${v}`}
-                radius={v === 'small' ? 20 : 26}
-                style={place}
-                open={(item.book.key ?? item.book.id) === editingId}
-                layoutKey={layoutKey}
-                onOpen={onOpen}
-                onEdit={onEdit}
-                onFinish={onFinish}
-                onKeep={onKeep}
-              />
-            );
-          }
           return (
             <Tile
               key={item.key}

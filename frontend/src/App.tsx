@@ -25,7 +25,6 @@ import { KeyDialog } from './features/add/KeyDialog';
 import { AccountMenu } from './features/account/AccountMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
-import { MANGA_LAYOUTS, type MangaLayout } from './features/gallery/mangaLayouts';
 import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
@@ -141,8 +140,6 @@ export default function App() {
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
-  /** How manga's library is set out: one way for now, the others to try in the preview bar. */
-  const [mangaLayout, setMangaLayout] = useState<MangaLayout>(() => (devTools ? readParam('manga', MANGA_LAYOUTS.map((l) => l.id), 'rows') : 'rows'));
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
@@ -175,7 +172,6 @@ export default function App() {
     writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
-  useEffect(() => { writeParam('manga', mangaLayout, 'rows'); }, [mangaLayout]);
 
   // Back from Google, or from a link in one of Breader's emails.
   useEffect(() => {
@@ -823,12 +819,10 @@ export default function App() {
               key={`${category}-${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}
               books={t === 'mine' ? items.mine : items.shelf}
               seriesNames={allSeries}
-              // Manga keeps its own view below Recent; books keep the one they always had.
-              place={manga ? `${t}-manga` : t}
-              // Shared libraries are browsed by genre; one's own books, by series. Manga has no series.
-              view={t === 'shelf' || manga ? 'genre' : 'series'}
-              noSeries={manga}
-              mangaLayout={manga ? mangaLayout : undefined}
+              place={t}
+              // Shared libraries are browsed by genre; one's own books, by series.
+              view={t === 'shelf' ? 'genre' : 'series'}
+              manga={manga}
               now={now}
               id={`library-${t}`}
               labelledBy={`tab-${t}`}
@@ -965,15 +959,7 @@ export default function App() {
 
       <Toast toast={toast} onDone={dismissToast} />
       {devTools && route.name === 'library' && (
-        <PreviewBar
-          mode={preview}
-          onMode={setPreview}
-          theme={theme}
-          onTheme={setTheme}
-          mangaLayout={manga ? mangaLayout : undefined}
-          onMangaLayout={setMangaLayout}
-          onReset={() => void lib.reset()}
-        />
+        <PreviewBar mode={preview} onMode={setPreview} theme={theme} onTheme={setTheme} onReset={() => void lib.reset()} />
       )}
     </MotionConfig>
   );

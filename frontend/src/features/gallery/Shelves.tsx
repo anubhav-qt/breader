@@ -4,7 +4,6 @@ import type { ShelfItem } from '../../data/useLibrary';
 import { readLocal, writeLocal } from '../../lib/store';
 import { springs } from '../../lib/springs';
 import { IconBack, IconChevron } from '../../components/icons';
-import { CoverCard, type Caption } from './CoverCard';
 import { KeepSeries } from './KeepSeries';
 import { finishedIn, type Series } from './series';
 import { VIEWS, byDate, byGenre, bySeries, isView, type Shelf, type View } from './shelving';
@@ -26,8 +25,6 @@ interface Props {
   place: string;
   /** The view it starts with until the reader picks one. */
   initial: View;
-  /** The views it has: manga has no series, so no Series. */
-  views: View[];
   /** The library's scroller, which brings in more shelves. */
   root: RefObject<HTMLElement | null>;
   now: number;
@@ -41,22 +38,18 @@ interface Props {
   /** Someone's shared library: a series' shelf can put all its books in the reader's own. */
   onKeepAll?: (books: ShelfItem[], series: string) => void;
   onSeries: (s: Series) => void;
-  /** Manga: each series as its cover, its title and chapter under it or on it. */
-  covers?: Caption;
 }
 
 /**
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, views, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries, covers }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: Props) {
   const key = `breader.view.${place}.v1`;
   const [picked, setPicked] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
-    if (isView(v) && views.includes(v)) return v;
-    return null;
+    return isView(v) ? v : null;
   });
-  const shown = VIEWS.filter((v) => views.includes(v.id));
   // A library with no series yet starts on its genres.
   const view = picked ?? (initial === 'series' && !series.size ? 'genre' : initial);
   const section = useRef<HTMLElement>(null);
@@ -82,11 +75,11 @@ export function Shelves({ books, stacks, series, authors, place, initial, views,
     return () => cancelAnimationFrame(f);
   }, [view]);
   const onArrow = (e: KeyboardEvent) => {
-    const i = shown.findIndex((v) => v.id === view);
-    const to = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: shown.length - 1 } as Record<string, number>)[e.key];
+    const i = VIEWS.findIndex((v) => v.id === view);
+    const to = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: VIEWS.length - 1 } as Record<string, number>)[e.key];
     if (to === undefined) return;
     e.preventDefault();
-    const next = shown[(to + shown.length) % shown.length].id;
+    const next = VIEWS[(to + VIEWS.length) % VIEWS.length].id;
     pick(next);
     tabs.current?.querySelector<HTMLElement>(`[data-view="${next}"]`)?.focus();
   };
@@ -117,7 +110,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, views,
           </AnimatePresence>
         </div>
         <div ref={tabs} className="views" role="tablist" aria-label="Shelve by" onKeyDown={onArrow}>
-          {shown.map((v) => (
+          {VIEWS.map((v) => (
             <button
               key={v.id}
               type="button"
@@ -162,14 +155,13 @@ export function Shelves({ books, stacks, series, authors, place, initial, views,
           onKeep={onKeep}
           onKeepAll={onKeepAll}
           onSeries={onSeries}
-          covers={covers}
         />
       </motion.div>
     </section>
   );
 }
 
-type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onFinish' | 'onKeep' | 'onKeepAll' | 'onSeries' | 'covers'> & {
+type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onFinish' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
   shelves: Shelf[];
   lazy: boolean;
   empty?: string;
@@ -199,10 +191,10 @@ function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
   );
 }
 
-export type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
+type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-export function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries, covers }: RowProps) {
+function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onFinish, onKeep, onKeepAll, onSeries }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -266,28 +258,10 @@ export function Row({ shelf, index, authors, now, enter, indexBase, editingId, o
           </button>
         </span>
       </header>
-      <motion.div ref={row} className={`shelf-row${covers ? ' is-covers' : ''}`} data-start={ends.start || undefined} data-end={ends.end || undefined} onScroll={check} layoutScroll>
+      <motion.div ref={row} className="shelf-row" data-start={ends.start || undefined} data-end={ends.end || undefined} onScroll={check} layoutScroll>
         <AnimatePresence mode="popLayout" initial={false}>
           {entries.map((e, k) => {
             const stack = e.stack;
-            if (covers) {
-              return (
-                <CoverCard
-                  key={e.key}
-                  item={{ key: e.key, book: e.book, author: authors.get(e.book.id) }}
-                  caption={covers}
-                  index={indexBase + index * 2 + k}
-                  enter={enter}
-                  className="shelf-cover"
-                  open={(e.book.key ?? e.book.id) === editingId}
-                  layoutKey={layoutKey}
-                  onOpen={onOpen}
-                  onEdit={onEdit}
-                  onFinish={onFinish}
-                  onKeep={onKeep}
-                />
-              );
-            }
             return (
               <Tile
                 key={e.key}
