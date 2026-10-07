@@ -356,12 +356,23 @@ export function makeManga(opts: MangaOptions): Manga {
   let warming = false;
 
   async function get(url: string, timeout: number, init: RequestInit = {}): Promise<Response> {
+    const ask = () => fetchFn(url, { ...init, headers: { 'user-agent': USER_AGENT, ...(init.headers as Record<string, string>) }, signal: AbortSignal.timeout(timeout) });
+    let error: unknown;
     try {
-      return await fetchFn(url, { ...init, headers: { 'user-agent': USER_AGENT, ...(init.headers as Record<string, string>) }, signal: AbortSignal.timeout(timeout) });
+      return await ask();
     } catch (err) {
-      log.warn({ err, host: new URL(url).host }, 'MangaDex didn’t answer');
-      throw unreachable();
+      error = err;
     }
+    // A connection kept open that MangaDex had closed meanwhile fails at once: once more, on a new one.
+    if (error instanceof TypeError) {
+      try {
+        return await ask();
+      } catch (err) {
+        error = err;
+      }
+    }
+    log.warn({ err: error, host: new URL(url).host }, 'MangaDex didn’t answer');
+    throw unreachable();
   }
 
   async function call<T>(path: string, params: Array<[string, string]>): Promise<T> {

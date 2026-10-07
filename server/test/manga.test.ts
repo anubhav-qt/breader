@@ -103,6 +103,8 @@ function fakeDex() {
     /** How long each API call takes, and the most at once so far. */
     slow: 0,
     most: 0,
+    /** API calls to drop as a closed connection would, before answering. */
+    drops: 0,
   };
   let going = 0;
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -112,6 +114,10 @@ function fakeDex() {
     const headers = new Headers(init.headers);
     calls.push({ url, ua: headers.get('user-agent'), method: init.method ?? 'GET', body: init.body as string | undefined });
     if (url.host !== 'api.mangadex.org') return answer(url);
+    if (state.drops > 0) {
+      state.drops--;
+      throw new TypeError('fetch failed');
+    }
     going++;
     state.most = Math.max(state.most, going);
     try {
@@ -483,6 +489,20 @@ describe('MangaDex through the laptop', () => {
     expect(r.headers.get('content-type')).toBe('image/jpeg');
     expect(dex.asked('uploads.mangadex.org', /./)[0].url.pathname).toBe(`/covers/${FRIEREN}/cover-1.jpg.256.jpg`);
     expect((await b.get(`/v1/manga/cover/${FRIEREN}/..%2F..%2Fetc`)).status).toBe(404);
+  });
+
+  it('asks once more when a connection drops, and says when MangaDex can’t be reached', async () => {
+    const { b, dex } = await setup();
+    dex.state.drops = 1;
+    const r = await b.get('/v1/manga/search?q=frieren&lang=en');
+    expect(r.status).toBe(200);
+    expect(titles(r.body)).toEqual(['Sousou no Frieren']);
+    // The first call a search makes, for the tags to leave out.
+    expect(dex.asked('api.mangadex.org', /^\/manga\/tag$/)).toHaveLength(2);
+    dex.state.drops = 2;
+    const gone = await b.get(`/v1/manga/series/${ADULT}?adult=1`);
+    expect(gone.status).toBe(503);
+    expect(gone.body.code).toBe('manga_unreachable');
   });
 
   it('waits out MangaDex when it says to slow down', async () => {
