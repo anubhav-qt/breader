@@ -32,6 +32,28 @@ services:
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 30 }
     restart: unless-stopped
 
+  # Manga sources the API asks for every reader: a Suwayomi server running Mihon's extensions, and a
+  # Komga library of comic files (copied into the komga-books volume, at /books). Their web pages
+  # answer on this machine only, for setting them up (README.md › Manga): Suwayomi's extensions at
+  # http://localhost:4567, and Komga's admin, library and API key (KOMGA_API_KEY) at :25600.
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:v2.4.2366
+    environment:
+      EXTENSION_STORES: '["https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json"]'
+      WEB_UI_CHANNEL: bundled
+      WEB_UI_UPDATE_INTERVAL: "0"
+      KCEF_ENABLED: "false"
+    ports: ["127.0.0.1:4567:4567"]
+    volumes: ["suwayomi:/home/suwayomi/.local/share/Tachidesk"]
+    restart: unless-stopped
+
+  komga:
+    image: gotson/komga:1.28.1
+    environment: { JAVA_TOOL_OPTIONS: "-Xmx512m" }
+    ports: ["127.0.0.1:25600:25600"]
+    volumes: ["komga:/config", "komga-books:/books"]
+    restart: unless-stopped
+
   # Brings Supabase and the copy to the image's schema before the new version starts, then exits.
   migrate:
     <<: *server
@@ -83,3 +105,6 @@ volumes:
   voices: {}
   manga: {}
   redis: {}
+  suwayomi: {}
+  komga: {}
+  komga-books: {}

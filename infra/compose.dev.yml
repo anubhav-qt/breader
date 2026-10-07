@@ -42,6 +42,26 @@ services:
     volumes: ["redis:/data"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 30 }
 
+  # Manga sources the API asks for every reader. Suwayomi runs Mihon's extensions: install them in
+  # its web UI at http://localhost:4567. Komga is a library of comic files: at http://localhost:25600
+  # make its admin, a library (files copied into the komga-books volume, at /books), and an API key
+  # for KOMGA_API_KEY.
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:v2.4.2366
+    environment:
+      EXTENSION_STORES: '["https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json"]'
+      WEB_UI_CHANNEL: bundled
+      WEB_UI_UPDATE_INTERVAL: "0"
+      KCEF_ENABLED: "false"
+    ports: ["127.0.0.1:4567:4567"]
+    volumes: ["suwayomi:/home/suwayomi/.local/share/Tachidesk"]
+
+  komga:
+    image: gotson/komga:1.28.1
+    environment: { JAVA_TOOL_OPTIONS: "-Xmx512m" }
+    ports: ["127.0.0.1:25600:25600"]
+    volumes: ["komga:/config", "komga-books:/books"]
+
   # Brings both databases to the latest schema (and makes the buckets), then exits.
   migrate:
     <<: *server
@@ -99,3 +119,6 @@ volumes:
   voices: {}
   manga: {}
   redis: {}
+  suwayomi: {}
+  komga: {}
+  komga-books: {}
