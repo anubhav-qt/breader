@@ -34,6 +34,14 @@ services:
     ports: ["9000:9000"]
     volumes: ["s3:/data"]
 
+  # The cache in front of MangaDex and the other manga sources. Only the servers reach it; to look
+  # inside: docker compose -f infra/compose.dev.yml exec redis redis-cli
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes: ["redis:/data"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 30 }
+
   # Brings both databases to the latest schema (and makes the buckets), then exits.
   migrate:
     <<: *server
@@ -88,3 +96,4 @@ volumes:
   backups: {}
   voices: {}
   manga: {}
+  redis: {}
