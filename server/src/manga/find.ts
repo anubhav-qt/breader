@@ -11,7 +11,9 @@ import { log } from '../log.ts';
  */
 
 /** How long a search waits for each place. One slower is asked again with the next lot, by when what it found is kept. */
-const DEADLINE = 12_000;
+export const DEADLINE = 12_000;
+/** Series checked ahead of readers in Popular and in Updated, in each place browsed: their first 12 lots. */
+export const WARM = 120;
 /** The most places one search asks. */
 const MOST_PLACES = 50;
 
@@ -24,12 +26,23 @@ export interface Wanted {
   doujinshi: boolean;
   /** At least one. */
   kinds: MangaKind[];
+  /** Only series going by one of these names (seriesName keys): a series' sheet looking for its other copies. */
+  names?: string[];
 }
 
 /** A series of this kind is one a search wants. One of no known kind is wanted only with every kind. */
 export function wantedKind(kind: MangaKind | null, w: Wanted): boolean {
   if (kind === null) return w.kinds.length === MANGA_KINDS.length;
   return w.kinds.includes(kind);
+}
+
+/** A series going by these names is one a search wants: any, unless it asked for some names only. */
+export function wantedName(titles: string[], w: Wanted): boolean {
+  if (!w.names) return true;
+  for (const t of titles) {
+    if (w.names.includes(seriesName(t).key)) return true;
+  }
+  return false;
 }
 
 /** A series a place found, and the names it goes by there, to tell the same series in another place. */

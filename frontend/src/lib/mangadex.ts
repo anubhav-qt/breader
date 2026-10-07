@@ -28,6 +28,8 @@ export interface MangaSearch {
   doujinshi?: boolean;
   /** Only these kinds; every kind when left out. */
   kinds?: MangaKind[];
+  /** Only series going by one of these names (seriesName keys): a sheet looking for a series' other copies. */
+  names?: string[];
   /** Where the search carries on, as the last answer said. */
   next?: string;
 }
@@ -49,7 +51,7 @@ const query = (q: Record<string, string | number | undefined>) => {
 export const mangadex = {
   state: () => ask(() => api.laptop.get<MangaState>('/v1/manga')),
   search: (s: MangaSearch) =>
-    ask(() => api.laptop.get<MangaSearchResult>(`/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, kinds: kindsOf(s.kinds), next: s.next })}`, 20_000)),
+    ask(() => api.laptop.get<MangaSearchResult>(`/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, kinds: kindsOf(s.kinds), names: s.names?.join(','), next: s.next })}`, 20_000)),
   series: (id: string, adult: boolean) => ask(() => api.laptop.get<MangaSeries>(`/v1/manga/series/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter in a language. A long series is several calls to MangaDex, so it can take a while. */
   chapters: (id: string, lang: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),

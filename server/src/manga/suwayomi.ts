@@ -1,12 +1,14 @@
-import { MANGA_PAGE, type MangaChapter, type MangaChapters, type SourceCard, type SourceSeries } from '@breader/shared';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { MANGA_KINDS, MANGA_PAGE, type MangaChapter, type MangaChapters, type MangaSort, type SourceCard, type SourceSeries } from '@breader/shared';
 import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
-import { wantedKind, type Found, type Lot, type Place, type Wanted } from './find.ts';
+import { DEADLINE, WARM, wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { adultGenre, kindGenre, neverGenre, sideGenre, web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
 import { caughtUp, firstMissing, highest } from './readable.ts';
+import { Speeds } from './speed.ts';
 
 /*
  * The sources of Breader's own Suwayomi server (SUWAYOMI_URL): each extension installed there is a
@@ -16,7 +18,9 @@ import { caughtUp, firstMissing, highest } from './readable.ts';
  * shows only series every chapter of can be read (readable.ts), never one tagged loli or shota,
  * those for adults only with 18+, doujinshi and anthologies only when asked, and only the kinds
  * asked for. Each series is judged by its own genres: a site that has some series for adults
- * isn't kept out whole. Pages and covers are kept on disk.
+ * isn't kept out whole. Pages and covers are kept on disk. Some sites let only so many calls
+ * through, so each lot is timed (speed.ts), and browsing leaves out a source too slow for find.ts's
+ * DEADLINE; a search by name asks every one.
  */
 
 const MINUTE = 60_000;
@@ -24,6 +28,8 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 /** Suwayomi's own folder of files, not a site: never a place to look. */
 const LOCAL = '0';
+/** The calls a lot is making of its source's site, counted as they're made, to time it by (lot()). */
+const tally = new AsyncLocalStorage<{ calls: number }>();
 
 const STATUS = new Map<string, SourceCard['status']>([
   ['ONGOING', 'ongoing'],
@@ -89,6 +95,8 @@ export interface Suwayomi {
   /** Page n of a chapter, from 0. */
   page(chapterId: number, n: number): Promise<Picture>;
   cover(id: number): Promise<Picture>;
+  /** Checks the Popular and Updated first lots of each source quick enough to browse, ahead of readers. */
+  warm(): Promise<void>;
 }
 
 export interface SuwayomiOptions {
@@ -100,6 +108,8 @@ export interface SuwayomiOptions {
   pace?: [number, number];
   /** Where its answers are kept: Redis, when the server has one. Without, in memory. */
   store?: Store | null;
+  /** How long a lot it hasn't seen may take a source for it to be browsed: find.ts's DEADLINE. Tests go faster. */
+  browseWithin?: number;
 }
 
 const notFound = () => new ApiError(404, 'manga_not_found', 'That series isn’t there any more.');
@@ -171,6 +181,11 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   const [count, per] = opts.pace ?? [4, 1000];
   const paces = new Map<string, Pace>();
   const images = new Gate(8, 30_000);
+  const speeds = new Speeds();
+  const within = opts.browseWithin ?? DEADLINE;
+  /** Whether each source timed was quick enough to browse, to say so when that changes. */
+  const browsing = new Map<string, boolean>();
+  let warming = false;
 
   /** Answers of a kind, kept so long: in the store when there's one, or else in memory, up to `max` of them. */
   function memo<T>(kind: string, ttl: number, max: number): Memo<T> {
@@ -206,6 +221,8 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       } catch {
         throw busy();
       }
+      const counting = tally.getStore();
+      if (counting) counting.calls += 1;
     }
     let body: Reply<T> | null = null;
     try {
@@ -352,11 +369,32 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     return { item: { kind: 'source', source: source.name, card }, names: [m.title] };
   }
 
-  /**
-   * A search's next lot from a source: up to ten of its results, from where it had got to
-   * (3.10 is page 3, its first ten already looked at). Its pages count from 1.
-   */
+  /** Says in the log when a source is left out of browsing, or comes back. */
+  function sayIfChanged(source: RawSource) {
+    const quick = speeds.quick(source.id, within);
+    const was = browsing.get(source.id) ?? true;
+    browsing.set(source.id, quick);
+    if (quick === was) return;
+    const seconds = Math.round((speeds.lotTime(source.id) ?? 0) / 1000);
+    if (quick) log.info({ source: source.name, seconds }, 'a source is quick enough to browse again');
+    else log.info({ source: source.name, seconds }, 'a source is left out of browsing, as a lot it hasn’t seen takes it too long');
+  }
+
+  /** A search's next lot from a source, timed by the calls it made of the site. */
   async function lot(source: RawSource, w: Wanted, at: string): Promise<Lot> {
+    const made = { calls: 0 };
+    const started = Date.now();
+    const answer = await tally.run(made, () => lotFrom(source, w, at));
+    speeds.took(source.id, Date.now() - started, made.calls);
+    sayIfChanged(source);
+    return answer;
+  }
+
+  /**
+   * Up to ten of a source's results, from where the search had got to (3.10 is page 3, its first
+   * ten already looked at). Its pages count from 1.
+   */
+  async function lotFrom(source: RawSource, w: Wanted, at: string): Promise<Lot> {
     let page = Number(at);
     let seen = 0;
     const dot = at.indexOf('.');
@@ -367,9 +405,11 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     if (page < 1) page = 1;
     const listed = await searchPage(source, w, page);
     const some = listed.mangas.slice(seen, seen + MANGA_PAGE);
+    // Looking for one series' copies, only those of its name are checked.
+    const named = some.filter((x) => wantedName([x.title], w));
     let failed: unknown = null;
     const each = await Promise.all(
-      some.map((x) =>
+      named.map((x) =>
         foundOf(x.id, source, w).catch((e) => {
           failed = e;
           return null;
@@ -387,6 +427,30 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     if (looked < listed.mangas.length) next = `${page}.${looked}`;
     else if (listed.hasNextPage && listed.mangas.length > 0) next = String(page + 1);
     return { found, next };
+  }
+
+  /**
+   * A source's Popular and Updated first lots, checked ahead of readers as Browse first opens: in
+   * English, nothing else on. Lot by lot, timed like a reader's, so a source found too slow is left
+   * there.
+   */
+  async function warmSource(source: RawSource) {
+    const sorts: MangaSort[] = ['popular'];
+    if (source.supportsLatest) sorts.push('latest');
+    try {
+      for (const sort of sorts) {
+        const w: Wanted = { lang: 'en', sort, adult: false, doujinshi: false, kinds: [...MANGA_KINDS] };
+        let at: string | null = '0';
+        for (let n = 0; n < WARM / MANGA_PAGE; n++) {
+          if (at === null) break;
+          if (!speeds.quick(source.id, within)) return;
+          const answer: Lot = await lot(source, w, at);
+          at = answer.next;
+        }
+      }
+    } catch (err) {
+      log.warn({ err, source: source.name }, 'checking a source’s first lots ahead stopped');
+    }
   }
 
   /** A picture Suwayomi serves: a page, or a cover. */
@@ -417,9 +481,24 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       const out: Place[] = [];
       for (const s of await sources()) {
         if (w.lang && s.lang.toLowerCase() !== w.lang) continue;
+        // Browsing, only the sources quick enough. A search by name asks every one.
+        if (!w.q && !speeds.quick(s.id, within)) continue;
         out.push({ key: `sw${s.id}`, name: s.name, lot: (at) => lot(s, w, at) });
       }
       return out;
+    },
+
+    async warm() {
+      if (warming) return;
+      warming = true;
+      try {
+        const english = (await sources()).filter((s) => s.lang.toLowerCase() === 'en');
+        await Promise.all(english.map((s) => warmSource(s)));
+      } catch (err) {
+        log.warn({ err }, 'checking the sources’ first lots ahead stopped');
+      } finally {
+        warming = false;
+      }
     },
 
     async series(id, adult) {

@@ -94,6 +94,8 @@ function fakeSuwayomi() {
     broken: new Set<string>(),
     /** Sources whose site says to slow down. */
     slowDown: new Set<string>(),
+    /** Sources whose site takes this long (ms) over every call. */
+    lag: new Map<string, number>(),
     perPage: 20,
   };
   const calls: Array<{ op: string; source?: string; type?: string; page?: number }> = [];
@@ -147,9 +149,23 @@ function fakeSuwayomi() {
     return refuse('Unknown query');
   }
 
+  /** The source a call asks of its site, if it asks one. */
+  function sourceOfCall(query: string, v: Record<string, any>): string | null {
+    if (query.includes('fetchSourceManga')) return v.input.source;
+    if (query.includes('fetchManga') || query.includes('fetchChapters')) {
+      const s = seriesById(v.id ?? v.mangaId);
+      if (s) return s.source;
+    }
+    return null;
+  }
+
   async function answer(url: URL, init: RequestInit) {
     if (url.pathname === '/api/graphql') {
       const body = JSON.parse(String(init.body));
+      const source = sourceOfCall(body.query, body.variables);
+      let lag = 0;
+      if (source) lag = state.lag.get(source) ?? 0;
+      if (lag > 0) await new Promise((done) => setTimeout(done, lag));
       return json(graphql(body.query, body.variables));
     }
     let m = /^\/api\/v1\/manga\/(\d+)\/thumbnail$/.exec(url.pathname);
@@ -170,7 +186,7 @@ function fakeSuwayomi() {
   return { state, calls, answer };
 }
 
-async function setup(dexTitles: string[] = [], store?: Store, originals: Record<string, string> = {}) {
+async function setup(dexTitles: string[] = [], store?: Store, originals: Record<string, string> = {}, browseWithin?: number) {
   const sw = fakeSuwayomi();
   const dex = fakeDex(dexTitles, originals);
   const dexCalls: URL[] = [];
@@ -191,12 +207,13 @@ async function setup(dexTitles: string[] = [], store?: Store, originals: Record<
     pace: { api: [1000, 1000], home: [1000, 1000] },
     store,
     suwayomi: 'http://suwayomi.test/',
+    browseWithin,
   });
   const app = makeApp({ ...deps, manga });
   const b = browser(undefined, app);
   const r = await b.post('/v1/libraries', { libraryId: crypto.randomUUID(), key: newLibraryKey() });
   expect(r.status).toBe(201);
-  return { sw, dexCalls, app, b };
+  return { sw, dexCalls, app, b, manga };
 }
 
 const shown = (body: { items: MangaFound[] }) => body.items.map((x) => `${x.source}: ${x.card.title}`);
@@ -566,5 +583,76 @@ describe('how a search ranks', () => {
       throw new Error('nope');
     });
     await expect(find([broken], undefined, undefined, 50)).rejects.toThrow('nope');
+  });
+});
+
+describe('browsing the quick sources, searching every one', () => {
+  /** Four series in Asura Scans, four in Manga Demon, whose site takes 150 ms over every call. */
+  function quickAndSlow(sw: ReturnType<typeof fakeSuwayomi>) {
+    for (const n of [1, 2, 3, 4]) {
+      sw.state.series.push({ id: n, source: '11', title: `Quick ${n}` });
+      sw.state.series.push({ id: 10 + n, source: '22', title: `Slow ${n}` });
+    }
+    sw.state.lag.set('22', 150);
+  }
+  const listsOf = (sw: ReturnType<typeof fakeSuwayomi>, source: string) => sw.calls.filter((c) => c.op === 'search' && c.source === source).length;
+
+  it('leaves out of browsing a source too slow over a lot it hasn’t seen, and still searches it by name', async () => {
+    const { b, sw } = await setup([], undefined, {}, 500);
+    quickAndSlow(sw);
+    // Not timed yet: asked, and timed.
+    let r = await b.get('/v1/manga/search?lang=en');
+    expect(shown(r.body)).toContain('Manga Demon: Slow 1');
+    const lists = listsOf(sw, '22');
+
+    r = await b.get('/v1/manga/search?lang=en&sort=new');
+    expect(shown(r.body).filter((t) => t.startsWith('Manga Demon'))).toEqual([]);
+    expect(shown(r.body)).toContain('Asura Scans: Quick 1');
+    expect(listsOf(sw, '22')).toBe(lists);
+
+    r = await b.get('/v1/manga/search?q=slow&lang=en');
+    expect(shown(r.body)).toContain('Manga Demon: Slow 1');
+  });
+
+  it('looking for one series’ copies, checks only the series going by its name', async () => {
+    const { b, sw, dexCalls } = await setup(['Haikyuu!!', 'Haikyu Fan Book']);
+    sw.state.series = [
+      { id: 1, source: '11', title: 'Haikyu!!' },
+      { id: 2, source: '11', title: 'Haikyu!! dj - Rally' },
+      { id: 3, source: '11', title: 'Haikyu!! (Color)' },
+    ];
+    const r = await b.get('/v1/manga/search?q=haikyu&lang=en&names=haikyu');
+    expect(r.status).toBe(200);
+    expect(shown(r.body).sort()).toEqual(['Asura Scans: Haikyu!!', 'Asura Scans: Haikyu!! (Color)', 'MangaDex: Haikyuu!!']);
+    expect(sw.calls.filter((c) => c.op === 'series')).toHaveLength(2);
+    expect(dexCalls.filter((u) => u.pathname.endsWith('/feed'))).toHaveLength(1);
+
+    const bad = await b.get('/v1/manga/search?q=haikyu&lang=en&names=haikyu!!');
+    expect(bad.status).toBe(400);
+  });
+
+  it('looking for one series’ copies, takes one list from MangaDex a lot, even with none of them', async () => {
+    const others = Array.from({ length: 25 }, (_, i) => `Other ${i + 1}`);
+    const { b, dexCalls } = await setup(others);
+    const r = await b.get('/v1/manga/search?q=haikyu&lang=en&names=haikyu');
+    expect(r.status).toBe(200);
+    expect(r.body.items).toEqual([]);
+    expect(dexCalls.filter((u) => u.pathname === '/manga')).toHaveLength(1);
+    expect(r.body.next).toBe('md:10');
+  });
+
+  it('checks each quick source’s Popular and Updated first lots ahead of readers, and stops at a slow one', async () => {
+    const { b, sw, manga } = await setup([], undefined, {}, 500);
+    quickAndSlow(sw);
+    await manga.warm();
+    // Asura Scans: Popular and Updated. Manga Demon has no Updated, and one lot showed it slow.
+    expect(listsOf(sw, '11')).toBe(2);
+    expect(listsOf(sw, '22')).toBe(1);
+
+    // Browse as it first opens: Asura Scans' series all checked already, Manga Demon left out.
+    const before = sw.calls.length;
+    const r = await b.get('/v1/manga/search?lang=en');
+    expect(shown(r.body)).toEqual(['Asura Scans: Quick 1', 'Asura Scans: Quick 2', 'Asura Scans: Quick 3', 'Asura Scans: Quick 4']);
+    expect(sw.calls.slice(before).filter((c) => c.op === 'series' || c.op === 'chapters')).toEqual([]);
   });
 });

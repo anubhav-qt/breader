@@ -16,7 +16,7 @@ import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
-import type { Found, Lot, Place, Wanted } from './find.ts';
+import { WARM, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
 import { caughtUp, firstMissing, highest } from './readable.ts';
@@ -62,8 +62,6 @@ const DAY = 24 * HOUR;
 const LOTS = 6;
 /** …and not once it has taken this long, so the reader sees something. */
 const BUDGET = 8_000;
-/** Series checked ahead of readers in Popular and in Updated: their first 12 lots, a few screens' scrolling. */
-const WARM = 120;
 
 const ORDER: Record<MangaSort, string> = {
   relevance: 'relevance',
@@ -626,8 +624,10 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       const listed = await list(ask, at);
       total = listed.total;
       at += MANGA_PAGE;
+      // Looking for one series' copies, only those of its name are checked.
+      const named = listed.data.filter((m) => wantedName(namesOf(m), w));
       const each = await Promise.all(
-        listed.data.map((m) =>
+        named.map((m) =>
           foundOf(m, w.lang).catch((e) => {
             failed = e;
             return null;
@@ -638,6 +638,8 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
         if (f) found.push(f);
       }
       if (found.length > 0 || failed || at >= total) break;
+      // Looking for one series' copies, a lot without them is no reason to look further.
+      if (w.names) break;
       if (Date.now() - started > BUDGET) break;
     }
     // Nothing found, and some couldn't be checked (MangaDex busy, say): that, not an empty lot.

@@ -15,7 +15,7 @@ import { makeSuwayomi, type Suwayomi } from './suwayomi.ts';
  */
 
 export interface Manga {
-  search(q: { q?: string; lang?: string; sort?: MangaSort; adult?: boolean; doujinshi?: boolean; kinds?: MangaKind[]; next?: string }): Promise<MangaSearchResult>;
+  search(q: { q?: string; lang?: string; sort?: MangaSort; adult?: boolean; doujinshi?: boolean; kinds?: MangaKind[]; names?: string[]; next?: string }): Promise<MangaSearchResult>;
   /** A MangaDex series, its chapters in a language, a chapter's page (from 0) and a cover. */
   series(id: string, adult: boolean): Promise<MangaSeries>;
   chapters(id: string, lang: string): Promise<MangaChapters>;
@@ -30,7 +30,7 @@ export interface Manga {
   sourcePage(chapterId: string, n: number): Promise<Picture>;
   /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:12) in its own. */
   copies(id: string, lang: string): Promise<MangaCopies>;
-  /** Checks MangaDex's Popular and Updated first screens ahead of readers. */
+  /** Checks the Popular and Updated first lots ahead of readers: MangaDex's, and each source's quick enough to browse. */
   warm(): Promise<void>;
 }
 
@@ -45,6 +45,8 @@ export interface MangaOptions {
   store?: Store | null;
   /** Breader's Suwayomi server, when it has one. */
   suwayomi?: string;
+  /** How long a lot it hasn't seen may take a source for it to be browsed (suwayomi.ts). Tests go faster. */
+  browseWithin?: number;
 }
 
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
@@ -59,7 +61,7 @@ export function makeManga(opts: MangaOptions): Manga {
   const pace = opts.pace?.api;
   const dex = makeMangaDex({ disk, fetch: opts.fetch, pace: opts.pace, store });
   let suwayomi: Suwayomi | null = null;
-  if (opts.suwayomi) suwayomi = makeSuwayomi({ url: opts.suwayomi, disk, fetch: opts.fetch, pace, store });
+  if (opts.suwayomi) suwayomi = makeSuwayomi({ url: opts.suwayomi, disk, fetch: opts.fetch, pace, store, browseWithin: opts.browseWithin });
 
   /** Suwayomi, and its series or chapter number in an id like sw:12. */
   function onSuwayomi(id: string): { suwayomi: Suwayomi; n: number } {
@@ -128,6 +130,7 @@ export function makeManga(opts: MangaOptions): Manga {
       if (asked && asked.length > 0) kinds = MANGA_KINDS.filter((k) => asked.includes(k));
       const w: Wanted = { lang: q.lang, sort: q.sort, adult: !!q.adult, doujinshi: !!q.doujinshi, kinds };
       if (q.q) w.q = q.q;
+      if (q.names) w.names = q.names;
       const places: Place[] = [dex.place(w)];
       if (suwayomi) {
         try {
@@ -143,7 +146,11 @@ export function makeManga(opts: MangaOptions): Manga {
     chapters: (id, lang) => dex.chapters(id, lang),
     page: (chapterId, n, saver) => dex.page(chapterId, n, saver),
     cover: (mangaId, file, size) => dex.cover(mangaId, file, size),
-    warm: () => dex.warm(),
+    async warm() {
+      const going = [dex.warm()];
+      if (suwayomi) going.push(suwayomi.warm());
+      await Promise.all(going);
+    },
 
     async sourceSeries(id, adult) {
       const { suwayomi, n } = onSuwayomi(id);

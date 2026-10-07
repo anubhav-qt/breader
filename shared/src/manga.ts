@@ -42,6 +42,13 @@ export const SourceId = z.string().regex(/^sw:[1-9]\d{0,9}$/, 'Not a series or c
  */
 const Next = z.string().regex(/^[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?(,[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?){0,49}$/, 'Not where a search carries on');
 
+/** Series names as seriesName keys them, comma separated. */
+const Names = z
+  .string()
+  .max(4000)
+  .regex(/^[\p{L}\p{N}]{1,200}(,[\p{L}\p{N}]{1,200}){0,39}$/u, 'Not series names')
+  .transform((v) => [...new Set(v.split(','))]);
+
 export const MangaSearchQuery = z.object({
   q: z.string().trim().max(200).optional(),
   /** Only series with chapters in this language; any language when left out. */
@@ -54,6 +61,8 @@ export const MangaSearchQuery = z.object({
   doujinshi: Flag.optional(),
   /** Only these kinds; every kind when left out. A series of no known kind shows only then. */
   kinds: Kinds.optional(),
+  /** Only series going by one of these names: a series' sheet, looking for its other copies with its title. */
+  names: Names.optional(),
   /** Where the last lot said to carry on from; the first lot without it. */
   next: Next.optional(),
 });

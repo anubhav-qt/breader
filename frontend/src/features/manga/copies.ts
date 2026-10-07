@@ -53,12 +53,32 @@ function copiesIn(found: MangaFound, lang: string): Promise<MangaCopies> {
   return going;
 }
 
-/** The first three lots of a search for the title, which is where the same series turns up. */
-async function lookFor(title: string, prefs: MangaPrefs): Promise<MangaFound[]> {
+/** The most names a search takes. */
+const MOST_NAMES = 40;
+
+/** Every name the series goes by where it was found, keyed as the server keys them (seriesName). */
+function namesIn(found: MangaFound[]): string[] {
+  const out: string[] = [];
+  for (const f of found) {
+    for (const k of f.keys) {
+      if (k.length === 0 || k.length > 200) continue;
+      if (!out.includes(k)) out.push(k);
+    }
+  }
+  return out.slice(0, MOST_NAMES);
+}
+
+/**
+ * The first three lots of a search for the title, which is where the same series turns up. Every
+ * place is asked, each checking only series of the same name, so a slow site checks one or two.
+ */
+async function lookFor(title: string, names: string[], prefs: MangaPrefs): Promise<MangaFound[]> {
+  let only: string[] | undefined = undefined;
+  if (names.length > 0) only = names;
   const out: MangaFound[] = [];
   let next: string | undefined = undefined;
   for (let lot = 0; lot < 3; lot++) {
-    const r = await mangadex.search({ q: title, lang: prefs.lang || undefined, adult: prefs.adult, doujinshi: true, next });
+    const r = await mangadex.search({ q: title, lang: prefs.lang || undefined, adult: prefs.adult, doujinshi: true, names: only, next });
     out.push(...r.items);
     if (!r.next) break;
     next = r.next;
@@ -143,7 +163,7 @@ export function useCopies(title: string, start: MangaFound[], prefs: MangaPrefs,
 
   useEffect(() => {
     let live = true;
-    lookFor(title, prefs).then(
+    lookFor(title, namesIn(start), prefs).then(
       (items) => {
         if (!live) return;
         setFound((known) => withFound(known, items));
