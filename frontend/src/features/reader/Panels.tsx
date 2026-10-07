@@ -7,7 +7,7 @@ import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
-import { FONTS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type ReaderSettings, type StyleSettings } from './settings';
+import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type Layout, type MangaDir, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
 
@@ -156,8 +156,16 @@ interface LookProps {
   update: (fn: (s: ReaderSettings) => ReaderSettings) => void;
   /** The book can read in 2 voices, so their colours can be picked. */
   two?: boolean;
-  /** A manga read from MangaDex, whose pages can come smaller. */
-  remote?: boolean;
+  /** A manga: how it reads here, and the way to change that. */
+  manga?: MangaControls;
+}
+
+/** `saver`: read from MangaDex, whose pages can come smaller. */
+export interface MangaControls {
+  look: MangaLook;
+  pick: (patch: { layout?: Layout; dir?: MangaDir }) => void;
+  widen: (width: number) => void;
+  saver: boolean;
 }
 
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
@@ -208,10 +216,37 @@ function DataSaver() {
     writeMangaPrefs({ ...readMangaPrefs(), saver: on });
     setSaver(on);
   };
-  return <Segmented label="Pages" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
+  return <Segmented label="Quality" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
 }
 
-export function AppearancePanel({ settings, kind, update, two = false, remote = false }: LookProps) {
+/** A manga's layout, the way its pages turn, and how wide they scroll: on a narrow screen, it's scrolled. */
+function MangaLookControls({ look, pick, widen, saver }: MangaControls) {
+  let note = 'One page after another, down the screen. Each manga keeps its own layout.';
+  if (look.narrow) note = 'One page after another, down the screen, as pages read best on a screen this narrow.';
+  else if (look.layout === 'pages') note = 'Two pages side by side when the screen is wide enough. Manga reads right to left, comics left to right. Each manga keeps its own.';
+  return (
+    <>
+      {!look.narrow && (
+        <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
+      )}
+      {!look.narrow && look.layout === 'pages' && (
+        <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
+      )}
+      {!look.narrow && look.layout === 'scroll' && (
+        <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
+      )}
+      <p className="p-note">{note}</p>
+      {saver && (
+        <>
+          <DataSaver />
+          <p className="p-note">Data saver brings MangaDex’s smaller copy of each page, for a slow or metered connection. Pages kept offline stay as they were kept.</p>
+        </>
+      )}
+    </>
+  );
+}
+
+export function AppearancePanel({ settings, kind, update, two = false, manga }: LookProps) {
   const cur = settings[settings.style];
   const set = (patch: Partial<StyleSettings>) => update((s) => ({ ...s, [s.style]: { ...s[s.style], ...patch } }));
   // Immersive's voice bar, as the rest of the controls sleep (focus.ts).
@@ -239,20 +274,8 @@ export function AppearancePanel({ settings, kind, update, two = false, remote = 
           ))}
         </div>
       </div>
-      {kind === 'manga' ? (
-        <>
-          <Segmented label="Layout" value={settings.mangaLayout} onChange={(v) => update((s) => ({ ...s, mangaLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
-          {settings.mangaLayout === 'pages' && (
-            <Segmented label="Direction" value={settings.mangaDir} onChange={(v) => update((s) => ({ ...s, mangaDir: v }))} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
-          )}
-          <p className="p-note">{settings.mangaLayout === 'pages' ? 'Two pages side by side when the screen is wide enough. Manga reads right to left, comics left to right.' : 'One page after another, down the screen.'}</p>
-          {remote && (
-            <>
-              <DataSaver />
-              <p className="p-note">Data saver brings MangaDex’s smaller copy of each page, for a slow or metered connection. Pages kept offline stay as they were kept.</p>
-            </>
-          )}
-        </>
+      {kind === 'manga' && manga ? (
+        <MangaLookControls {...manga} />
       ) : kind === 'pdf' ? (
         <>
           <Segmented label="Layout" value={settings.pdfLayout} onChange={(v) => update((s) => ({ ...s, pdfLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />

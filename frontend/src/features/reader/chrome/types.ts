@@ -8,6 +8,7 @@ import type { Paragraph, Sentence } from '../narration';
 import type { BarAsk } from '../focus';
 import type { Block, Found } from '../search';
 import type { Asleep } from '../sleep';
+import type { MangaControls } from '../Panels';
 import type { ReaderSettings } from '../settings';
 
 /** `revisit` is the drop up from the bottom line; `recap` the window it opens (chrome/Revisit.tsx). */
@@ -24,6 +25,8 @@ export interface ChromeProps {
   current: number;
   settings: ReaderSettings;
   update: (fn: (s: ReaderSettings) => ReaderSettings) => void;
+  /** A manga: how it reads here (Panels.tsx). */
+  manga: MangaControls | null;
   panel: PanelName | null;
   lastPanel: PanelName;
   openPanel: (p: PanelName | null) => void;

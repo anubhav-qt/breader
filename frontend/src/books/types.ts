@@ -89,6 +89,11 @@ export interface MangaBook {
     prev?: { label: string; at: Position };
     next?: { label: string; at: Position };
   };
+  /**
+   * Opened a few chapters at a time: the same book with the chapters after these added at its end,
+   * or null when they can't be opened just now.
+   */
+  more?(): Promise<MangaBook | null>;
   /** How far through the whole series a place in the pages open is, for one opened a few chapters at a time. */
   progressOf?(exact: number, end: boolean): number;
   /**

@@ -872,6 +872,8 @@ export default function App() {
             onRemove={canRemove(shownRec) ? removeOpen : undefined}
             ai={!!lib.edits[shown.id]?.ai}
             onAi={(on) => void editBook(shown.id, { ai: on })}
+            // A series opened a few chapters at a time, with the next few added as it's read on.
+            onBook={(grown) => setLoaded((l) => (l && l.id === shown.id ? { id: l.id, book: grown } : l))}
           />
         </div>
       )}

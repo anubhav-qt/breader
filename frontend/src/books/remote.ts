@@ -1,4 +1,5 @@
 import type { MangaChapter, SourceSeries } from '@breader/shared/manga';
+import { flush } from '../data/sync';
 import { ApiError, OfflineError } from '../lib/api';
 import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
@@ -9,9 +10,9 @@ import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './
 /*
  * A manga read from a catalogue, its chapters one after another in one book, so it scrolls on from
  * chapter to chapter like a webtoon app. From MangaDex, that's the whole series, each chapter's
- * pages coming through the laptop as they're read. From a Suwayomi source,
- * which only learns a chapter's pages by asking the site it reads, it's a few chapters around the
- * place, the rest a tap away. Either way, chapters kept offline come from this browser, and places
+ * pages coming through the laptop as they're read. From a Suwayomi source, which only learns a
+ * chapter's pages by asking the site it reads, it's a few chapters around the place, more added as
+ * the reader nears their end. Either way, chapters kept offline come from this browser, and places
  * are kept by chapter number, so they stay put as chapters are added, uploads change, or the
  * language does.
  */
@@ -241,6 +242,24 @@ async function aboutSource(id: string): Promise<{ name: string; page: string | n
   }
 }
 
+/** A chapter's pages, as its source counts them. A library made a moment ago signs in with its first sync. */
+async function pagesOf(chapter: string): Promise<number> {
+  try {
+    return await sources.pages(chapter);
+  } catch (e) {
+    if (!(e instanceof ApiError && e.code === 'signed_out')) throw e;
+    await flush();
+    return sources.pages(chapter);
+  }
+}
+
+/** How many of these counts come before the first that failed (0: its source couldn't say). */
+function inARow(counts: number[]): number {
+  let n = 0;
+  while (n < counts.length && counts[n] > 0) n++;
+  return n;
+}
+
 async function openSource(rec: BookRecord, id: string, group: string | null, at?: Position): Promise<MangaBook> {
   const [about, list] = await Promise.all([
     aboutSource(id),
@@ -254,62 +273,82 @@ async function openSource(rec: BookRecord, id: string, group: string | null, at?
   const here = at ? chapterAt(all, at) : undefined;
   const start = here ? all.indexOf(here) : 0;
   const from = Math.max(0, start - BEFORE);
-  const to = Math.min(all.length, start + 1 + AFTER);
   const note = await keptNote(id);
-  // A chapter's pages: counted by its source, unless they're kept here already.
-  const counts = await each(all.slice(from, to), 4, async (c) => {
+  /** A chapter's pages: counted by its source, unless they're kept here already. 0 when it can't say. */
+  const count = async (c: MangaChapter): Promise<number> => {
     const k = note[c.id];
     if (k?.done) return k.pages;
     try {
-      return await sources.pages(c.id);
+      return await pagesOf(c.id);
     } catch {
       return 0;
     }
-  });
-  const chapters: RemoteChapter[] = [];
-  let total = 0;
-  all.forEach((c, i) => {
-    const open = i >= from && i < to;
-    let pages = 0;
-    if (open) pages = counts[i - from];
-    chapters.push({
-      id: c.id,
-      label: labelOf(c, all.length === 1),
-      title: c.title,
-      number: c.number,
-      first: open ? total : -1,
-      pages,
-      external: null,
-      groups: c.groups,
-      ...(open ? {} : { away: true }),
+  };
+
+  /** The book with chapters from `from` up to `to` open, `counts` their pages. */
+  const build = (to: number, counts: number[]): MangaBook => {
+    const chapters: RemoteChapter[] = [];
+    let total = 0;
+    all.forEach((c, i) => {
+      const open = i >= from && i < to;
+      let pages = 0;
+      if (open) pages = counts[i - from];
+      chapters.push({
+        id: c.id,
+        label: labelOf(c, all.length === 1),
+        title: c.title,
+        number: c.number,
+        first: open ? total : -1,
+        pages,
+        external: null,
+        groups: c.groups,
+        ...(open ? {} : { away: true }),
+      });
+      total += pages;
     });
-    total += pages;
-  });
-  if (!total) throw new Error(`${about.name} couldn’t bring these chapters’ pages just now. It may be down, so try again in a while.`);
-  const shown = chapters.filter((c) => c.pages > 0);
-  const before = chapters[from - 1];
-  const after = chapters[to];
-  const remote: NonNullable<MangaBook['remote']> = {
-    name: about.name,
-    series: id,
-    page: about.page,
-    chapters,
-    ...(before ? { prev: { label: before.label, at: startOf(before) } } : {}),
-    ...(after ? { next: { label: after.label, at: startOf(after) } } : {}),
+    if (!total) throw new Error(`${about.name} couldn’t bring these chapters’ pages just now. It may be down, so try again in a while.`);
+    const shown = chapters.filter((c) => c.pages > 0);
+    const before = chapters[from - 1];
+    const after = chapters[to];
+    const remote: NonNullable<MangaBook['remote']> = {
+      name: about.name,
+      series: id,
+      page: about.page,
+      chapters,
+      ...(before ? { prev: { label: before.label, at: startOf(before) } } : {}),
+      ...(after ? { next: { label: after.label, at: startOf(after) } } : {}),
+    };
+    const book = bookOf(rec, remote, total, (c, n) => pageFor(c.id, n));
+    // Progress and time left go by the whole series, of which only these chapters are open.
+    const perChapter = total / Math.max(1, shown.length);
+    /**
+     * The chapters after these, read on to: the same book with them added at its end, so the pages
+     * already open stay where they are. Null when their source couldn't say how many pages they have.
+     */
+    const more = async (): Promise<MangaBook | null> => {
+      const next = await each(all.slice(to, to + AFTER), 4, count);
+      const n = inARow(next);
+      if (!n) return null;
+      return build(to + n, [...counts, ...next.slice(0, n)]);
+    };
+    return {
+      ...book,
+      words: Math.round(all.length * perChapter * WORDS_PER_MANGA_PAGE),
+      progressOf: (exact, end) => {
+        if (end && !after) return 1;
+        const c = shown.filter((x) => x.first <= exact).pop() ?? shown[0];
+        const i = chapters.indexOf(c);
+        return Math.min(0.9999, (i + Math.max(0, Math.min(1, (exact - c.first) / c.pages))) / chapters.length);
+      },
+      ...(after ? { more } : {}),
+    };
   };
-  const book = bookOf(rec, remote, total, (c, n) => pageFor(c.id, n));
-  // Progress and time left go by the whole series, of which only these chapters are open.
-  const perChapter = total / Math.max(1, shown.length);
-  return {
-    ...book,
-    words: Math.round(all.length * perChapter * WORDS_PER_MANGA_PAGE),
-    progressOf: (exact, end) => {
-      if (end && !after) return 1;
-      const c = shown.filter((x) => x.first <= exact).pop() ?? shown[0];
-      const i = chapters.indexOf(c);
-      return Math.min(0.9999, (i + Math.max(0, Math.min(1, (exact - c.first) / c.pages))) / chapters.length);
-    },
-  };
+
+  // A chapter after the place whose pages can't be counted ends what's open: reading on asks again.
+  const counted = await each(all.slice(from, start + 1 + AFTER), 4, count);
+  const upTo = start + 1 - from;
+  const to = start + 1 + inARow(counted.slice(upTo));
+  return build(to, counted.slice(0, to - from));
 }
 
 export async function openRemote(rec: BookRecord, at?: Position): Promise<MangaBook> {

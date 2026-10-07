@@ -62,6 +62,7 @@
 .p-remove { margin-top: 20px; color: var(--r-mu); }
 
 .ctl { margin-bottom: 18px; }
+.p-note + .ctl { margin-top: 18px; }
 .clbl { font: var(--ui-w) 12px/1 var(--ui); color: var(--r-mu); margin-bottom: 9px; }
 label.clbl { display: block; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border-radius: 11px; background: var(--r-fill); }
@@ -267,13 +268,17 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-spread.is-rtl { flex-direction: row-reverse; }
 .mg-pg { position: relative; flex: none; background: var(--r-fill); }
 .mg-pg img { display: block; width: 100%; height: 100%; object-fit: contain; background: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.mg-broken { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
+.mg-broken { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 12px; text-align: center; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
+.mg-broken button { height: 34px; padding: 0 14px; border-radius: 10px; background: var(--r-fill); box-shadow: 0 0 0 1px var(--r-line); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
+.mg-broken button:hover { background: var(--r-line); }
+/* A tap on a picture brings its panel closer (MangaView.tsx). */
+.mg-pg img { cursor: zoom-in; }
 .mg-scroll { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
 .mg-column { position: relative; margin: 0 auto; }
 .mg-scroll .mg-pg { position: absolute; left: 0; right: 0; }
 .mg-scroll:not(.is-strip) .mg-pg { box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow); }
-/* The page fills most of the screen, so its outer thirds turn it, as in most manga readers. */
-.mgv .fv-zone { width: max(30%, calc(50% - var(--vw) / 2 + var(--vw) * 0.2)); }
+/* The space beside the page turns it: a tap on the page is for its panels. Keys and swipes turn it too. */
+.mgv .fv-zone { width: max(44px, calc(50% - var(--vw) / 2)); }
 /* A chapter of a series from MangaDex starts under its name and who made it. */
 .mg-band { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; padding: 0 12px; text-align: center; font: var(--ui-w) 12px/1.3 var(--ui); color: var(--r-mu); }
 .mg-band b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; font-size: 13px; color: var(--r-fg); }
@@ -284,3 +289,10 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-band.is-more button, .mg-more { height: 36px; padding: 0 16px; border-radius: 10px; background: var(--r-fill); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
 .mg-band.is-more button:hover, .mg-more:hover { background: var(--r-line); }
 .mg-more { position: absolute; left: 50%; bottom: 88px; z-index: 3; transform: translateX(-50%); box-shadow: 0 0 0 1px var(--r-line); }
+
+/* A page looked at closely (MangaZoom.tsx): over the controls, the rest of the page faded away. */
+.mg-zoom { position: fixed; inset: 0; z-index: 20; overflow: hidden; touch-action: none; cursor: zoom-out; }
+.mg-zoom.is-pan { cursor: grab; }
+.mg-zoom.is-pan:active { cursor: grabbing; }
+.mg-zoom-bg { position: absolute; inset: 0; background: color-mix(in srgb, var(--r-bg) 94%, transparent); }
+.mg-zoom img { position: absolute; display: block; max-width: none; transform-origin: 0 0; background: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }

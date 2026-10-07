@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
 import type { BookRecord, LoadedBook, ReadMark, ReadState, TocItem } from '../../books/types';
 import { markTracker, screenWords } from '../../books/mark';
+import { remoteOf } from '../../books/remote';
 import { Toast, type ToastMessage } from '../../components/Toast';
 import { paintBars } from '../../lib/bars';
 import { chapterAt, chapterName, chaptersOf } from './chapters';
@@ -21,7 +22,7 @@ import { refreshVoices } from './voice/list';
 import { refreshSpeech } from './voice/server';
 import { useVoicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
-import { TWO_COLORS, useReaderSettings, type ThemeName } from './settings';
+import { TWO_COLORS, mangaLookOf, useNarrow, useReaderSettings, withMangaLook, type ThemeName } from './settings';
 import { flash, readBook, type Found } from './search';
 import { useSleepWatch } from './sleep';
 import { keepStop, stopIn, type Stop } from './stops';
@@ -48,14 +49,23 @@ interface Props {
   ai?: boolean;
   /** Flips that, from where 2 voices asks for it. */
   onAi?: (on: boolean) => void;
+  /** A manga opened a few chapters at a time, with the chapters after them added as they're neared. */
+  onBook?: (book: LoadedBook) => void;
 }
 
 const noTime = () => {};
 
 const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
 
-export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, onAi }: Props) {
+export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, onAi, onBook }: Props) {
   const [settings, update] = useReaderSettings();
+  // A manga is scrolled on a narrow screen; on a wide one, each keeps its own layout and direction.
+  const narrow = useNarrow();
+  const mangaLook = mangaLookOf(settings, record.id, narrow);
+  const ownLook = !!settings.mangaOwn?.[record.id];
+  useEffect(() => {
+    if (book.kind === 'manga' && !narrow && !ownLook) update((s) => withMangaLook(s, record.id, {}));
+  }, [book.kind, narrow, ownLook, record.id, update]);
   const [panel, setPanel] = useState<PanelName | null>(null);
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
   const [loc, setLoc] = useState<Loc | null>(null);
@@ -367,10 +377,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   }, [away, chapters, book, goBack, stayHere]);
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
-  const layout = book.kind === 'pdf' ? settings.pdfLayout : book.kind === 'manga' ? settings.mangaLayout : settings[settings.style].layout;
+  const layout = book.kind === 'pdf' ? settings.pdfLayout : book.kind === 'manga' ? mangaLook.layout : settings[settings.style].layout;
   const paged = layout === 'pages';
   /** A manga's pages turning right to left: swipes and arrows go on the other way. */
-  const rtl = book.kind === 'manga' && paged && settings.mangaDir === 'rtl';
+  const rtl = book.kind === 'manga' && paged && mangaLook.dir === 'rtl';
   const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
   const swipedAt = useRef(-Infinity);
   const onTouchStart = (e: TouchEvent) => {
@@ -422,6 +432,12 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     };
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+  };
+  /** A tap on a manga's page with no panel to zoom into (MangaView.tsx): as a tap mid-page. */
+  const tapPage = () => {
+    if (closing || !hush || !touched.current) return;
+    if (awake) sleep();
+    else wake(3500);
   };
   const onClick = (e: MouseEvent) => {
     if (e.defaultPrevented || closing) return;
@@ -515,6 +531,12 @@ export function Reader({ record, title, color, book, initial, closing = false, o
 
   const chromeProps: ChromeProps = {
     book, title, loc, chapters, current, settings, update,
+    manga: book.kind === 'manga' ? {
+      look: mangaLook,
+      pick: (patch) => update((s) => withMangaLook(s, record.id, patch)),
+      widen: (width) => update((s) => ({ ...s, mangaWidth: width })),
+      saver: remoteOf(record.url)?.kind === 'mangadex',
+    } : null,
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,
     narration: canNarrate && !pictures ? {
@@ -568,7 +590,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} aside={tail} />
           ) : book.kind === 'manga' ? (
-            <MangaView ref={view} book={book} layout={settings.mangaLayout} dir={settings.mangaDir} start={start} onLocation={onLocation} onWidth={setPageW} />
+            <MangaView ref={view} book={book} layout={mangaLook.layout} dir={mangaLook.dir} width={mangaLook.width} start={start} onLocation={onLocation} onWidth={setPageW} onTap={tapPage} onGrow={onBook} />
           ) : (
             <PdfView ref={view} book={book} layout={settings.pdfLayout} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           )}

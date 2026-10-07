@@ -31,7 +31,7 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit, two, letAi, talk }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit, two, letAi, talk }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [full, toggleFull] = useFullscreen();
   const [foot, setFoot] = useState(false);
@@ -251,7 +251,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
-                <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} remote={book.kind === 'manga' && !!book.remote} />
+                <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} manga={manga ?? undefined} />
               )}
             </div>
             <CloseDots onClick={() => openPanel(null)} />
