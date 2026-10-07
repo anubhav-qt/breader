@@ -21,7 +21,6 @@ interface Props {
   layoutKey?: string;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
-  onFinish?: (book: ShelfItem, finished: boolean) => void;
   onKeep?: (book: ShelfItem) => void;
 }
 
@@ -30,7 +29,7 @@ interface Props {
  * in its colour. The cover opens it; the corner button (or a right-click) edits it, as on the
  * books' cards.
  */
-export function CoverCard({ item, index, enter, words, open = false, layoutKey, onOpen, onEdit, onFinish, onKeep }: Props) {
+export function CoverCard({ item, index, enter, words, open = false, layoutKey, onOpen, onEdit, onKeep }: Props) {
   const b = item.book;
   const moreRef = useRef<HTMLButtonElement>(null);
   const [broken, setBroken] = useState(false);
@@ -89,7 +88,7 @@ export function CoverCard({ item, index, enter, words, open = false, layoutKey, 
           aria-label={`${b.title}, ${chapterText(b)}`}
           onClick={(e) => onOpen(b, (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect())}
         />
-        <Tools book={b} open={open} moreRef={moreRef} onEdit={onEdit} onFinish={onFinish} onKeep={onKeep} />
+        <Tools book={b} open={open} moreRef={moreRef} onEdit={onEdit} onKeep={onKeep} />
       </div>
     </motion.div>
   );

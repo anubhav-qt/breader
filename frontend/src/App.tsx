@@ -3,7 +3,8 @@ import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { Header, type Tab } from './components/Header';
-import { IconPlus, IconSearch } from './components/icons';
+import { IconPlus } from './components/icons';
+import { SWITCH_STYLES, type SwitchStyle } from './components/switchStyles';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { categoryOf, countOf, type Category } from './books/category';
@@ -22,7 +23,7 @@ import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
 import { AddBook } from './features/add/AddBook';
 import { KeyDialog } from './features/add/KeyDialog';
-import { AccountMenu } from './features/account/AccountMenu';
+import { SettingsMenu } from './features/account/SettingsMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
 import { RemoveDialog } from './features/gallery/RemoveDialog';
@@ -53,6 +54,8 @@ function parseHash(): Route {
  * books. Production shows only real books.
  */
 const devTools = import.meta.env.DEV;
+/** Where the eye over manga's covers is kept, on this device. */
+const COVERS_ONLY = 'breader.manga.coversOnly.v1';
 
 function readParam<T extends string>(name: string, allowed: readonly T[], fallback: T): T {
   const v = new URLSearchParams(window.location.search).get(name) as T | null;
@@ -140,6 +143,10 @@ export default function App() {
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
+  /** The way between the reader's own library and the shared ones: one for now, the others to try in the preview bar. */
+  const [switchLook, setSwitchLook] = useState<SwitchStyle>(() => (devTools ? readParam('nav', SWITCH_STYLES.map((l) => l.id), 'title') : 'title'));
+  /** Manga's covers without their titles: off until the reader turns it on, then kept on this device. */
+  const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
@@ -172,6 +179,7 @@ export default function App() {
     writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
+  useEffect(() => { writeParam('nav', switchLook, 'title'); }, [switchLook]);
 
   // Back from Google, or from a link in one of Breader's emails.
   useEffect(() => {
@@ -761,9 +769,14 @@ export default function App() {
     });
   }, [recordById, lib, say]);
   const manga = category === 'manga';
+  const flipCovers = () => {
+    const next = !coversOnly;
+    setCoversOnly(next);
+    writeLocal(COVERS_ONLY, next);
+  };
   /** Manga is found in Browse, which this opens, where the laptop has anywhere to look. */
   const browseButton = mdOn !== false && (
-    <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconSearch /> Browse</button>
+    <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconPlus /> Browse</button>
   );
   /** An empty shared library: the reader's own says how to share; someone else's, why it's empty. */
   const emptyShelf = showing === 'own' ? (
@@ -798,11 +811,14 @@ export default function App() {
             browse={mdOn !== false}
             shelfName={libraryName(sharing, showing)}
             canAdd={books.length > 0}
+            switchLook={switchLook}
+            // Only over manga's covers, where there are some to show.
+            coversOnly={manga && tab !== 'browse' && books.length > 0 ? coversOnly : undefined}
+            onCoversOnly={flipCovers}
             onTab={setTab}
             onAdd={() => setAdding({ mode: 'file' })}
             onBrowse={() => setTab('browse')}
-            onKey={() => setKeyOpen(true)}
-            libraries={(close) => (
+            libraries={(close, withMine) => (
               <LibraryMenu
                 key="libraries"
                 sharing={sharing}
@@ -810,9 +826,11 @@ export default function App() {
                 onShow={(which: Showing) => { showLibrary(which); setTab('shelf'); }}
                 onClose={close}
                 say={say}
+                mine={withMine ? { name: manga ? 'My manga' : 'My books', count: countOf(items.mine.length, category), onShow: () => setTab('mine') } : undefined}
+                current={tab === 'browse' ? null : tab}
               />
             )}
-            account={<AccountMenu account={account} onLogin={() => setLogin({ mode: 'login' })} onLogOut={logOutAll} />}
+            settings={<SettingsMenu account={account} onLogin={() => setLogin({ mode: 'login' })} onLogOut={logOutAll} onKey={() => setKeyOpen(true)} />}
           />
           {lib.ready && (['mine', 'shelf'] as const).filter((t) => seen.has(t)).map((t) => (
             <Gallery
@@ -823,6 +841,7 @@ export default function App() {
               // Shared libraries are browsed by genre; one's own books, by series.
               view={t === 'shelf' ? 'genre' : 'series'}
               manga={manga}
+              coversOnly={coversOnly}
               now={now}
               id={`library-${t}`}
               labelledBy={`tab-${t}`}
@@ -959,7 +978,15 @@ export default function App() {
 
       <Toast toast={toast} onDone={dismissToast} />
       {devTools && route.name === 'library' && (
-        <PreviewBar mode={preview} onMode={setPreview} theme={theme} onTheme={setTheme} onReset={() => void lib.reset()} />
+        <PreviewBar
+          mode={preview}
+          onMode={setPreview}
+          theme={theme}
+          onTheme={setTheme}
+          switchLook={switchLook}
+          onSwitchLook={setSwitchLook}
+          onReset={() => void lib.reset()}
+        />
       )}
     </MotionConfig>
   );

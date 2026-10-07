@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { IconKey, IconSettings } from '../../components/icons';
 import { useSyncStatus } from '../../data/sync';
 import { loginError, sendVerification, type AccountState } from '../../lib/account';
 import { springs } from '../../lib/springs';
@@ -10,10 +11,12 @@ interface Props {
   onLogin: () => void;
   /** Ends the login and clears this browser's library. */
   onLogOut: () => Promise<void>;
+  /** The reader's library key, which shares their books. */
+  onKey: () => void;
 }
 
-/** The header's Log in button, or, once logged in, the account's initial with its menu. */
-export function AccountMenu({ account, onLogin, onLogOut }: Props) {
+/** The header's settings: the library key, and logging in, or who's logged in and logging out. */
+export function SettingsMenu({ account, onLogin, onLogOut, onKey }: Props) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -40,13 +43,6 @@ export function AccountMenu({ account, onLogin, onLogOut }: Props) {
   }, [open]);
 
   const user = account.status === 'in' ? account.user : null;
-  if (!user) {
-    return (
-      <button type="button" className="btn btn-ghost" onClick={onLogin}>
-        Log in
-      </button>
-    );
-  }
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -60,20 +56,47 @@ export function AccountMenu({ account, onLogin, onLogOut }: Props) {
     }
   };
 
-  const initial = (user.name || user.email).trim().charAt(0).toUpperCase() || '?';
+  // Out of the menu, into a dialog of its own.
+  const leaveFor = (go: () => void) => {
+    setOpen(false);
+    go();
+  };
+
+  let ending = (
+    <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onLogin)}>Log in</button>
+  );
+  if (user && confirming) {
+    ending = (
+      <div className="acct-confirm">
+        <p>
+          {sync.pending
+            ? `${sync.pending === 1 ? '1 change hasn’t' : `${sync.pending} changes haven’t`} reached your account yet, and would be lost. Log out anyway?`
+            : 'Your books stay in your account. Logging out removes them from this browser.'}
+        </p>
+        <div className="add-actions">
+          <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run(onLogOut)}>
+            {busy ? 'Logging out…' : 'Log out'}
+          </button>
+        </div>
+      </div>
+    );
+  } else if (user) {
+    ending = <button type="button" role="menuitem" className="acct-item" onClick={() => setConfirming(true)}>Log out</button>;
+  }
 
   return (
     <div className="acct" ref={root}>
       <button
         type="button"
-        className="acct-btn"
+        className="btn btn-ghost hdr-icon"
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label={`Account: ${user.email}`}
-        title={user.email}
+        aria-label="Settings"
+        title="Settings"
         onClick={() => setOpen((o) => !o)}
       >
-        {initial}
+        <IconSettings />
       </button>
       <AnimatePresence>
         {open && (
@@ -85,11 +108,13 @@ export function AccountMenu({ account, onLogin, onLogOut }: Props) {
             exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
             transition={springs.snappy}
           >
-            <div className="acct-who">
-              <span>Logged in as</span>
-              <b>{user.email}</b>
-            </div>
-            {!user.emailVerified && (
+            {user && (
+              <div className="acct-who">
+                <span>Logged in as</span>
+                <b>{user.email}</b>
+              </div>
+            )}
+            {user && !user.emailVerified && (
               <div className="acct-verify">
                 <span>Confirm your email with the link we sent you.</span>
                 <button type="button" className="login-link" disabled={busy} onClick={() => void run(async () => { await sendVerification(); setMessage('Sent. Check your inbox.'); })}>
@@ -98,24 +123,11 @@ export function AccountMenu({ account, onLogin, onLogOut }: Props) {
               </div>
             )}
             {message && <p className="acct-message" role="status">{message}</p>}
-            <div className="acct-sep" />
-            {confirming ? (
-              <div className="acct-confirm">
-                <p>
-                  {sync.pending
-                    ? `${sync.pending === 1 ? '1 change hasn’t' : `${sync.pending} changes haven’t`} reached your account yet, and would be lost. Log out anyway?`
-                    : 'Your books stay in your account. Logging out removes them from this browser.'}
-                </p>
-                <div className="add-actions">
-                  <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
-                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run(onLogOut)}>
-                    {busy ? 'Logging out…' : 'Log out'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" role="menuitem" className="acct-item" onClick={() => setConfirming(true)}>Log out</button>
-            )}
+            {user && <div className="acct-sep" />}
+            <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onKey)}>
+              <IconKey /> Library key
+            </button>
+            {ending}
           </motion.div>
         )}
       </AnimatePresence>

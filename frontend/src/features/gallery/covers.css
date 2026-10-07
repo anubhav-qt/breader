@@ -71,7 +71,7 @@
 }
 .cv :is(.tile-more, .tile-fav) { width: var(--tool); height: var(--tool); }
 .cv .tile-tools svg { width: calc(var(--tool) * 0.53); height: calc(var(--tool) * 0.53); }
-.cv:hover .tile-more, .cv:hover button.tile-done { opacity: 1; }
+.cv:hover .tile-more { opacity: 1; }
 
 /* On the cover, over a shade at its foot: how far it's read as a line, no words, then its title. */
 .cv-words {
@@ -118,25 +118,11 @@
 
 /* The hero, then the wall: every other series, an even grid of covers. */
 .mg-hero { height: clamp(300px, 30vw, 400px); }
-.mg-wall { margin-top: 14px; }
-.mg-tools { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.mg-wall { margin-top: 18px; }
 .cv-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px; }
-
-/* Only the covers, or their titles too. */
-.mg-eye {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  color: var(--ink-2);
-  transition: color 160ms ease, background-color 160ms ease;
-}
-.mg-eye svg { width: 19px; height: 19px; }
-.mg-eye:hover { color: var(--ink); }
-.mg-eye[aria-pressed="true"] { color: var(--ink); background: var(--fill); }
 
 @media (max-width: 720px) {
   .mg-hero { height: 250px; }
+  .mg-wall { margin-top: 10px; }
   .cv-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 }

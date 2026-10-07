@@ -19,21 +19,8 @@
 .login-note { margin: 0 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--fill); font: var(--ui-w) 12.5px/1.45 var(--ui); }
 .add-choice > svg.login-go { width: 18px; height: 18px; margin-top: 2px; color: var(--ink-2); }
 
-/* Header: the account's initial and its menu */
+/* Header: settings, and its menu */
 .acct { position: relative; }
-.acct-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--ink);
-  color: var(--canvas);
-  font: var(--ui-w-strong) 15px/1 var(--ui);
-  transition: opacity 140ms ease, transform 160ms ease;
-}
-.acct-btn:hover { opacity: 0.86; }
-.acct-btn:active { transform: scale(0.95); }
 .acct-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -55,6 +42,9 @@
 .acct-message { margin: 0; font: var(--ui-w) 12px/1.45 var(--ui); }
 .acct-sep { height: 1px; background: var(--line); }
 .acct-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
   padding: 9px 10px;
   margin: -4px -6px;
@@ -63,5 +53,6 @@
   transition: background-color 140ms ease;
 }
 .acct-item:hover { background: var(--fill); }
+.acct-item svg { flex: none; width: 16px; height: 16px; color: var(--ink-2); }
 .acct-confirm p { margin: 0; font: var(--ui-w) 12.5px/1.45 var(--ui); color: var(--ink-2); }
 .acct-confirm .add-actions { margin-top: 10px; }

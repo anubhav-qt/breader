@@ -95,10 +95,7 @@
 .tile-more svg, .tile-fav svg { width: 16px; height: 16px; }
 .tile-fav svg { fill: currentColor; }
 .tile-done svg { fill: none; width: 15px; height: 15px; }
-/* Not finished yet, the tick waits faintly, like the edit button beside it. */
-button.tile-done:not(.is-on) { opacity: 0.55; transition: opacity 160ms ease, background-color 160ms ease; }
-.tile:hover button.tile-done, button.tile-done:focus-visible { opacity: 1; }
-button.tile-done:hover, .tile-keep:not(.is-on):hover { background: var(--canvas); }
+.tile-keep:not(.is-on):hover { background: var(--canvas); }
 /* Someone's book: into the reader's own library, then a tick once it's there. */
 .tile-keep svg { fill: none; width: 16px; height: 16px; }
 .tile-keep.is-on { cursor: default; }

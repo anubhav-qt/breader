@@ -14,6 +14,13 @@ interface Props {
   onShow: (which: Showing) => void;
   onClose: () => void;
   say: (text: string) => void;
+  /**
+   * The reader's own library, first in the list, where the list is the only way between them
+   * (the title's menu): its name, how many in it, and showing it.
+   */
+  mine?: { name: string; count: string; onShow: () => void };
+  /** Which the library shows now: the reader's own, a shared one, or neither (Browse). */
+  current?: 'mine' | 'shelf' | null;
 }
 
 /**
@@ -22,7 +29,7 @@ interface Props {
  * The star picks the one the tab opens at, the first unless the reader picks another. A key pasted
  * below adds one. Others see the reader's shared books by the name they give their own.
  */
-export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) {
+export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, mine, current = 'shelf' }: Props) {
   const [renaming, setRenaming] = useState<Showing | null>(null);
   const [draft, setDraft] = useState('');
   const [key, setKey] = useState('');
@@ -74,10 +81,20 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
       exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
       transition={springs.snappy}
     >
+      {mine && (
+        <div className="lm-list lm-mine">
+          <div className={`lm-row${current === 'mine' ? ' is-on' : ''}`}>
+            <button type="button" className="lm-pick" aria-current={current === 'mine'} onClick={() => { mine.onShow(); onClose(); }}>
+              <span className="lm-name">{mine.name}</span>
+              <span className="lm-sub">{mine.count}</span>
+            </button>
+          </div>
+        </div>
+      )}
       <div className="lm-list">
         {rows.map(({ which, count, closed }) => {
           const name = libraryName(sharing, which);
-          const on = sharing.showing === which;
+          const on = current === 'shelf' && sharing.showing === which;
           const isDefault = sharing.byDefault === which;
           // What its owner calls it, when that isn't the name it has here.
           const theirs = which === 'own' ? null : sharing.libs[which]?.name;

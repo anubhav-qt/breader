@@ -38,7 +38,6 @@ export interface TileProps {
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   /** Marks it finished, or not after all, from the tick beside the star. */
-  onFinish?: (book: ShelfItem, finished: boolean) => void;
   /** Someone's shared library: puts the book in the reader's own. */
   onKeep?: (book: ShelfItem) => void;
 }
@@ -62,7 +61,7 @@ function setMask(el: HTMLElement | null, mask: string) {
  *
  * A full-size button opens the book; the corner button (or a right-click) opens the edit popover.
  */
-export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onFinish, onKeep }: TileProps) {
+export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onKeep }: TileProps) {
   const b = item.book;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
@@ -109,10 +108,9 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   const done = b.progress >= 1;
   // Someone else's book, in their shared library: theirs to change. It can only be read, or kept.
   const theirs = b.source === 'shelf';
-  const finishable = !!onFinish && !theirs;
   const keepable = !!onKeep && theirs;
   // The corner's buttons: keep or finished, favourite and the edit button, which the first line keeps clear of.
-  const tools = stack ? 0 : (theirs ? 0 : 1) + (keepable || finishable || done ? 1 : 0) + (b.favorite ? 1 : 0);
+  const tools = stack ? 0 : (theirs ? 0 : 1) + (keepable || done ? 1 : 0) + (b.favorite ? 1 : 0);
   useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);
   useEffect(() => {
     let live = true;
@@ -169,7 +167,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           </span>
         )}
         {/* A series' card opens the series; its books are edited there. */}
-        {!stack && <Tools book={b} open={open} moreRef={moreRef} onEdit={onEdit} onFinish={onFinish} onKeep={onKeep} />}
+        {!stack && <Tools book={b} open={open} moreRef={moreRef} onEdit={onEdit} onKeep={onKeep} />}
       </div>
     </motion.div>
   );

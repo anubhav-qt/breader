@@ -1,7 +1,4 @@
-import { useState } from 'react';
-import { IconEye } from '../../components/icons';
 import type { ShelfItem } from '../../data/useLibrary';
-import { readLocal, writeLocal } from '../../lib/store';
 import { CoverCard } from './CoverCard';
 import { Tile } from './Tile';
 import type { SectionProps } from './types';
@@ -11,22 +8,16 @@ import type { SectionProps } from './types';
  * read, big, then every other one as its cover, the one read last first.
  */
 
-/** Only the covers, without their titles: off until the reader turns it on, then kept on this device. */
-const COVERS_ONLY = 'breader.manga.coversOnly.v1';
+type Props = Omit<SectionProps, 'items' | 'indexBase'> & {
+  books: ShelfItem[];
+  /** The covers without their titles on them (the header's eye). */
+  coversOnly: boolean;
+};
 
-type Props = Omit<SectionProps, 'items' | 'indexBase'> & { books: ShelfItem[] };
-
-export function MangaLibrary({ books, ...shared }: Props) {
-  const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
+export function MangaLibrary({ books, coversOnly, ...shared }: Props) {
   const [reading, ...rest] = books;
   // Only when series join or leave the wall do its covers glide to their new places.
   const layoutKey = rest.map((b) => b.key ?? b.id).join('|');
-
-  const flip = () => {
-    const next = !coversOnly;
-    setCoversOnly(next);
-    writeLocal(COVERS_ONLY, next);
-  };
 
   return (
     <>
@@ -45,24 +36,11 @@ export function MangaLibrary({ books, ...shared }: Props) {
           open={(reading.key ?? reading.id) === shared.editingId}
           onOpen={shared.onOpen}
           onEdit={shared.onEdit}
-          onFinish={shared.onFinish}
           onKeep={shared.onKeep}
         />
       </section>
       {rest.length > 0 && (
         <section className="mg-wall" aria-label="Your manga">
-          <div className="mg-tools">
-            <button
-              type="button"
-              className="mg-eye"
-              aria-label="Only covers"
-              aria-pressed={coversOnly}
-              title={coversOnly ? 'Show the titles' : 'Only the covers'}
-              onClick={flip}
-            >
-              <IconEye />
-            </button>
-          </div>
           <div className="cv-wall">
             {rest.map((b, i) => (
               <CoverCard
@@ -76,7 +54,6 @@ export function MangaLibrary({ books, ...shared }: Props) {
                 layoutKey={layoutKey}
                 onOpen={shared.onOpen}
                 onEdit={shared.onEdit}
-                onFinish={shared.onFinish}
                 onKeep={shared.onKeep}
               />
             ))}

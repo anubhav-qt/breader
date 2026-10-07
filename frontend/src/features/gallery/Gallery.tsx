@@ -28,6 +28,8 @@ interface Props {
   view: View;
   /** Manga: set out by its covers (MangaLibrary), and no series anywhere, not even in a card's menu. */
   manga?: boolean;
+  /** Manga's covers without their titles on them. */
+  coversOnly?: boolean;
   /** The panel's id, and the id of the tab that labels it. */
   id: string;
   labelledBy: string;
@@ -57,7 +59,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, manga = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
+export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -113,12 +115,12 @@ export function Gallery({ books, seriesNames, place, view, manga = false, now, i
     );
   }
 
-  const shared = { now, enter: first.current, editingId: editing?.id, onOpen, onEdit: openEdit, onFinish, onKeep };
+  const shared = { now, enter: first.current, editingId: editing?.id, onOpen, onEdit: openEdit, onKeep };
   // Shelves below only add something once there's more than Recent holds, or a series to show.
   const more = books.length > RECENT || stacks.size > 0;
   return (
     <motion.div {...panel} ref={scrollRef} className="gallery" layoutScroll>
-      {manga && <MangaLibrary books={books} {...shared} />}
+      {manga && <MangaLibrary books={books} coversOnly={coversOnly} {...shared} />}
       {!manga && (
         <section className="recent" aria-label="Recent">
           {/* "Recent" only means something when more books follow it. */}
@@ -172,7 +174,6 @@ export function Gallery({ books, seriesNames, place, view, manga = false, now, i
             editingId={editing?.id}
             onOpen={onOpen}
             onEdit={openEdit}
-            onFinish={onFinish}
             onKeep={onKeep}
             onKeepAll={onKeepAll}
             onClose={closeSeries}

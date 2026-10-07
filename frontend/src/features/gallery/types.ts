@@ -17,8 +17,6 @@ export interface SectionProps {
   editingId?: string;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
-  /** Marks a book finished, or not after all, from the tick on its card. */
-  onFinish?: (book: ShelfItem, finished: boolean) => void;
   /** Puts a book from someone's shared library in the reader's own, without opening it. */
   onKeep?: (book: ShelfItem) => void;
 }
