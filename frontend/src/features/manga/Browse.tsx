@@ -46,6 +46,9 @@ const KINDS: Array<{ v: MangaKind; label: string; about: string }> = [
  */
 type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; ask: string; items: MangaFound[]; next: string | null };
 
+/** What one lot found, and where the one after it starts. */
+type Lot = { items: MangaFound[]; next: string | null };
+
 function messageOf(e: unknown): string {
   if (e instanceof Error) return e.message;
   return 'Breader couldn’t reach it.';
@@ -58,8 +61,10 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
   const [tries, setTries] = useState(0);
   const end = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  /** The search a next lot is being fetched for, if any. */
+  /** The search a next lot is being added to, if any. */
   const loadingMore = useRef<string | null>(null);
+  /** The next lot, asked for as soon as the one before it came: the search it's for, and where it starts. */
+  const ahead = useRef<{ ask: string; at: string; lot: Promise<Lot> } | null>(null);
 
   // Searching, the best match comes first; otherwise the order picked.
   let sort: MangaSort = prefs.sort;
@@ -76,9 +81,22 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
    * A lot of results from every place, from where the search had got to. Only series that can be
    * read here show, and a slow place shows with the next lot, so a lot can be short or even empty.
    */
-  const fetchLot = async (next: string | null): Promise<{ items: MangaFound[]; next: string | null }> => {
+  const fetchLot = async (next: string | null): Promise<Lot> => {
     const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, kinds: prefs.kinds, next: next ?? undefined });
     return { items: r.items, next: r.next };
+  };
+
+  /** The lot starting at `at`: the one already asked for ahead, or asked for now. */
+  const lotAt = (ask: string, at: string): Promise<Lot> => {
+    const a = ahead.current;
+    if (a && a.ask === ask && a.at === at) return a.lot;
+    const lot = fetchLot(at);
+    ahead.current = { ask, at, lot };
+    // One asked for ahead may fail before it's wanted. It's forgotten, so it's asked for again then.
+    void lot.catch(() => {
+      if (ahead.current && ahead.current.lot === lot) ahead.current = null;
+    });
+    return lot;
   };
 
   useEffect(() => {
@@ -93,19 +111,28 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askKey, tries]);
 
-  // Near the end of what's shown, the next lot comes. A lot that came back empty leaves the end in
-  // view, so the one after it is asked for straight away. Another search started meanwhile (a dot
-  // flipped, say) may have got just as far, so a lot is added only to the search it's for.
+  // The next lot is asked for as soon as one comes, so it's mostly here before the end is.
   const ready = found.state === 'ready' ? found : null;
+  useEffect(() => {
+    if (!ready?.next || hidden) return;
+    if (ready.ask !== askKey) return;
+    void lotAt(ready.ask, ready.next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, hidden, askKey]);
+
+  // Within a screen and a half of the end, the next lot shows. A short or empty one leaves the end
+  // that near, so the one after it shows straight away too. Another search started meanwhile (a dot
+  // flipped, say) may have got just as far, so a lot is added only to the search it's for.
   useEffect(() => {
     const el = end.current;
     if (!el || !ready?.next || hidden) return;
+    if (ready.ask !== askKey) return;
     const ask = ready.ask;
+    const at = ready.next;
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting || loadingMore.current === ask) return;
       loadingMore.current = ask;
-      const at = ready.next;
-      fetchLot(at).then(
+      lotAt(ask, at).then(
         (r) => {
           setFound((f) => {
             if (f.state !== 'ready' || f.ask !== ask || f.next !== at) return f;
@@ -123,7 +150,7 @@ export function Browse({ id, labelledBy, hidden, have, prefs, onPrefs, onPick }:
       ).finally(() => {
         if (loadingMore.current === ask) loadingMore.current = null;
       });
-    }, { root: scroller.current, rootMargin: '600px 0px' });
+    }, { root: scroller.current, rootMargin: '150% 0px' });
     io.observe(el);
     return () => io.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
