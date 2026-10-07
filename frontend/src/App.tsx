@@ -4,7 +4,6 @@ import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { Header, type Tab } from './components/Header';
 import { IconPlus } from './components/icons';
-import { SWITCH_STYLES, type SwitchStyle } from './components/switchStyles';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { categoryOf, countOf, type Category } from './books/category';
@@ -143,8 +142,6 @@ export default function App() {
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
-  /** The way between the reader's own library and the shared ones: one for now, the others to try in the preview bar. */
-  const [switchLook, setSwitchLook] = useState<SwitchStyle>(() => (devTools ? readParam('nav', SWITCH_STYLES.map((l) => l.id), 'title') : 'title'));
   /** Manga's covers without their titles: off until the reader turns it on, then kept on this device. */
   const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
@@ -179,7 +176,6 @@ export default function App() {
     writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
-  useEffect(() => { writeParam('nav', switchLook, 'title'); }, [switchLook]);
 
   // Back from Google, or from a link in one of Breader's emails.
   useEffect(() => {
@@ -811,14 +807,10 @@ export default function App() {
             browse={mdOn !== false}
             shelfName={libraryName(sharing, showing)}
             canAdd={books.length > 0}
-            switchLook={switchLook}
-            // Only over manga's covers, where there are some to show.
-            coversOnly={manga && tab !== 'browse' && books.length > 0 ? coversOnly : undefined}
-            onCoversOnly={flipCovers}
             onTab={setTab}
             onAdd={() => setAdding({ mode: 'file' })}
             onBrowse={() => setTab('browse')}
-            libraries={(close, withMine) => (
+            libraries={(close) => (
               <LibraryMenu
                 key="libraries"
                 sharing={sharing}
@@ -826,11 +818,19 @@ export default function App() {
                 onShow={(which: Showing) => { showLibrary(which); setTab('shelf'); }}
                 onClose={close}
                 say={say}
-                mine={withMine ? { name: manga ? 'My manga' : 'My books', count: countOf(items.mine.length, category), onShow: () => setTab('mine') } : undefined}
-                current={tab === 'browse' ? null : tab}
               />
             )}
-            settings={<SettingsMenu account={account} onLogin={() => setLogin({ mode: 'login' })} onLogOut={logOutAll} onKey={() => setKeyOpen(true)} />}
+            settings={(
+              <SettingsMenu
+                account={account}
+                onLogin={() => setLogin({ mode: 'login' })}
+                onLogOut={logOutAll}
+                onKey={() => setKeyOpen(true)}
+                // Only over manga's covers, where there are some to show.
+                coversOnly={manga && tab !== 'browse' && books.length > 0 ? coversOnly : undefined}
+                onCoversOnly={flipCovers}
+              />
+            )}
           />
           {lib.ready && (['mine', 'shelf'] as const).filter((t) => seen.has(t)).map((t) => (
             <Gallery
@@ -983,8 +983,6 @@ export default function App() {
           onMode={setPreview}
           theme={theme}
           onTheme={setTheme}
-          switchLook={switchLook}
-          onSwitchLook={setSwitchLook}
           onReset={() => void lib.reset()}
         />
       )}

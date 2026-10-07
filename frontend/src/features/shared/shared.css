@@ -42,5 +42,3 @@
 .lm-add .btn { flex: none; }
 .lm-error { margin: -4px 4px 0; font: var(--ui-w) 12px/1.4 var(--ui); }
 .lm-note { margin: 0 4px 2px; font: var(--ui-w) 11.5px/1.45 var(--ui); color: var(--ink-2); }
-/* The reader's own library, above the shared ones, in the title's menu. */
-.lm-mine { padding-bottom: 10px; border-bottom: 1px solid var(--line); }

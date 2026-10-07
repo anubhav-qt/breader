@@ -54,5 +54,10 @@
 }
 .acct-item:hover { background: var(--fill); }
 .acct-item svg { flex: none; width: 16px; height: 16px; color: var(--ink-2); }
+/* An item that's on or off, with a switch at its end. */
+.acct-toggle { padding-block: 4px; }
+.acct-toggle .switch { margin-left: auto; }
+.acct-toggle[aria-checked="true"] .switch { background: var(--ink); }
+.acct-toggle[aria-checked="true"] .switch::after { transform: translateX(16px); }
 .acct-confirm p { margin: 0; font: var(--ui-w) 12.5px/1.45 var(--ui); color: var(--ink-2); }
 .acct-confirm .add-actions { margin-top: 10px; }

@@ -2,10 +2,9 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { CATEGORIES, type Category } from '../books/category';
 import { springs } from '../lib/springs';
-import { IconEye, IconPlus } from './icons';
+import { IconPlus } from './icons';
 import { LibrarySwitch } from './LibrarySwitch';
 import { Logo } from './Logo';
-import type { SwitchStyle } from './switchStyles';
 import './header.css';
 
 /** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened by its button, not a tab. */
@@ -23,21 +22,16 @@ interface Props {
   shelfName: string;
   /** False while the open tab is empty: the empty library has its own centred button. */
   canAdd: boolean;
-  /** The way between the reader's own library and the shared ones (LibrarySwitch). */
-  switchLook: SwitchStyle;
-  /** Manga's covers without their titles, or with them; absent where there are no covers to show. */
-  coversOnly?: boolean;
-  onCoversOnly: () => void;
   onTab: (t: Tab) => void;
   onAdd: () => void;
   onBrowse: () => void;
   /** The list of shared libraries (features/shared/LibraryMenu.tsx). */
-  libraries: (close: () => void, withMine: boolean) => ReactNode;
-  /** Settings: the library key, and logging in or out. */
+  libraries: (close: () => void) => ReactNode;
+  /** Settings: manga's covers on their own, the library key, and logging in or out. */
   settings: ReactNode;
 }
 
-export function Header({ category, onCategory, tab, counts, browse, shelfName, canAdd, switchLook, coversOnly, onCoversOnly, onTab, onAdd, onBrowse, libraries, settings }: Props) {
+export function Header({ category, onCategory, tab, counts, browse, shelfName, canAdd, onTab, onAdd, onBrowse, libraries, settings }: Props) {
   const manga = category === 'manga';
 
   // One Tab stop for the pair too; the arrow keys switch between them, as radio buttons do.
@@ -70,7 +64,6 @@ export function Header({ category, onCategory, tab, counts, browse, shelfName, c
         ))}
       </div>
       <LibrarySwitch
-        look={switchLook}
         category={category}
         tab={tab}
         counts={counts}
@@ -82,25 +75,13 @@ export function Header({ category, onCategory, tab, counts, browse, shelfName, c
         {/* Not animated: a fading copy would sit beside the empty library's own Add button,
             and on phones that fade can stall and leave both on screen. */}
         {canAdd && manga && browse && (
-          <button type="button" className="btn btn-primary" onClick={onBrowse} aria-label="Browse" aria-pressed={tab === 'browse'}>
+          <button type="button" className="btn btn-primary hdr-add" onClick={onBrowse} aria-label="Browse" aria-pressed={tab === 'browse'}>
             <IconPlus /> <span className="hdr-label">Browse</span>
           </button>
         )}
         {canAdd && !manga && (
-          <button type="button" className="btn btn-primary" onClick={onAdd} aria-label="Add book">
+          <button type="button" className="btn btn-primary hdr-add" onClick={onAdd} aria-label="Add book">
             <IconPlus /> <span className="hdr-label">Add book</span>
-          </button>
-        )}
-        {coversOnly !== undefined && (
-          <button
-            type="button"
-            className="btn btn-ghost hdr-icon"
-            aria-label="Only covers"
-            aria-pressed={coversOnly}
-            title={coversOnly ? 'Show the titles' : 'Only the covers'}
-            onClick={onCoversOnly}
-          >
-            <IconEye />
           </button>
         )}
         {settings}

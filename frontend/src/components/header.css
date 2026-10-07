@@ -7,15 +7,14 @@
   gap: 44px;
   padding: 0 36px;
 }
-/* With the library's name as a title, that gets a row of its own under the rest. */
-.hdr:has(.ls-title) { flex-wrap: wrap; height: auto; padding-top: 19px; row-gap: 12px; }
 .logo { width: 38px; height: 38px; flex: none; display: block; }
 .logo-b { fill: var(--ink); }
 .hdr-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-/* Buttons that are only an icon: the eye and settings. */
+/* Add book and Browse: one width, so switching shelves leaves it where it was. */
+.hdr-actions .hdr-add { width: 128px; }
+/* Buttons that are only an icon: settings. */
 .hdr-actions .hdr-icon { width: 40px; padding: 0; }
 .hdr-icon svg { width: 20px; height: 20px; }
-.hdr-icon[aria-pressed="true"] { color: var(--ink); background: var(--fill); }
 
 /* Books or manga: which shelf the libraries beside it show. Closer to the logo than the rest are. */
 .cats { flex: none; display: flex; margin-left: -22px; padding: 3px; border-radius: 12px; background: var(--fill); }
@@ -32,24 +31,21 @@
 .cat-on { position: absolute; inset: 0; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
 .cat-name { position: relative; }
 
-/* Phones: a second row, under the logo and buttons, for whatever needs one. */
+/* Phones: closer to the edges, and as tall as what's in it. */
 @media (max-width: 720px) {
   .hdr { flex-wrap: wrap; height: auto; padding: 14px 16px 0; column-gap: 12px; row-gap: 4px; }
-  .hdr:has(.ls-title) { padding-top: 14px; row-gap: 10px; }
   .cats { margin-left: 0; }
 }
 /* Narrow screens: the buttons go to icons, so the shelf switch fits beside them on the top row. */
 @media (max-width: 560px) {
   .hdr-label { display: none; }
   .hdr-actions { gap: 4px; }
-  .hdr-actions .btn { padding: 0 12px; }
-  .hdr-actions .hdr-icon { padding: 0; }
+  .hdr-actions :is(.hdr-add, .hdr-icon) { width: 40px; padding: 0; }
 }
 @media (max-width: 400px) {
   .hdr { column-gap: 10px; }
   .hdr-actions { gap: 2px; }
-  .hdr-actions .btn { padding: 0 10px; }
-  .hdr-actions .hdr-icon { width: 36px; padding: 0; }
+  .hdr-actions :is(.hdr-add, .hdr-icon) { width: 36px; padding: 0; }
   .cats { margin-left: -4px; }
   .cat { padding: 0 9px; font-size: 12px; }
 }

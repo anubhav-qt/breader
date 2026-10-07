@@ -4,32 +4,26 @@ import { countOf, type Category } from '../books/category';
 import { springs } from '../lib/springs';
 import type { Tab } from './Header';
 import { IconCaret } from './icons';
-import type { SwitchStyle } from './switchStyles';
 import './library-switch.css';
 
 const TABS: Array<'mine' | 'shelf'> = ['mine', 'shelf'];
 
 interface Props {
-  look: SwitchStyle;
   category: Category;
   tab: Tab;
   counts: Record<'mine' | 'shelf', number>;
   /** The shared library the second one shows: the reader's own, or someone's from their list. */
   shelfName: string;
   onTab: (t: Tab) => void;
-  /**
-   * The list of shared libraries (features/shared/LibraryMenu.tsx); with the reader's own first
-   * when it's the only way between them.
-   */
-  libraries: (close: () => void, withMine: boolean) => ReactNode;
+  /** The list of shared libraries (features/shared/LibraryMenu.tsx). */
+  libraries: (close: () => void) => ReactNode;
 }
 
 /**
- * Between the reader's own library and the shared ones, one of three ways: the library's name as a
- * title whose menu lists them all, two halves of a pill in the header, or the same pill floating
- * at the bottom of the screen.
+ * Between the reader's own library and the shared ones: two halves of a pill, in the header on
+ * wide screens and floating at the bottom on phones, where a thumb reaches it.
  */
-export function LibrarySwitch({ look, category, tab, counts, shelfName, onTab, libraries }: Props) {
+export function LibrarySwitch({ category, tab, counts, shelfName, onTab, libraries }: Props) {
   const [menu, setMenu] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const mine = category === 'manga' ? 'My manga' : 'My books';
@@ -50,35 +44,6 @@ export function LibrarySwitch({ look, category, tab, counts, shelfName, onTab, l
     };
   }, [menu]);
 
-  if (look === 'title') {
-    let name = mine;
-    let count: number | null = counts.mine;
-    if (tab === 'shelf') {
-      name = shelfName;
-      count = counts.shelf;
-    }
-    if (tab === 'browse') {
-      name = 'Browse';
-      count = null;
-    }
-    return (
-      <div className="ls ls-title" ref={wrap}>
-        <button
-          type="button"
-          className={`ls-head${menu ? ' is-open' : ''}`}
-          aria-haspopup="dialog"
-          aria-expanded={menu}
-          onClick={() => setMenu((m) => !m)}
-        >
-          <span id={`tab-${tab}`} className="ls-name">{name}</span>
-          {count !== null && <span className="ls-count">{count}</span>}
-          <IconCaret />
-        </button>
-        <AnimatePresence>{menu && libraries(close, true)}</AnimatePresence>
-      </div>
-    );
-  }
-
   // One Tab stop for both; the arrow keys switch between them.
   const onArrow = (e: KeyboardEvent) => {
     const i = TABS.indexOf(focusable);
@@ -92,7 +57,7 @@ export function LibrarySwitch({ look, category, tab, counts, shelfName, onTab, l
   };
 
   return (
-    <div className={`ls ls-${look}`} ref={wrap}>
+    <div className="ls" ref={wrap}>
       <div className="ls-seg">
         <div className="ls-tabs" role="tablist" aria-label="Library" onKeyDown={onArrow}>
           {TABS.map((t) => (
@@ -108,7 +73,7 @@ export function LibrarySwitch({ look, category, tab, counts, shelfName, onTab, l
               // The shared one, chosen already, opens its list of libraries.
               onClick={() => (t === 'shelf' && tab === 'shelf' ? setMenu((m) => !m) : onTab(t))}
             >
-              {tab === t && <motion.span className="ls-on" layoutId={`ls-on-${look}`} transition={springs.snappy} />}
+              {tab === t && <motion.span className="ls-on" layoutId="ls-on" transition={springs.snappy} />}
               {t === 'shelf' && <span className="sr-only">Shared library: </span>}
               <span className="ls-name">{t === 'mine' ? mine : shelfName}</span>
               <span className="ls-count" aria-hidden="true">{counts[t]}</span>
@@ -128,7 +93,7 @@ export function LibrarySwitch({ look, category, tab, counts, shelfName, onTab, l
           <IconCaret />
         </button>
       </div>
-      <AnimatePresence>{menu && libraries(close, false)}</AnimatePresence>
+      <AnimatePresence>{menu && libraries(close)}</AnimatePresence>
     </div>
   );
 }

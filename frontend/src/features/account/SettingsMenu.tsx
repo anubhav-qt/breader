@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { IconKey, IconSettings } from '../../components/icons';
+import { IconEye, IconKey, IconSettings } from '../../components/icons';
 import { useSyncStatus } from '../../data/sync';
 import { loginError, sendVerification, type AccountState } from '../../lib/account';
 import { springs } from '../../lib/springs';
@@ -13,10 +13,16 @@ interface Props {
   onLogOut: () => Promise<void>;
   /** The reader's library key, which shares their books. */
   onKey: () => void;
+  /** Manga's covers without their titles, or with them; absent where there are no covers to show. */
+  coversOnly?: boolean;
+  onCoversOnly: () => void;
 }
 
-/** The header's settings: the library key, and logging in, or who's logged in and logging out. */
-export function SettingsMenu({ account, onLogin, onLogOut, onKey }: Props) {
+/**
+ * The header's settings: manga's covers on their own, the library key, and logging in, or who's
+ * logged in and logging out.
+ */
+export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, onCoversOnly }: Props) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -124,6 +130,13 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey }: Props) {
             )}
             {message && <p className="acct-message" role="status">{message}</p>}
             {user && <div className="acct-sep" />}
+            {/* Stays open, so the covers can be seen changing behind it. */}
+            {coversOnly !== undefined && (
+              <button type="button" role="menuitemcheckbox" aria-checked={coversOnly} className="acct-item acct-toggle" onClick={onCoversOnly}>
+                <IconEye /> Only covers
+                <span className="switch" aria-hidden="true" />
+              </button>
+            )}
             <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onKey)}>
               <IconKey /> Library key
             </button>

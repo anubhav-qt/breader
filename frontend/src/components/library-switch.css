@@ -1,35 +1,7 @@
-/* Between the reader's own library and the shared ones (LibrarySwitch), one of three ways. */
-.ls { position: relative; min-width: 0; }
-
-/* Title menu: the library's name, big, under the header; its menu lists them all. */
-.ls-title { order: 4; flex: 1 0 100%; display: flex; }
-.ls-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-  padding: 4px 10px 4px 0;
-  border-radius: 12px;
-  color: var(--ink);
-}
-.ls-head .ls-name {
-  min-width: 0;
-  padding-top: 0.15em;
-  margin-top: -0.15em;
-  font-family: var(--read);
-  font-weight: 700;
-  font-size: 40px;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ls-head .ls-count { flex: none; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); }
-.ls-head svg { flex: none; align-self: center; width: 18px; height: 18px; color: var(--ink-2); transition: transform 160ms ease, color 140ms ease; }
-.ls-head:hover svg, .ls-head.is-open svg { color: var(--ink); }
-.ls-head.is-open svg { transform: rotate(180deg); }
-
-/* Header pill and bottom switch: two halves, the chosen one lit, and the shared ones' list. */
+/* Between the reader's own library and the shared ones (LibrarySwitch): two halves, the chosen one
+   lit, and the shared ones' list. Beside the books-or-manga switch, a little closer to it than the
+   header's gaps. */
+.ls { position: relative; min-width: 0; flex: 0 1 auto; margin-left: -32px; }
 .ls-seg { display: flex; align-items: center; min-width: 0; padding: 3px; border-radius: 12px; background: var(--fill); }
 .ls-tabs { display: flex; min-width: 0; }
 .ls-tab {
@@ -46,6 +18,8 @@
   white-space: nowrap;
   transition: color 160ms ease;
 }
+/* Short of room, a shared library's long name gives way; the reader's own stays whole. */
+.ls-tab:first-child { flex: none; }
 .ls-tab:hover, .ls-tab[aria-selected="true"] { color: var(--ink); }
 .ls-tab .ls-name { position: relative; min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
 .ls-tab .ls-count { position: relative; flex: none; font-size: 11.5px; opacity: 0.75; }
@@ -65,43 +39,37 @@
 .ls-caret svg { width: 16px; height: 16px; transition: transform 160ms ease; }
 .ls-caret.is-open svg { transform: rotate(180deg); }
 
-/* Header pill: beside the books-or-manga switch, a little closer to it than the header's gaps. */
-.ls-pill { flex: 0 1 auto; margin-left: -32px; }
-
-/* Bottom switch: the pill floats over the library, at the thumb, its list opening upwards. */
-.ls-bottom {
-  position: fixed;
-  left: 50%;
-  bottom: calc(18px + var(--pv-room, 0px) + env(safe-area-inset-bottom));
-  z-index: 30;
-  max-width: calc(100vw - 32px);
-  transform: translateX(-50%);
-}
-.ls-bottom .ls-seg {
-  padding: 4px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--paper) 88%, transparent);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 0 0 1px var(--tile-border), var(--float-shadow);
-}
-.ls-bottom .ls-tab { height: 38px; padding: 0 16px; border-radius: 12px; font-size: 14px; }
-.ls-bottom .ls-on { background: var(--ink); box-shadow: none; }
-.ls-bottom .ls-tab[aria-selected="true"] { color: var(--canvas); }
-.ls-bottom .ls-caret { width: 34px; height: 34px; }
-.ls-bottom .lm {
-  top: auto;
-  bottom: calc(100% + 10px);
-  left: calc(50% - min(170px, 50vw - 16px));
-  transform-origin: bottom center;
-}
-
-@media (max-width: 720px) {
-  .ls-head .ls-name { font-size: 34px; }
-  /* The pill gets the row under the logo and buttons to itself, in two even halves. */
-  .ls-pill { order: 3; flex: 1 0 100%; margin: 6px 0 4px; }
-  .ls-pill .ls-tabs { flex: 1; }
-  .ls-pill .ls-tab { flex: 1 1 50%; justify-content: center; }
-  .ls-bottom .ls-tab { padding-inline: 13px; }
-  .ls-bottom .ls-tab .ls-name { max-width: 14ch; }
+/* Phones, and screens too narrow for it beside the rest of the header: the pill floats over the
+   library, at the thumb, its list opening upwards. */
+@media (max-width: 880px) {
+  .ls {
+    position: fixed;
+    left: 50%;
+    bottom: calc(18px + var(--pv-room, 0px) + env(safe-area-inset-bottom));
+    z-index: 30;
+    max-width: calc(100vw - 32px);
+    margin: 0;
+    transform: translateX(-50%);
+  }
+  .ls-seg {
+    padding: 4px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 0 0 1px var(--tile-border), var(--float-shadow);
+  }
+  .ls-tab { height: 38px; padding: 0 13px; border-radius: 12px; font-size: 14px; }
+  .ls-tab .ls-name { max-width: 14ch; }
+  .ls-on { background: var(--ink); box-shadow: none; }
+  .ls-tab[aria-selected="true"] { color: var(--canvas); }
+  .ls-caret { width: 34px; height: 34px; }
+  .ls .lm {
+    top: auto;
+    bottom: calc(100% + 10px);
+    left: calc(50% - min(170px, 50vw - 16px));
+    transform-origin: bottom center;
+  }
+  /* Messages rise above it rather than cover it. */
+  :root:has(.ls) .toast-host { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
 }
