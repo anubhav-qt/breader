@@ -14,8 +14,9 @@ import { caughtUp, firstMissing, highest } from './readable.ts';
  * Suwayomi fetches from each site as its extension says, keeping to that site's own limits; on top
  * of that, Breader asks each source no faster than it asks MangaDex. As with MangaDex, a search
  * shows only series every chapter of can be read (readable.ts), never one tagged loli or shota,
- * those for adults only with 18+, and doujinshi and anthologies only when asked. Pages and covers
- * are kept on disk.
+ * those for adults only with 18+, and doujinshi and anthologies only when asked. Each series is
+ * judged by its own genres: a site that has some series for adults isn't kept out whole. Pages and
+ * covers are kept on disk.
  */
 
 const MINUTE = 60_000;
@@ -32,9 +33,9 @@ const STATUS = new Map<string, SourceCard['status']>([
   ['ON_HIATUS', 'hiatus'],
 ]);
 
-const SOURCES = 'query { sources { nodes { id name lang isNsfw supportsLatest } } }';
+const SOURCES = 'query { sources { nodes { id name lang supportsLatest } } }';
 const SEARCH = 'mutation($input: FetchSourceMangaInput!) { fetchSourceManga(input: $input) { hasNextPage mangas { id title } } }';
-const SERIES = 'mutation($id: Int!) { fetchManga(input: { id: $id }) { manga { id title status genre author artist description realUrl source { id name isNsfw } } } }';
+const SERIES = 'mutation($id: Int!) { fetchManga(input: { id: $id }) { manga { id title status genre author artist description realUrl source { id name } } } }';
 const CHAPTERS = 'mutation($id: Int!) { fetchChapters(input: { mangaId: $id }) { chapters { id name chapterNumber scanlator uploadDate sourceOrder } } }';
 const PAGES = 'mutation($id: Int!) { fetchChapterPages(input: { chapterId: $id }) { pages } }';
 // These two ask only what Suwayomi has already, not the site.
@@ -51,7 +52,6 @@ interface RawSource {
   id: string;
   name: string;
   lang: string;
-  isNsfw: boolean;
   supportsLatest: boolean;
 }
 interface SearchPage {
@@ -67,7 +67,7 @@ interface RawSeries {
   artist: string | null;
   description: string | null;
   realUrl: string | null;
-  source: { id: string; name: string; isNsfw: boolean } | null;
+  source: { id: string; name: string } | null;
 }
 interface RawChapter {
   id: number;
@@ -119,14 +119,12 @@ function cardOf(m: RawSeries): SourceCard {
   let status: SourceCard['status'] = null;
   const known = STATUS.get(m.status);
   if (known) status = known;
-  let adult = adultGenre(m.genre);
-  if (m.source?.isNsfw) adult = true;
   return {
     id: `sw:${m.id}`,
     title: m.title.trim() || 'Untitled',
     cover: `/v1/manga/source/sw:${m.id}/cover`,
     status,
-    adult,
+    adult: adultGenre(m.genre),
     side: sideGenre(m.genre),
   };
 }
@@ -416,7 +414,6 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     async places(w) {
       const out: Place[] = [];
       for (const s of await sources()) {
-        if (s.isNsfw && !w.adult) continue;
         if (w.lang && s.lang.toLowerCase() !== w.lang) continue;
         out.push({ key: `sw${s.id}`, name: s.name, lot: (at) => lot(s, w, at) });
       }

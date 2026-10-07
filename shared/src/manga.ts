@@ -127,7 +127,7 @@ export interface SourceCard {
   /** Its cover through the laptop (/v1/manga/source/:id/cover), or null when it has none. */
   cover: string | null;
   status: MangaCard['status'];
-  /** From a source for adults, or for adults by its genres. */
+  /** For adults, by its genres. */
   adult: boolean;
   /** A doujinshi or an anthology, by its genres. */
   side: boolean;

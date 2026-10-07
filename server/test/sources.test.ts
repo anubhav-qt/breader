@@ -200,7 +200,9 @@ describe('one search everywhere', () => {
     expect(r.body.items[1].card).toEqual({ id: 'sw:1', title: 'Omniscient Reader’s Viewpoint', cover: '/v1/manga/source/sw:1/cover', status: 'ongoing', adult: false, side: false });
     // Every place had nothing more.
     expect(r.body.next).toBeNull();
-    expect(sw.calls.filter((c) => c.op === 'search').map((c) => c.type)).toEqual(['SEARCH', 'SEARCH', 'SEARCH']);
+    // Every source in English, Late Night's too, as its series are judged one by one.
+    expect(sw.calls.filter((c) => c.op === 'search').map((c) => c.source)).toEqual(['11', '33', '44', '22']);
+    expect(sw.calls.filter((c) => c.op === 'search').map((c) => c.type)).toEqual(['SEARCH', 'SEARCH', 'SEARCH', 'SEARCH']);
   });
 
   it('goes on without a source that fails, and answers an empty lot when the rest found nothing', async () => {
@@ -232,7 +234,7 @@ describe('one search everywhere', () => {
     expect(shown(r.body)).toEqual(['Asura Scans: All here', 'Asura Scans: A gap near the newest', 'Asura Scans: In parts']);
   });
 
-  it('keeps 18+ out unless asked, loli and shota always, and doujinshi and anthologies unless asked, after the rest', async () => {
+  it('keeps 18+ out unless asked, by each series’ own genres, loli and shota always, and doujinshi and anthologies unless asked, after the rest', async () => {
     const { b, sw } = await setup();
     sw.state.series = [
       { id: 1, source: '11', title: 'Plain' },
@@ -240,16 +242,19 @@ describe('one search everywhere', () => {
       { id: 3, source: '11', title: 'Never', genre: ['Loli'] },
       { id: 4, source: '11', title: 'Fan work', genre: ['Doujinshi'] },
       { id: 5, source: '11', title: 'Many hands', genre: ['Anthology'] },
+      // A site with some series for adults isn't for adults whole.
       { id: 6, source: '44', title: 'Late show' },
+      { id: 7, source: '44', title: 'After hours', genre: ['Romance', 'Smut'] },
     ];
     const plain = await b.get('/v1/manga/search');
-    expect(shown(plain.body)).toEqual(['Asura Scans: Plain']);
+    expect(shown(plain.body).sort()).toEqual(['Asura Scans: Plain', 'Late Night: Late show']);
     const adult = await b.get('/v1/manga/search?adult=1');
-    expect(shown(adult.body).sort()).toEqual(['Asura Scans: Plain', 'Asura Scans: Spicy', 'Late Night: Late show']);
-    expect(adult.body.items.filter((x: MangaFound) => x.kind === 'source' && x.card.adult)).toHaveLength(2);
+    expect(shown(adult.body).sort()).toEqual(['Asura Scans: Plain', 'Asura Scans: Spicy', 'Late Night: After hours', 'Late Night: Late show']);
+    const marked = adult.body.items.filter((x: MangaFound) => x.kind === 'source' && x.card.adult);
+    expect(shown({ items: marked }).sort()).toEqual(['Asura Scans: Spicy', 'Late Night: After hours']);
     const side = await b.get('/v1/manga/search?doujinshi=1');
-    expect(shown(side.body)).toEqual(['Asura Scans: Plain', 'Asura Scans: Fan work', 'Asura Scans: Many hands']);
-    expect(side.body.items.map((x: MangaFound) => x.card.side)).toEqual([false, true, true]);
+    expect(shown(side.body)).toEqual(['Asura Scans: Plain', 'Late Night: Late show', 'Asura Scans: Fan work', 'Asura Scans: Many hands']);
+    expect(side.body.items.map((x: MangaFound) => x.card.side)).toEqual([false, false, true, true]);
   });
 
   it('looks only in sources of the language asked, and in all of them for any', async () => {
@@ -327,7 +332,8 @@ describe('a series from a source', () => {
     const { b, app, sw } = await setup();
     sw.state.series = [
       { id: 7, source: '11', title: 'Read me', chapters: [1, 2] },
-      { id: 8, source: '44', title: 'After dark' },
+      { id: 8, source: '44', title: 'After dark', genre: ['Adult'] },
+      { id: 10, source: '44', title: 'Quiet night' },
       { id: 9, source: '11', title: 'Never', genre: ['Shota'] },
     ];
     const r = await b.get('/v1/manga/source/sw:7');
@@ -371,6 +377,7 @@ describe('a series from a source', () => {
     expect(shut.status).toBe(403);
     expect(shut.body.code).toBe('manga_adult');
     expect((await b.get('/v1/manga/source/sw:8?adult=1')).status).toBe(200);
+    expect((await b.get('/v1/manga/source/sw:10')).status).toBe(200);
     for (const path of ['/v1/manga/source/sw:9?adult=1', '/v1/manga/source/sw:9/cover', '/v1/manga/source/sw:404']) {
       expect((await b.get(path)).status, path).toBe(404);
     }
