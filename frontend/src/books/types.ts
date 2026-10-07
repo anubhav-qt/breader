@@ -59,9 +59,7 @@ export interface RemoteChapter {
   pages: number;
   external: string | null;
   groups: Array<{ id: string; name: string }>;
-  /** Its pages' addresses, on a server that gives them a chapter at a time (Suwayomi). */
-  urls?: string[];
-  /** Not opened this time: a series on a reader's own server opens a few chapters at a time. */
+  /** Not opened this time: a series on a Suwayomi source opens a few chapters at a time. */
   away?: boolean;
 }
 

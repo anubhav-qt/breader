@@ -1,35 +1,35 @@
-import type { MangaChapter } from '@breader/shared/manga';
+import type { MangaChapter, SourceSeries } from '@breader/shared/manga';
 import { ApiError, OfflineError } from '../lib/api';
-import { mangadex } from '../lib/mangadex';
+import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
-import { ServerError, suwayomi } from '../lib/suwayomi';
-import { keptNote, keptPage, pageFor } from './kept';
+import { keptNote, pageFor } from './kept';
 import { WORDS_PER_MANGA_PAGE } from './manga';
 import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './types';
 
 /*
  * A manga read from a catalogue, its chapters one after another in one book, so it scrolls on from
- * chapter to chapter like a webtoon app. From MangaDex, that's the whole series in a language, each
- * chapter's pages coming through the laptop as they're read. From the reader's own Suwayomi server,
- * which only learns a chapter's pages by asking its source, it's a few chapters around the place,
- * the rest a tap away. Either way, chapters kept offline come from this browser, and places are kept
- * by chapter number, so they stay put as chapters are added, uploads change, or the language does.
+ * chapter to chapter like a webtoon app. From MangaDex or Breader's Komga library, that's the whole
+ * series, each chapter's pages coming through the laptop as they're read. From a Suwayomi source,
+ * which only learns a chapter's pages by asking the site it reads, it's a few chapters around the
+ * place, the rest a tap away. Either way, chapters kept offline come from this browser, and places
+ * are kept by chapter number, so they stay put as chapters are added, uploads change, or the
+ * language does.
  */
 
 export type Remote =
   | { kind: 'mangadex'; series: string; lang: string; key: string }
-  | { kind: 'suwayomi'; id: number; key: string };
+  | { kind: 'source'; id: string; key: string };
 
 /** Where a remote book is read from, by its url. `key` names it for what's kept offline. */
 export function remoteOf(url: string | undefined): Remote | null {
   const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?$/.exec(url ?? '');
   if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', key: md[1] };
-  const sw = /^suwayomi:([1-9]\d{0,9})$/.exec(url ?? '');
-  if (sw) return { kind: 'suwayomi', id: Number(sw[1]), key: `sw:${sw[1]}` };
+  // A series on Breader's Suwayomi or in its Komga library: its url is its id there.
+  const source = /^(sw:[1-9]\d{0,9}|kg:[0-9A-Z]{8,20})$/.exec(url ?? '');
+  if (source) return { kind: 'source', id: source[1], key: source[1] };
   return null;
 }
 export const remoteUrl = (series: string, lang: string) => (lang === 'en' ? `mangadex:${series}` : `mangadex:${series}:${lang}`);
-export const serverUrl = (id: number) => `suwayomi:${id}`;
 
 /** Its number: 12, 12.5; null for a oneshot or an extra. */
 export function numberOf(c: { chapter: string | null }): number | null {
@@ -86,7 +86,7 @@ async function kept<T>(key: string, get: () => Promise<T>): Promise<T> {
     return v;
   } catch (e) {
     const had = await store.get<T>(key);
-    const away = e instanceof OfflineError || (e instanceof ApiError && e.status >= 500) || (e instanceof ServerError && e.code === 'unreachable');
+    const away = e instanceof OfflineError || (e instanceof ApiError && e.status >= 500);
     if (had !== undefined && away) return had;
     throw e;
   }
@@ -176,7 +176,7 @@ async function openMangaDex(rec: BookRecord, series: string, lang: string): Prom
   return bookOf(rec, { name: 'MangaDex', series, page: `https://mangadex.org/title/${series}`, chapters }, total, (c, n) => pageFor(c.id, n));
 }
 
-/** Chapters opened at a time from the reader's own server: the one before the place, and these after it. */
+/** Chapters opened at a time from a Suwayomi source: the one before the place, and these after it. */
 const BEFORE = 1;
 const AFTER = 7;
 
@@ -193,63 +193,81 @@ async function each<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
   return out;
 }
 
-async function openServer(rec: BookRecord, id: number, key: string, at?: Position): Promise<MangaBook> {
-  const picked = pickChapters(await kept(`swlist:${id}`, () => suwayomi.chapters(id)));
-  if (!picked.length) throw new Error('Your server has no chapters of this series yet.');
+/** Where a source's series is from, and its page there. Not reached, it's still read, under a plainer name. */
+async function aboutSource(id: string): Promise<{ name: string; page: string | null }> {
+  try {
+    // In the library already, it opens whatever 18+ says.
+    const s = await kept<SourceSeries>(`srcseries:${id}`, () => sources.series(id, true));
+    return { name: s.source, page: s.link };
+  } catch {
+    if (id.startsWith('kg:')) return { name: 'Komga', page: null };
+    return { name: 'its source', page: null };
+  }
+}
+
+async function openSource(rec: BookRecord, id: string, at?: Position): Promise<MangaBook> {
+  const [about, list] = await Promise.all([
+    aboutSource(id),
+    kept(`srclist:${id}`, async () => (await sources.chapters(id)).chapters),
+  ]);
+  const picked = pickChapters(list);
+  if (!picked.length) throw new Error('There are no chapters of this series yet.');
+
+  // Komga knows every chapter's pages, so the whole series opens, as from MangaDex.
+  if (picked.every((c) => c.pages > 0)) {
+    const { chapters, total } = laidOut(picked);
+    return bookOf(rec, { name: about.name, series: id, page: about.page, chapters }, total, (c, n) => pageFor(c.id, n));
+  }
+
+  // Suwayomi learns a chapter's pages by asking its source, so a few chapters around the place open.
   const all = picked.map((c) => ({ ...c, number: numberOf(c) }));
   const here = at ? chapterAt(all, at) : undefined;
   const start = here ? all.indexOf(here) : 0;
   const from = Math.max(0, start - BEFORE);
   const to = Math.min(all.length, start + 1 + AFTER);
-  const note = await keptNote(key);
-  // A chapter's pages: the server asks its source for them, unless they're kept here already.
-  const lists = await each(all.slice(from, to), 4, async (c) => {
+  const note = await keptNote(id);
+  // A chapter's pages: counted by its source, unless they're kept here already.
+  const counts = await each(all.slice(from, to), 4, async (c) => {
     const k = note[c.id];
-    if (k?.done) return { urls: undefined, pages: k.pages };
+    if (k?.done) return k.pages;
     try {
-      const urls = await suwayomi.pages(c.id);
-      return { urls, pages: urls.length };
+      return await sources.pages(c.id);
     } catch {
-      return { urls: undefined, pages: 0 };
+      return 0;
     }
   });
   const chapters: RemoteChapter[] = [];
   let total = 0;
   all.forEach((c, i) => {
-    const got = i >= from && i < to ? lists[i - from] : null;
-    const pages = got?.pages ?? 0;
+    const open = i >= from && i < to;
+    let pages = 0;
+    if (open) pages = counts[i - from];
     chapters.push({
       id: c.id,
       label: labelOf(c, all.length === 1),
       title: c.title,
       number: c.number,
-      first: got ? total : -1,
+      first: open ? total : -1,
       pages,
       external: null,
       groups: c.groups,
-      ...(got?.urls ? { urls: got.urls } : {}),
-      ...(got ? {} : { away: true }),
+      ...(open ? {} : { away: true }),
     });
     total += pages;
   });
-  if (!total) throw new Error('Your server couldn’t bring these chapters’ pages. It may be off, or its source may be down.');
+  if (!total) throw new Error(`${about.name} couldn’t bring these chapters’ pages just now. It may be down, so try again in a while.`);
   const shown = chapters.filter((c) => c.pages > 0);
   const before = chapters[from - 1];
   const after = chapters[to];
   const remote: NonNullable<MangaBook['remote']> = {
-    name: 'your server',
-    series: key,
-    page: suwayomi.webUrl(id),
+    name: about.name,
+    series: id,
+    page: about.page,
     chapters,
     ...(before ? { prev: { label: before.label, at: startOf(before) } } : {}),
     ...(after ? { next: { label: after.label, at: startOf(after) } } : {}),
   };
-  const book = bookOf(rec, remote, total, async (c, n) => {
-    const had = await keptPage(c.id, n);
-    if (had) return had;
-    if (!c.urls?.[n]) throw new Error(`No page ${n + 1}`);
-    return suwayomi.picture(c.urls[n]);
-  });
+  const book = bookOf(rec, remote, total, (c, n) => pageFor(c.id, n));
   // Progress and time left go by the whole series, of which only these chapters are open.
   const perChapter = total / Math.max(1, shown.length);
   return {
@@ -267,5 +285,6 @@ async function openServer(rec: BookRecord, id: number, key: string, at?: Positio
 export async function openRemote(rec: BookRecord, at?: Position): Promise<MangaBook> {
   const where = remoteOf(rec.url);
   if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
-  return where.kind === 'mangadex' ? openMangaDex(rec, where.series, where.lang) : openServer(rec, where.id, where.key, at);
+  if (where.kind === 'mangadex') return openMangaDex(rec, where.series, where.lang);
+  return openSource(rec, where.id, at);
 }

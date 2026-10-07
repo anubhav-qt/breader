@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { createStore, del, get, keys, set } from 'idb-keyval';
 import { flush } from '../data/sync';
 import { ApiError } from '../lib/api';
-import { mangadex, readMangaPrefs } from '../lib/mangadex';
-import { suwayomi } from '../lib/suwayomi';
+import { mangadex, readMangaPrefs, sources } from '../lib/mangadex';
 import type { RemoteChapter } from './types';
 
 /*
@@ -39,20 +38,27 @@ export async function keptPage(chapter: string, n: number): Promise<Blob | undef
   }
 }
 
-/** A page from MangaDex, through the laptop. */
+/** A chapter on Breader's Suwayomi or in its Komga library (sw:22, kg:0RVCY8NSY301F), not on MangaDex. */
+const onSource = (chapter: string) => chapter.startsWith('sw:') || chapter.startsWith('kg:');
+
+/** A page through the laptop: from a source as it is, or from MangaDex, smaller with data saver on. */
+function askPage(chapter: string, n: number): Promise<Blob> {
+  if (onSource(chapter)) return sources.page(chapter, n);
+  return mangadex.page(chapter, n, readMangaPrefs().saver);
+}
+
 async function fetchPage(chapter: string, n: number): Promise<Blob> {
-  const saver = readMangaPrefs().saver;
   try {
-    return await mangadex.page(chapter, n, saver);
+    return await askPage(chapter, n);
   } catch (e) {
     // A library made in this browser a moment ago may not be signed in yet: its first sync does it.
     if (!(e instanceof ApiError && e.code === 'signed_out')) throw e;
     await flush();
-    return mangadex.page(chapter, n, saver);
+    return askPage(chapter, n);
   }
 }
 
-/** A page to read: kept here, or from MangaDex. */
+/** A page to read: kept here, or through the laptop. */
 export async function pageFor(chapter: string, n: number): Promise<Blob> {
   return (await keptPage(chapter, n)) ?? fetchPage(chapter, n);
 }
@@ -105,8 +111,8 @@ async function run() {
         if (stopped) break;
         let blob = await keptPage(chapter.id, n);
         if (!blob) {
-          // From the reader's own server by its address, or from MangaDex; once more, then it waits for another try.
-          const get = () => (chapter.urls ? suwayomi.picture(chapter.urls[n]) : fetchPage(chapter.id, n));
+          // Once more, then it waits for another try.
+          const get = () => fetchPage(chapter.id, n);
           blob = await get().catch(get);
           await set(pageKey(chapter.id, n), { bytes: await blob.arrayBuffer(), type: blob.type } satisfies Bytes, store);
         }

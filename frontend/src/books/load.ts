@@ -90,9 +90,9 @@ async function openRecord(rec: BookRecord, at?: Position): Promise<LoadedBook> {
     book = placeholderBook(rec);
   } else if (rec.source === 'remote') {
     // A series from a catalogue: its chapters as they are now, its pages as they're read. One from
-    // the reader's own server opens around its place, so it isn't kept to open again elsewhere.
+    // a Suwayomi source opens around its place, so it isn't kept to open again elsewhere.
     book = await (await import('./remote')).openRemote(rec, at);
-    if (rec.url?.startsWith('suwayomi:')) return book;
+    if (rec.url?.startsWith('sw:')) return book;
   } else if (rec.source === 'sample' && rec.url) {
     const res = await fetch(rec.url);
     if (!res.ok) throw new Error(`Couldn't load ${rec.url}`);

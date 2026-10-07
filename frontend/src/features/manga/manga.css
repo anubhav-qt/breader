@@ -1,4 +1,4 @@
-/* The MangaDex tab (Browse.tsx) and a series' sheet (SeriesSheet.tsx), in the library's own look. */
+/* The Browse tab (Browse.tsx) and a series' sheets (SeriesSheet.tsx, SourceSheet.tsx), in the library's own look. */
 .mdx-bar {
   position: sticky;
   top: 0;
@@ -82,64 +82,6 @@
 .mdx-credit { margin: 24px auto 0; max-width: 640px; text-align: center; font: var(--ui-w) 11.5px/1.5 var(--ui); color: var(--ink-2); }
 .mdx-credit a { color: inherit; text-underline-offset: 2px; }
 
-/* Where to look: MangaDex, or a source on the reader's own server. */
-.mdx-from { position: relative; flex: none; }
-.mdx-from-b { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px 0 14px; border-radius: 12px; background: var(--ink); color: var(--canvas); font: var(--ui-w) 13.5px/1 var(--ui); white-space: nowrap; }
-.mdx-from-b span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-.mdx-from-b svg { width: 16px; height: 16px; transition: transform 160ms ease; }
-.mdx-from-b[aria-expanded="true"] svg { transform: rotate(180deg); }
-.mdx-from-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  display: grid;
-  width: 280px;
-  max-height: min(420px, 70vh);
-  overflow-y: auto;
-  padding: 6px;
-  border-radius: 14px;
-  background: var(--paper);
-  box-shadow: 0 0 0 1px var(--line), var(--float-shadow);
-}
-.mdx-from-list button { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-height: 38px; padding: 8px 10px; border-radius: 9px; text-align: left; font: var(--ui-w) 13px/1.2 var(--ui); color: var(--ink); }
-.mdx-from-list button:hover { background: var(--fill); }
-.mdx-from-list button[aria-selected="true"] { background: var(--fill); }
-.mdx-from-list small { flex: none; font-size: 11px; color: var(--ink-2); }
-.mdx-from-list small.is-adult { color: var(--danger); }
-.mdx-from-h { margin: 8px 10px 2px; font: var(--ui-w-strong) 11.5px/1 var(--ui); color: var(--ink-2); }
-.mdx-from-note { padding: 6px 10px; font: var(--ui-w) 11.5px/1.4 var(--ui); color: var(--ink-2); }
-.mdx-from-list .mdx-from-connect { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; color: var(--ink-2); }
-.mdx-cover-wait { position: absolute; inset: 0; }
-.mdx-cover-wait img, .mds-cover .mdx-cover-wait img { display: block; width: 100%; height: 100%; object-fit: cover; }
-
-/* The reader's OPDS catalog (Catalog.tsx): where in it, its feeds as rows, its books as covers. */
-.ctg { display: grid; gap: 16px; }
-.ctg-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
-.ctg-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; font: var(--ui-w) 13px/1.2 var(--ui); }
-.ctg-step { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-.ctg-step svg { width: 14px; height: 14px; color: var(--ink-2); }
-.ctg-step button { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 8px; border-radius: 8px; color: var(--ink-2); }
-.ctg-step button:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
-.ctg-step button:disabled { cursor: default; color: var(--ink); }
-.ctg-bar .mdx-search { flex: 1 1 240px; }
-.ctg-feeds { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
-.ctg-feeds button { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t c" "s c"; align-items: center; column-gap: 10px; width: 100%; min-height: 56px; padding: 10px 14px; border-radius: 12px; background: var(--fill); text-align: left; transition: background-color 140ms ease; }
-.ctg-feeds button:hover { background: var(--line); }
-.ctg-feed-t { grid-area: t; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 24px; line-height: 1; }
-.ctg-feed-s { grid-area: s; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 11.5px/1.3 var(--ui); color: var(--ink-2); }
-.ctg-feeds svg { grid-area: c; width: 18px; height: 18px; color: var(--ink-2); }
-
-/* Connecting the reader's own server */
-.srv-kind { justify-self: start; margin-bottom: 6px; }
-.srv-form { display: grid; gap: 7px; }
-.srv-intro { margin: 0 0 8px; font: var(--ui-w) 12.5px/1.5 var(--ui); color: var(--ink-2); }
-.srv-intro a { color: var(--ink); }
-.srv-note { margin: 0 0 6px; font: var(--ui-w) 11.5px/1.4 var(--ui); color: var(--ink-2); }
-.srv-login { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.srv-login > div { display: grid; gap: 7px; }
-.srv-error { margin: 2px 0; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--danger); }
-
 /* A series' sheet */
 .mds-top { display: grid; grid-template-columns: 196px minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "cover info" "cover actions"; column-gap: 22px; }
 .mds-cover { grid-area: cover; position: relative; align-self: start; aspect-ratio: 1 / 1.42; border-radius: 6px 14px 14px 6px; overflow: hidden; background: var(--fill); }
@@ -193,7 +135,6 @@
 
 @media (max-width: 720px) {
   .mdx-search { flex: 1 1 0; max-width: none; }
-  .mdx-from-b span { max-width: 110px; }
   .mdx-tools { flex-wrap: wrap; gap: 10px 12px; }
   .mdx-sorts { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
   .mdx-sorts::-webkit-scrollbar { display: none; }

@@ -10,12 +10,12 @@ import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
-import { remoteOf, remoteUrl, serverUrl } from './books/remote';
+import { remoteOf, remoteUrl } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
 import type { AccountResponse } from '@breader/shared/protocol';
-import type { MangaCard, MangaSeries } from '@breader/shared/manga';
+import type { MangaCard, MangaSeries, SourceCard, SourceSeries } from '@breader/shared/manga';
 import { addLibrary, libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type ShelfItem } from './data/useLibrary';
@@ -29,16 +29,13 @@ import { detectSeries, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
 import { Reader } from './features/reader/Reader';
 import { Browse } from './features/manga/Browse';
-import { ConnectServer } from './features/manga/ConnectServer';
 import { SeriesSheet } from './features/manga/SeriesSheet';
-import { ServerSheet } from './features/manga/ServerSheet';
+import { SourceSheet } from './features/manga/SourceSheet';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
-import { genreOf, mangadex, readMangaPrefs, writeMangaPrefs, type MangaPrefs } from './lib/mangadex';
-import { bestFile, opds, readCatalog, type Entry as CatalogEntry } from './lib/opds';
-import { readServer, suwayomi, type ServerCard, type ServerManga } from './lib/suwayomi';
+import { genreOf, mangadex, readMangaPrefs, sources, type MangaPrefs } from './lib/mangadex';
 import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
@@ -129,13 +126,8 @@ export default function App() {
   const [sheet, setSheet] = useState<MangaCard | null>(null);
   /** A chapter picked in a sheet: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
-  /** The reader's own Suwayomi server (its address, kept in this browser), a series' sheet on it, and connecting it. */
-  // Its address, and how many times it's been connected: a new login asks its sources again.
-  const [server, setServer] = useState<string | null>(() => (readServer() ? `${readServer()!.url}#0` : null));
-  const [serverSheet, setServerSheet] = useState<ServerCard | null>(null);
-  /** The reader's OPDS catalog, likewise. */
-  const [catalog, setCatalog] = useState<string | null>(() => (readCatalog() ? `${readCatalog()!.url}#0` : null));
-  const [connecting, setConnecting] = useState(false);
+  /** A series' sheet from one of Breader's Suwayomi sources or its Komga library, open over the library too. */
+  const [sourceSheet, setSourceSheet] = useState<SourceCard | null>(null);
   // Whether the Manga shelf has a MangaDex tab: the laptop says. Out of reach, the tab stays and says so.
   useEffect(() => {
     if (category !== 'manga' || mdOn !== null) return;
@@ -311,7 +303,7 @@ export default function App() {
     const rec = given ?? recordById.get(id);
     if (!rec) return null;
     try {
-      // A series from the reader's own server opens a few chapters around its place.
+      // A series from a Suwayomi source opens a few chapters around its place.
       const book = await loadRecord(rec, at ?? lib.reads[id]?.pos);
       loadedId.current = id;
       setLoaded({ id, book });
@@ -363,7 +355,7 @@ export default function App() {
     setStartAt(null);
   }, [route]);
 
-  // A chapter not in the book as it's open (a series from the reader's own server opens a few at a
+  // A chapter not in the book as it's open (a series from a Suwayomi source opens a few at a
   // time): the book opens again, there.
   useEffect(() => {
     const onReopen = (e: Event) => {
@@ -433,28 +425,29 @@ export default function App() {
     });
   }, [remoteSeries, lib, addSeries, startLoad, finishOpen]);
 
-  /** A MangaDex series in My manga: its sheet, from what the card knows until the rest comes. */
+  /** A series in My manga: its sheet, from what the card knows until the rest comes. */
   const chaptersOf = useCallback((b: ShelfItem) => {
     const w = remoteOf(b.url);
-    if (w?.kind === 'mangadex') setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [], side: false });
-    else if (w?.kind === 'suwayomi') {
-      if (readServer()) setServerSheet({ id: w.id, title: b.title, thumbnailUrl: `/api/v1/manga/${w.id}/thumbnail`, inLibrary: false });
-      else setConnecting(true);
+    if (w?.kind === 'mangadex') {
+      setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [], side: false });
+    } else if (w?.kind === 'source') {
+      setSourceSheet({ id: w.id, title: b.title, cover: `/v1/manga/source/${w.id}/cover`, status: null, adult: false, side: false });
     }
   }, []);
 
-  /** A series from the reader's own server into My manga, with its cover from there. */
-  const addServerSeries = useCallback(async (m: ServerManga): Promise<BookRecord> => {
+  /** A series from one of Breader's sources or its Komga library into My manga, with its cover from there. */
+  const addSourceSeries = useCallback(async (s: SourceSeries): Promise<BookRecord> => {
     const now = Date.now();
-    const cover = m.thumbnailUrl ? await suwayomi.picture(m.thumbnailUrl).catch(() => undefined) : undefined;
-    const genre = genreOf(m.genre.map((name) => ({ name })));
+    let cover: Blob | undefined = undefined;
+    if (s.cover) cover = await sources.cover(s.cover);
+    const genre = genreOf(s.genres.map((name) => ({ name })));
     const rec: BookRecord = {
       id: newId(),
-      title: m.title.slice(0, 500),
-      author: [...new Set([m.author, m.artist].flatMap((p) => p?.split(/\s*,\s*/) ?? []).filter(Boolean))].join(', ').slice(0, 300),
+      title: s.title.slice(0, 500),
+      author: s.authors.join(', ').slice(0, 300),
       format: 'CBZ',
       source: 'remote',
-      url: serverUrl(m.id),
+      url: s.id,
       shared: false,
       addedAt: now,
       words: 0,
@@ -474,11 +467,11 @@ export default function App() {
     return rec;
   }, [lib]);
 
-  const readServerSeries = useCallback(async (m: ServerManga, from: Position | undefined, rect: DOMRect | undefined) => {
-    const rec = remoteSeries.get(`sw:${m.id}`) ?? (await addServerSeries(m));
+  const readSourceSeries = useCallback(async (s: SourceSeries, from: Position | undefined, rect: DOMRect | undefined) => {
+    const rec = remoteSeries.get(s.id) ?? (await addSourceSeries(s));
     const id = rec.id;
     setStartAt(from ? { id, pos: from } : null);
-    setServerSheet(null);
+    setSourceSheet(null);
     openAnimDone.current = false;
     loadedId.current = null;
     setOpening({ id, rect: rect ?? new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2 - 85, 120, 170) });
@@ -486,7 +479,7 @@ export default function App() {
       if (!b) setOpening(null);
       else if (openAnimDone.current) finishOpen(id);
     });
-  }, [remoteSeries, addServerSeries, startLoad, finishOpen]);
+  }, [remoteSeries, addSourceSeries, startLoad, finishOpen]);
 
   const addSeriesOnly = useCallback(async (s: MangaSeries, lang: string) => {
     if (remoteSeries.has(s.id)) return;
@@ -501,10 +494,12 @@ export default function App() {
     if (!libIsReady || category !== 'manga') return;
     for (const r of libRecords) {
       const w = r.source === 'remote' && !r.hasCover && !coverAsked.current.has(r.id) ? remoteOf(r.url) : null;
-      if (!w || (w.kind === 'suwayomi' && !server)) continue;
+      if (!w) continue;
       coverAsked.current.add(r.id);
-      if (w.kind === 'suwayomi') {
-        void suwayomi.picture(`/api/v1/manga/${w.id}/thumbnail`).then((blob) => setCover(r.id, blob)).catch(() => {});
+      if (w.kind === 'source') {
+        void sources.cover(`/v1/manga/source/${w.id}/cover`).then((blob) => {
+          if (blob) void setCover(r.id, blob);
+        });
         continue;
       }
       void mangadex.series(w.series, true)
@@ -514,7 +509,7 @@ export default function App() {
         })
         .catch(() => {});
     }
-  }, [libIsReady, libRecords, category, setCover, server]);
+  }, [libIsReady, libRecords, category, setCover]);
 
   // Closing waits two frames, so the library underneath has laid out the card to land on.
   useEffect(() => {
@@ -608,8 +603,7 @@ export default function App() {
   categoryRef.current = category;
   const showingRef = useRef(showing);
   showingRef.current = showing;
-  /** Files dropped on the library, or downloaded into it; `stay` keeps the shelf showing as it is. */
-  const addFiles = useCallback(async (files: File[], stay = false) => {
+  const addFiles = useCallback(async (files: File[]) => {
     // Dropped on the reader's own shared library, they're shared; on someone else's, they're the reader's own.
     const shared = tabRef.current === 'shelf' && showingRef.current === 'own';
     let needKey = !lib.key;
@@ -645,15 +639,8 @@ export default function App() {
         say(`Breader couldn’t read “${file.name}”`);
       }
     }
-    if (landed.size && !landed.has(categoryRef.current) && !stay) setCategory([...landed][0]);
+    if (landed.size && !landed.has(categoryRef.current)) setCategory([...landed][0]);
   }, [lib, say, allSeries, guessGenre]);
-
-  /** A book from the reader's OPDS catalog: its file downloaded, then added like one dropped here. */
-  const addFromCatalog = useCallback(async (book: Extract<CatalogEntry, { kind: 'book' }>) => {
-    const file = bestFile(book.files);
-    if (!file) throw new Error('Breader can’t open any of this book’s files.');
-    await addFiles([await opds.download(file, book.title)], true);
-  }, [addFiles]);
 
   useEffect(() => {
     if (route.name !== 'library') return;
@@ -865,13 +852,9 @@ export default function App() {
               hidden={!manga || tab !== 'mangadex'}
               have={haveSeries}
               prefs={mdPrefs}
-              server={server}
-              catalog={catalog}
-              onAddBook={addFromCatalog}
               onPrefs={setMdPrefs}
               onPick={setSheet}
-              onPickServer={setServerSheet}
-              onConnect={() => setConnecting(true)}
+              onPickSource={setSourceSheet}
             />
           )}
         </div>
@@ -959,32 +942,15 @@ export default function App() {
             onClose={() => setSheet(null)}
           />
         )}
-        {serverSheet && route.name === 'library' && (
-          <ServerSheet
-            key={`server-${serverSheet.id}`}
-            card={serverSheet}
-            had={remoteSeries.get(`sw:${serverSheet.id}`)}
-            onRead={(m, from, rect) => void readServerSeries(m, from, rect)}
-            onAdd={(m) => { if (!remoteSeries.has(`sw:${m.id}`)) void addServerSeries(m).then((rec) => say(`Added “${rec.title}” to My manga`)); }}
-            onClose={() => setServerSheet(null)}
-          />
-        )}
-        {connecting && (
-          <ConnectServer
-            key="connect"
-            onDone={(kind, url) => {
-              setConnecting(false);
-              const key = url ? `${url}#${Date.now()}` : null;
-              if (kind === 'suwayomi') setServer(key);
-              else setCatalog(key);
-              if (url && kind === 'opds') {
-                const next = { ...mdPrefs, source: 'opds' };
-                writeMangaPrefs(next);
-                setMdPrefs(next);
-              }
-              say(url ? (kind === 'suwayomi' ? 'Your server is connected: its sources are in Browse' : 'Your catalog is connected: it’s in Browse') : 'Let go of, in this browser');
-            }}
-            onClose={() => setConnecting(false)}
+        {sourceSheet && route.name === 'library' && (
+          <SourceSheet
+            key={`source-${sourceSheet.id}`}
+            card={sourceSheet}
+            adult={mdPrefs.adult}
+            had={remoteSeries.get(sourceSheet.id)}
+            onRead={(s, from, rect) => void readSourceSeries(s, from, rect)}
+            onAdd={(s) => { if (!remoteSeries.has(s.id)) void addSourceSeries(s).then((rec) => say(`Added “${rec.title}” to My manga`)); }}
+            onClose={() => setSourceSheet(null)}
           />
         )}
         {login && (
