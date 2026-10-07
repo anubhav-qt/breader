@@ -1,4 +1,4 @@
-import type { MangaChapters, MangaSearchResult, MangaSeries, MangaSort, SourceSeries } from '@breader/shared';
+import { MANGA_KINDS, type MangaChapters, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
 import type { Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
@@ -14,7 +14,7 @@ import { makeSuwayomi, type Suwayomi } from './suwayomi.ts';
  */
 
 export interface Manga {
-  search(q: { q?: string; lang?: string; sort?: MangaSort; adult?: boolean; doujinshi?: boolean; next?: string }): Promise<MangaSearchResult>;
+  search(q: { q?: string; lang?: string; sort?: MangaSort; adult?: boolean; doujinshi?: boolean; kinds?: MangaKind[]; next?: string }): Promise<MangaSearchResult>;
   /** A MangaDex series, its chapters in a language, a chapter's page (from 0) and a cover. */
   series(id: string, adult: boolean): Promise<MangaSeries>;
   chapters(id: string, lang: string): Promise<MangaChapters>;
@@ -62,7 +62,11 @@ export function makeManga(opts: MangaOptions): Manga {
 
   return {
     async search(q) {
-      const w: Wanted = { lang: q.lang, sort: q.sort, adult: !!q.adult, doujinshi: !!q.doujinshi };
+      // In MANGA_KINDS' order, so the same ask is kept once.
+      let kinds: MangaKind[] = [...MANGA_KINDS];
+      const asked = q.kinds;
+      if (asked && asked.length > 0) kinds = MANGA_KINDS.filter((k) => asked.includes(k));
+      const w: Wanted = { lang: q.lang, sort: q.sort, adult: !!q.adult, doujinshi: !!q.doujinshi, kinds };
       if (q.q) w.q = q.q;
       const places: Place[] = [dex.place(w)];
       if (suwayomi) {

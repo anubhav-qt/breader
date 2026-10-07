@@ -259,6 +259,7 @@ describe('MangaDex through the laptop', () => {
       year: 2020,
       langs: ['en', 'pt-br'],
       original: 'ja',
+      kind: 'manga',
       authors: ['Yamada Kanehito'],
       readIn: 'en',
       side: false,
@@ -556,7 +557,7 @@ describe('answers kept in Redis', () => {
     expect((await b.get(`/v1/manga/chapter/${ch(1000)}/0`)).status).toBe(200);
 
     const ttl = (key: string) => redis.keys.get(`manga:v1:${key}`)?.ttl;
-    expect(ttl('search:en:followedCount:safe:plain:0:')).toBe(10 * MIN);
+    expect(ttl('search:en:followedCount:safe:plain:all:0:')).toBe(10 * MIN);
     expect(ttl(`series:${sid(1)}`)).toBe(6 * HOUR);
     expect(ttl(`chapters:${sid(1)}:en`)).toBe(10 * MIN);
     expect(ttl(`readable:${sid(1)}:en`)).toBe(24 * HOUR);

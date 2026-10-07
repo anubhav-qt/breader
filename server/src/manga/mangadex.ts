@@ -1,10 +1,12 @@
 import {
   ADULT_RATINGS,
+  MANGA_KINDS,
   MANGA_LAST_OFFSET,
   MANGA_PAGE,
   type MangaCard,
   type MangaChapter,
   type MangaChapters,
+  type MangaKind,
   type MangaLink,
   type MangaRating,
   type MangaSeries,
@@ -43,6 +45,12 @@ export const DOUJINSHI_ID = 'b13b2a48-c720-44a9-9c77-39c9979373fb';
 export const ANTHOLOGY_ID = '51d83883-4103-437c-b4b1-731cb73d786c';
 /** Left out of a search unless it asks for them (its doujinshi switch). */
 const SIDE_WORKS = [DOUJINSHI_ID, ANTHOLOGY_ID];
+/** The languages manga, manhwa and manhua are first published in. Comics are every other. */
+const ORIGINALS: Array<[MangaKind, string[]]> = [
+  ['manga', ['ja']],
+  ['manhwa', ['ko']],
+  ['manhua', ['zh', 'zh-hk']],
+];
 const SAFE: MangaRating[] = ['safe', 'suggestive'];
 const ALL: MangaRating[] = [...SAFE, ...ADULT_RATINGS];
 /** A chapter list comes this many at a time, MangaDex's most. */
@@ -151,6 +159,8 @@ interface Ask {
   field: string;
   adult: boolean;
   doujinshi: boolean;
+  /** In MANGA_KINDS' order. */
+  kinds: MangaKind[];
 }
 
 /** Whether every chapter of a series can be read here in a language, and as of which upload. */
@@ -217,6 +227,30 @@ function linksOf(links: Record<string, string> | null | undefined): MangaLink[] 
   return out;
 }
 
+/** What kind a series is, by the language it was first published in. */
+export function kindOf(original: string): MangaKind {
+  for (const [kind, langs] of ORIGINALS) {
+    if (langs.includes(original)) return kind;
+  }
+  return 'comics';
+}
+
+/**
+ * MangaDex's filter for some kinds, by the languages they're first published in. Comics are every
+ * language but a few, so with comics the kinds left out are left out by their languages; without,
+ * only the languages of the kinds asked are.
+ */
+function originals(kinds: MangaKind[]): { only: string[]; not: string[] } {
+  const only: string[] = [];
+  const not: string[] = [];
+  for (const [kind, langs] of ORIGINALS) {
+    if (kinds.includes(kind)) only.push(...langs);
+    else not.push(...langs);
+  }
+  if (kinds.includes('comics')) return { only: [], not };
+  return { only, not: [] };
+}
+
 /** Sexual content with children: never shown, by tag. */
 export function never(m: RawManga): boolean {
   return (m.attributes.tags ?? []).some((t) => NEVER_IDS.includes(t.id) || NEVER_NAMES.has((t.attributes?.name?.en ?? '').trim().toLowerCase()));
@@ -238,6 +272,7 @@ function card(m: RawManga): MangaCard {
     year: typeof a.year === 'number' ? a.year : null,
     langs: [...new Set((a.availableTranslatedLanguages ?? []).filter((l): l is string => !!l))],
     original: a.originalLanguage ?? 'ja',
+    kind: kindOf(a.originalLanguage ?? 'ja'),
     authors: names(m, 'author'),
     side: (a.tags ?? []).some((t) => SIDE_WORKS.includes(t.id)),
   };
@@ -422,12 +457,15 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
   function list(a: Ask, offset: number) {
     const rating = a.adult ? 'adult' : 'safe';
     const doujinshi = a.doujinshi ? 'doujinshi' : 'plain';
-    // Readable in redis-cli: en:followedCount:safe:plain:0:frieren
-    const key = [a.lang || 'any', a.field, rating, doujinshi, offset, a.q ?? ''].join(':');
+    let kinds = a.kinds.join('+');
+    if (a.kinds.length === MANGA_KINDS.length) kinds = 'all';
+    // Readable in redis-cli: en:followedCount:safe:plain:all:0:frieren
+    const key = [a.lang || 'any', a.field, rating, doujinshi, kinds, offset, a.q ?? ''].join(':');
     return lists.get(key, async () => {
       // A new list, so the kept never-list stays as it is.
       const excluded = [...(await neverIds())];
       if (!a.doujinshi) excluded.push(...SIDE_WORKS);
+      const from = originals(a.kinds);
       const r = await call<{ data: RawManga[]; total: number }>('/manga', [
         ...query({
           limit: MANGA_PAGE,
@@ -438,6 +476,8 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
           excludedTags: excluded,
           excludedTagsMode: 'OR',
           availableTranslatedLanguage: a.lang ? [a.lang] : undefined,
+          originalLanguage: from.only,
+          excludedOriginalLanguage: from.not,
           hasAvailableChapters: 'true',
         }),
         [`order[${a.field}]`, 'desc'],
@@ -576,7 +616,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
     const by = ORDER[w.sort ?? (w.q ? 'relevance' : 'popular')];
     // Relevance needs words to be relevant to.
     const field = by === 'relevance' && !w.q ? 'followedCount' : by;
-    const ask: Ask = { q: w.q, lang: w.lang, field, adult: w.adult, doujinshi: w.doujinshi };
+    const ask: Ask = { q: w.q, lang: w.lang, field, adult: w.adult, doujinshi: w.doujinshi, kinds: w.kinds };
     const started = Date.now();
     const found: Found[] = [];
     let failed: unknown = null;
@@ -657,7 +697,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       try {
         for (const field of [ORDER.popular, ORDER.latest]) {
           for (let at = 0; at < WARM; at += MANGA_PAGE) {
-            const found = await list({ lang: 'en', field, adult: false, doujinshi: false }, at);
+            const found = await list({ lang: 'en', field, adult: false, doujinshi: false, kinds: [...MANGA_KINDS] }, at);
             for (const m of found.data) await readableCard(m, 'en');
           }
         }

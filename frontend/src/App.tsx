@@ -429,9 +429,9 @@ export default function App() {
   const chaptersOf = useCallback((b: ShelfItem) => {
     const w = remoteOf(b.url);
     if (w?.kind === 'mangadex') {
-      setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', authors: b.author ? [b.author] : [], side: false });
+      setSheet({ id: w.series, title: b.title, cover: null, rating: 'safe', status: null, year: null, langs: [], original: '', kind: 'manga', authors: b.author ? [b.author] : [], side: false });
     } else if (w?.kind === 'source') {
-      setSourceSheet({ id: w.id, title: b.title, cover: `/v1/manga/source/${w.id}/cover`, status: null, adult: false, side: false });
+      setSourceSheet({ id: w.id, title: b.title, cover: `/v1/manga/source/${w.id}/cover`, status: null, adult: false, side: false, kind: null });
     }
   }, []);
 

@@ -1,4 +1,4 @@
-import type { MangaFound, MangaSearchResult, MangaSort } from '@breader/shared';
+import { MANGA_KINDS, type MangaFound, type MangaKind, type MangaSearchResult, type MangaSort } from '@breader/shared';
 import { log } from '../log.ts';
 
 /*
@@ -21,6 +21,14 @@ export interface Wanted {
   sort?: MangaSort;
   adult: boolean;
   doujinshi: boolean;
+  /** At least one. */
+  kinds: MangaKind[];
+}
+
+/** A series of this kind is one a search wants. One of no known kind is wanted only with every kind. */
+export function wantedKind(kind: MangaKind | null, w: Wanted): boolean {
+  if (kind === null) return w.kinds.length === MANGA_KINDS.length;
+  return w.kinds.includes(kind);
 }
 
 /** A series a place found, and the names it goes by there, to tell the same series in another place. */

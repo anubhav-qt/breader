@@ -3,8 +3,8 @@ import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
-import type { Found, Lot, Place, Wanted } from './find.ts';
-import { adultGenre, neverGenre, sideGenre, web } from './genres.ts';
+import { wantedKind, type Found, type Lot, type Place, type Wanted } from './find.ts';
+import { adultGenre, kindGenre, neverGenre, sideGenre, web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
 import { caughtUp, firstMissing, highest } from './readable.ts';
 
@@ -14,9 +14,9 @@ import { caughtUp, firstMissing, highest } from './readable.ts';
  * Suwayomi fetches from each site as its extension says, keeping to that site's own limits; on top
  * of that, Breader asks each source no faster than it asks MangaDex. As with MangaDex, a search
  * shows only series every chapter of can be read (readable.ts), never one tagged loli or shota,
- * those for adults only with 18+, and doujinshi and anthologies only when asked. Each series is
- * judged by its own genres: a site that has some series for adults isn't kept out whole. Pages and
- * covers are kept on disk.
+ * those for adults only with 18+, doujinshi and anthologies only when asked, and only the kinds
+ * asked for. Each series is judged by its own genres: a site that has some series for adults
+ * isn't kept out whole. Pages and covers are kept on disk.
  */
 
 const MINUTE = 60_000;
@@ -126,6 +126,7 @@ function cardOf(m: RawSeries): SourceCard {
     status,
     adult: adultGenre(m.genre),
     side: sideGenre(m.genre),
+    kind: kindGenre(m.genre),
   };
 }
 
@@ -345,6 +346,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     const card = cardOf(m);
     if (card.adult && !w.adult) return null;
     if (card.side && !w.doujinshi) return null;
+    if (!wantedKind(card.kind, w)) return null;
     const ok = await readable(m, source.id);
     if (!ok) return null;
     return { item: { kind: 'source', source: source.name, card }, names: [m.title] };

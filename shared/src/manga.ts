@@ -17,6 +17,18 @@ const Flag = z.enum(['0', '1']).transform((v) => v === '1');
 export const MANGA_SORTS = ['relevance', 'popular', 'latest', 'new', 'rated'] as const;
 export type MangaSort = (typeof MANGA_SORTS)[number];
 
+/**
+ * Where a series is from, as a reader tells them apart: manga (Japan), manhwa (Korea, mostly
+ * webtoons), manhua (China) and comics (everywhere else).
+ */
+export const MANGA_KINDS = ['manga', 'manhwa', 'manhua', 'comics'] as const;
+export type MangaKind = (typeof MANGA_KINDS)[number];
+/** Some kinds, as a search asks for them: manga,manhwa. */
+const Kinds = z
+  .string()
+  .regex(/^(manga|manhwa|manhua|comics)(,(manga|manhwa|manhua|comics)){0,3}$/, 'Not kinds of series')
+  .transform((v) => [...new Set(v.split(','))] as MangaKind[]);
+
 /** Results a search looks at a time in each place, keeping only those that can be read here. */
 export const MANGA_PAGE = 10;
 /** The furthest into MangaDex's results a search can ask, as it stops at 10,000. */
@@ -40,6 +52,8 @@ export const MangaSearchQuery = z.object({
   adult: Flag.optional(),
   /** Doujinshi (fan-made works) and anthologies too, which stay out unless asked. */
   doujinshi: Flag.optional(),
+  /** Only these kinds; every kind when left out. A series of no known kind shows only then. */
+  kinds: Kinds.optional(),
   /** Where the last lot said to carry on from; the first lot without it. */
   next: Next.optional(),
 });
@@ -72,6 +86,8 @@ export interface MangaCard {
   langs: string[];
   /** The language it was first published in. */
   original: string;
+  /** By the language it was first published in. */
+  kind: MangaKind;
   authors: string[];
   /** The language a search found every chapter of it readable in here, which its sheet opens in. */
   readIn?: string;
@@ -131,6 +147,8 @@ export interface SourceCard {
   adult: boolean;
   /** A doujinshi or an anthology, by its genres. */
   side: boolean;
+  /** By its genres, or null when they don't say. */
+  kind: MangaKind | null;
 }
 
 export interface SourceSeries extends SourceCard {

@@ -20,13 +20,13 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 
-/** MangaDex with these series, each ended with its three chapters all here. */
-function fakeDex(titles: string[]) {
+/** MangaDex with these series, each ended with its three chapters all here, first published in Japanese unless said. */
+function fakeDex(titles: string[], originals: Record<string, string>) {
   const uuid = (n: number) => `e0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
   const data = titles.map((title, i) => ({
     id: uuid(i + 1),
     type: 'manga',
-    attributes: { title: { en: title }, altTitles: [], status: 'completed', lastChapter: '3', contentRating: 'safe', tags: [], availableTranslatedLanguages: ['en'], originalLanguage: 'ja', latestUploadedChapter: 'up' },
+    attributes: { title: { en: title }, altTitles: [], status: 'completed', lastChapter: '3', contentRating: 'safe', tags: [], availableTranslatedLanguages: ['en'], originalLanguage: originals[title] ?? 'ja', latestUploadedChapter: 'up' },
     relationships: [],
   }));
   const chapters = [1, 2, 3].map((n) => ({
@@ -41,7 +41,12 @@ function fakeDex(titles: string[]) {
     if (path === '/manga') {
       const offset = Number(url.searchParams.get('offset'));
       const limit = Number(url.searchParams.get('limit'));
-      return json({ result: 'ok', data: data.slice(offset, offset + limit), total: data.length, limit, offset });
+      const only = url.searchParams.getAll('originalLanguage[]');
+      const not = url.searchParams.getAll('excludedOriginalLanguage[]');
+      let list = data;
+      if (only.length > 0) list = list.filter((m) => only.includes(m.attributes.originalLanguage));
+      list = list.filter((m) => !not.includes(m.attributes.originalLanguage));
+      return json({ result: 'ok', data: list.slice(offset, offset + limit), total: list.length, limit, offset });
     }
     if (/\/feed$/.test(path)) return json({ result: 'ok', data: chapters, total: 3, limit: 500, offset: 0 });
     if (/\/aggregate$/.test(path)) {
@@ -147,9 +152,9 @@ function fakeSuwayomi() {
   return { state, calls, answer };
 }
 
-async function setup(dexTitles: string[] = [], store?: Store) {
+async function setup(dexTitles: string[] = [], store?: Store, originals: Record<string, string> = {}) {
   const sw = fakeSuwayomi();
-  const dex = fakeDex(dexTitles);
+  const dex = fakeDex(dexTitles, originals);
   const dexCalls: URL[] = [];
   const fetch = (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input));
@@ -197,7 +202,8 @@ describe('one search everywhere', () => {
     ]);
     const kinds = r.body.items.map((x: MangaFound) => x.kind);
     expect(kinds).toEqual(['source', 'source', 'mangadex', 'source', 'mangadex']);
-    expect(r.body.items[1].card).toEqual({ id: 'sw:1', title: 'Omniscient Reader’s Viewpoint', cover: '/v1/manga/source/sw:1/cover', status: 'ongoing', adult: false, side: false });
+    expect(r.body.items[1].card).toEqual({ id: 'sw:1', title: 'Omniscient Reader’s Viewpoint', cover: '/v1/manga/source/sw:1/cover', status: 'ongoing', adult: false, side: false, kind: null });
+    expect(r.body.items[2].card.kind).toBe('manga');
     // Every place had nothing more.
     expect(r.body.next).toBeNull();
     // Every source in English, Late Night's too, as its series are judged one by one.
@@ -255,6 +261,39 @@ describe('one search everywhere', () => {
     const side = await b.get('/v1/manga/search?doujinshi=1');
     expect(shown(side.body)).toEqual(['Asura Scans: Plain', 'Late Night: Late show', 'Asura Scans: Fan work', 'Asura Scans: Many hands']);
     expect(side.body.items.map((x: MangaFound) => x.card.side)).toEqual([false, false, true, true]);
+  });
+
+  it('shows only the kinds asked, by a series’ genres or first language, one of no known kind only with every kind', async () => {
+    const { b, sw, dexCalls } = await setup(['Dex Manga', 'Dex Manhwa', 'Dex Comic'], undefined, { 'Dex Manhwa': 'ko', 'Dex Comic': 'en' });
+    sw.state.series = [
+      { id: 1, source: '11', title: 'Source Manga', genre: ['Manga', 'Action'] },
+      { id: 2, source: '11', title: 'Source Manhwa', genre: ['Action', 'Manwha'] },
+      { id: 3, source: '11', title: 'Source Manhua', genre: ['Manhua'] },
+      { id: 4, source: '11', title: 'Source Untyped', genre: ['Action'] },
+    ];
+    const kinds = (body: { items: MangaFound[] }) => body.items.map((x) => `${x.card.title}: ${x.card.kind}`).sort();
+    const all = await b.get('/v1/manga/search');
+    expect(kinds(all.body)).toEqual([
+      'Dex Comic: comics',
+      'Dex Manga: manga',
+      'Dex Manhwa: manhwa',
+      'Source Manga: manga',
+      'Source Manhua: manhua',
+      'Source Manhwa: manhwa',
+      'Source Untyped: null',
+    ]);
+    const some = await b.get('/v1/manga/search?kinds=manhwa,manga');
+    expect(kinds(some.body)).toEqual(['Dex Manga: manga', 'Dex Manhwa: manhwa', 'Source Manga: manga', 'Source Manhwa: manhwa']);
+    const comics = await b.get('/v1/manga/search?kinds=comics');
+    expect(kinds(comics.body)).toEqual(['Dex Comic: comics']);
+    // MangaDex is asked for those first published in their languages, or for any but the others'.
+    const lists = dexCalls.filter((u) => u.pathname === '/manga');
+    expect(lists).toHaveLength(3);
+    expect(lists[0].searchParams.has('originalLanguage[]')).toBe(false);
+    expect(lists[0].searchParams.has('excludedOriginalLanguage[]')).toBe(false);
+    expect(lists[1].searchParams.getAll('originalLanguage[]')).toEqual(['ja', 'ko']);
+    expect(lists[2].searchParams.getAll('excludedOriginalLanguage[]')).toEqual(['ja', 'ko', 'zh', 'zh-hk']);
+    expect((await b.get('/v1/manga/search?kinds=books')).status).toBe(400);
   });
 
   it('looks only in sources of the language asked, and in all of them for any', async () => {
@@ -345,6 +384,7 @@ describe('a series from a source', () => {
       status: 'ongoing',
       adult: false,
       side: false,
+      kind: null,
       source: 'Asura Scans',
       authors: ['Writer', 'Drawer'],
       description: 'What it is.\n\nMore.',
@@ -387,7 +427,7 @@ describe('a series from a source', () => {
 
 describe('how a search ranks', () => {
   const found = (source: string, title: string, side = false, names = [title]): Found => ({
-    item: { kind: 'source', source, card: { id: `sw:${title.length}`, title, cover: null, status: null, adult: false, side } },
+    item: { kind: 'source', source, card: { id: `sw:${title.length}`, title, cover: null, status: null, adult: false, side, kind: null } },
     names,
   });
   const place = (key: string, name: string, lot: Place['lot']): Place => ({ key, name, lot });
