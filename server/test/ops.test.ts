@@ -102,9 +102,13 @@ describe('status page', () => {
   });
 });
 
-/** pg_dump and pg_restore from the mirror's own container, which has the right version. */
+/**
+ * pg_dump and pg_restore from the mirror's own container, which has the right version. A stack
+ * started under another project name says its container in MIRROR_CONTAINER.
+ */
+const MIRROR_CONTAINER = process.env.MIRROR_CONTAINER ?? 'breader-dev-mirror-1';
 const inMirror: PgTools = {
-  spawn: (cmd, args) => spawn('docker', ['exec', '-i', 'breader-dev-mirror-1', cmd, ...args], { stdio: ['pipe', 'pipe', 'pipe'] }),
+  spawn: (cmd, args) => spawn('docker', ['exec', '-i', MIRROR_CONTAINER, cmd, ...args], { stdio: ['pipe', 'pipe', 'pipe'] }),
   url: (u) => u.replace('localhost:54333', 'localhost:5432'),
 };
 
