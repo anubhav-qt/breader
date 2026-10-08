@@ -130,8 +130,6 @@
 /* 2 voices: her lines and his in their own colours (Aa), deeper on light pages like the book's. */
 .rd ::highlight(narrate-her) { color: var(--her-mark); }
 .rd ::highlight(narrate-his) { color: var(--his-mark); }
-/* Nothing to see: a change that makes Safari draw a paragraph again when its lit words move (narration.ts). */
-.rd .hl-paint { outline-color: rgba(255, 255, 255, 0); }
 /* The word a tap is asking about (chrome/SayAs.tsx), lit like a selection. */
 .rd ::highlight(say-as) { background-color: color-mix(in srgb, var(--book) 34%, transparent); }
 .i3-mid {

@@ -129,41 +129,25 @@ const TONES = { F: '-her', M: '-his' } as const;
 let tone: Two | null = null;
 /** Whose voice the sentence lit next is in, for its colour; null for one voice. */
 export const setTone = (g: Two | null) => { tone = g; };
-type Highlights = { set: (name: string, h: unknown) => void; delete: (name: string) => void };
+type Highlights = { get: (name: string) => { clear: () => void } | undefined; set: (name: string, h: unknown) => void; delete: (name: string) => void };
 const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
 
 /*
- * Safari on a phone draws the page in tiles and doesn't draw one again when only a highlight on it
- * changed: each tile keeps whatever was lit when something else last made it draw, so old words
- * stay lit and new ones never light. So each change also gives the paragraphs it left and reached a
- * change Safari has to draw (an outline colour nobody sees, reader.css), once a frame, since two
- * in one frame would cancel out.
+ * Safari before 2026 (WebKit bug 306396) doesn't draw the words again when a highlight is taken out
+ * of CSS.highlights, so every sentence read stays lit. Emptying the highlight first does draw them.
  */
-let litIn: Element[] = [];
-const toRepaint = new Set<Element>();
-let repaintFrame = 0;
-const holder = (r: Range) => {
-  const n = r.commonAncestorContainer;
-  return n instanceof Element ? n : n.parentElement;
-};
-function repaint(els: Element[]) {
-  for (const el of els) toRepaint.add(el);
-  if (repaintFrame) return;
-  repaintFrame = requestAnimationFrame(() => {
-    repaintFrame = 0;
-    for (const el of toRepaint) el.classList.toggle('hl-paint');
-    toRepaint.clear();
-  });
+function unlight(name: string) {
+  const h = highlights?.get(name);
+  if (!h) return;
+  h.clear();
+  highlights?.delete(name);
 }
 
 export function light(range: Range | null, said: Range | null = null) {
   if (!highlights) return;
-  const was = litIn;
-  litIn = range ? [holder(range)].filter((el): el is Element => !!el) : [];
-  repaint([...was, ...litIn]);
   for (const sfx of ['', ...Object.values(TONES)]) {
-    highlights.delete(HIGHLIGHT + sfx);
-    highlights.delete(SAID + sfx);
+    unlight(HIGHLIGHT + sfx);
+    unlight(SAID + sfx);
   }
   if (!range) return;
   const sfx = tone ? TONES[tone] : '';
