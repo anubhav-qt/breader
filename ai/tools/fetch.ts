@@ -130,12 +130,11 @@ Speech habits, who calls whom what, who is disguised as what.
 `;
 
 /**
- * Downloads and extracts a book, and starts its folder. `seeded` says where its cast came from,
- * when it came from another volume.
+ * Extracts a book's file into its folder and starts the files the work needs. `seeded` says where
+ * its cast came from, when it came from another volume.
  */
-export async function fetchBook(b: QueueBook): Promise<{ book: Book; seeded: string }> {
+export async function startBook(b: QueueBook, bytes: Uint8Array): Promise<{ book: Book; seeded: string }> {
   const dir = bookDir(b.key);
-  const bytes = await download(b);
   const sha = createHash('sha256').update(bytes).digest('hex');
   if (sha !== b.sha256) throw new Error(`The file for ${b.title} doesn’t match what the server recorded. Stop and tell the owner.`);
   mkdirSync(dir, { recursive: true });
@@ -156,4 +155,9 @@ export async function fetchBook(b: QueueBook): Promise<{ book: Book; seeded: str
   if (!existsSync(join(dir, 'ledger.md'))) writeFileSync(join(dir, 'ledger.md'), LEDGER(book));
   mkdirSync(join(dir, 'marks'), { recursive: true });
   return { book, seeded };
+}
+
+/** Downloads a book from R2 and starts its folder (startBook). */
+export async function fetchBook(b: QueueBook): Promise<{ book: Book; seeded: string }> {
+  return startBook(b, await download(b));
 }

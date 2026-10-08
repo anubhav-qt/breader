@@ -13,8 +13,10 @@
     "audit": "tsx tools/cli/audit.ts",
     "pack": "tsx tools/cli/pack.ts",
     "import": "tsx tools/cli/import.ts",
+    "marker": "tsx tools/cli/marker.ts",
     "selftest": "tsx tools/cli/selftest.ts",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "test": "tsx --test tools/test/*.test.ts"
   },
   "dependencies": {
     "@types/jsdom": "^30.0.0",
