@@ -66,7 +66,7 @@ interface Balancers {
 
 /** Books being worked on, by SHA-256, and books that failed, with when to try them again. */
 const running = new Map<string, Phase>();
-const failures = new Map<string, { count: number; next: number }>();
+export const failures = new Map<string, { count: number; next: number }>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const clock = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -143,13 +143,14 @@ export function notesOrder(a: QueueBook, b: QueueBook): number {
 
 /**
  * Books to start notes for, in notesOrder. A series goes from its earliest volume that needs
- * notes, one volume at a time, since each builds on the ones before. A stuck volume is passed over.
+ * notes, one volume at a time, since each builds on the ones before. A stuck volume is still
+ * tried, but no longer holds up the ones after it.
  */
 export function toNote(books: QueueBook[], server: Map<string, OnServer>): QueueBook[] {
-  const want = books.filter((b) => needs(b, server) === 'notes' && !stuck(b)).sort(notesOrder);
+  const want = books.filter((b) => needs(b, server) === 'notes').sort(notesOrder);
   const out: QueueBook[] = [];
   for (const b of want) {
-    const before = want.filter((o) => earlier(o, b)).sort((x, y) => x.seriesIndex! - y.seriesIndex!);
+    const before = want.filter((o) => earlier(o, b) && !stuck(o)).sort((x, y) => x.seriesIndex! - y.seriesIndex!);
     const first = before[0] ?? b;
     if (running.has(first.sha256) || resting(first) || out.includes(first)) continue;
     out.push(first);
@@ -384,7 +385,8 @@ export async function runMarker(dry: boolean) {
   for (;;) {
     try {
       await round(lbs, pool);
-      if (Date.now() - alive > ALIVE_S * 1000) {
+      // Not while NVIDIA refuses the key: that would hide it on the status page.
+      if (Date.now() - alive > ALIVE_S * 1000 && !Balancer.refused().length) {
         alive = Date.now();
         await recordOk(pool, JOB, { running: running.size, failing: failures.size });
       }

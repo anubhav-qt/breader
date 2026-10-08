@@ -13,7 +13,7 @@ import type { OnServer } from '../marker.ts';
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { bookDir, writeJson } = await import('../lib.ts');
-const { byWithNotes, needs, notesOrder, toMark, toNote } = await import('../marker.ts');
+const { byWithNotes, failures, needs, notesOrder, toMark, toNote } = await import('../marker.ts');
 
 let made = 0;
 function book(title: string, more: Partial<QueueBook> = {}): QueueBook {
@@ -73,6 +73,20 @@ test('a series gets its notes from its earliest volume, at the place its book be
   // Once Saga 1 has notes, Saga 2 is next, still ahead of Other.
   server.set(s1.sha256, marked(10));
   assert.deepEqual(titles(toNote(books, server)), ['Saga 2', 'Other']);
+});
+
+test('a volume that keeps failing is still tried, but stops holding up the ones after it', () => {
+  const v1 = book('Epic 1', { series: 'Epic', seriesIndex: 1 });
+  const v2 = book('Epic 2', { series: 'Epic', seriesIndex: 2 });
+  const books = [v2, v1];
+  const server = new Map(books.map((b) => [b.sha256, marked()]));
+  failures.set(v1.sha256, { count: 2, next: Date.now() + 60_000 });
+  assert.deepEqual(titles(toNote(books, server)), [], 'resting, and still holding up Epic 2');
+  failures.set(v1.sha256, { count: 5, next: Date.now() + 60_000 });
+  assert.deepEqual(titles(toNote(books, server)), ['Epic 2']);
+  failures.set(v1.sha256, { count: 5, next: 0 });
+  assert.deepEqual(titles(toNote(books, server)), ['Epic 2', 'Epic 1']);
+  failures.clear();
 });
 
 test('marks: a later volume waits for an earlier one’s cast, so everyone keeps their id and voice', () => {
