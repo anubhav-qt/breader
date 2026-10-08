@@ -398,7 +398,7 @@ export default function App() {
   }, [route, recordById, startLoad]);
 
   /** A series into My manga, read from the copy picked: its cover kept here, its genres from its tags. */
-  const addSeries = useCallback(async (about: About, url: string): Promise<BookRecord> => {
+  const addNewSeries = useCallback(async (about: About, url: string): Promise<BookRecord> => {
     const now = Date.now();
     let cover: Blob | undefined = undefined;
     let author = '';
@@ -440,6 +440,21 @@ export default function App() {
     }
     return rec;
   }, [lib]);
+
+  /**
+   * Series on their way into My manga, by the url they're read from. Its cover can take half a
+   * minute, and a second tap meanwhile gets the same book, not another copy.
+   */
+  const addingSeries = useRef(new Map<string, Promise<BookRecord>>());
+  const addSeries = useCallback((about: About, url: string): Promise<BookRecord> => {
+    const going = addingSeries.current.get(url);
+    if (going) return going;
+    const adding = addNewSeries(about, url);
+    addingSeries.current.set(url, adding);
+    const done = () => { addingSeries.current.delete(url); };
+    adding.then(done, done);
+    return adding;
+  }, [addNewSeries]);
 
   /** Read from a series' sheet: into My manga if it isn't, then open, at the chapter picked if one was. */
   const readSeries = useCallback(async (about: About, picked: Picked, had: BookRecord | undefined, from: Position | undefined, rect: DOMRect | undefined) => {
@@ -952,8 +967,8 @@ export default function App() {
             prefs={mdPrefs}
             recordOf={recordOf}
             placeOf={placeOf}
-            onRead={(about, picked, had, from, rect) => void readSeries(about, picked, had, from, rect)}
-            onAdd={(about, picked) => void addSeriesOnly(about, picked)}
+            onRead={(about, picked, had, from, rect) => readSeries(about, picked, had, from, rect)}
+            onAdd={(about, picked) => addSeriesOnly(about, picked)}
             onMove={moveSeries}
             onClose={() => setSheet(null)}
           />

@@ -37,8 +37,8 @@ interface Props {
   recordOf: (id: string) => BookRecord | undefined;
   /** The number of the chapter a series in My manga is at, the same on every site. */
   placeOf: (rec: BookRecord) => number | null;
-  onRead: (about: About, picked: Picked, had: BookRecord | undefined, from: Position | undefined, rect: DOMRect | undefined) => void;
-  onAdd: (about: About, picked: Picked) => void;
+  onRead: (about: About, picked: Picked, had: BookRecord | undefined, from: Position | undefined, rect: DOMRect | undefined) => Promise<void> | void;
+  onAdd: (about: About, picked: Picked) => Promise<void> | void;
   /** A series in My manga, read from another copy from now on. site: where that is, for saying so. */
   onMove: (rec: BookRecord, picked: Picked, site: string) => void;
   onClose: () => void;
@@ -135,6 +135,7 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
   const [listOpen, setListOpen] = useState(false);
   const [kept, setKept] = useState(0);
   const [more, setMore] = useState(false);
+  const [busy, setBusy] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
   const hereRef = useRef<HTMLLIElement>(null);
   const { places, settled } = useCopies(main.card.title, start, prefs, lang);
@@ -151,6 +152,16 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
     return () => { live = false; };
   }, [main.kind, main.card.id, prefs.adult]);
   const a = about.state === 'ready' ? about.value : null;
+
+  /**
+   * Adding a series takes as long as its cover does (half a minute from some sites), and it isn't
+   * "In My manga" until then, so the buttons wait for it rather than add it again.
+   */
+  const once = (go: () => Promise<void> | void) => {
+    if (busy) return;
+    setBusy(true);
+    void Promise.resolve(go()).finally(() => setBusy(false));
+  };
 
   // In My manga by any of its places.
   let had: BookRecord | undefined;
@@ -384,11 +395,13 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
           )}
         </div>
         <div className="mds-actions">
-          <button type="button" className="btn btn-primary" disabled={!canRead} onClick={() => a && onRead(a, pickedNow, had, undefined, rect())}>{readLabel}</button>
+          <button type="button" className="btn btn-primary" disabled={!canRead || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, undefined, rect()))}>{readLabel}</button>
           {had ? (
             <span className="mds-in"><IconCheck /> In My manga</span>
           ) : (
-            <button type="button" className="btn btn-quiet" disabled={!a} onClick={() => a && onAdd(a, pickedNow)}>Add to My manga</button>
+            <button type="button" className="btn btn-quiet" disabled={!a || busy} onClick={() => a && once(() => onAdd(a, pickedNow))}>
+              {busy ? 'Adding…' : 'Add to My manga'}
+            </button>
           )}
         </div>
       </div>
@@ -482,7 +495,7 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
             else if (i < hereAt) cls += ' is-read';
             return (
               <li key={c.id} ref={i === hereAt ? hereRef : undefined}>
-                <button type="button" className={cls} aria-current={i === hereAt ? 'step' : undefined} disabled={!a} onClick={() => a && onRead(a, pickedNow, had, startOf(c), rect())}>{body}</button>
+                <button type="button" className={cls} aria-current={i === hereAt ? 'step' : undefined} disabled={!a || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, startOf(c), rect()))}>{body}</button>
               </li>
             );
           })}
