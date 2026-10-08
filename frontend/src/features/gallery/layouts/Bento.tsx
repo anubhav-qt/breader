@@ -1,10 +1,11 @@
 import { AnimatePresence } from 'motion/react';
 import { useElementWidth } from '../useElementWidth';
+import { pickedOf } from '../picking';
 import { Tile } from '../Tile';
 import type { SectionProps } from '../types';
 import { slotsFor } from './slots';
 
-export function Bento({ items, now, enter, editingId, onOpen, onEdit, onKeep }: SectionProps) {
+export function Bento({ items, now, enter, editingId, picked, onOpen, onEdit, onKeep }: SectionProps) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const cols = width >= 1000 ? 6 : width >= 640 ? 4 : 2;
   const slots = slotsFor(items.length, cols);
@@ -29,6 +30,7 @@ export function Bento({ items, now, enter, editingId, onOpen, onEdit, onKeep }: 
               radius={v === 'small' ? 20 : 26}
               style={place}
               open={(item.book.key ?? item.book.id) === editingId}
+              picked={pickedOf(picked, [item.book])}
               layoutKey={layoutKey}
               onOpen={onOpen}
               onEdit={onEdit}

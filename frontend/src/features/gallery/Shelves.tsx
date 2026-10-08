@@ -5,6 +5,7 @@ import { readLocal, writeLocal } from '../../lib/store';
 import { springs } from '../../lib/springs';
 import { IconBack, IconChevron } from '../../components/icons';
 import { KeepSeries } from './KeepSeries';
+import { pickedOf } from './picking';
 import { finishedIn, type Series } from './series';
 import { VIEWS, byDate, byGenre, bySeries, isView, type Shelf, type View } from './shelving';
 import { Tile } from './Tile';
@@ -31,6 +32,8 @@ interface Props {
   enter: boolean;
   indexBase: number;
   editingId?: string;
+  /** Picking books to favourite or remove together: the ones ticked. Absent while not picking. */
+  picked?: ReadonlySet<string>;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   onKeep?: (book: ShelfItem) => void;
@@ -43,20 +46,20 @@ interface Props {
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, onOpen, onEdit, onKeep, onKeepAll, onSeries }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: Props) {
   const key = `breader.view.${place}.v1`;
-  const [picked, setPicked] = useState<View | null>(() => {
+  const [chosen, setChosen] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
     return isView(v) ? v : null;
   });
   // A library with no series yet starts on its genres.
-  const view = picked ?? (initial === 'series' && !series.size ? 'genre' : initial);
+  const view = chosen ?? (initial === 'series' && !series.size ? 'genre' : initial);
   const section = useRef<HTMLElement>(null);
   const tabs = useRef<HTMLDivElement>(null);
 
   const pick = (v: View) => {
     if (v === view) return;
-    setPicked(v);
+    setChosen(v);
     writeLocal(key, v);
     const el = section.current;
     const scroller = root.current;
@@ -148,6 +151,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
           enter={enter}
           indexBase={indexBase}
           editingId={editingId}
+          picked={picked}
           onOpen={onOpen}
           onEdit={onEdit}
           onKeep={onKeep}
@@ -159,7 +163,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
   );
 }
 
-type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'onOpen' | 'onEdit' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
+type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'picked' | 'onOpen' | 'onEdit' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
   shelves: Shelf[];
   lazy: boolean;
   empty?: string;
@@ -192,7 +196,7 @@ function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
 type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, onEdit, onKeep, onKeepAll, onSeries }: RowProps) {
+function Row({ shelf, index, authors, now, enter, indexBase, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -273,6 +277,7 @@ function Row({ shelf, index, authors, now, enter, indexBase, editingId, onOpen, 
                 number={e.number}
                 stack={stack && { name: stack.name, count: stack.books.length, finished: finishedIn(stack) }}
                 open={!stack && (e.book.key ?? e.book.id) === editingId}
+                picked={pickedOf(picked, stack ? stack.books : [e.book])}
                 layoutKey={layoutKey}
                 onOpen={stack ? () => onSeries(stack) : onOpen}
                 onEdit={onEdit}

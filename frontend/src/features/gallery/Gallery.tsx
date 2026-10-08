@@ -50,6 +50,10 @@ interface Props {
   onChapters?: (book: ShelfItem) => void;
   /** What an empty library says, in place of its Add button. */
   empty?: ReactNode;
+  /** Picking books to favourite or remove together: the ones ticked. Absent while not picking. */
+  picked?: ReadonlySet<string>;
+  /** While picking: ticks these books, or takes the tick off when they all have one. */
+  onPick?: (books: ShelfItem[]) => void;
 }
 
 /** The cards rise in and their colour grows only the first time a library appears after the page loads. */
@@ -59,7 +63,7 @@ let entered = false;
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty }: Props) {
+export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty, picked, onPick }: Props) {
   const first = useRef(!entered);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -68,11 +72,12 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
     const t = window.setTimeout(() => { first.current = false; entered = true; }, 60);
     return () => window.clearTimeout(t);
   }, []);
+  const picking = !!picked;
   useEffect(() => {
-    if (!hidden) return;
+    if (!hidden && !picking) return;
     setEditing(null);
     setShowing(null);
-  }, [hidden]);
+  }, [hidden, picking]);
 
   const series = useMemo(() => {
     if (manga) return new Map<string, Series>();
@@ -115,7 +120,14 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
     );
   }
 
-  const shared = { now, enter: first.current, editingId: editing?.id, onOpen, onEdit: openEdit, onKeep };
+  // While picking, a card ticks its book, and a series' card or name all of its books, instead of opening.
+  let openBook = onOpen;
+  let showSeries: (s: Series) => void = openSeries;
+  if (picked && onPick) {
+    openBook = (b) => onPick([b]);
+    showSeries = (s) => onPick(s.books);
+  }
+  const shared = { now, enter: first.current, editingId: editing?.id, picked, onOpen: openBook, onEdit: openEdit, onKeep };
   // Shelves below only add something once there's more than Recent holds, or a series to show.
   const more = books.length > RECENT || stacks.size > 0;
   return (
@@ -138,7 +150,7 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
           initial={view}
           root={scrollRef}
           indexBase={RECENT}
-          onSeries={openSeries}
+          onSeries={showSeries}
           onKeepAll={onKeepAll}
           {...shared}
         />

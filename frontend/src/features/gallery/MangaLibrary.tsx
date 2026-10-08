@@ -1,5 +1,6 @@
 import type { ShelfItem } from '../../data/useLibrary';
 import { CoverCard } from './CoverCard';
+import { pickedOf } from './picking';
 import { Tile } from './Tile';
 import type { SectionProps } from './types';
 
@@ -34,6 +35,7 @@ export function MangaLibrary({ books, coversOnly, ...shared }: Props) {
           radius={26}
           className="mg-hero"
           open={(reading.key ?? reading.id) === shared.editingId}
+          picked={pickedOf(shared.picked, [reading])}
           onOpen={shared.onOpen}
           onEdit={shared.onEdit}
           onKeep={shared.onKeep}
@@ -51,6 +53,7 @@ export function MangaLibrary({ books, coversOnly, ...shared }: Props) {
                 index={i + 1}
                 enter={shared.enter}
                 open={(b.key ?? b.id) === shared.editingId}
+                picked={pickedOf(shared.picked, [b])}
                 layoutKey={layoutKey}
                 onOpen={shared.onOpen}
                 onEdit={shared.onEdit}

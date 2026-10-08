@@ -53,6 +53,8 @@
   transition: box-shadow 220ms ease;
 }
 .tile:hover::after { box-shadow: inset 0 0 0 1px var(--tile-border-hover); }
+/* A picked card's ring, which the keyboard's ring shows over. */
+.tile-slot.is-picked .tile::after { box-shadow: inset 0 0 0 3px var(--ink); }
 .tile:has(.tile-hit:focus-visible)::after { box-shadow: inset 0 0 0 2px var(--accent); }
 
 .tile { --pad-y: 20px; --pad-x: 22px; }
@@ -98,6 +100,19 @@
 .tile-keep:not(.is-on):hover { background: var(--canvas); }
 /* Someone's book: into the reader's own library, then a tick once it's there. */
 .tile-keep svg { fill: none; width: 16px; height: 16px; }
+/* Picking books to favourite or remove together: an empty circle in the corner, filled with a tick
+   once picked. */
+.tile-pick {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--canvas) 82%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--ink-2);
+}
+.tile-pick.is-on { background: var(--ink); color: var(--canvas); box-shadow: none; }
+.tile-pick svg { width: 16px; height: 16px; fill: none; }
 .tile-keep.is-on { cursor: default; }
 .tile-keep.is-on svg { width: 15px; height: 15px; }
 
@@ -393,7 +408,7 @@
   right: calc(100cqw - var(--mg-inset) - var(--mg-art-w) + var(--tool) * 0.27);
   gap: calc(var(--tool) * 0.17);
 }
-.tile.is-manga :is(.tile-more, .tile-fav) { width: var(--tool); height: var(--tool); }
+.tile.is-manga :is(.tile-more, .tile-fav, .tile-pick) { width: var(--tool); height: var(--tool); }
 .tile.is-manga .tile-tools svg { width: calc(var(--tool) * 0.53); height: calc(var(--tool) * 0.53); }
 .tile.is-manga > .tile-face > :first-child { padding-right: 0; }
 .tile.is-manga .t-foot { margin-top: auto; padding-top: 16px; }

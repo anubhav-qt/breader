@@ -15,6 +15,8 @@ export interface SectionProps {
   indexBase?: number;
   /** The book whose edit popover is open. */
   editingId?: string;
+  /** Picking books to favourite or remove together: the ones ticked. Absent while not picking. */
+  picked?: ReadonlySet<string>;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   /** Puts a book from someone's shared library in the reader's own, without opening it. */

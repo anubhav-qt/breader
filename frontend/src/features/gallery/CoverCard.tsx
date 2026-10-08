@@ -17,6 +17,8 @@ interface Props {
   words: boolean;
   /** Its edit popover is open. */
   open?: boolean;
+  /** Picking series to favourite or remove together: whether this one is ticked. */
+  picked?: boolean;
   /** Changes when series join or leave the section: only then do cards glide to their new places. */
   layoutKey?: string;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
@@ -29,7 +31,7 @@ interface Props {
  * in its colour. The cover opens it; the corner button (or a right-click) edits it, as on the
  * books' cards.
  */
-export function CoverCard({ item, index, enter, words, open = false, layoutKey, onOpen, onEdit, onKeep }: Props) {
+export function CoverCard({ item, index, enter, words, open = false, picked, layoutKey, onOpen, onEdit, onKeep }: Props) {
   const b = item.book;
   const moreRef = useRef<HTMLButtonElement>(null);
   const [broken, setBroken] = useState(false);
@@ -40,7 +42,7 @@ export function CoverCard({ item, index, enter, words, open = false, layoutKey, 
 
   return (
     <motion.div
-      className={`tile-slot cv${drawn ? ' is-drawn' : ''}`}
+      className={`tile-slot cv${drawn ? ' is-drawn' : ''}${picked ? ' is-picked' : ''}`}
       style={bookVars(b)}
       // The library's first appearance rises in; a series added or put back later settles in place.
       initial={enter ? { opacity: 0, y: 18 } : { opacity: 0, scale: 0.97 }}
@@ -86,9 +88,10 @@ export function CoverCard({ item, index, enter, words, open = false, layoutKey, 
           className="tile-hit"
           data-id={b.id}
           aria-label={`${b.title}, ${chapterText(b)}`}
+          aria-pressed={picked}
           onClick={(e) => onOpen(b, (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect())}
         />
-        <Tools book={b} open={open} moreRef={moreRef} onEdit={onEdit} onKeep={onKeep} />
+        <Tools book={b} open={open} picked={picked} moreRef={moreRef} onEdit={onEdit} onKeep={onKeep} />
       </div>
     </motion.div>
   );

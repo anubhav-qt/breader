@@ -6,7 +6,7 @@ import { blotsFor, maskFor, radiiFor } from './blots';
 import { fitCard } from './fit';
 import { cardNames, markFor } from './names';
 import { actionLabel, chapterText, progressText, shortProgress, timeLeft, when } from './text';
-import { Tools } from './Tools';
+import { Pick, Tools } from './Tools';
 import type { GalleryItem } from './types';
 import { useSize } from './useSize';
 import { bookVars } from './vars';
@@ -26,6 +26,8 @@ export interface TileProps {
   radius?: string | number;
   /** Its edit popover is open. */
   open?: boolean;
+  /** Picking books to favourite or remove together: whether this one (or all of a series) is ticked. */
+  picked?: boolean;
   /** Changes when books join or leave the section: only then do cards glide to their new places. */
   layoutKey?: string;
   /** The book's number in its series, on a card in a series row. */
@@ -61,7 +63,7 @@ function setMask(el: HTMLElement | null, mask: string) {
  *
  * A full-size button opens the book; the corner button (or a right-click) opens the edit popover.
  */
-export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onKeep }: TileProps) {
+export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, picked, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onKeep }: TileProps) {
   const b = item.book;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
@@ -110,7 +112,9 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   const theirs = b.source === 'shelf';
   const keepable = !!onKeep && theirs;
   // The corner's buttons: keep or finished, favourite and the edit button, which the first line keeps clear of.
-  const tools = stack ? 0 : (theirs ? 0 : 1) + (keepable || done ? 1 : 0) + (b.favorite ? 1 : 0);
+  let tools = (theirs ? 0 : 1) + (keepable || done ? 1 : 0) + (b.favorite ? 1 : 0);
+  // A series' card has none, but for its tick while picking.
+  if (stack) tools = picked === undefined ? 0 : 1;
   useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);
   useEffect(() => {
     let live = true;
@@ -122,7 +126,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   return (
     <motion.div
       ref={slotRef}
-      className={`tile-slot ${className}${stack ? ' is-stack' : ''}`}
+      className={`tile-slot ${className}${stack ? ' is-stack' : ''}${picked ? ' is-picked' : ''}`}
       style={{ ...style, borderRadius: radius }}
       // The library's first appearance rises in; a book added or put back later settles in place.
       initial={enter ? { opacity: 0, y: 18 } : { opacity: 0, scale: 0.97 }}
@@ -149,7 +153,8 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
           className="tile-hit"
           data-id={b.id}
           aria-label={stack ? `${stack.name}, a series of ${stack.count} books, ${stack.finished} finished` : `${b.title}, ${manga ? chapterText(b) : progressText(b)}`}
-          aria-haspopup={stack ? 'dialog' : undefined}
+          aria-haspopup={stack && picked === undefined ? 'dialog' : undefined}
+          aria-pressed={picked}
           onClick={(e) => onOpen(b, (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect())}
         />
         {made && <MadeCover book={b} number={number} author={item.author} />}
@@ -166,8 +171,9 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
             />
           </span>
         )}
-        {/* A series' card opens the series; its books are edited there. */}
-        {!stack && <Tools book={b} open={open} moreRef={moreRef} onEdit={onEdit} onKeep={onKeep} />}
+        {/* A series' card opens the series; its books are edited there. While picking, it ticks them all. */}
+        {!stack && <Tools book={b} open={open} picked={picked} moreRef={moreRef} onEdit={onEdit} onKeep={onKeep} />}
+        {stack && picked !== undefined && <div className="tile-tools"><Pick on={picked} /></div>}
       </div>
     </motion.div>
   );

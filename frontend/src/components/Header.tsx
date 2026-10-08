@@ -29,9 +29,13 @@ interface Props {
   libraries: (close: () => void) => ReactNode;
   /** Settings: manga's covers on their own, the library key, and logging in or out. */
   settings: ReactNode;
+  /** Starts picking books to favourite or remove together, where there are books of the reader's own. */
+  onSelect?: () => void;
+  /** While picking: the bar (BulkBar) that takes the place of the switch between libraries. */
+  bulk?: ReactNode;
 }
 
-export function Header({ category, onCategory, tab, counts, browse, shelfName, canAdd, onTab, onAdd, onBrowse, libraries, settings }: Props) {
+export function Header({ category, onCategory, tab, counts, browse, shelfName, canAdd, onTab, onAdd, onBrowse, libraries, settings, onSelect, bulk }: Props) {
   const manga = category === 'manga';
 
   // One Tab stop for the pair too; the arrow keys switch between them, as radio buttons do.
@@ -63,15 +67,20 @@ export function Header({ category, onCategory, tab, counts, browse, shelfName, c
           </button>
         ))}
       </div>
-      <LibrarySwitch
-        category={category}
-        tab={tab}
-        counts={counts}
-        shelfName={shelfName}
-        onTab={onTab}
-        libraries={libraries}
-      />
+      {bulk ?? (
+        <LibrarySwitch
+          category={category}
+          tab={tab}
+          counts={counts}
+          shelfName={shelfName}
+          onTab={onTab}
+          libraries={libraries}
+        />
+      )}
       <div className="hdr-actions">
+        {onSelect && !bulk && (
+          <button type="button" className="btn btn-ghost hdr-select" onClick={onSelect}>Select</button>
+        )}
         {/* Not animated: a fading copy would sit beside the empty library's own Add button,
             and on phones that fade can stall and leave both on screen. */}
         {canAdd && manga && browse && (

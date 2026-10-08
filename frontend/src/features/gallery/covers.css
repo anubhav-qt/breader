@@ -22,6 +22,7 @@
   transition: box-shadow 220ms ease;
 }
 .cv:hover .cv-art::after { box-shadow: inset 0 0 0 1px var(--tile-border-hover); }
+.cv.is-picked .cv-art::after { box-shadow: inset 0 0 0 3px var(--ink); }
 .cv-art:has(.tile-hit:focus-visible)::after { box-shadow: inset 0 0 0 2px var(--accent); }
 .cv-art img {
   position: absolute;
@@ -69,7 +70,7 @@
   right: calc(var(--tool) * 0.27);
   gap: calc(var(--tool) * 0.17);
 }
-.cv :is(.tile-more, .tile-fav) { width: var(--tool); height: var(--tool); }
+.cv :is(.tile-more, .tile-fav, .tile-pick) { width: var(--tool); height: var(--tool); }
 .cv .tile-tools svg { width: calc(var(--tool) * 0.53); height: calc(var(--tool) * 0.53); }
 .cv:hover .tile-more { opacity: 1; }
 

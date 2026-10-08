@@ -41,6 +41,8 @@
   .hdr-label { display: none; }
   .hdr-actions { gap: 4px; }
   .hdr-actions :is(.hdr-add, .hdr-icon) { width: 40px; padding: 0; }
+  /* Select stays a word, short enough to fit. */
+  .hdr-actions .hdr-select { padding: 0 10px; }
 }
 @media (max-width: 400px) {
   .hdr { column-gap: 10px; }
