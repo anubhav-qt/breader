@@ -5,6 +5,7 @@ import { pruneReadFeed } from './jobs/chores.ts';
 import { cleanUp } from './jobs/cleanup.ts';
 import { restoreDrill } from './jobs/drill.ts';
 import { updateExtensions } from './jobs/extensions.ts';
+import { startMarker } from './jobs/marker.ts';
 import { repairStorage } from './jobs/repair.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
 import { report, startReporting } from './lib/report.ts';
@@ -16,8 +17,8 @@ import { makeFileMirror } from './mirror/files.ts';
 /*
  * The laptop's background process: keeps the copy and the file mirror current, prunes feed
  * records it has read, cleans up, writes the nightly backup and tests that it restores, puts
- * back files missing from R2, and keeps Suwayomi's extensions current. It never runs on the
- * fallback.
+ * back files missing from R2, keeps Suwayomi's extensions current, and runs the AI marker. It
+ * never runs on the fallback.
  */
 const env = loadEnv();
 startReporting(env, 'worker');
@@ -88,6 +89,7 @@ if (env.HEARTBEAT_URL) {
     if ((rows[0]?.lag ?? Infinity) < 60) await fetch(url, { signal: AbortSignal.timeout(10_000) });
   })();
 }
+startMarker({ filesDir: env.FILES_DIR, signal: stop.signal });
 log.info({ files: env.FILES_DIR }, 'worker running');
 
 const shutdown = () => {

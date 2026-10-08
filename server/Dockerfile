@@ -27,7 +27,7 @@ RUN node ai/build.mjs
 FROM node:24-alpine
 # pg_dump for backups (must be at least the copy's major version), tini to forward signals.
 RUN apk add --no-cache postgresql17-client tini tzdata \
-  && mkdir -p /data/files /data/backups /data/voices /data/manga /data/ai && chown -R node:node /data
+  && mkdir -p /data/files /data/backups /data/voices /data/manga && chown -R node:node /data
 WORKDIR /app
 ENV NODE_ENV=production
 # The commit, shown by /health, so you can see which version each server runs.
@@ -37,10 +37,11 @@ COPY --from=build /app/server/dist ./dist
 COPY --from=build /app/server/drizzle ./drizzle
 # The server voice's MP3 encoder sits beside the bundle rather than in it (build.mjs).
 COPY --from=build /app/node_modules/@breezystack/lamejs ./node_modules/@breezystack/lamejs
-# The marker: its bundle, the procedure its prompts quote, and the two packages that load files of
-# their own (ai/build.mjs): jsdom whole, and only the build of pdf.js it uses.
+# The marker, which the worker runs: its bundle, the procedure its prompts quote, the sealed NVIDIA
+# key (ai/tools/seal.ts), and the two packages that load files of their own (ai/build.mjs): jsdom
+# whole, and only the build of pdf.js it uses.
 COPY --from=build /app/ai/dist ./ai/dist
-COPY ai/procedure.md ./ai/
+COPY ai/procedure.md ai/nvidia-key.enc ./ai/
 COPY --from=build /app/ai/node_modules ./ai/node_modules
 COPY --from=build /app/node_modules/pdfjs-dist/package.json ./node_modules/pdfjs-dist/
 COPY --from=build /app/node_modules/pdfjs-dist/legacy/build/pdf.mjs /app/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs ./node_modules/pdfjs-dist/legacy/build/

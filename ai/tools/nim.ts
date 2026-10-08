@@ -2,33 +2,62 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { AI } from './lib.ts';
+import { unseal } from './seal.ts';
 
 /*
  * NVIDIA's free API (build.nvidia.com), OpenAI style and always streamed: its gateway drops a call
  * that has sent nothing for 300 s, and a big model can sit in a queue for minutes before its first
  * token. The key is NVIDIA_NIM_API_KEY, from the environment or ai/.env (the main checkout's, in a
- * worktree). It is never printed.
+ * worktree), or on the server, ai/nvidia-key.enc opened with its ADMIN_TOKEN (seal.ts). It is
+ * never printed.
  */
 
 const URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+export const SEALED = join(AI, 'nvidia-key.enc');
 
-let cached: string | null = null;
-function key(): string {
-  if (cached) return cached;
-  if (process.env.NVIDIA_NIM_API_KEY) return (cached = process.env.NVIDIA_NIM_API_KEY);
+export interface Key {
+  key: string;
+  from: string;
+}
+
+function fromEnvFiles(): Key | null {
   const files = [join(AI, '.env')];
   try {
-    const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: AI, encoding: 'utf8' }).trim();
+    const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: AI, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     files.push(join(dirname(common), 'ai/.env'));
   } catch { /* not a git checkout */ }
   for (const file of files) {
     if (!existsSync(file)) continue;
     for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
       const m = line.match(/^\s*NVIDIA_NIM_API_KEY\s*=\s*(.*?)\s*$/);
-      if (m?.[1]) return (cached = m[1].replace(/^(["'])(.*)\1$/, '$2'));
+      if (m?.[1]) return { key: m[1].replace(/^(["'])(.*)\1$/, '$2'), from: file };
     }
   }
-  throw new Error('No NVIDIA_NIM_API_KEY in ai/.env or the environment.');
+  return null;
+}
+
+function fromSealed(): Key | null {
+  const token = process.env.ADMIN_TOKEN;
+  if (!token || !existsSync(SEALED)) return null;
+  try {
+    return { key: unseal(readFileSync(SEALED, 'utf8').trim(), token), from: 'ai/nvidia-key.enc' };
+  } catch {
+    throw new Error('ai/nvidia-key.enc doesn’t open with this ADMIN_TOKEN. Seal it again: npm --prefix ai run seal.');
+  }
+}
+
+let cached: Key | null = null;
+
+/** The key, and where it came from. Throws when there's none. */
+export function nvidiaKey(): Key {
+  if (cached) return cached;
+  if (process.env.NVIDIA_NIM_API_KEY) {
+    cached = { key: process.env.NVIDIA_NIM_API_KEY, from: 'the environment' };
+    return cached;
+  }
+  cached = fromEnvFiles() ?? fromSealed();
+  if (!cached) throw new Error('No NVIDIA_NIM_API_KEY in ai/.env or the environment, and no ai/nvidia-key.enc with an ADMIN_TOKEN to open it.');
+  return cached;
 }
 
 /**
@@ -98,7 +127,7 @@ export async function chat(model: string, messages: Msg[], o: ChatOptions): Prom
     const res = await fetch(URL, {
       method: 'POST',
       signal: ctl.signal,
-      headers: { Authorization: `Bearer ${key()}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: { Authorization: `Bearer ${nvidiaKey().key}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({
         model,
         messages,

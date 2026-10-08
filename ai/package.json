@@ -14,6 +14,7 @@
     "pack": "tsx tools/cli/pack.ts",
     "import": "tsx tools/cli/import.ts",
     "marker": "tsx tools/cli/marker.ts",
+    "seal": "tsx tools/cli/seal.ts",
     "selftest": "tsx tools/cli/selftest.ts",
     "typecheck": "tsc -p .",
     "test": "tsx --test tools/test/*.test.ts",

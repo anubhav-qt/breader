@@ -302,7 +302,7 @@ a terminal:
 curl -s https://api.breader.example/ready   # primary up, the copy's lag
 curl -s https://fb.breader.example/ready
 docker compose -f infra/compose.yml ps
-docker compose -f infra/compose.yml logs --since 1h api worker marker
+docker compose -f infra/compose.yml logs --since 1h api worker
 tail infra/update.log
 ```
 
@@ -324,22 +324,23 @@ and key libraries unused for a year, with their files.
 laptop's copy. A file missing from both makes the job fail every day, on the status page and in
 Sentry, until someone looks.
 
-**The marker.** The `marker` service gives every book whose AI switch is on its voice marks, then
-its Revisit notes, through NVIDIA's free API (`ai/procedure.md` › The marker). It needs
-`NVIDIA_NIM_API_KEY` in `infra/.env`, and keeps the books it reads, and what it makes from them,
-in the `ai` volume, never anywhere else. It shows on the status page as "AI marker", which also
-says when NVIDIA refuses the key. `update.sh` pulls images but not this file, so the first time,
-on the laptop:
+**The marker.** The worker also runs the AI marker, as a process of its own that it starts again
+a minute after a crash. It gives every book whose AI switch is on its voice marks, then its Revisit
+notes, through NVIDIA's free API (`ai/procedure.md` › The marker). Its NVIDIA key comes in the
+image, sealed with `ADMIN_TOKEN` (`ai/nvidia-key.enc`), so there's nothing to set up here; after
+a new NVIDIA key or a new `ADMIN_TOKEN`, run `npm --prefix ai run seal` on a machine with both and
+commit the file. Without a key that opens, it stays off and the status page says why. It keeps the
+books it reads, and what it makes from them, under `ai/` in the `files` volume, never anywhere
+else. It shows on the status page as "AI marker", which also says when NVIDIA refuses the key.
+What it would start now, and its lines:
 
 ```sh
-git pull                                          # compose.yml with the marker in it
-docker compose -f infra/compose.yml run --rm marker node ai/dist/marker.js --dry   # what it would start
-docker compose -f infra/compose.yml up -d marker
-docker compose -f infra/compose.yml logs -f marker
+docker compose -f infra/compose.yml exec -e AI_WORK=/data/files/ai/work -e AI_OUT=/data/files/ai/out worker node ai/dist/marker.js --dry
+docker compose -f infra/compose.yml logs -f worker
 ```
 
-`stop marker` pauses it until the next release starts it again. Never run the ai tools' `mark`,
-`mark-all` or `notes` on another machine while it runs: the same books would be done twice.
+Never run the ai tools' `mark`, `mark-all`, `notes` or `marker` on another machine while it runs:
+the same books would be done twice.
 
 ## When something breaks
 

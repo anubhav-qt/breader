@@ -40,7 +40,7 @@ When you're done, the owner pastes the "Final Antigravity prompt" at the end of 
   - `git -C ../breader-ai merge --ff-only ai/app`, so Antigravity gets `import`. It never commits, so this fast-forwards.
   - Merge `ai/app` into `dev`, and push only with the owner's go-ahead.
 
-**The tools** are in `ai/tools/*.ts`, their commands in `ai/tools/cli/*.ts`, run with `npm --prefix ai run <name>`: `books`, `fetch`, `check`, `audit`, `pack`, `selftest`, `test`, `typecheck`, and the server's `marker`.
+**The tools** are in `ai/tools/*.ts`, their commands in `ai/tools/cli/*.ts`, run with `npm --prefix ai run <name>`: `books`, `fetch`, `check`, `audit`, `pack`, `selftest`, `test`, `typecheck`, and the server's `marker` and `seal`.
 - `lib.ts` has shared types and helpers.
 - `env.ts` reads production credentials: `PRIMARY_SESSION_URL`, and `S3_*` for R2.
 - `books.ts` shows how to query production read-only: `begin read only` … `rollback`.

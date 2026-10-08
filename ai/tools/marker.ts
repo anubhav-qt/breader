@@ -12,14 +12,15 @@ import { castByFile, castOf, fitBy, LADDER, mins, notesBy, PRIMARY } from './kim
 import { bookDir, isFetched, loadBook, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
 import { listBooks } from './library.ts';
 import { markBook } from './mark.ts';
+import { nvidiaKey } from './nim.ts';
 import { writeNotes } from './notes.ts';
 import { revisitOf } from './pack.ts';
 import { validate, type Notes } from './validate.ts';
 
 /*
  * The marker: mark.ts and notes.ts for every book whose AI switch is on, for good, with no one at
- * the keyboard. The server runs it (compose's marker service); npm --prefix ai run marker runs it
- * here.
+ * the keyboard. The server's worker runs it (server/src/jobs/marker.ts); npm --prefix ai run
+ * marker runs it here. With no NVIDIA key it stays off.
  *
  * About once a minute it lists the books. A book with nothing on the server yet gets its voice
  * marks: fetched, its cast read from the book alone (cast.ts, no web research), every part marked,
@@ -372,9 +373,45 @@ async function round(lbs: Balancers, pool: pg.Pool) {
   }
 }
 
-/** Runs for good: a round about once a minute. With `dry`, only says what it would start. */
+/** Why there's no NVIDIA key, or null when there is one. */
+function noKey(): string | null {
+  try {
+    nvidiaKey();
+    return null;
+  } catch (e) {
+    return message(e);
+  }
+}
+
+/** Says on the status page that the marker is off, when there's a database to say it in. */
+async function sayOff(why: string) {
+  let pool: pg.Pool | null = null;
+  try {
+    pool = prodPool('breader-ai-marker');
+    await recordError(pool, JOB, new Error(`The marker is off: ${why}`));
+  } catch {
+    /* a stack for development: no database of the marker's */
+  } finally {
+    await pool?.end().catch(() => {});
+  }
+}
+
+/**
+ * Runs for good: a round about once a minute. With `dry`, only says what it would start. With no
+ * NVIDIA key it stays off and ends, which is what it does in a stack for development.
+ */
 export async function runMarker(dry: boolean) {
-  if (dry) return plan();
+  const why = noKey();
+  if (dry) {
+    if (why) console.log(`${why}\n`);
+    else console.log(`The NVIDIA key comes from ${nvidiaKey().from}.\n`);
+    return plan();
+  }
+  if (why) {
+    console.log(`${clock()} The marker is off: ${why}`);
+    await sayOff(why);
+    return;
+  }
   mkdirSync(WORK, { recursive: true });
   mkdirSync(OUT, { recursive: true });
   const lbs = balancers();
@@ -398,7 +435,7 @@ export async function runMarker(dry: boolean) {
     const now = Balancer.refused().join(' and ');
     if (now && now !== refused) {
       console.log(`${clock()} NVIDIA refuses the key for ${now}; asking again about every hour.`);
-      await recordError(pool, JOB, new Error(`NVIDIA refuses the key for ${now}. Check NVIDIA_NIM_API_KEY in infra/.env.`)).catch(() => {});
+      await recordError(pool, JOB, new Error(`NVIDIA refuses the key for ${now}. Put a new one in ai/.env and seal it again: npm --prefix ai run seal.`)).catch(() => {});
     }
     refused = now;
     await sleep(jitter(POLL_S) * 1000);

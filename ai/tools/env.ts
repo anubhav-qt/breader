@@ -8,7 +8,8 @@ import { ROOT } from './lib.ts';
  * The production settings the tools need, read from infra/.env (or AI_ENV_FILE): the database
  * address and the file store's keys. Nothing here is ever printed: errors name a setting, never
  * its value. In a git worktree, it's the main checkout's infra/.env, so the file never gets copied.
- * The marker on the server has no such file: compose hands it the same settings in its environment.
+ * The marker on the server has no such file: the worker hands it the same settings in its
+ * environment, ADMIN_TOKEN among them, which opens the sealed NVIDIA key (seal.ts).
  */
 
 function envFile(): string {
@@ -24,6 +25,7 @@ function envFile(): string {
 }
 
 const WANT = new Set([
+  'ADMIN_TOKEN',
   'PRIMARY_SESSION_URL',
   'PRIMARY_URL',
   'PRIMARY_SSL',
