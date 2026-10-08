@@ -302,7 +302,7 @@ a terminal:
 curl -s https://api.breader.example/ready   # primary up, the copy's lag
 curl -s https://fb.breader.example/ready
 docker compose -f infra/compose.yml ps
-docker compose -f infra/compose.yml logs --since 1h api worker
+docker compose -f infra/compose.yml logs --since 1h api worker marker
 tail infra/update.log
 ```
 
@@ -323,6 +323,23 @@ and key libraries unused for a year, with their files.
 **R2 check.** Once a day the worker lists R2 and puts back any file missing from it, from the
 laptop's copy. A file missing from both makes the job fail every day, on the status page and in
 Sentry, until someone looks.
+
+**The marker.** The `marker` service gives every book whose AI switch is on its voice marks, then
+its Revisit notes, through NVIDIA's free API (`ai/procedure.md` › The marker). It needs
+`NVIDIA_NIM_API_KEY` in `infra/.env`, and keeps the books it reads, and what it makes from them,
+in the `ai` volume, never anywhere else. It shows on the status page as "AI marker", which also
+says when NVIDIA refuses the key. `update.sh` pulls images but not this file, so the first time,
+on the laptop:
+
+```sh
+git pull                                          # compose.yml with the marker in it
+docker compose -f infra/compose.yml run --rm marker node ai/dist/marker.js --dry   # what it would start
+docker compose -f infra/compose.yml up -d marker
+docker compose -f infra/compose.yml logs -f marker
+```
+
+`stop marker` pauses it until the next release starts it again. Never run the ai tools' `mark`,
+`mark-all` or `notes` on another machine while it runs: the same books would be done twice.
 
 ## When something breaks
 

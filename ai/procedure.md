@@ -184,6 +184,17 @@ The owner's side, run by the owner or by an agent the owner asks to run it, neve
 
 4. **Report each book** to the owner as it goes in: its lines (M, F and N), how many are unsure, and the verify result. Counts and status only, as in Step 5.
 
+### The marker: every book, with no one at the keyboard
+
+The server runs `marker` for good (compose's `marker` service, `infra/README.md`). It's the owner's, like `mark-all`, and does steps 1 to 5 for every book whose AI switch is on, with no web research:
+
+- About once a minute it lists the books. A book with nothing on the server yet is marked: fetched, its cast and `research.md` read from the book alone by Kimi K3 (`cast.ts`), every part marked, then packed and imported at once. Up to 4 books at a time, the books being read first. A later volume of a series waits for an earlier one's cast, so everyone keeps their id and voice.
+- When no book is waiting to be marked, it writes Revisit notes for every book that has none: books someone is reading, the most recently read first, then the rest, the oldest added first. A series goes from its earliest volume that needs notes, one volume at a time. The notes go into the book's file on the server, beside its marks. A book marked somewhere else is fetched and checked first: it has to read the same as when it was marked.
+- A new book still comes first: while one is being marked, notes calls wait.
+- A failed call is asked again after a wait that doubles each time, with random jitter, for as long as it takes. A failed book rests 2 minutes, then 4, 8 and so on up to an hour, and carries on where it stopped. How it goes shows on the status page as "AI marker", which also says when NVIDIA refuses the key.
+
+Books already on the server are left alone, whoever made them; the marker only adds notes to those with none. While it runs, never run `mark`, `mark-all` or `notes` by hand on a book it could take: the book would be done twice, and the extra calls bring the 429s back. `marker -- --dry` says what it would start now, and asks no model.
+
 ## 5. Voice marks: how to decide
 
 ### 5.1 What counts as a line
@@ -468,6 +479,8 @@ Every command starts `npm --prefix ai run`, from the repository root.
 | `mark-all` | The owner's, not yours: marks every book in `research-ready.txt` not packed yet, all in one run, round after round until all are packed |
 | `import` | The owner's, not yours: puts every packed book on the server. `import -- --verify` checks the server matches `ai/out` |
 | `notes -- <key>` | The owner's, not yours: after `mark`, writes the Revisit notes with Kimi K3 through NVIDIA, reads them through as a reader, then packs |
+| `marker` | The owner's, not yours: the server runs it. Marks every new book with AI on, then writes Revisit notes for every book without them, for good (The marker, above). `marker -- --dry` says what it would start now |
+| `test` | The tools' tests: the balancer, what the marker picks next, and a made-up book marked end to end, with NVIDIA played by the test |
 
 `<key>` can also be the book's rank in `books`, or the first letters of its key.
 

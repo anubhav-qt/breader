@@ -85,6 +85,18 @@ services:
       SUWAYOMI_URL: "http://suwayomi:4567"
     volumes: ["files:/data/files", "backups:/data/backups"]
 
+  # Voice marks and Revisit notes for every book whose AI switch is on, through NVIDIA's free API
+  # (ai/tools/marker.ts), for good. It needs NVIDIA_NIM_API_KEY in .env. The books it reads, and
+  # what it makes from them, stay in the ai volume.
+  marker:
+    <<: *server
+    command: ["node", "--enable-source-maps", "ai/dist/marker.js"]
+    environment:
+      PRIMARY_URL: "${PRIMARY_SESSION_URL}"
+      AI_WORK: /data/ai/work
+      AI_OUT: /data/ai/out
+    volumes: ["ai:/data/ai"]
+
   # api.breader.example → http://api:8787, set on the tunnel's Public Hostname page in Cloudflare.
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -102,3 +114,4 @@ volumes:
   manga: {}
   redis: {}
   suwayomi: {}
+  ai: {}

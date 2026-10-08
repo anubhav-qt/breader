@@ -1,10 +1,20 @@
-# The server image only needs the workspace manifests, shared/ and server/.
+# The server image only needs the workspace manifests, shared/ and server/, and for the marker the
+# ai tools and the app's book parsers. Never ai/work, ai/out or ai/.env: books and the key.
 *
 !package.json
 !package-lock.json
 !frontend/package.json
 !shared/
 !server/
+!ai/package.json
+!ai/package-lock.json
+!ai/build.mjs
+!ai/procedure.md
+!ai/tools/
+!frontend/src/books/
+!frontend/src/lib/format.ts
+!frontend/src/features/reader/dom.ts
+!frontend/src/features/reader/search.ts
 **/node_modules
 server/dist
 server/.env
