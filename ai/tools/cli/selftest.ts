@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import JSZip from 'jszip';
-import { extract } from './extract.ts';
-import { args, bookDir, main, writeJson, type Book } from './lib.ts';
-import { locate } from './marks.ts';
-import { detectStyle, findQuotes } from './quotes.ts';
-import { validate } from './validate.ts';
+import { extract } from '../extract.ts';
+import { args, bookDir, main, writeJson, type Book } from '../lib.ts';
+import { locate } from '../marks.ts';
+import { detectStyle, findQuotes } from '../quotes.ts';
+import { validate } from '../validate.ts';
 
 /*
  * npm --prefix ai run selftest [-- --keep]

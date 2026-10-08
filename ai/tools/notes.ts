@@ -1,31 +1,26 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import type { AiFile } from '../../shared/src/ai.ts';
-import { Balancer } from './balancer.ts';
-import { castOf, castText, context, isCastLine, LADDER, mergeCast, mins, notesDone, notesLedger, notesLedgerFile, packBy, PRIMARY, text, TOP, type Done, type NotesLedger } from './kimi.ts';
-import { AI, args, blockAt, bookDir, cmp, count, inPart, loadBook, loadQueue, main, OUT, parsePos, partName, posText, QUEUE, readJson, writeJson, type Book, type Pos, type QueueBook } from './lib.ts';
+import type { Balancer } from './balancer.ts';
+import { castOf, castText, context, isCastLine, mergeCast, mins, notesDone, notesLedger, notesLedgerFile, packBy, text, TOP, type Done, type NotesLedger } from './kimi.ts';
+import { AI, blockAt, bookDir, cmp, count, inPart, loadBook, loadQueue, OUT, parsePos, partName, posText, QUEUE, readJson, writeJson, type Book, type Pos, type QueueBook } from './lib.ts';
 import type { Msg } from './nim.ts';
+import { packBook } from './pack.ts';
 import { KINDS, validate, type Notes } from './validate.ts';
 
 /*
- * npm --prefix ai run notes -- <book> [<book>…]   Writes a book's Revisit notes, checks them,
- *                                                  reads them through as a reader and packs.
- *   --again       start over, setting any notes it has aside in notes.before.json
- *   --no-pack     don't pack at the end
- *
- * procedure.md, part 6, done by a model through NVIDIA's free API, the way mark does the voice
- * marks. Every call gets the rules, the whole book, research.md, the cast, and what earlier
- * volumes of the series showed. First one call lists every entry and its names, each at the
- * paragraph where the book first uses it (notes/roster.txt). Then every part at once: its first
- * abouts, new abouts where something changes, and its events (notes/NNNN.txt). Then check, and a
- * call to fix every entry with errors or warnings together. Then one call reads the whole notes
- * as a reader would at a quarter, half, three quarters and the end, and fixes what a reader
+ * Revisit notes by a model through NVIDIA's free API: procedure.md, part 6, done the way mark.ts
+ * does the voice marks. Every call gets the rules, the whole book, research.md, the cast, and what
+ * earlier volumes of the series showed. First one call lists every entry and its names, each at
+ * the paragraph where the book first uses it (notes/roster.txt). Then every part at once: its
+ * first abouts, new abouts where something changes, and its events (notes/NNNN.txt). Then check,
+ * and a call to fix every entry with errors or warnings together. Then one call reads the whole
+ * notes as a reader would at a quarter, half, three quarters and the end, and fixes what a reader
  * couldn't know yet. Entries check still rejects go back to how they were, or out. The notes go
  * in notes.json and who wrote them in notes-by.json, so a stopped run picks up where it was.
  *
- * Volumes of one series run in order, each after the ones before it, so a later volume can say
- * what the earlier ones showed. Nothing it prints has the book's text in it.
+ * A volume of a series reads what the earlier volumes' notes showed, so those go first. Nothing
+ * it prints has the book's text in it.
  */
 
 const ROUNDS = 2;
@@ -552,10 +547,8 @@ function clear(book: Book, d: Draft, earlier: Earlier, fallback?: Draft): string
   return [...new Set(gone)];
 }
 
-/** One call reads the whole notes as a reader would, and fixes what it finds. */
-async function review(book: Book, d: Draft, earlier: Earlier, led: NotesLedger) {
-  // The read-through is Kimi's, waited for however long it takes.
-  const top = new Balancer(PRIMARY, { waitForTopS: Infinity, strikesToFall: Infinity, maxTries: 40 });
+/** One call reads the whole notes as a reader would, and fixes what it finds. `top`: Kimi's, waited for however long it takes. */
+async function review(book: Book, d: Draft, earlier: Earlier, led: NotesLedger, top: Balancer) {
   const { reply, rung } = await top.chat(ask([...base(book, earlier), `# The notes\n\n${draftText(d)}`, `# Your task: read them as a reader would\n\n${REVIEW_TASK}`]), { book: book.key, notes: 'review' });
   const said = parse(reply.text);
   mergeCast(book, said.cast, rung.name);
@@ -585,7 +578,11 @@ function keptInResearch(book: Book, earlier: Earlier, led: NotesLedger) {
   return rows.length;
 }
 
-async function runBook(key: string, lb: Balancer, flags: Record<string, string | true>) {
+/**
+ * Writes a book's notes, checks them, reads them through and packs it. `top` is for the
+ * read-through, which only the primary models do. flags: again (start over), no-pack.
+ */
+export async function writeNotes(key: string, lb: Balancer, top: Balancer, flags: Record<string, string | true>) {
   const book = loadBook(key);
   const tag = book.title;
   const had = validate(book, false).notes;
@@ -643,7 +640,7 @@ async function runBook(key: string, lb: Balancer, flags: Record<string, string |
     }
 
     const before = copy(d);
-    const read = await review(book, d, earlier, led);
+    const read = await review(book, d, earlier, led, top);
     await fix(book, d, lb, earlier, led, ROUNDS, 'fix after the read-through');
     const back = clear(book, d, earlier, before);
     if (back.length) console.log(`  ${back.length} entries the read-through broke are back as they were, or out: ${back.join(', ')}`);
@@ -664,42 +661,5 @@ async function runBook(key: string, lb: Balancer, flags: Record<string, string |
     return;
   }
   if (final.errors.length) throw new Error(`${tag}: check --final has ${final.errors.length} errors; not packing. The first: ${final.errors[0]}`);
-  execFileSync('npm', ['--prefix', AI, 'run', '--silent', 'pack', '--', book.key, '--by', packBy(book)], { stdio: 'inherit' });
+  packBook(book, packBy(book));
 }
-
-main(async () => {
-  const { rest, flags } = args();
-  if (!rest.length) throw new Error('Which book? npm --prefix ai run notes -- <rank or key> [<book>…] [--again] [--no-pack]');
-  const lb = new Balancer(LADDER);
-  // A volume waits for the earlier volumes of its series in this run, to read what they showed,
-  // so earlier volumes start first and each later one finds theirs in `runs`.
-  const queue = existsSync(QUEUE) ? loadQueue().books : [];
-  const place = (b: Book) => queue.find((q) => q.sha256 === b.sha256);
-  const books = rest.map((k) => loadBook(k)).sort((a, b) => (place(a)?.seriesIndex ?? 0) - (place(b)?.seriesIndex ?? 0));
-  const runs = new Map<string, Promise<void>>();
-  for (const b of books) {
-    const me = place(b);
-    const before = books.filter((o) => {
-      const it = place(o);
-      return o !== b && me?.series && it?.series?.toLowerCase() === me.series.toLowerCase() && (it.seriesIndex ?? Infinity) < (me.seriesIndex ?? -Infinity);
-    });
-    runs.set(b.key, (async () => {
-      if (before.length) {
-        console.log(`${b.title}: waits for ${before.map((o) => o.title).join(', ')}`);
-        const done = await Promise.allSettled(before.map((o) => runs.get(o.key) ?? Promise.resolve()));
-        const failed = before.filter((_, i) => done[i].status === 'rejected');
-        if (failed.length) throw new Error(`${b.title}: not started, since ${failed.map((o) => o.title).join(', ')} failed first and its notes are what this one builds on. Run notes again.`);
-      }
-      try {
-        await runBook(b.key, lb, flags);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(msg.startsWith(b.title) ? msg : `${b.title}: ${msg}`);
-      }
-    })());
-  }
-  const results = await Promise.allSettled([...runs.values()]);
-  const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-  for (const f of failed) console.error(`\n${f.reason instanceof Error ? f.reason.message : String(f.reason)}`);
-  return failed.length ? 1 : 0;
-});

@@ -1,6 +1,6 @@
-import type { Span } from './marks.ts';
-import { args, blockAt, blocksOf, cmp, loadBook, plural, main, parsePos, posText, hasText, type Pos } from './lib.ts';
-import { KINDS, validate } from './validate.ts';
+import type { Span } from '../marks.ts';
+import { args, blockAt, blocksOf, cmp, loadBook, plural, main, parsePos, posText, hasText, type Pos } from '../lib.ts';
+import { KINDS, validate } from '../validate.ts';
 
 /*
  * npm --prefix ai run audit -- <book> <view>

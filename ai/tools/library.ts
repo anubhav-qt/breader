@@ -2,31 +2,14 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { prodClient } from './env.ts';
-import {
-  bookDir,
-  isFetched,
-  isPacked,
-  main,
-  marksFiles,
-  QUEUE,
-  readJson,
-  ROOT,
-  slug,
-  writeJson,
-  type Format,
-  type Queue,
-  type QueueBook,
-} from './lib.ts';
+import { ROOT, slug, type Format, type Queue, type QueueBook } from './lib.ts';
 
 /*
- * npm --prefix ai run books
- *
  * Every book on the production server whose AI switch is on, one entry per distinct file (the same
  * file in two libraries is one book), in the order to work on them: books someone has started, the
  * most recently read first, then the rest. A book whose switch is off in every library isn't listed:
  * nobody said yes to it. Until the app update with the switch is live, it lists them all and says so.
- * Read only: the connection can't change anything. Writes ai/work/queue.json and prints where each
- * book stands.
+ * Read only: the connection can't change anything.
  */
 
 interface Row {
@@ -38,6 +21,7 @@ interface Row {
   series: string | null;
   series_index: number | null;
   last_opened: Date;
+  added_at: Date;
   read_at: Date | null;
   progress: number | null;
   words_read: number | null;
@@ -52,7 +36,7 @@ const SQL = `
   select li.title, li.author, li.format, li.source, li.url,
          case when li.edit_series is null then li.series when li.edit_series = '' then null else li.edit_series end as series,
          case when li.edit_series is null then li.series_index else li.edit_series_index end as series_index,
-         li.last_opened, rs.read_at, rs.progress, rs.words_read, (rs.mark is not null) as has_mark,
+         li.last_opened, li.added_at, rs.read_at, rs.progress, rs.words_read, (rs.mark is not null) as has_mark,
          b.sha256, b.size, b.r2_key, b.status as blob_status
     from library_items li
     join libraries l on l.id = li.library_id
@@ -64,6 +48,9 @@ const SQL = `
 const HAS_SWITCH = `select exists (select 1 from information_schema.columns
   where table_schema = 'public' and table_name = 'library_items' and column_name = 'ai') as ok`;
 
+/** The switch is on in this library, or for the file anywhere (ai_books), as the server reads it (routes/ai.ts). */
+const AI_ON = 'and (li.ai or exists (select 1 from ai_books a where a.sha256 = b.sha256))';
+
 export async function listBooks(): Promise<Queue> {
   const client = await prodClient('breader-ai-read-only');
   let rows: Row[];
@@ -71,7 +58,7 @@ export async function listBooks(): Promise<Queue> {
   try {
     await client.query('begin read only');
     switchLive = (await client.query<{ ok: boolean }>(HAS_SWITCH)).rows[0].ok;
-    rows = (await client.query<Row>(switchLive ? `${SQL} and li.ai` : SQL)).rows;
+    rows = (await client.query<Row>(switchLive ? `${SQL} ${AI_ON}` : SQL)).rows;
     await client.query('rollback');
   } finally {
     await client.end();
@@ -116,38 +103,10 @@ export async function listBooks(): Promise<Queue> {
       started: g.rows.some((r) => r.has_mark || (r.progress ?? 0) > 0 || (r.words_read ?? 0) > 0),
       progress: Math.max(0, ...g.rows.map((r) => r.progress ?? 0)),
       lastRead: new Date(lastRead).toISOString(),
+      added: new Date(Math.min(...g.rows.map((r) => time(r.added_at)))).toISOString(),
       readers: g.rows.length,
     };
   });
   books.sort((a, b) => Number(b.started) - Number(a.started) || b.lastRead.localeCompare(a.lastRead));
   return { made: new Date().toISOString(), books: books.map((b, i) => ({ rank: i + 1, ...b })), skipped, ...(switchLive ? {} : { everyBook: true }) };
 }
-
-export function status(b: QueueBook): string {
-  if (isPacked(b)) return 'packed';
-  if (!isFetched(b.key)) return 'new';
-  const meta = join(bookDir(b.key), 'meta.json');
-  const parts = existsSync(meta) ? readJson<{ parts: number }>(meta).parts : 0;
-  const done = marksFiles(b.key).length;
-  return done ? `part ${done} of ${parts}` : 'fetched';
-}
-
-main(async () => {
-  const q = await listBooks();
-  writeJson(QUEUE, q);
-  const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s).padEnd(n);
-  console.log(`${q.books.length} books${q.everyBook ? '' : ' with the AI switch on'}, most recently read first. Saved to ai/work/queue.json.`);
-  if (q.everyBook) console.log('The server has no AI switch yet (the app update isn’t live), so this lists every book. Import will still only load the ones whose switch is on.');
-  console.log('');
-  console.log(`${'#'.padStart(3)}  ${'status'.padEnd(14)} ${'title'.padEnd(44)} ${'format'.padEnd(6)} ${'read'.padStart(4)}  ${'last read'.padEnd(10)}  key`);
-  for (const b of q.books) {
-    const read = b.started ? `${Math.round(b.progress * 100)}%` : '-';
-    console.log(`${String(b.rank).padStart(3)}  ${status(b).padEnd(14)} ${cut(b.title, 44)} ${b.format.padEnd(6)} ${read.padStart(4)}  ${b.lastRead.slice(0, 10)}  ${b.key}`);
-  }
-  if (q.skipped.length) {
-    console.log(`\nSkipped ${q.skipped.length}:`);
-    for (const s of q.skipped) console.log(`  ${s}`);
-  }
-  const next = q.books.find((b) => !isPacked(b));
-  console.log(next ? `\nNext: ${next.rank}. ${next.title} (npm --prefix ai run fetch -- next)` : '\nEvery book is packed.');
-});

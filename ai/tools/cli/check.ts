@@ -1,5 +1,5 @@
-import { args, count, loadBook, main, partName } from './lib.ts';
-import { validate } from './validate.ts';
+import { args, count, loadBook, main, partName } from '../lib.ts';
+import { validate } from '../validate.ts';
 
 /*
  * npm --prefix ai run check -- <book> [--final]

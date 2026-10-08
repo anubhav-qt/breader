@@ -32,12 +32,14 @@ export const mins = (s: number) => `${(s / 60).toFixed(1)} min`;
 export const text = (book: Book, n: number) => readFileSync(join(bookDir(book.key), 'text', `${partName(n)}.md`), 'utf8').trim();
 export const castOf = (book: Book): Cast => readJson<Cast>(join(bookDir(book.key), 'cast.json'));
 
+/** Every part's text, in order. */
+export const wholeBook = (book: Book) => book.parts.filter((p) => p.words > 0).map((p) => text(book, p.n)).join('\n\n');
+
 /** The whole book and its research notes: the start of every call. */
 export function context(book: Book): string {
   const dir = bookDir(book.key);
-  const whole = book.parts.filter((p) => p.words > 0).map((p) => text(book, p.n)).join('\n\n');
   const research = existsSync(join(dir, 'research.md')) ? readFileSync(join(dir, 'research.md'), 'utf8').trim() : '(none)';
-  return `# The whole book\n\n${whole}\n\n# Research notes\n\n${research}`;
+  return `# The whole book\n\n${wholeBook(book)}\n\n# Research notes\n\n${research}`;
 }
 
 export function castText(book: Book): string {
@@ -89,6 +91,9 @@ export function mergeCast(book: Book, lines: string[], by: string): { added: num
   return { added, notes };
 }
 
+/** Who read the cast from the book, when no one researched it by hand (cast.ts). */
+export const castByFile = (book: { key: string }) => join(bookDir(book.key), 'cast-by.json');
+
 /** Who marked each part (marked-by.json), and who wrote the notes (notes-by.json). */
 export const marksLedgerFile = (book: Book) => join(bookDir(book.key), 'marked-by.json');
 export const marksLedger = (book: Book): Ledger => (existsSync(marksLedgerFile(book)) ? readJson<Ledger>(marksLedgerFile(book)) : {});
@@ -112,6 +117,20 @@ const ranges = (ns: number[]) => ns.reduce<string[]>((out, n, i) => {
   return out;
 }, []).join(', ');
 
+/** Who wrote the notes, by their long names: "Kimi K3 (reasoning high, NVIDIA)". */
+export function notesBy(book: { key: string }): string {
+  const n = notesLedger(book);
+  const models = [n.roster, ...Object.values(n.parts), n.fixed, n.reviewed].filter((d): d is Done => !!d).map((d) => d.model);
+  return [...new Set(models)].map((m) => LONG[m] ?? m).join(' and ');
+}
+
+/** Who did the research: Antigravity by hand, or a model reading the book alone (cast-by.json). */
+function researchBy(book: Book): string {
+  if (!existsSync(castByFile(book))) return 'research by Antigravity';
+  const model = readJson<Done>(castByFile(book)).model;
+  return `cast by ${LONG[model] ?? model}`;
+}
+
 /** The pack's "by": who marked which parts, then who wrote the notes, when notes did. */
 export function packBy(book: Book): string {
   const l = marksLedger(book);
@@ -120,9 +139,15 @@ export function packBy(book: Book): string {
     const who = l[p.n]?.model ?? 'Antigravity';
     groups.set(who, [...(groups.get(who) ?? []), p.n]);
   }
-  const marks = [...groups].map(([who, ns]) => `${LONG[who] ?? who} parts ${ranges(ns)}`).join('; ');
-  const n = notesLedger(book);
-  if (!n.reviewed) return `${marks}; research by Antigravity`;
-  const models = [n.roster, ...Object.values(n.parts), n.fixed, n.reviewed].filter((d): d is Done => !!d).map((d) => d.model);
-  return `${marks}; notes by ${[...new Set(models)].map((m) => LONG[m] ?? m).join(' and ')}; research by Antigravity`;
+  const parts = [...groups].map(([who, ns]) => `${LONG[who] ?? who} parts ${ranges(ns)}`);
+  if (notesLedger(book).reviewed) parts.push(`notes by ${notesBy(book)}`);
+  parts.push(researchBy(book));
+  return fitBy(parts);
+}
+
+/** The parts of a "by" joined, within the 200 characters the server takes: the last one goes first. */
+export function fitBy(parts: string[]): string {
+  let by = parts.join('; ');
+  if (by.length > 200) by = parts.slice(0, -1).join('; ');
+  return by.slice(0, 200);
 }

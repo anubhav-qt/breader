@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AI, isPacked, loadQueue, main, WORK } from './lib.ts';
+import { AI, isPacked, loadQueue, main, WORK } from '../lib.ts';
 
 /*
  * npm --prefix ai run mark-all   Marks every book in ai/work/research-ready.txt that isn't packed

@@ -1,40 +1,23 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import type { AiFile } from '../../shared/src/ai.ts';
 import { prodEnv } from './env.ts';
 import { extract } from './extract.ts';
-import {
-  args,
-  bookDir,
-  count,
-  findBook,
-  isFetched,
-  isPacked,
-  loadQueue,
-  main,
-  partName,
-  readJson,
-  ROOT,
-  writeJson,
-  type Book,
-  type QueueBook,
-} from './lib.ts';
-import { STYLE_NAMES } from './quotes.ts';
+import { bookDir, loadQueue, OUT, readJson, ROOT, writeJson, type Book, type QueueBook } from './lib.ts';
 import type { Cast } from './validate.ts';
 
 /*
- * npm --prefix ai run fetch -- next | <rank or key> [--again]
- *
- * Downloads a book's file from R2 (read only), checks it's the file the server recorded, and
- * extracts it into ai/work/<key>/ with everything the agent starts from: the text in parts, a cast
+ * Fetching a book: its file from R2 (read only), checked against what the server recorded, and
+ * extracted into ai/work/<key>/ with everything the work starts from: the text in parts, a cast
  * with the generic speakers (and the cast of another volume in the series, when one exists),
- * empty notes, and the research and ledger templates. Never overwrites the agent's own files.
+ * empty notes, and the research and ledger templates. Never overwrites files already there.
  */
 
 const EXT = { EPUB: 'epub', PDF: 'pdf', TXT: 'txt', MD: 'md', Text: 'txt' } as const;
 
-async function download(b: QueueBook): Promise<Uint8Array> {
+export async function download(b: QueueBook): Promise<Uint8Array> {
   if (b.sample) return new Uint8Array(readFileSync(join(ROOT, 'frontend/public', b.sample)));
   const env = prodEnv();
   const s3 = new S3Client({
@@ -50,7 +33,7 @@ async function download(b: QueueBook): Promise<Uint8Array> {
   return res.Body.transformToByteArray();
 }
 
-const GENERIC: Cast['people'] = [
+export const GENERIC: Cast['people'] = [
   { id: 'unknown', name: 'A speaker the text doesn’t identify', gender: 'N', generic: true },
   { id: 'unknown-man', name: 'An unidentified man', gender: 'M', generic: true },
   { id: 'unknown-woman', name: 'An unidentified woman', gender: 'F', generic: true },
@@ -64,17 +47,36 @@ const GENERIC: Cast['people'] = [
   },
 ];
 
+/** A cast.json from a book's file on the server, for a book marked somewhere else. */
+export function castFromFile(f: AiFile): Cast {
+  const generic = new Map(GENERIC.map((p) => [p.id, p]));
+  const people = f.voices.cast.map((c) => {
+    const g = generic.get(c.id);
+    if (g) return { ...g, gender: c.g };
+    const changes = (c.changes ?? []).map(([s, b, gender]) => ({ at: `${s}:${b}`, gender, why: 'As marked.' }));
+    return { id: c.id, name: c.name, gender: c.g, evidence: 'From its marks on the server.', ...(changes.length ? { changes } : {}) };
+  });
+  return { people };
+}
+
+/** Everyone but the generic speakers in another volume's cast: its cast.json here, or its file from the server. */
+function castOfVolume(o: QueueBook): Cast['people'] {
+  const file = join(bookDir(o.key), 'cast.json');
+  if (existsSync(file)) return readJson<Cast>(file).people.filter((p) => !p.generic);
+  const out = join(OUT, `${o.sha256}.json`);
+  if (existsSync(out)) return castFromFile(readJson<AiFile>(out)).people.filter((p) => !p.generic);
+  return [];
+}
+
 /** The cast of another volume in the same series, nearest first, to keep everyone's id and voice. */
-function seriesCast(b: QueueBook): { cast: Cast; from: QueueBook } | null {
+function seriesCast(b: QueueBook): { people: Cast['people']; from: QueueBook } | null {
   if (!b.series) return null;
-  const same = loadQueue().books.filter(
-    (o) => o.sha256 !== b.sha256 && o.series?.toLowerCase() === b.series!.toLowerCase() && existsSync(join(bookDir(o.key), 'cast.json')),
-  );
+  const same = loadQueue().books.filter((o) => o.sha256 !== b.sha256 && o.series?.toLowerCase() === b.series!.toLowerCase());
   same.sort((x, y) => Math.abs((x.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) - Math.abs((y.seriesIndex ?? 0) - (b.seriesIndex ?? 0)));
   for (const o of same) {
     try {
-      const cast = readJson<Cast>(join(bookDir(o.key), 'cast.json'));
-      if (cast.people.some((p) => !p.generic)) return { cast, from: o };
+      const people = castOfVolume(o);
+      if (people.length) return { people, from: o };
     } catch { /* an unreadable cast is no help */ }
   }
   return null;
@@ -127,25 +129,12 @@ Who is in the current scene, and where.
 Speech habits, who calls whom what, who is disguised as what.
 `;
 
-main(async () => {
-  const { rest, flags } = args();
-  const which = rest[0] ?? 'next';
-  const q = loadQueue();
-  const b = which === 'next' ? q.books.find((x) => !isPacked(x)) : findBook(which);
-  if (!b) {
-    console.log('Every book in the queue is packed. Run books to look for new ones.');
-    return;
-  }
+/**
+ * Downloads and extracts a book, and starts its folder. `seeded` says where its cast came from,
+ * when it came from another volume.
+ */
+export async function fetchBook(b: QueueBook): Promise<{ book: Book; seeded: string }> {
   const dir = bookDir(b.key);
-  if (isFetched(b.key) && !flags.again) {
-    console.log(`${b.rank}. ${b.title} is already fetched: ai/work/${b.key}`);
-    console.log('Carry on from its ledger.md (check says which part is next).');
-    return;
-  }
-  if (flags.again && existsSync(join(dir, 'marks')) && readdirSync(join(dir, 'marks')).length) {
-    console.log('Note: this book has marks. Extracting again keeps them, and they only still fit if the tools haven’t changed.');
-  }
-
   const bytes = await download(b);
   const sha = createHash('sha256').update(bytes).digest('hex');
   if (sha !== b.sha256) throw new Error(`The file for ${b.title} doesn’t match what the server recorded. Stop and tell the owner.`);
@@ -158,7 +147,7 @@ main(async () => {
   let seeded = '';
   if (!existsSync(join(dir, 'cast.json'))) {
     const earlier = seriesCast(b);
-    const carried = earlier ? earlier.cast.people.filter((p) => !p.generic) : [];
+    const carried = earlier ? earlier.people : [];
     writeJson(join(dir, 'cast.json'), { people: [...GENERIC, ...carried] });
     if (earlier) seeded = `cast.json starts with ${carried.length} people from ${earlier.from.title}. Check each one still fits this book.`;
   }
@@ -166,13 +155,5 @@ main(async () => {
   if (!existsSync(join(dir, 'research.md'))) writeFileSync(join(dir, 'research.md'), RESEARCH(book));
   if (!existsSync(join(dir, 'ledger.md'))) writeFileSync(join(dir, 'ledger.md'), LEDGER(book));
   mkdirSync(join(dir, 'marks'), { recursive: true });
-
-  const toCheck = book.segs.filter((g) => g.note && g.note !== 'runs-on').length + book.stray.length;
-  console.log(`Fetched ${b.rank}. ${book.title}${book.author ? ` by ${book.author}` : ''} (${b.format}, ${count(book.words)} words)`);
-  console.log(`  Folder: ai/work/${b.key}`);
-  console.log(`  Parts: ${book.parts.length} (text/${partName(1)}.md to text/${partName(book.parts.length)}.md)`);
-  console.log(`  Quote style: ${STYLE_NAMES[book.style]}. ${count(book.segs.length)} numbered quotes, ${toCheck} paragraphs flagged to check.`);
-  if (b.series) console.log(`  Series: ${b.series}${b.seriesIndex != null ? `, number ${b.seriesIndex}` : ''}`);
-  if (seeded) console.log(`  ${seeded}`);
-  console.log('\nNext: research (procedure.md, part 4, step 2).');
-});
+  return { book, seeded };
+}

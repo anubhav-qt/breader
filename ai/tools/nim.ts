@@ -33,11 +33,12 @@ function key(): string {
 
 /**
  * Why a call failed, which decides what happens next.
- * rate: 429. busy: 5xx or "overloaded". slow: 504, a timeout, a dropped stream, an empty answer.
- * cut: the answer hit max_tokens. bad: 4xx, the request itself is wrong. gone: 401, 403 or 404,
- * the model isn't open to this key.
+ * rate: 429. busy: 5xx or "overloaded". slow: 504, a timeout, a dropped stream. empty: an answer
+ * with no text, which a model can keep giving one prompt (a scene it won't touch) while it answers
+ * others. cut: the answer hit max_tokens. bad: 4xx, the request itself is wrong. gone: 401, 403 or
+ * 404, the model isn't open to this key.
  */
-export type Failure = 'rate' | 'busy' | 'slow' | 'cut' | 'bad' | 'gone';
+export type Failure = 'rate' | 'busy' | 'slow' | 'empty' | 'cut' | 'bad' | 'gone';
 
 export class CallError extends Error {
   constructor(public kind: Failure, message: string, public retryAfterS?: number) {
@@ -158,7 +159,7 @@ export async function chat(model: string, messages: Msg[], o: ChatOptions): Prom
 
   text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   if (finish === 'length') throw new CallError('cut', `the answer hit max_tokens (${o.maxTokens})`);
-  if (!text) throw new CallError('slow', `an empty answer (finish ${finish || 'none'}, ${thinkChars} characters of thinking)`);
+  if (!text) throw new CallError('empty', `an empty answer (finish ${finish || 'none'}, ${thinkChars} characters of thinking)`);
   return {
     text,
     thinkChars,

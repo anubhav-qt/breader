@@ -6,13 +6,13 @@ import type { Style } from './quotes.ts';
 /*
  * What the tools share: where things live, the queue of books, and a book as extract.ts leaves it.
  * Everything under ai/work and ai/out is private (the books themselves, and what's made from them)
- * and git ignores it.
+ * and git ignores it. The marker on the server keeps them in a volume instead (AI_WORK, AI_OUT).
  */
 
 export const AI = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const ROOT = resolve(AI, '..');
-export const WORK = join(AI, 'work');
-export const OUT = join(AI, 'out');
+export const WORK = process.env.AI_WORK || join(AI, 'work');
+export const OUT = process.env.AI_OUT || join(AI, 'out');
 export const bookDir = (key: string) => join(WORK, key);
 
 export type Format = 'EPUB' | 'PDF' | 'TXT' | 'MD' | 'Text';
@@ -47,6 +47,8 @@ export interface QueueBook {
   /** The furthest anyone has got, 0 to 1. */
   progress: number;
   lastRead: string;
+  /** When the first library added it. */
+  added: string;
   /** How many libraries hold it. */
   readers: number;
 }
