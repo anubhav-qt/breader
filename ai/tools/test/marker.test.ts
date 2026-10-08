@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -13,7 +13,7 @@ import type { OnServer } from '../marker.ts';
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { bookDir, writeJson } = await import('../lib.ts');
-const { byWithNotes, failures, needs, notesOrder, toMark, toNote } = await import('../marker.ts');
+const { byWithNotes, failures, needs, notesOrder, progressOf, queueOf, toMark, toNote } = await import('../marker.ts');
 
 let made = 0;
 function book(title: string, more: Partial<QueueBook> = {}): QueueBook {
@@ -99,6 +99,48 @@ test('marks: a later volume waits for an earlier one’s cast, so everyone keeps
   assert.deepEqual(titles(toMark(books, server)), ['Lone', 'Tale 2']);
   writeJson(join(bookDir(v2.key), 'cast-by.json'), { model: 'kimi-k3', rounds: 1, secs: 1, at: '' });
   assert.deepEqual(titles(toMark(books, server)), ['Tale 3', 'Lone', 'Tale 2']);
+});
+
+test('the live view: how far a book’s marks have got, from what’s on disk', () => {
+  const b = book('Gauge');
+  const dir = bookDir(b.key);
+  const parts = [1, 2, 3, 4];
+  assert.deepEqual(progressOf(b.key, 'marks', null), { step: 'Fetching the book', parts: 0, of: 0, percent: 0 });
+  assert.equal(progressOf(b.key, 'marks', parts).step, 'Reading the cast from the book');
+  writeJson(join(dir, 'cast-by.json'), { model: 'kimi-k3', rounds: 1, secs: 1, at: '' });
+  mkdirSync(join(dir, 'marks'), { recursive: true });
+  writeFileSync(join(dir, 'marks', '0001.txt'), '');
+  writeFileSync(join(dir, 'marks', '0002.txt'), '');
+  // The cast and two of four parts: 3 of 6 steps.
+  assert.deepEqual(progressOf(b.key, 'marks', parts), { step: 'Marking who speaks, part by part', parts: 2, of: 4, percent: 50 });
+  writeFileSync(join(dir, 'marks', '0003.txt'), '');
+  writeFileSync(join(dir, 'marks', '0004.txt'), '');
+  assert.deepEqual(progressOf(b.key, 'marks', parts), { step: 'Checking, settling and saving', parts: 4, of: 4, percent: 83 });
+});
+
+test('the live view: how far a book’s notes have got', () => {
+  const b = book('Ledger');
+  const done = { model: 'kimi-k3', rounds: 1, secs: 1, at: '' };
+  const parts = [1, 2, 3, 4];
+  assert.equal(progressOf(b.key, 'notes', parts).step, 'Listing who’s who');
+  writeJson(join(bookDir(b.key), 'notes-by.json'), { roster: done, parts: { 1: done } });
+  // The list of who's who and one of four parts: 2 of 7 steps.
+  assert.deepEqual(progressOf(b.key, 'notes', parts), { step: 'Writing notes, part by part', parts: 1, of: 4, percent: 28 });
+  writeJson(join(bookDir(b.key), 'notes-by.json'), { roster: done, parts: { 1: done, 2: done, 3: done, 4: done }, fixed: done });
+  assert.deepEqual(progressOf(b.key, 'notes', parts), { step: 'Reading them through as a reader would', parts: 4, of: 4, percent: 85 });
+});
+
+test('the live view: the queue, marks first, then notes, with how the failed ones went', () => {
+  const fresh = book('Fresh');
+  const halfway = book('Halfway', { started: true, lastRead: '2026-10-08T00:00:00.000Z' });
+  const done = book('Done');
+  const server = new Map([[halfway.sha256, marked()], [done.sha256, marked(9)]]);
+  failures.set(halfway.sha256, { count: 2, next: Date.parse('2026-10-08T12:00:00.000Z'), why: 'NVIDIA was busy' });
+  assert.deepEqual(queueOf([done, halfway, fresh], server), [
+    { title: 'Fresh', task: 'marks' },
+    { title: 'Halfway', task: 'notes', failed: { times: 2, next: '2026-10-08T12:00:00.000Z', why: 'NVIDIA was busy' } },
+  ]);
+  failures.clear();
 });
 
 test('the notes go into "by" before the credit for the research, within 200 characters', () => {

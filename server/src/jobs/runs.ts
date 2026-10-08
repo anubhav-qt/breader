@@ -22,6 +22,15 @@ export async function recordError(pool: pg.Pool, name: string, err: unknown) {
   );
 }
 
+/** What a job is doing right now, in its detail, without saying it worked (the AI marker's live view). */
+export async function recordLive(pool: pg.Pool, name: string, detail: unknown) {
+  await pool.query(
+    `INSERT INTO job_runs (name, detail) VALUES ($1, $2)
+     ON CONFLICT (name) DO UPDATE SET detail = EXCLUDED.detail`,
+    [name, JSON.stringify(detail ?? null)],
+  );
+}
+
 /** Whether a job last worked more than `days` ago, or never has. */
 export async function due(pool: pg.Pool, name: string, days: number): Promise<boolean> {
   const { rows } = await pool.query<{ due: boolean }>(

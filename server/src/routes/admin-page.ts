@@ -1,7 +1,8 @@
 /**
  * The status page itself: one static document that asks for the admin token (kept for this tab
- * only) and reads /admin/status from the same server. Nothing on it comes from readers, and every
- * value is set as text, never as markup.
+ * only) and reads /admin/status from the same server every few seconds while it's in view, so it
+ * stays live. Book titles in the AI marker's section are the only thing on it that comes from
+ * readers, and every value is set as text, never as markup.
  */
 export const adminPage = (nonce: string) => `<!doctype html>
 <html lang="en">
@@ -11,8 +12,8 @@ export const adminPage = (nonce: string) => `<!doctype html>
 <meta name="robots" content="noindex">
 <title>Breader status</title>
 <style nonce="${nonce}">
-  :root { --fg: #000; --bg: #fff; --dim: rgba(0,0,0,.55); --line: rgba(0,0,0,.14); --bad: #d11a2a; color-scheme: light dark; }
-  @media (prefers-color-scheme: dark) { :root { --fg: #fff; --bg: #000; --dim: rgba(255,255,255,.55); --line: rgba(255,255,255,.16); --bad: #ff5a5f; } }
+  :root { --fg: #000; --bg: #fff; --dim: rgba(0,0,0,.55); --line: rgba(0,0,0,.14); --bad: #d11a2a; --ok: #1a9e4b; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #fff; --bg: #000; --dim: rgba(255,255,255,.55); --line: rgba(255,255,255,.16); --bad: #ff5a5f; --ok: #3ddc84; } }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; }
   main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
@@ -25,14 +26,30 @@ export const adminPage = (nonce: string) => `<!doctype html>
   dd { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: pre-line; }
   .bad { color: var(--bad); }
   .dim { color: var(--dim); }
+  h3 { font-size: 13px; font-weight: 600; margin: 18px 0 6px; }
+  p { margin: 6px 0; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); margin-right: 6px; vertical-align: 1px; }
+  .dot.on { background: var(--ok); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
+  .book { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .books { border-top: 1px solid var(--line); }
+  .title { font-weight: 600; overflow-wrap: anywhere; }
+  .progress { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .bar > div { height: 100%; background: var(--fg); transition: width .4s ease; }
+  .progress > span { min-width: 4ch; text-align: right; }
+  ol { margin: 0; padding: 0 0 0 2.2em; border-top: 1px solid var(--line); }
+  li { padding: 7px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
   form { display: flex; gap: 8px; margin-top: 24px; }
+  [hidden] { display: none; }
   input { flex: 1; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; }
   button { font: inherit; padding: 8px 14px; border: 1px solid var(--fg); border-radius: 8px; background: var(--fg); color: var(--bg); cursor: pointer; }
 </style>
 </head>
 <body>
 <main>
-  <header><h1>Breader status</h1><span id="when" class="dim"></span></header>
+  <header><h1>Breader status</h1><span class="dim"><span id="dot" class="dot"></span><span id="when"></span></span></header>
   <form id="login" hidden>
     <input id="token" type="password" autocomplete="off" placeholder="Admin token" aria-label="Admin token">
     <button>Show</button>
@@ -45,8 +62,22 @@ const KEY = 'breader.admin';
 const $ = (id) => document.getElementById(id);
 const mb = (b) => b == null ? '—' : b >= 1024 ** 3 ? (b / 1024 ** 3).toFixed(2) + ' GB' : (b / 1024 ** 2).toFixed(1) + ' MB';
 const pct = (a, b) => a == null ? '' : ' (' + Math.round((a / b) * 100) + '% of the free ' + mb(b) + ')';
-const ago = (s) => s == null ? '—' : s < 90 ? s + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : s < 172800 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' days ago';
+const dur = (s) => s < 90 ? s + ' s' : s < 5400 ? Math.round(s / 60) + ' min' : s < 172800 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' days';
+const ago = (s) => s == null ? '—' : dur(s) + ' ago';
 const since = (t) => t ? ago(Math.round((Date.now() - new Date(t).getTime()) / 1000)) : 'never';
+const until = (t) => {
+  const s = Math.round((new Date(t).getTime() - Date.now()) / 1000);
+  if (s <= 0) return 'any moment now';
+  return 'in ' + dur(s);
+};
+const TASKS = { marks: 'Voice marks (M/F)', notes: 'Revisit notes' };
+
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text != null) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
 
 function section(title, rows) {
   const h = document.createElement('h2');
@@ -68,7 +99,7 @@ function render(s) {
   out.push(...section('Server', [
     ['Answering', s.server.role === 'laptop' ? 'the laptop' : 'the fallback (Render)'],
     ['Release', s.server.release],
-    ['Up for', ago(s.server.uptimeSeconds).replace(' ago', '')],
+    ['Up for', dur(s.server.uptimeSeconds)],
     ['Errors to Sentry', s.server.sentry ? 'on' : 'off (SENTRY_DSN not set)', !s.server.sentry],
   ]));
   out.push(...section('Supabase', s.supabase ? [
@@ -97,12 +128,14 @@ function render(s) {
     ...files.map((f) => [f.status, f.files + ' files, ' + mb(f.bytes) + (f.unused ? ', ' + f.unused + ' waiting for clean-up' : '')]),
   ]));
   const names = { 'backup': 'Nightly backup', 'restore-drill': 'Restore test', 'clean-up': 'Clean-up', 'storage-check': 'R2 check', 'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'ai-marker': 'AI marker' };
-  out.push(...section('Worker jobs', s.jobs.length ? s.jobs.flatMap((j) => {
+  out.push(...section('Workers', s.jobs.length ? s.jobs.flatMap((j) => {
     const failing = j.last_error_at && (!j.last_ok_at || new Date(j.last_error_at) > new Date(j.last_ok_at));
     const rows = [[names[j.name] || j.name, 'worked ' + since(j.last_ok_at), !j.last_ok_at]];
     if (failing) rows.push(['', 'failed ' + since(j.last_error_at) + ': ' + j.last_error, true]);
     return rows;
   }) : [['Jobs', 'none have run yet']]));
+  const ai = s.jobs.find((j) => j.name === 'ai-marker');
+  if (ai && ai.detail && Array.isArray(ai.detail.working)) out.push(...marker(ai.detail));
   const headers = Object.entries(s.request.headers).map(([k, v]) => k + ': ' + v).join('\\n') || 'none';
   out.push(...section('Your request', [
     ['Your address, as seen', s.request.ip],
@@ -110,7 +143,55 @@ function render(s) {
     ['Forwarding headers', headers],
   ]));
   $('out').replaceChildren(...out);
-  $('when').textContent = new Date().toLocaleTimeString();
+  $('when').textContent = 'Live, ' + new Date().toLocaleTimeString();
+}
+
+/** The AI marker, as it last said (ai/tools/marker.ts, liveNow): the books it's on, and the queue. */
+function marker(d) {
+  const out = [el('h2', 'AI marker')];
+  out.push(el('p', d.books + ' books with AI on: ' + d.finished + ' finished, ' + d.working.length + ' being worked on, ' + d.queue.length + ' waiting.'));
+  // It says how it's doing at least once a minute, so three quiet minutes mean it has stopped.
+  const quiet = Math.round((Date.now() - new Date(d.at).getTime()) / 1000);
+  if (quiet > 180) out.push(el('p', 'Not heard from in ' + dur(quiet) + ', so it may have stopped. What follows is from then.', 'bad'));
+
+  out.push(el('h3', 'Working on'));
+  if (!d.working.length) out.push(el('p', 'Nothing right now.', 'dim'));
+  const books = el('div', null, 'books');
+  for (const w of d.working) {
+    const line = [TASKS[w.task] || w.task, w.step];
+    if (w.of) line.push(w.parts + ' of ' + w.of + ' parts');
+    line.push('started ' + since(w.since));
+    const fill = el('div');
+    fill.style.width = w.percent + '%';
+    const bar = el('div', null, 'bar');
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuenow', String(w.percent));
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', '100');
+    bar.append(fill);
+    const progress = el('div', null, 'progress');
+    progress.append(bar, el('span', w.percent + '%'));
+    const book = el('div', null, 'book');
+    book.append(el('div', w.title, 'title'), el('div', line.join(' · '), 'dim'), progress);
+    books.append(book);
+  }
+  if (d.working.length) out.push(books);
+
+  out.push(el('h3', 'Queue'));
+  if (!d.queue.length) out.push(el('p', 'Empty.', 'dim'));
+  const ol = el('ol');
+  for (const q of d.queue) {
+    const li = el('li');
+    li.append(el('span', q.title), el('span', ' · ' + (TASKS[q.task] || q.task), 'dim'));
+    if (q.failed) {
+      const times = q.failed.times === 1 ? 'once' : q.failed.times + ' times in a row';
+      const why = q.failed.why ? ': ' + q.failed.why : '';
+      li.append(el('div', 'Failed ' + times + ', trying again ' + until(q.failed.next) + why, 'bad'));
+    }
+    ol.append(li);
+  }
+  if (d.queue.length) out.push(ol);
+  return out;
 }
 
 async function load() {
@@ -121,9 +202,11 @@ async function load() {
     if (res.status === 401) { sessionStorage.removeItem(KEY); $('login').hidden = false; throw new Error('That token didn’t work.'); }
     if (!res.ok) throw new Error('The server answered ' + res.status + '.');
     render(await res.json());
+    $('dot').className = 'dot on';
     $('login').hidden = true;
     $('error').hidden = true;
   } catch (e) {
+    $('dot').className = 'dot';
     $('error').textContent = e.message;
     $('error').hidden = false;
   }
@@ -136,7 +219,12 @@ $('login').addEventListener('submit', (e) => {
   load();
 });
 load();
-setInterval(() => { if (document.visibilityState === 'visible') load(); }, 30000);
+// Live while it's in view: every 5 s (the server allows 30 a minute), and at once on coming back.
+setInterval(() => { if (document.visibilityState === 'visible') load(); }, 5000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') load();
+  else $('dot').className = 'dot';
+});
 </script>
 </body>
 </html>`;

@@ -2,14 +2,14 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type pg from 'pg';
 import type { AiFile } from '../../shared/src/ai.ts';
-import { recordError, recordOk } from '../../server/src/jobs/runs.ts';
+import { recordError, recordLive, recordOk } from '../../server/src/jobs/runs.ts';
 import { Balancer, jitter } from './balancer.ts';
 import { castPass } from './cast.ts';
 import { prodClient, prodPool } from './env.ts';
 import { castFromFile, fetchBook } from './fetch.ts';
 import { checkFile, fileOnServer, live, loadOne, onServer, replace, upsert, wanted } from './import.ts';
-import { castByFile, castOf, fitBy, LADDER, mins, notesBy, PRIMARY } from './kimi.ts';
-import { bookDir, isFetched, loadBook, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
+import { castByFile, castOf, fitBy, LADDER, mins, notesBy, notesLedger, PRIMARY } from './kimi.ts';
+import { bookDir, isFetched, loadBook, marksFiles, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
 import { listBooks } from './library.ts';
 import { markBook } from './mark.ts';
 import { nvidiaKey } from './nim.ts';
@@ -33,7 +33,8 @@ import { validate, type Notes } from './validate.ts';
  * A call that fails is asked again by the balancer, after a wait that doubles each time, with
  * jitter, for as long as it takes. A book that fails waits 2 minutes, then 4, 8 and so on up to an
  * hour, with jitter, and carries on where it stopped. How it goes is in job_runs as "ai-marker",
- * for the admin page. Nothing it prints has a book's text in it.
+ * for the admin page, along with what it's on right now: each book, its task, its step and how
+ * many of its parts are done, and the queue (liveLoop). Nothing it prints has a book's text in it.
  */
 
 /** How often it looks for work, and how many books it marks, and writes notes for, at once. */
@@ -48,8 +49,11 @@ const STUCK = 5;
 /** Its name in job_runs, and how often it says it's alive there when there's nothing new. */
 const JOB = 'ai-marker';
 const ALIVE_S = 3600;
+/** How often the status page's live view is brought up to date, and how often it's written anyway. */
+const LIVE_S = 10;
+const LIVE_ANYWAY_S = 60;
 
-type Phase = 'marks' | 'notes';
+export type Phase = 'marks' | 'notes';
 
 /** What the server has for a book: when it was made, by whom, and how many Revisit entries. */
 export interface OnServer {
@@ -65,9 +69,23 @@ interface Balancers {
   review: Balancer;
 }
 
-/** Books being worked on, by SHA-256, and books that failed, with when to try them again. */
-const running = new Map<string, Phase>();
-export const failures = new Map<string, { count: number; next: number }>();
+/** A book being worked on: what for, since when, and its parts once it's fetched. */
+interface Job {
+  b: QueueBook;
+  phase: Phase;
+  since: number;
+  parts?: number[];
+}
+
+/**
+ * Books being worked on, by SHA-256; books that failed, with when to try them again and why; and
+ * books finished since the last look at the server, which hasn't caught up with them yet.
+ */
+const running = new Map<string, Job>();
+export const failures = new Map<string, { count: number; next: number; why?: string }>();
+const ended = new Set<string>();
+/** The last look at the books and the server. */
+let seen: { books: QueueBook[]; server: Map<string, OnServer> } | null = null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const clock = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -269,30 +287,158 @@ async function notesJob(b: QueueBook, lbs: Balancers) {
 
 /** Starts a book's work without waiting for it. When it ends, job_runs hears how it went. */
 function start(b: QueueBook, phase: Phase, work: () => Promise<void>, pool: pg.Pool) {
-  running.set(b.sha256, phase);
+  running.set(b.sha256, { b, phase, since: Date.now() });
   if (phase === 'marks') Balancer.holdLow = true;
   console.log(`${clock()} ${b.title}: ${phase} start`);
   const t0 = Date.now();
   work()
     .then(async () => {
       failures.delete(b.sha256);
+      running.delete(b.sha256);
+      ended.add(b.sha256);
       console.log(`${clock()} ${b.title}: ${phase} done, in ${mins((Date.now() - t0) / 1000)}`);
-      await recordOk(pool, JOB, { book: b.title, done: phase }).catch(() => {});
+      await recordOk(pool, JOB, liveNow()).catch(() => {});
     })
     .catch(async (e: unknown) => {
+      const why = message(e);
       const f = failures.get(b.sha256) ?? { count: 0, next: 0 };
       f.count++;
       const secs = jitter(Math.min(RETRY_CAP_S, RETRY_FIRST_S * 2 ** (f.count - 1)));
       f.next = Date.now() + secs * 1000;
+      f.why = why.slice(0, 300);
       failures.set(b.sha256, f);
-      const why = message(e);
       console.log(`${clock()} ${b.title}: ${phase} failed (${f.count} in a row), again in ${mins(secs)}: ${why}`);
       await recordError(pool, JOB, new Error(`${b.title}: ${phase}: ${why}`)).catch(() => {});
     })
     .finally(() => {
       running.delete(b.sha256);
-      Balancer.holdLow = [...running.values()].includes('marks');
+      Balancer.holdLow = [...running.values()].some((j) => j.phase === 'marks');
     });
+}
+
+/** The parts a book is marked and noted in (the ones with words), read once it's fetched. */
+function partsOf(job: Job): number[] | null {
+  if (!job.parts && isFetched(job.b.key)) {
+    job.parts = loadBook(job.b.key).parts.filter((p) => p.words > 0).map((p) => p.n);
+  }
+  return job.parts ?? null;
+}
+
+export interface Progress {
+  step: string;
+  /** Parts done, of the book's parts. */
+  parts: number;
+  of: number;
+  /** Of the whole task, counting the steps before and after the parts as one part each: 0 to 100. */
+  percent: number;
+}
+
+/** How far a book's marks or notes have got, from what's on disk. `parts` is null until it's fetched. */
+export function progressOf(key: string, phase: Phase, parts: number[] | null): Progress {
+  if (!parts) return { step: 'Fetching the book', parts: 0, of: 0, percent: 0 };
+
+  if (phase === 'marks') {
+    const marked = new Set(marksFiles(key));
+    const done = parts.filter((n) => marked.has(n)).length;
+    const cast = existsSync(castByFile({ key }));
+    let steps = done;
+    if (cast) steps++;
+    const percent = Math.floor((100 * steps) / (parts.length + 2));
+    let step = 'Checking, settling and saving';
+    if (!cast) step = 'Reading the cast from the book';
+    else if (done < parts.length) step = 'Marking who speaks, part by part';
+    return { step, parts: done, of: parts.length, percent };
+  }
+
+  const led = notesLedger({ key });
+  const done = parts.filter((n) => led.parts[n]).length;
+  let steps = done;
+  if (led.roster) steps++;
+  if (led.fixed) steps++;
+  if (led.reviewed) steps++;
+  const percent = Math.floor((100 * steps) / (parts.length + 3));
+  let step = 'Saving';
+  if (!led.roster) step = 'Listing who’s who';
+  else if (done < parts.length) step = 'Writing notes, part by part';
+  else if (!led.fixed) step = 'Checking the notes';
+  else if (!led.reviewed) step = 'Reading them through as a reader would';
+  return { step, parts: done, of: parts.length, percent };
+}
+
+/** A book in the queue, with how its last tries went when they failed. */
+export interface Waiting {
+  title: string;
+  task: Phase;
+  failed?: { times: number; next: string; why: string };
+}
+
+function waiting(b: QueueBook, task: Phase): Waiting {
+  const f = failures.get(b.sha256);
+  if (!f) return { title: b.title, task };
+  return { title: b.title, task, failed: { times: f.count, next: new Date(f.next).toISOString(), why: f.why ?? '' } };
+}
+
+/** Every book waiting, in the order it goes: all the marks, then the notes. */
+export function queueOf(books: QueueBook[], server: Map<string, OnServer>): Waiting[] {
+  const out: Waiting[] = [];
+  for (const b of books) {
+    if (running.has(b.sha256) || ended.has(b.sha256)) continue;
+    if (needs(b, server) === 'marks') out.push(waiting(b, 'marks'));
+  }
+  for (const b of notesQueue(books, server)) {
+    if (running.has(b.sha256) || ended.has(b.sha256)) continue;
+    out.push(waiting(b, 'notes'));
+  }
+  return out;
+}
+
+/** What the status page shows of the marker: the books it's on, how far each has got, and the queue. */
+export interface Live {
+  at: string;
+  books: number;
+  finished: number;
+  working: Array<Progress & { title: string; task: Phase; since: string }>;
+  queue: Waiting[];
+}
+
+function liveNow(): Live {
+  const books = seen?.books ?? [];
+  const server = seen?.server ?? new Map<string, OnServer>();
+  const working = [...running.values()].map((j) => ({
+    title: j.b.title,
+    task: j.phase,
+    since: new Date(j.since).toISOString(),
+    ...progressOf(j.b.key, j.phase, partsOf(j)),
+  }));
+  return {
+    at: new Date().toISOString(),
+    books: books.length,
+    finished: books.filter((b) => needs(b, server) === null).length,
+    working,
+    queue: queueOf(books, server),
+  };
+}
+
+/** Keeps the status page's live view current: whenever something changes, and every minute anyway. */
+async function liveLoop(pool: pg.Pool) {
+  let last = '';
+  let wrote = 0;
+  for (;;) {
+    try {
+      if (seen) {
+        const live = liveNow();
+        const now = JSON.stringify({ ...live, at: '' });
+        if (now !== last || Date.now() - wrote > LIVE_ANYWAY_S * 1000) {
+          await recordLive(pool, JOB, live);
+          last = now;
+          wrote = Date.now();
+        }
+      }
+    } catch {
+      /* tried again in a moment */
+    }
+    await sleep(LIVE_S * 1000);
+  }
 }
 
 /** What the server holds now, with ai/out kept the same when `sync`. */
@@ -360,7 +506,9 @@ async function plan() {
 /** One look at the books, starting whatever can start. */
 async function round(lbs: Balancers, pool: pg.Pool) {
   const { books, server } = await look(true);
-  const byPhase = (p: Phase) => [...running.values()].filter((x) => x === p).length;
+  seen = { books, server };
+  ended.clear();
+  const byPhase = (p: Phase) => [...running.values()].filter((j) => j.phase === p).length;
 
   const marks = toMark(books, server);
   for (const b of marks.slice(0, Math.max(0, MARKING - byPhase('marks')))) {
@@ -419,13 +567,14 @@ export async function runMarker(dry: boolean) {
   let refused = '';
   let alive = 0;
   console.log(`${clock()} The marker is running: a look about every ${POLL_S} s, up to ${MARKING} books marked and ${NOTING} given notes at once.`);
+  void liveLoop(pool);
   for (;;) {
     try {
       await round(lbs, pool);
       // Not while NVIDIA refuses the key: that would hide it on the status page.
       if (Date.now() - alive > ALIVE_S * 1000 && !Balancer.refused().length) {
         alive = Date.now();
-        await recordOk(pool, JOB, { running: running.size, failing: failures.size });
+        await recordOk(pool, JOB, liveNow());
       }
     } catch (e) {
       console.log(`${clock()} ${message(e)}`);

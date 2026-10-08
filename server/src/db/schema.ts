@@ -426,7 +426,7 @@ export const jobRuns = pgTable('job_runs', {
   lastOkAt: at('last_ok_at'),
   lastError: text('last_error'),
   lastErrorAt: at('last_error_at'),
-  /** What the last good run did, e.g. how many files it removed. */
+  /** What the last good run did, e.g. how many files it removed. The AI marker's says what it's doing now. */
   detail: jsonb('detail'),
 });
 
