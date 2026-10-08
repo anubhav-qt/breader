@@ -5,7 +5,7 @@ import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { AiFile } from '../../shared/src/ai.ts';
 import { prodEnv } from './env.ts';
 import { extract } from './extract.ts';
-import { bookDir, loadQueue, OUT, readJson, ROOT, writeJson, type Book, type QueueBook } from './lib.ts';
+import { bookDir, loadQueue, OUT, QUEUE, readJson, ROOT, writeJson, type Book, type QueueBook } from './lib.ts';
 import type { Cast } from './validate.ts';
 
 /*
@@ -70,7 +70,7 @@ function castOfVolume(o: QueueBook): Cast['people'] {
 
 /** The cast of another volume in the same series, nearest first, to keep everyone's id and voice. */
 function seriesCast(b: QueueBook): { people: Cast['people']; from: QueueBook } | null {
-  if (!b.series) return null;
+  if (!b.series || !existsSync(QUEUE)) return null;
   const same = loadQueue().books.filter((o) => o.sha256 !== b.sha256 && o.series?.toLowerCase() === b.series!.toLowerCase());
   same.sort((x, y) => Math.abs((x.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) - Math.abs((y.seriesIndex ?? 0) - (b.seriesIndex ?? 0)));
   for (const o of same) {

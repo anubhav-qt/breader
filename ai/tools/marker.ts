@@ -313,14 +313,46 @@ async function look(sync: boolean): Promise<{ books: QueueBook[]; server: Map<st
   }
 }
 
-/** Says what the marker would start now, and does nothing. */
+/** Every book that needs notes, in the order they go: notesOrder, each series from its earliest volume. */
+function notesQueue(books: QueueBook[], server: Map<string, OnServer>): QueueBook[] {
+  const want = books.filter((b) => needs(b, server) === 'notes').sort(notesOrder);
+  const out: QueueBook[] = [];
+  for (const b of want) {
+    const before = want.filter((o) => earlier(o, b)).sort((x, y) => x.seriesIndex! - y.seriesIndex!);
+    for (const o of [...before, b]) {
+      if (!out.includes(o)) out.push(o);
+    }
+  }
+  return out;
+}
+
+/**
+ * Says what the marker would start now, and checks that the first book due for notes reads here
+ * the way it did when it was marked. It fetches that book if it has to, and writes nothing else:
+ * nothing to the server, and no model is asked anything.
+ */
 async function plan() {
   const { books, server } = await look(false);
   const marks = books.filter((b) => needs(b, server) === 'marks');
-  const notes = books.filter((b) => needs(b, server) === 'notes').sort(notesOrder);
+  const notes = notesQueue(books, server);
   console.log(`${books.length} books with the AI switch on: ${marks.length} to mark, then ${notes.length} to write notes for.`);
   if (marks.length) console.log(`\nTo mark, ${MARKING} at a time, in this order:\n${marks.map((b) => `  ${b.title}`).join('\n')}`);
-  if (notes.length) console.log(`\nThen notes, ${NOTING} at a time, each series from its earliest volume, in this order:\n${notes.map((b) => `  ${b.title}`).join('\n')}`);
+  if (notes.length) console.log(`\nThen notes, ${NOTING} at a time, in this order:\n${notes.map((b) => `  ${b.title}`).join('\n')}`);
+  const first = notes[0];
+  if (!first) return;
+  if (!isFetched(first.key)) await fetchBook(first);
+  const db = await prodClient('breader-ai-marker');
+  let row: AiFile | null;
+  try {
+    row = await fileOnServer(db, first.sha256);
+  } finally {
+    await db.end();
+  }
+  const here = loadBook(first.key).sections.map((s) => s.print);
+  const there = row?.sections ?? [];
+  const differ = here.filter((p, i) => p !== there[i]).length + Math.max(0, there.length - here.length);
+  if (differ) console.log(`\n${first.title} reads differently here: ${differ} of ${there.length} chapters. Its notes would fail.`);
+  else console.log(`\n${first.title} reads the same here as when it was marked (${here.length} chapters).`);
 }
 
 /** One look at the books, starting whatever can start. */
