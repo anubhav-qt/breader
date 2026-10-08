@@ -14,6 +14,7 @@ import type { OnServer } from '../marker.ts';
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { bookDir, writeJson } = await import('../lib.ts');
 const { byWithNotes, failures, needs, notesOrder, progressOf, queueOf, toMark, toNote } = await import('../marker.ts');
+const { stageOf } = await import('../mark.ts');
 
 let made = 0;
 function book(title: string, more: Partial<QueueBook> = {}): QueueBook {
@@ -115,7 +116,11 @@ test('the live view: how far a book’s marks have got, from what’s on disk', 
   assert.deepEqual(progressOf(b.key, 'marks', parts), { step: 'Marking who speaks, part by part', parts: 2, of: 4, percent: 50 });
   writeFileSync(join(dir, 'marks', '0003.txt'), '');
   writeFileSync(join(dir, 'marks', '0004.txt'), '');
-  assert.deepEqual(progressOf(b.key, 'marks', parts), { step: 'Checking, settling and saving', parts: 4, of: 4, percent: 83 });
+  assert.deepEqual(progressOf(b.key, 'marks', parts), { step: 'Checking the marks', parts: 4, of: 4, percent: 83 });
+  // From there, markBook says which of its last steps it's on.
+  stageOf.set(b.key, 'Settling unsure lines (2 of 2)');
+  assert.equal(progressOf(b.key, 'marks', parts).step, 'Settling unsure lines (2 of 2)');
+  stageOf.clear();
 });
 
 test('the live view: how far a book’s notes have got', () => {

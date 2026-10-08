@@ -42,6 +42,9 @@ ${RULES}`;
 
 export const marksFile = (book: Book, n: number) => join(bookDir(book.key), 'marks', `${partName(n)}.txt`);
 
+/** What markBook is doing for each book, by key, once its parts are marked: for the marker's live view. */
+export const stageOf = new Map<string, string>();
+
 /** An answer split into the marks file and the cast lines. */
 function split(answer: string) {
   const marks: string[] = [];
@@ -120,6 +123,7 @@ async function fixParts(book: Book, ns: number[], lb: Balancer) {
   for (let round = 2; round <= ROUNDS; round++) {
     const bad = ns.filter((n) => errorsFor(book, n).length);
     if (!bad.length) return;
+    stageOf.set(book.key, `Fixing what the check found (round ${round - 1} of ${ROUNDS - 1})`);
     const sections = bad.map((n) => {
       const errors = errorsFor(book, n);
       return `## Part ${n}\n\nIts marks:\n${readFileSync(marksFile(book, n), 'utf8').trim()}\n\ncheck's ${errors.length === 1 ? 'error' : `${errors.length} errors`}:\n${errors.slice(0, 80).join('\n')}`;
@@ -218,6 +222,7 @@ async function settle(book: Book, lb: Balancer) {
 export async function markBook(key: string, lb: Balancer, top: Balancer, flags: Record<string, string | true>) {
   const book = loadBook(key);
   const tag = book.title;
+  stageOf.set(key, 'Checking the marks');
   // Parts a stopped run left with errors go straight to the fix. A part that failed for good last
   // time leaves a gap, which check calls skipped: both are fine here.
   const broken = Object.keys(ledger(book)).map(Number).filter((n) => existsSync(marksFile(book, n)) && errorsFor(book, n).length);
@@ -249,6 +254,7 @@ export async function markBook(key: string, lb: Balancer, top: Balancer, flags: 
     const who = PRIMARY.map((r) => r.name).join(' or ');
     if (redo.length) {
       console.log(`${tag}: parts ${redo.join(', ')} again, with ${who}`);
+      stageOf.set(key, `Marking again the ${redo.length} parts the backup model did`);
       const old = new Map(redo.map((n) => [n, readFileSync(marksFile(book, n), 'utf8')]));
       const oldLedger = ledger(book);
       const failed = await markParts(book, redo, top);
@@ -261,11 +267,14 @@ export async function markBook(key: string, lb: Balancer, top: Balancer, flags: 
   }
 
   console.log(`${tag}: settling unsure lines`);
+  stageOf.set(key, 'Settling unsure lines (1 of 2)');
   await settle(book, lb);
   // Now and then a settle answer decides almost none of them, and the same question again decides
   // nearly all (Mushoku Vol. 12: 0 of 18, then 17 of 18). So whatever is left gets a second go.
+  stageOf.set(key, 'Settling unsure lines (2 of 2)');
   await settle(book, lb);
   if (flags['no-pack']) return;
+  stageOf.set(key, 'Saving');
   // Revisit notes come from notes, for the whole book. Other notes that stop partway would show a
   // Revisit that knows only the start, so they wait in notes.partial.json and the book packs without any.
   const notes = join(bookDir(book.key), 'notes.json');

@@ -11,7 +11,7 @@ import { checkFile, fileOnServer, live, loadOne, onServer, replace, upsert, want
 import { castByFile, castOf, fitBy, LADDER, mins, notesBy, notesLedger, PRIMARY } from './kimi.ts';
 import { bookDir, isFetched, loadBook, marksFiles, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
 import { listBooks } from './library.ts';
-import { markBook } from './mark.ts';
+import { markBook, stageOf } from './mark.ts';
 import { nvidiaKey } from './nim.ts';
 import { writeNotes } from './notes.ts';
 import { revisitOf } from './pack.ts';
@@ -208,8 +208,12 @@ async function markJob(b: QueueBook, lbs: Balancers) {
   if (!isFetched(b.key)) await fetchBook(b);
   const book = loadBook(b.key);
   if (!existsSync(castByFile(book))) await castPass(book, lbs.lb);
-  await markBook(b.key, lbs.lb, lbs.top, {});
-  await importFile(b.sha256);
+  try {
+    await markBook(b.key, lbs.lb, lbs.top, {});
+    await importFile(b.sha256);
+  } finally {
+    stageOf.delete(b.key);
+  }
 }
 
 /**
@@ -344,7 +348,8 @@ export function progressOf(key: string, phase: Phase, parts: number[] | null): P
     let steps = done;
     if (cast) steps++;
     const percent = Math.floor((100 * steps) / (parts.length + 2));
-    let step = 'Checking, settling and saving';
+    // Once every part has its marks, markBook says which of its last steps it's on.
+    let step = stageOf.get(key) ?? 'Checking the marks';
     if (!cast) step = 'Reading the cast from the book';
     else if (done < parts.length) step = 'Marking who speaks, part by part';
     return { step, parts: done, of: parts.length, percent };
