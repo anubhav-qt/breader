@@ -1,5 +1,6 @@
 import type { ShelfItem } from '../../data/useLibrary';
 import { IconAddBook, IconCheck } from '../../components/icons';
+import { useLabels } from '../../data/labels';
 
 interface Props {
   name: string;
@@ -12,13 +13,14 @@ interface Props {
  * yet. Once they all are, it says so.
  */
 export function KeepSeries({ name, books, onKeepAll }: Props) {
+  const labels = useLabels();
   const theirs = books.filter((b) => b.source === 'shelf');
   if (!theirs.length) return null;
   const left = theirs.filter((b) => !b.kept);
   if (!left.length) {
     return (
       <span className="keep-series is-done">
-        <IconCheck aria-hidden="true" /> In My books
+        <IconCheck aria-hidden="true" /> In {labels.mine}
       </span>
     );
   }
@@ -28,8 +30,8 @@ export function KeepSeries({ name, books, onKeepAll }: Props) {
     <button
       type="button"
       className="keep-series"
-      title={`${label} to My books`}
-      aria-label={`${label} of ${name} to My books`}
+      title={`${label} to ${labels.mine}`}
+      aria-label={`${label} of ${name} to ${labels.mine}`}
       onClick={() => onKeepAll(left, name)}
     >
       <IconAddBook aria-hidden="true" /> {label}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { IconCheck } from '../../components/icons';
+import { useLabels } from '../../data/labels';
 import './add.css';
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 /** A new key, shown once: keep it, or log in so an account keeps the books instead. */
 export function FreshKey({ libraryKey, title, count = 1, onLogin, onDone }: Props) {
   const [copied, setCopied] = useState(false);
+  const labels = useLabels();
 
   const copy = async () => {
     try {
@@ -30,7 +32,7 @@ export function FreshKey({ libraryKey, title, count = 1, onLogin, onDone }: Prop
   return (
     <>
       <p className="add-keynote">
-        {count > 1 ? `Your ${count} books are in My books. ` : title ? `“${title}” is in My books. ` : ''}This is your personal key. Store it somewhere safe: it can’t be recovered.
+        {count > 1 ? `Your ${count} books are in ${labels.mine}. ` : title ? `“${title}” is in ${labels.mine}. ` : ''}This is your personal key. Store it somewhere safe: it can’t be recovered.
       </p>
       <div className="key-box">{libraryKey}</div>
       <p className="add-local">

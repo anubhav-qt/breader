@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { IconCheck } from '../../components/icons';
+import { useLabels } from '../../data/labels';
 import { useSyncStatus, type SyncStatus } from '../../data/sync';
 import { normalizeKey } from '../../lib/key';
 import { FreshKey } from './FreshKey';
@@ -32,6 +33,7 @@ function syncLine(s: SyncStatus): string | null {
 }
 
 export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogin, loggedIn }: Props) {
+  const labels = useLabels();
   const [copied, setCopied] = useState(false);
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
@@ -113,7 +115,7 @@ export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogi
               : 'Only for your own key from another browser: the books in this browser, and where you are in them, are swapped for that library’s.'}
           </p>
         ) : (
-          <p className="add-local">Their shared books open as a shared library of their own. Nothing of theirs comes into My books.</p>
+          <p className="add-local">Their shared books open as a shared library of their own. Nothing of theirs comes into {labels.mine}.</p>
         )}
         <div className="add-actions">
           {swapping ? (

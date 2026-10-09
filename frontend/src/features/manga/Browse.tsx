@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MANGA_KINDS, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
+import { useLabels } from '../../data/labels';
 import { LANGS, langName, mangadex, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
 import { entriesOf, viewOf } from './found';
 import './manga.css';
@@ -64,6 +65,7 @@ function messageOf(e: unknown): string {
 }
 
 export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
+  const labels = useLabels();
   const [text, setText] = useState(() => kept?.text ?? '');
   const [q, setQ] = useState(() => kept?.text.trim() ?? '');
   const [found, setFound] = useState<Found>(() => kept?.found ?? { state: 'loading' });
@@ -275,7 +277,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
                   ) : (
                     <span className="mdx-nocover">{c.title}</span>
                   )}
-                  {c.have && <span className="mdx-have" title="In My manga"><IconCheck /></span>}
+                  {c.have && <span className="mdx-have" title={`In ${labels.mine}`}><IconCheck /></span>}
                   {c.adult && <span className="mdx-badge">18+</span>}
                 </span>
                 <span className="mdx-title">{c.title}</span>

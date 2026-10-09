@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { MangaChapter, MangaFound, MangaSeries, SourceSeries } from '@breader/shared/manga';
 import { Modal } from '../../components/Modal';
 import { IconCheck, IconChevron, IconOut } from '../../components/icons';
+import { useLabels } from '../../data/labels';
 import { keptNote } from '../../books/kept';
 import { laidOut, madeBy, pickChapters, remoteOf, startOf } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
@@ -126,6 +127,7 @@ function chaptersText(c: Copy): string {
 }
 
 export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onAdd, onMove, onClose }: Props) {
+  const labels = useLabels();
   const main = start[0];
   const [about, setAbout] = useState<Load<About>>({ state: 'loading' });
   const [lang, setLang] = useState(() => startLang(start, recordOf, prefs));
@@ -397,10 +399,10 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
         <div className="mds-actions">
           <button type="button" className="btn btn-primary" disabled={!canRead || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, undefined, rect()))}>{readLabel}</button>
           {had ? (
-            <span className="mds-in"><IconCheck /> In My manga</span>
+            <span className="mds-in"><IconCheck /> In {labels.mine}</span>
           ) : (
             <button type="button" className="btn btn-quiet" disabled={!a || busy} onClick={() => a && once(() => onAdd(a, pickedNow))}>
-              {busy ? 'Adding…' : 'Add to My manga'}
+              {busy ? 'Adding…' : `Add to ${labels.mine}`}
             </button>
           )}
         </div>

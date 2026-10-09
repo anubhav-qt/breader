@@ -502,8 +502,8 @@ export default function App() {
 
   const addSeriesOnly = useCallback(async (about: About, picked: Picked) => {
     const rec = await addSeries(about, urlOf(picked.found, picked.group, picked.lang));
-    say(`Added “${rec.title}” to My manga`);
-  }, [addSeries, say]);
+    say(`Added “${rec.title}” to ${labels.mine}`);
+  }, [addSeries, say, labels.mine]);
 
   /**
    * A series in My manga, read from another copy from now on (MangaSheet.tsx). Its place stays, as
@@ -753,8 +753,8 @@ export default function App() {
     setTab('mine');
     const on = categoryOf(rec);
     setCategory(on);
-    say(`Added “${rec.title}” to ${on === 'manga' ? 'My manga' : 'My books'}${rec.shared ? ', shared with your key' : ''}`);
-  }, [lib, say]);
+    say(`Added “${rec.title}” to ${labels.mine}${rec.shared ? ', shared with your key' : ''}`);
+  }, [lib, say, labels.mine]);
 
   /* The Key dialog's usual answer to someone's key: a shared library of its own, beside My books. */
   const openShared = useCallback(async (key: string) => {
@@ -821,8 +821,8 @@ export default function App() {
     const entry = recordById.get(b.id);
     if (entry?.source !== 'shelf') return;
     await lib.startShelfBook(entry);
-    say(`Added “${b.title}” to ${categoryOf(b) === 'manga' ? 'My manga' : 'My books'}`);
-  }, [recordById, lib, say]);
+    say(`Added “${b.title}” to ${labels.mine}`);
+  }, [recordById, lib, say, labels.mine]);
   /**
    * Books from someone's shared library, put in the reader's own at once, last book first so the
    * first is the newest in Recent. Returns the ones it added.
@@ -843,10 +843,10 @@ export default function App() {
     const added = await keepBooks(books);
     if (!added.length) return;
     const on = categoryOf(books[0]);
-    say(`Added ${countOf(added.length, on)} of “${series}” to ${on === 'manga' ? 'My manga' : 'My books'}`, {
+    say(`Added ${countOf(added.length, on)} of “${series}” to ${labels.mine}`, {
       action: { label: 'Undo', run: () => { for (const id of added) void lib.removeBook(id); } },
     });
-  }, [keepBooks, lib, say]);
+  }, [keepBooks, lib, say, labels.mine]);
   const manga = category === 'manga';
 
   /* Picking books in the library showing, to act on them together. */
@@ -854,7 +854,7 @@ export default function App() {
     if (!picking) return [];
     return books.filter((b) => picking.ids.has(b.id));
   }, [picking, books]);
-  const yours = manga ? 'My manga' : 'My books';
+  const yours = labels.mine;
   const allFavourites = pickedBooks.length > 0 && pickedBooks.every((b) => b.favorite);
   /** Ticks these books, or takes the tick off when they all have one already (a series' card). */
   const pick = useCallback((books: ShelfItem[]) => {
@@ -1014,7 +1014,7 @@ export default function App() {
   /** No manga yet: what goes here, and how. */
   const emptyManga = (
     <div className="gallery-empty">
-      <p>Manga and comics go here. Find a series in <b>Browse</b> and add it to My manga.</p>
+      <p>Manga and comics go here. Find a series in <b>Browse</b> and add it to {labels.mine}.</p>
       {browseButton}
     </div>
   );
