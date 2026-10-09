@@ -338,13 +338,14 @@ describe('MangaDex through the laptop', () => {
     const { b, dex } = await setup();
     dex.state.catalogue = [shelf(1, 'ongoing', 20, upTo(20)), shelf(3, 'ongoing', 20, upTo(17))];
     const feeds = () => dex.asked('api.mangadex.org', /\/feed$/).length;
-    expect(titles((await b.get('/v1/manga/search?q=a&lang=en')).body)).toEqual(['Series 1']);
+    // Each search its own, so none is answered from what was kept; each a name the series go by.
+    expect(titles((await b.get('/v1/manga/search?q=series&lang=en')).body)).toEqual(['Series 1']);
     expect(feeds()).toBe(2);
-    await b.get('/v1/manga/search?q=b&lang=en');
+    await b.get('/v1/manga/search?q=serie&lang=en');
     expect(feeds()).toBe(2);
     // Series 3 caught up, as its newest upload says.
     dex.state.catalogue[1] = shelf(3, 'ongoing', 20, upTo(20), [], { latestUploadedChapter: ch(1) });
-    expect(titles((await b.get('/v1/manga/search?q=c&lang=en')).body)).toEqual(['Series 1', 'Series 3']);
+    expect(titles((await b.get('/v1/manga/search?q=eries&lang=en')).body)).toEqual(['Series 1', 'Series 3']);
     expect(feeds()).toBe(3);
   });
 
