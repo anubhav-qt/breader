@@ -607,6 +607,18 @@ describe('how a search ranks', () => {
     expect(r.next).toBe('sw1:10,sw2:0');
   });
 
+  it('answers soon after the first place brings something, a slower one joining with the next lot, unless every place is waited for', async () => {
+    const quick = place('sw1', 'Quick Scans', async () => ({ found: [found('Quick Scans', 'Quick')], next: null }));
+    const slow = () => place('sw2', 'Slow Scans', () => new Promise((done) => setTimeout(() => done({ found: [found('Slow Scans', 'Slow')], next: null }), 200)));
+    let r = await find([quick, slow()], undefined, undefined, 5_000, 20);
+    expect(titlesOf(r.items)).toEqual(['Quick Scans: Quick']);
+    expect(r.next).toBe('sw2:0');
+
+    r = await find([quick, slow()], undefined, undefined, 5_000, null);
+    expect(titlesOf(r.items).sort()).toEqual(['Quick Scans: Quick', 'Slow Scans: Slow']);
+    expect(r.next).toBeNull();
+  });
+
   it('says why when every place failed', async () => {
     const broken = place('sw5', 'Broken', async () => {
       throw new Error('nope');
@@ -704,21 +716,56 @@ describe('browsing the quick sources, searching every one', () => {
     expect(r.body.next).toBe('md:10');
   });
 
-  it('checks each quick source’s Popular and Updated first lots ahead of readers, and stops at a slow one', async () => {
+  it('shelves every source’s Popular and Updated lists ahead of readers, slow ones too, and browses them without asking a site', async () => {
     const { b, sw, manga, dexCalls } = await setup(['Dex One'], undefined, {}, 500);
     quickAndSlow(sw);
-    await manga.warm();
-    // MangaDex isn't browsed beside the sources, so isn't checked ahead either.
-    expect(dexCalls).toEqual([]);
-    // Asura Scans: Popular and Updated. Manga Demon has no Updated, and one lot showed it slow.
-    expect(listsOf(sw, '11')).toBe(2);
-    expect(listsOf(sw, '22')).toBe(1);
+    // Found slow by a reader's lot before it had a shelf.
+    await b.get('/v1/manga/search?lang=en');
+    expect(shown((await b.get('/v1/manga/search?lang=en&sort=new')).body).filter((t) => t.startsWith('Manga Demon'))).toEqual([]);
 
-    // Browse as it first opens: Asura Scans' series all checked already, Manga Demon left out.
+    await manga.warm();
+    // MangaDex isn't browsed beside the sources, so isn't shelved either.
+    expect(dexCalls).toEqual([]);
+    // Asura Scans: Popular and Updated. Manga Demon has no Updated. Their covers kept too.
+    expect(sw.calls.filter((c) => c.op === 'search' && c.source === '11').map((c) => c.type).sort()).toContain('LATEST');
+    expect(sw.calls.filter((c) => c.op === 'thumbnail')).toHaveLength(8);
+
+    // Every source on Browse, from its shelf, however slow its site: nothing asked of any.
     const before = sw.calls.length;
-    const r = await b.get('/v1/manga/search?lang=en');
-    expect(shown(r.body)).toEqual(['Asura Scans: Quick 1', 'Asura Scans: Quick 2', 'Asura Scans: Quick 3', 'Asura Scans: Quick 4']);
-    expect(sw.calls.slice(before).filter((c) => c.op === 'series' || c.op === 'chapters')).toEqual([]);
+    let r = await b.get('/v1/manga/search?lang=en');
+    expect(shown(r.body).sort()).toEqual(['Asura Scans: Quick 1', 'Asura Scans: Quick 2', 'Asura Scans: Quick 3', 'Asura Scans: Quick 4', 'Manga Demon: Slow 1', 'Manga Demon: Slow 2', 'Manga Demon: Slow 3', 'Manga Demon: Slow 4']);
+    expect(r.body.next).toBeNull();
+    r = await b.get('/v1/manga/search?lang=en&sort=new');
+    expect(shown(r.body)).toHaveLength(8);
+    expect(sw.calls.slice(before)).toEqual([]);
+
+    // Shelved again, a while later, its covers aren't fetched twice.
+    await manga.warm();
+    expect(sw.calls.filter((c) => c.op === 'thumbnail')).toHaveLength(8);
+  });
+
+  it('brings up to 40 a lot from each shelf, what was asked for only, and carries on down it', async () => {
+    const { b, sw, manga } = await setup();
+    sw.state.sources = sw.state.sources.filter((s) => s.id === '11');
+    for (let n = 1; n <= 90; n++) {
+      // Every third for adults.
+      const genre = n % 3 === 0 ? ['Adult'] : [];
+      sw.state.series.push({ id: n, source: '11', title: `Series ${n}`, genre });
+    }
+    await manga.warm();
+    const before = sw.calls.length;
+    let r = await b.get('/v1/manga/search?lang=en');
+    expect(r.body.items).toHaveLength(40);
+    expect(shown(r.body).slice(0, 3)).toEqual(['Asura Scans: Series 1', 'Asura Scans: Series 2', 'Asura Scans: Series 4']);
+    expect(r.body.next).toBe('sw11:s59');
+    r = await b.get(`/v1/manga/search?lang=en&next=${r.body.next}`);
+    expect(r.body.items).toHaveLength(20);
+    expect(r.body.next).toBeNull();
+    // With 18+, every one.
+    r = await b.get('/v1/manga/search?lang=en&adult=1');
+    expect(shown(r.body)[2]).toBe('Asura Scans: Series 3');
+    expect(sw.calls.slice(before)).toEqual([]);
+    expect((await b.get('/v1/manga/search?next=sw11:s3.10')).status).toBe(400);
   });
 });
 

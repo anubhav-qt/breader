@@ -1,4 +1,4 @@
-import { MANGA_KINDS, sameKind, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared';
+import { MANGA_KINDS, sameKind, type MangaChapter, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared';
 import { freshly } from '../lib/cache.ts';
 import { log } from '../log.ts';
 import type { Manga } from './index.ts';
@@ -8,7 +8,8 @@ import type { Manga } from './index.ts';
  * 50 series in each order (Popular, Updated, New, Top rated), with every kind on and with each kind
  * alone, in English and without 18+ or doujinshi, as Browse first opens. Then, for each series,
  * what its sheet asks for: the series, the other places it's in, each place's copies measured, its
- * chapters and its cover. Everything it touches is brought up to date and kept on for days
+ * chapters and its cover, and what Read opens on: a source's first two chapters, their pages
+ * counted. Everything it touches is brought up to date and kept on for days
  * (lib/cache.ts), so readers are given it straight away, and what they open is fetched again
  * behind them. One call at a time, with a pause between series, so readers' own calls go first.
  */
@@ -140,7 +141,12 @@ async function sheet(manga: Manga, card: MangaFound[]): Promise<{ places: number
       await step(() => manga.copies(id, LANG));
     } else {
       if (f.card.cover) await step(() => manga.sourceCover(id));
-      await step(() => manga.sourceChapters(id));
+      let chapters: MangaChapter[] = [];
+      await step(async () => {
+        chapters = (await manga.sourceChapters(id)).chapters;
+      });
+      // Read from the start, the reader opens on the first two chapters' pages, counted here first.
+      for (const c of chapters.slice(0, 2)) await step(() => manga.sourcePages(c.id));
       await step(() => manga.copies(id, ''));
     }
   }

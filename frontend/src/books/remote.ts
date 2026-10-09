@@ -214,8 +214,13 @@ async function openMangaDex(rec: BookRecord, series: string, lang: string, group
   return bookOf(rec, { name: 'MangaDex', series, page: `https://mangadex.org/title/${series}`, chapters }, total, (c, n) => pageFor(c.id, n));
 }
 
-/** Chapters opened at a time from a Suwayomi source: the one before the place, and these after it. */
+/**
+ * Chapters opened at a time from a Suwayomi source: the one before the place, and these after it.
+ * It opens on the next one alone, each counted being a call to the site; the reader opens the rest
+ * as soon as it's showing (MangaView's grow).
+ */
 const BEFORE = 1;
+const FIRST_AFTER = 1;
 const AFTER = 7;
 
 /** Each of these, at most `n` at a time. */
@@ -345,7 +350,7 @@ async function openSource(rec: BookRecord, id: string, group: string | null, at?
   };
 
   // A chapter after the place whose pages can't be counted ends what's open: reading on asks again.
-  const counted = await each(all.slice(from, start + 1 + AFTER), 4, count);
+  const counted = await each(all.slice(from, start + 1 + FIRST_AFTER), 4, count);
   const upTo = start + 1 - from;
   const to = start + 1 + inARow(counted.slice(upTo));
   return build(to, counted.slice(0, to - from));

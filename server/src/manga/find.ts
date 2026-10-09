@@ -12,9 +12,15 @@ import { log } from '../log.ts';
 
 /** How long a search waits for each place. One slower is asked again with the next lot, by when what it found is kept. */
 export const DEADLINE = 12_000;
+/**
+ * Once a place has brought something, how much longer the others are waited for: a reader sees
+ * what's come, and a slow site's series join with the next lot. Not for a sheet's look for its
+ * series' other copies, which waits for every place it can.
+ */
+export const GRACE = 1_500;
 /** How long a lot waits in all when every place is late, for the first to come: within the app's 20 s for a search. */
 const LONGEST = 18_000;
-/** Series checked ahead of readers in Popular and in Updated, in each place browsed: their first 12 lots. */
+/** Series checked ahead of readers in MangaDex's Popular and Updated, when it's browsed: their first 12 lots. */
 export const WARM = 120;
 /** The most places one search asks. */
 const MOST_PLACES = 50;
@@ -90,6 +96,51 @@ function within(going: Promise<Lot>, ms: number): Promise<Answer> {
         done({ lot: null, late: false, error });
       },
     );
+  });
+}
+
+/**
+ * Each place's lot, or that it was late or failed: each waited for up to `deadline`, and once one
+ * has brought something, the rest only `grace` longer.
+ */
+function answersOf(going: Promise<Lot>[], deadline: number, grace: number | null): Promise<Answer[]> {
+  return new Promise((done) => {
+    const answers: Array<Answer | undefined> = going.map(() => undefined);
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    let left = going.length;
+    let over = false;
+    let graced = false;
+    const finish = () => {
+      if (over) return;
+      over = true;
+      for (const t of timers) clearTimeout(t);
+      done(answers.map((a) => a ?? { lot: null, late: true, error: null }));
+    };
+    if (left === 0) {
+      finish();
+      return;
+    }
+    timers.push(setTimeout(finish, deadline));
+    going.forEach((g, i) => {
+      g.then(
+        (lot) => {
+          if (over) return;
+          answers[i] = { lot, late: false, error: null };
+          left -= 1;
+          if (left === 0) finish();
+          else if (grace !== null && !graced && lot.found.length > 0) {
+            graced = true;
+            timers.push(setTimeout(finish, grace));
+          }
+        },
+        (error) => {
+          if (over) return;
+          answers[i] = { lot: null, late: false, error };
+          left -= 1;
+          if (left === 0) finish();
+        },
+      );
+    });
   });
 }
 
@@ -193,15 +244,15 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
  * The next lot from every place, from where next says each had got to. A place that fails is left
  * out from then on; one that's late is asked again next time. Only when every place failed is that
  * the answer. When every place is late, a lot with nothing in it would only be asked for again, so
- * it waits a while longer for the first to come.
+ * it waits a while longer for the first to come. grace: null waits out the deadline for every place.
  */
-export async function find(places: Place[], q: string | undefined, next: string | undefined, deadline = DEADLINE): Promise<MangaSearchResult> {
+export async function find(places: Place[], q: string | undefined, next: string | undefined, deadline = DEADLINE, grace: number | null = GRACE): Promise<MangaSearchResult> {
   const byName = [...places].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
   const known = byName.slice(0, MOST_PLACES);
   const at = startsAt(known, next);
   const asked = known.filter((p) => at.has(p.key));
   const going = asked.map((p) => p.lot(at.get(p.key)!));
-  let answers = await Promise.all(going.map((g) => within(g, deadline)));
+  let answers = await answersOf(going, deadline, grace);
   if (allLate(answers)) {
     await firstOf(going, LONGEST - deadline);
     // Those come by now answer straight away; the rest are late.

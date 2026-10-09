@@ -40,7 +40,7 @@ const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.
 // Both roles prune feed records the laptop never read, so a long absence can't fill Supabase.
 const chores = setInterval(() => void pruneStaleFeed(primary.pool).catch((err) => log.warn({ err }, 'feed prune failed')), 3_600_000);
 
-// Browse's first screens of MangaDex are checked ahead of readers, and again every 15 minutes.
+// Browse's lists are shelved ahead of readers (manga/suwayomi.ts), and again every 15 minutes.
 let warming: NodeJS.Timeout | undefined;
 if (manga) {
   void manga.warm();

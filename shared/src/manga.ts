@@ -38,9 +38,10 @@ export const MANGA_LAST_OFFSET = 9_900;
 export const SourceId = z.string().regex(/^sw:[1-9]\d{0,9}$/, 'Not a series or chapter of a source');
 /**
  * Where a search carries on, place by place: md:30 (MangaDex's offset), sw<source>:3.10 (a
- * Suwayomi source's page, and how many of it were looked at). A place left out has nothing more.
+ * Suwayomi source's page, and how many of it were looked at), sw<source>:s40 (past the first 40 on
+ * its shelf). A place left out has nothing more.
  */
-const Next = z.string().regex(/^[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?(,[a-z]{2}\d{0,20}:\d{1,6}(\.\d{1,4})?){0,49}$/, 'Not where a search carries on');
+const Next = z.string().regex(/^[a-z]{2}\d{0,20}:(s\d{1,6}|\d{1,6}(\.\d{1,4})?)(,[a-z]{2}\d{0,20}:(s\d{1,6}|\d{1,6}(\.\d{1,4})?)){0,49}$/, 'Not where a search carries on');
 
 /** Series names as seriesName keys them, comma separated. */
 const Names = z

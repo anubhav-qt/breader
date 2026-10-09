@@ -102,12 +102,15 @@ describe('the daily prefetch', () => {
       series: vi.fn(async (id: string) => { asked.push(`series ${id}`); return {} as never; }),
       sourceSeries: vi.fn(async (id: string) => { asked.push(`series ${id}`); return {} as never; }),
       chapters: vi.fn(async (id: string) => { asked.push(`chapters ${id}`); return {} as never; }),
-      sourceChapters: vi.fn(async (id: string) => { asked.push(`chapters ${id}`); return {} as never; }),
+      sourceChapters: vi.fn(async (id: string) => {
+        asked.push(`chapters ${id}`);
+        return { lang: 'en', chapters: [1, 2, 3].map((n) => ({ id: `${id}.${n}` })) } as never;
+      }),
       copies: vi.fn(async (id: string) => { asked.push(`copies ${id}`); return {} as never; }),
       cover: vi.fn(async (id: string, _file: string, size: string) => { asked.push(`cover ${id} ${size}`); return {} as never; }),
       sourceCover: vi.fn(async (id: string) => { asked.push(`cover ${id}`); return {} as never; }),
       page: say('page'),
-      sourcePages: say('pages'),
+      sourcePages: vi.fn(async (id: string) => { asked.push(`pages ${id}`); return 3; }),
       sourcePage: say('page'),
       warm: async () => {},
     } satisfies Manga;
@@ -138,9 +141,13 @@ describe('the daily prefetch', () => {
         'copies a',
         'cover sw:1',
         'chapters sw:1',
+        'pages sw:1.1',
+        'pages sw:1.2',
         'copies sw:1',
         'cover sw:2',
         'chapters sw:2',
+        'pages sw:2.1',
+        'pages sw:2.2',
         'copies sw:2',
         'series b',
         'places Beta beta',

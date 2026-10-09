@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { MANGA_KINDS, MANGA_PAGE, type MangaChapter, type MangaChapters, type MangaSort, type SourceCard, type SourceSeries } from '@breader/shared';
-import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
+import { MANGA_PAGE, type MangaChapter, type MangaChapters, type SourceCard, type SourceSeries } from '@breader/shared';
+import { freshly, Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
-import { WARM, wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
+import { wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { adultGenre, kindGenre, neverGenre, sideGenre, sideTitle, web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
 import { caughtUp, firstMissing, highest } from './readable.ts';
@@ -18,9 +18,13 @@ import { Speeds } from './speed.ts';
  * shows only series every chapter of can be read (readable.ts), never one tagged loli or shota,
  * those for adults only with 18+, doujinshi and anthologies only when asked, and only the kinds
  * asked for. Each series is judged by its own genres: a site that has some series for adults
- * isn't kept out whole. Pages and covers are kept on disk. Some sites let only so many calls
- * through, so each lot is timed (speed.ts), and browsing leaves out a source too slow, or keeps the
- * quickest when every one is; a search by name asks every one.
+ * isn't kept out whole. Pages and covers are kept on disk.
+ *
+ * Browsing reads each English source's shelves: its Popular and Updated lists, a few hundred series
+ * deep, every one checked ahead of readers (warm), so Browse is shown them without asking the site
+ * anything, however slow it is. Some sites let only so many calls through, so a lot that does ask
+ * one is timed (speed.ts), and browsing past a shelf, or a source with none yet, leaves out a source
+ * too slow, or keeps the quickest when every one is; a search by name asks every one.
  */
 
 const MINUTE = 60_000;
@@ -28,12 +32,20 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 /** How long lists, series, chapters and verdicts are kept on past their time, as MangaDex's are (mangadex.ts). */
 const KEPT = 3 * DAY;
+/** How long a chapter's pages are kept on: reopened in a week, it opens without asking the site first. */
+const PAGES_KEPT = 7 * DAY;
 /**
- * How long a lot it hasn't seen may take a source for it to be browsed. A lot waits only so long
- * for each place (find.ts), and one that's late shows with the next, but its first lots are checked
- * ahead of readers (warm), so most come straight away.
+ * How long a lot it hasn't seen may take a source for it to be browsed, past its shelves or before
+ * it has any. A lot waits only so long for each place (find.ts), and one that's late shows with the
+ * next.
  */
 const BROWSE_WITHIN = 25_000;
+/** How many of a list's series a shelf looks at: Browse's first screens of every kind, and a good way past. */
+const SHELF = 300;
+/** The most series a lot takes from each shelf: with two or three sources, some 50 cards of any one kind. */
+const SHELF_LOT = 40;
+/** Series checked at once for a shelf, so a reader's own calls to that site never wait long behind them. */
+const SHELVING = 3;
 /** Suwayomi's own folder of files, not a site: never a place to look. */
 const LOCAL = '0';
 /** The calls a lot is making of its source's site, counted as they're made, to time it by (lot()). */
@@ -93,6 +105,25 @@ interface RawChapter {
   sourceOrder: number;
 }
 
+/** A source's lists Browse shows: Popular, and Updated (New too) when it has one. */
+type List = 'POPULAR' | 'LATEST';
+
+/** A series on a shelf: its card, and the name it goes by there. */
+interface Shelved {
+  card: SourceCard;
+  names: string[];
+}
+
+/**
+ * One of a source's lists, as far as SHELF series, in its order. Only series that can be shown at
+ * all are on it, 18+ and doujinshi of every kind too, as what a reader asks for is picked from it.
+ */
+interface Shelf {
+  items: Shelved[];
+  /** The list's page after the last one shelved, or null when the list ended there. */
+  more: number | null;
+}
+
 export interface Suwayomi {
   /** A place for each source a search looks in. */
   places(w: Wanted): Promise<Place[]>;
@@ -103,7 +134,7 @@ export interface Suwayomi {
   /** Page n of a chapter, from 0. */
   page(chapterId: number, n: number): Promise<Picture>;
   cover(id: number): Promise<Picture>;
-  /** Checks the Popular and Updated first lots of each source quick enough to browse, ahead of readers. */
+  /** Shelves every English source's Popular and Updated lists ahead of readers, their covers too. */
   warm(): Promise<void>;
 }
 
@@ -198,6 +229,34 @@ function byNumber(a: RawChapter, b: RawChapter): number {
   return a.sourceOrder - b.sourceOrder;
 }
 
+/** The list a browse shows of a source: Updated and New its latest, when it has one, or else its popular. */
+function listOf(source: RawSource, w: Wanted): List {
+  const newest = w.sort === 'latest' || w.sort === 'new';
+  if (newest && source.supportsLatest) return 'LATEST';
+  return 'POPULAR';
+}
+
+/** A series a search wants by its card: 18+ and doujinshi only when asked, and only the kinds asked. */
+function wants(card: SourceCard, w: Wanted): boolean {
+  if (card.adult && !w.adult) return false;
+  if (card.side && !w.doujinshi) return false;
+  return wantedKind(card.kind, w);
+}
+
+/** fn for each of these, `n` at a time, the answers in their order. */
+async function inTurn<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const one = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, one));
+  return out;
+}
+
 export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   const fetchFn = opts.fetch ?? fetch;
   const base = opts.url.replace(/\/+$/, '');
@@ -222,7 +281,10 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   const seriesMemo = memo<RawSeries>('series', 6 * HOUR, 3000, KEPT);
   const chapterLists = memo<MangaChapter[]>('chapters', 10 * MINUTE, 300, KEPT);
   const verdicts = memo<boolean>('readable', DAY, 20_000, KEPT);
-  const pageLists = memo<string[]>('pages', 10 * MINUTE, 500);
+  const pageLists = memo<string[]>('pages', 10 * MINUTE, 2000, PAGES_KEPT);
+  const shelfMemo = memo<Shelf>('shelf', KEPT, 50);
+  /** The shelves, as read or last made: this process is the only one making them. */
+  const shelves = new Map<string, Shelf>();
   /** Which source each series is from, and which series each chapter is in: they never change. */
   const seriesSource = memo<string>('series-source', 30 * DAY, 100_000);
   const chapterSeries = memo<number>('chapter-series', 30 * DAY, 100_000);
@@ -356,26 +418,29 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     });
   }
 
-  function pageList(chapterId: number, source: string): Promise<string[]> {
-    return pageLists.get(String(chapterId), async () => {
+  /** A chapter's pages. fresh: asked of the site again, whatever's kept. */
+  function pageList(chapterId: number, source: string, fresh = false): Promise<string[]> {
+    const make = async () => {
       const r = await ask<{ fetchChapterPages: { pages: string[] } }>(PAGES, { id: chapterId }, source);
       return r.fetchChapterPages.pages.filter((p) => PAGE_PATH.test(p));
-    });
+    };
+    return pageLists.get(String(chapterId), make, fresh);
   }
 
-  /** Its source's results for a search, a page of them, kept a while. */
-  function searchPage(source: RawSource, w: Wanted, page: number): Promise<SearchPage> {
-    let type = 'POPULAR';
-    const newest = w.sort === 'latest' || w.sort === 'new';
-    if (w.q) type = 'SEARCH';
-    else if (newest && source.supportsLatest) type = 'LATEST';
-    const key = [source.id, type, page, w.q ?? ''].join(':');
+  /** A page of one of a source's lists, or of its results for a search, kept a while. */
+  function listPage(source: RawSource, type: List | 'SEARCH', page: number, q = ''): Promise<SearchPage> {
+    const key = [source.id, type, page, q].join(':');
     return searches.get(key, async () => {
       const input: Record<string, unknown> = { source: source.id, type, page };
-      if (w.q) input.query = w.q;
+      if (q) input.query = q;
       const r = await ask<{ fetchSourceManga: SearchPage }>(SEARCH, { input }, source.id);
       return r.fetchSourceManga;
     });
+  }
+
+  function searchPage(source: RawSource, w: Wanted, page: number): Promise<SearchPage> {
+    if (w.q) return listPage(source, 'SEARCH', page, w.q);
+    return listPage(source, listOf(source, w), page);
   }
 
   /** A series a search found, when it's one to show. */
@@ -384,12 +449,112 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     const m = await rawSeries(id, source.id);
     if (neverGenre(m.genre)) return null;
     const card = cardOf(m);
-    if (card.adult && !w.adult) return null;
-    if (card.side && !w.doujinshi) return null;
-    if (!wantedKind(card.kind, w)) return null;
+    if (!wants(card, w)) return null;
     const ok = await readable(m, source.id);
     if (!ok) return null;
     return { item: { kind: 'source', source: source.name, card }, names: [m.title] };
+  }
+
+  /** A series a source lists, when it can be shown at all, whoever asks. */
+  async function shelved(id: number, source: string): Promise<Shelved | null> {
+    seriesSource.set(String(id), source);
+    const m = await rawSeries(id, source);
+    if (neverGenre(m.genre)) return null;
+    if (!(await readable(m, source))) return null;
+    return { card: cardOf(m), names: [m.title] };
+  }
+
+  async function shelfOf(source: string, list: List): Promise<Shelf | null> {
+    const key = `${source}:${list}`;
+    const had = shelves.get(key);
+    if (had) return had;
+    const kept = await shelfMemo.peek(key);
+    if (!kept) return null;
+    shelves.set(key, kept);
+    return kept;
+  }
+
+  function putShelf(source: string, list: List, shelf: Shelf) {
+    const key = `${source}:${list}`;
+    shelves.set(key, shelf);
+    shelfMemo.set(key, shelf);
+  }
+
+  /**
+   * A source's list on its shelf, page by page down to SHELF series, each checked as a search would.
+   * The first time, each page shows as soon as it's checked. Its first page not coming, the shelf
+   * it had stays; a later one not coming, it ends there.
+   */
+  async function shelve(source: RawSource, list: List): Promise<Shelved[]> {
+    const had = await shelfOf(source.id, list);
+    const items: Shelved[] = [];
+    const seen = new Set<number>();
+    let looked = 0;
+    let more: number | null = 1;
+    while (more !== null && looked < SHELF) {
+      const page: number = more;
+      let listed: SearchPage;
+      try {
+        listed = await listPage(source, list, page);
+      } catch (err) {
+        if (page === 1) throw err;
+        break;
+      }
+      looked += listed.mangas.length;
+      const fresh = listed.mangas.filter((x) => !seen.has(x.id));
+      for (const x of fresh) seen.add(x.id);
+      // One that can't be checked now is left off until next time.
+      const each = await inTurn(fresh, SHELVING, (x) => shelved(x.id, source.id).catch(() => null));
+      for (const s of each) {
+        if (s) items.push(s);
+      }
+      more = null;
+      if (listed.hasNextPage && listed.mangas.length > 0) more = page + 1;
+      if (!had && items.length > 0) putShelf(source.id, list, { items: [...items], more });
+    }
+    if (items.length > 0) putShelf(source.id, list, { items, more });
+    return items;
+  }
+
+  /** A source's lists shelved, then the covers on them kept on disk, one at a time, as pages read come first. */
+  async function shelveSource(source: RawSource) {
+    const lists: List[] = ['POPULAR'];
+    if (source.supportsLatest) lists.push('LATEST');
+    const covers = new Set<number>();
+    for (const list of lists) {
+      try {
+        for (const s of await shelve(source, list)) covers.add(Number(s.card.id.slice(3)));
+      } catch (err) {
+        log.warn({ err, source: source.name, list }, 'a source’s list couldn’t be shelved');
+      }
+    }
+    for (const id of covers) {
+      if (await opts.disk.has(`sw-cover:${id}`)) continue;
+      try {
+        await coverOf(id);
+      } catch {
+        // Fetched when a reader's Browse asks for it instead.
+      }
+    }
+  }
+
+  /**
+   * Up to SHELF_LOT of a shelf's series a search wants, from the n-th on. Past the shelf, the list
+   * carries on from the site, while it's quick enough to ask.
+   */
+  function shelfLot(source: RawSource, shelf: Shelf, w: Wanted, from: number): Lot {
+    const found: Found[] = [];
+    let i = from;
+    while (i < shelf.items.length && found.length < SHELF_LOT) {
+      const s = shelf.items[i];
+      i += 1;
+      if (!wants(s.card, w)) continue;
+      found.push({ item: { kind: 'source', source: source.name, card: s.card }, names: s.names });
+    }
+    let next: string | null = null;
+    if (i < shelf.items.length) next = `s${i}`;
+    else if (shelf.more !== null && speeds.quick(source.id, within)) next = String(shelf.more);
+    return { found, next };
   }
 
   /** The sources a browse asks: those quick enough, or when not one is, the quickest. */
@@ -420,8 +585,19 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     else log.info({ source: source.name, seconds }, 'a source is left out of browsing, as a lot it hasn’t seen takes it too long');
   }
 
-  /** A search's next lot from a source, timed by the calls it made of the site. */
+  /**
+   * A search's next lot from a source. Browsing, from its shelf, where s40 is past its first 40;
+   * otherwise from its site, timed by the calls it made of it.
+   */
   async function lot(source: RawSource, w: Wanted, at: string): Promise<Lot> {
+    if (!w.q && !w.names && (at === '0' || at.startsWith('s'))) {
+      const shelf = await shelfOf(source.id, listOf(source, w));
+      let from = 0;
+      if (at.startsWith('s')) from = Number(at.slice(1));
+      if (shelf) return shelfLot(source, shelf, w, from);
+      // Its shelf is gone: the list from its start.
+      at = '0';
+    }
     const made = { calls: 0 };
     const started = Date.now();
     const answer = await tally.run(made, () => lotFrom(source, w, at));
@@ -469,30 +645,6 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     return { found, next };
   }
 
-  /**
-   * A source's Popular and Updated first lots, checked ahead of readers as Browse first opens: in
-   * English, nothing else on. Lot by lot, timed like a reader's, so a source no longer browsed (one
-   * of `english`) is left there.
-   */
-  async function warmSource(source: RawSource, english: RawSource[]) {
-    const sorts: MangaSort[] = ['popular'];
-    if (source.supportsLatest) sorts.push('latest');
-    try {
-      for (const sort of sorts) {
-        const w: Wanted = { lang: 'en', sort, adult: false, doujinshi: false, kinds: [...MANGA_KINDS] };
-        let at: string | null = '0';
-        for (let n = 0; n < WARM / MANGA_PAGE; n++) {
-          if (at === null) break;
-          if (!browsed(english).includes(source)) return;
-          const answer: Lot = await lot(source, w, at);
-          at = answer.next;
-        }
-      }
-    } catch (err) {
-      log.warn({ err, source: source.name }, 'checking a source’s first lots ahead stopped');
-    }
-  }
-
   /** A picture Suwayomi serves: a page, or a cover. */
   async function picture(path: string): Promise<Picture> {
     try {
@@ -516,6 +668,11 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     }
   }
 
+  async function coverOf(id: number): Promise<Picture> {
+    await allowed(id);
+    return opts.disk.keep(`sw-cover:${id}`, () => picture(`/api/v1/manga/${id}/thumbnail`));
+  }
+
   return {
     async places(w) {
       let asked: RawSource[] = [];
@@ -523,8 +680,19 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
         if (w.lang && s.lang.toLowerCase() !== w.lang) continue;
         asked.push(s);
       }
-      // Browsing, only the sources quick enough. A search by name asks every one.
-      if (!w.q) asked = browsed(asked);
+      // Browsing, every source with a shelf, and of the rest only those quick enough (or the
+      // quickest, when there's no shelf at all). A search by name asks every one.
+      if (!w.q) {
+        const withShelf: RawSource[] = [];
+        const rest: RawSource[] = [];
+        for (const s of asked) {
+          if (await shelfOf(s.id, listOf(s, w))) withShelf.push(s);
+          else rest.push(s);
+        }
+        let live = rest.filter((s) => speeds.quick(s.id, within));
+        if (withShelf.length === 0) live = browsed(rest);
+        asked = [...withShelf, ...live];
+      }
       const out: Place[] = [];
       for (const s of asked) {
         out.push({ key: `sw${s.id}`, name: s.name, lot: (at) => lot(s, w, at) });
@@ -537,9 +705,10 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       warming = true;
       try {
         const english = (await sources()).filter((s) => s.lang.toLowerCase() === 'en');
-        await Promise.all(english.map((s) => warmSource(s, english)));
+        // Brought up to date and waited for in turn, not all at once behind what's kept.
+        await freshly(() => Promise.all(english.map((s) => shelveSource(s))));
       } catch (err) {
-        log.warn({ err }, 'checking the sources’ first lots ahead stopped');
+        log.warn({ err }, 'shelving the sources’ lists stopped');
       } finally {
         warming = false;
       }
@@ -568,14 +737,19 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       const { source } = await allowed(await seriesOf(chapterId));
       return opts.disk.keep(`sw-page:${chapterId}:${n}`, async () => {
         const paths = await pageList(chapterId, source);
-        if (n >= paths.length) throw noPage();
-        return picture(paths[n]);
+        try {
+          if (n >= paths.length) throw noPage();
+          return await picture(paths[n]);
+        } catch (e) {
+          if (e instanceof ApiError && e.code === 'manga_busy') throw e;
+          // Its pages kept from a while ago, the site may have moved them since: asked again, once.
+          const fresh = await pageList(chapterId, source, true);
+          if (n >= fresh.length) throw noPage();
+          return picture(fresh[n]);
+        }
       });
     },
 
-    async cover(id) {
-      await allowed(id);
-      return opts.disk.keep(`sw-cover:${id}`, () => picture(`/api/v1/manga/${id}/thumbnail`));
-    },
+    cover: coverOf,
   };
 }

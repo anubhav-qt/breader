@@ -4,7 +4,7 @@ import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { copiesOf, measure } from './copies.ts';
 import { Disk, type Picture } from './disk.ts';
-import { find, type Place, type Wanted } from './find.ts';
+import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
 import { makeMangaDex } from './mangadex.ts';
 import { makeSuwayomi, type Suwayomi } from './suwayomi.ts';
 
@@ -32,7 +32,7 @@ export interface Manga {
   sourcePage(chapterId: string, n: number): Promise<Picture>;
   /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:12) in its own. */
   copies(id: string, lang: string): Promise<MangaCopies>;
-  /** Checks the Popular and Updated first lots ahead of readers: each source's quick enough to browse, or MangaDex's without Suwayomi. */
+  /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi. */
   warm(): Promise<void>;
 }
 
@@ -145,7 +145,10 @@ export function makeManga(opts: MangaOptions): Manga {
       }
       // A search by name asks MangaDex too. Browsing asks it only when there's no source to browse.
       if (w.q || places.length === 0) places.push(dex.place(w));
-      return find(places, w.q, q.next);
+      // A sheet looking for its series' other copies waits for every place; a reader sees what's come.
+      let grace: number | null = GRACE;
+      if (w.names) grace = null;
+      return find(places, w.q, q.next, DEADLINE, grace);
     },
 
     series: (id, adult) => dex.series(id, adult),

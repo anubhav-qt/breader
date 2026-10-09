@@ -57,6 +57,12 @@ export class Disk {
     await this.trim();
   }
 
+  /** Whether it's kept, without reading it or counting it as used. */
+  async has(key: string): Promise<boolean> {
+    await this.ready;
+    return this.index.has(this.nameOf(key));
+  }
+
   async get(key: string): Promise<Picture | null> {
     await this.ready;
     const name = this.nameOf(key);
