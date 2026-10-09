@@ -133,7 +133,7 @@ export function MangaZoom({ look, rtl, onClose, onBeyond, backTo }: Props) {
   const [fits] = useState(() => steps.map((b) => fitOf(b, ratio, mostOf(look), vw, vh)));
   // Laid out as wide as it's ever shown here, so it's only ever made smaller, and stays sharp.
   const [wide] = useState(() => Math.max(first.s, ...fits.map((f) => f.s)));
-  const [panning, setPanning] = useState(first.box === null);
+  const panning = first.box === null;
   const stepping = steps.length > 0 && !!look.shown;
   /** The steps showing now. */
   const shown = useRef(look.shown);
@@ -180,7 +180,6 @@ export function MangaZoom({ look, rtl, onClose, onBeyond, backTo }: Props) {
       return;
     }
     shown.current = { from: k, to: k };
-    setPanning(false);
     void go({ ...placed(fits[k]), clip: clipOf(steps[k]), fade: 1 }, GLIDE);
   };
   const stepRef = useRef(step);

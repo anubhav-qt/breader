@@ -8,7 +8,7 @@ import { frameAt, framesKnown, framesSoon, type Box } from './frames';
 import { PanelPicture } from './MangaPanels';
 import { MangaZoom, type Look } from './MangaZoom';
 import type { MangaDir, MangaLayout } from './settings';
-import { WHOLE, fallbackOf, shownOf, stepAt, stepsOf } from './steps';
+import { WHOLE, shownOf, stepsOf } from './steps';
 import { runTurn } from './turn';
 
 /*
@@ -581,7 +581,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const img = pics.image(i);
     if (!url || !img) return null;
     const frames = await framesSoon(img);
-    return stepsOf(frames, rtl, fallbackOf());
+    return stepsOf(frames, rtl);
   }, [pics, rtl]);
 
   /** Page i's steps, when its panels have been found already. */
@@ -590,7 +590,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     if (!img) return null;
     const frames = framesKnown(img);
     if (!frames) return null;
-    return stepsOf(frames, rtl, fallbackOf());
+    return stepsOf(frames, rtl);
   }, [pics, rtl]);
 
   /** Panels: the page's steps and the one shown. Until its panels are found, the page shows whole. */
@@ -726,8 +726,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   /**
    * Brings a page closer: the panels drawn together at a point on its picture, the one panel there,
    * or the page around it. False when there's no panel there. From a panel (or panels), the arrows
-   * step on through the page's others. Held where none can be told apart, a page falls back as the
-   * fallback picked says (steps.ts).
+   * step on through the page's others. Held where none can be told apart, the page is fitted whole,
+   * and the arrows go on to the next.
    */
   const zoom = async (img: HTMLImageElement, cx: number, cy: number, what: 'group' | 'panel' | 'page'): Promise<boolean> => {
     // Turned away from while the taps were counted.
@@ -742,8 +742,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     let shown: { from: number; to: number } | undefined;
     if (what !== 'page') {
       const frames = await framesSoon(img);
-      const fallback = fallbackOf();
-      steps = stepsOf(frames, rtl, fallback);
+      steps = stepsOf(frames, rtl);
       const hit = frameAt(frames, x, y);
       if (hit) {
         box = hit.panel;
@@ -751,12 +750,9 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
         shown = shownOf(steps, box) ?? undefined;
       } else if (what === 'group') {
         return false;
-      } else if (fallback === 'closer') {
-        shown = { from: 0, to: steps.length - 1 };
       } else {
-        const k = stepAt(steps, x, y);
-        box = steps[k];
-        shown = { from: k, to: k };
+        box = WHOLE;
+        shown = { from: 0, to: 0 };
       }
     }
     // Turned away from while its panels were looked for.

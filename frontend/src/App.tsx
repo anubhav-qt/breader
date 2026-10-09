@@ -36,7 +36,6 @@ import { urlOf } from './features/manga/copies';
 import { MangaSheet, type About, type Picked } from './features/manga/MangaSheet';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { OwnLibraryMenu } from './features/shared/OwnLibraryMenu';
-import { FALLBACK, fallbackOf, type Fallback } from './features/reader/steps';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
@@ -162,8 +161,6 @@ export default function App() {
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
-  /** What a manga page held off its panels does, to try each (steps.ts reads it from the link). */
-  const [held, setHeld] = useState<Fallback>(() => fallbackOf());
   const labels = useLabels();
   /** Manga's covers without their titles: off until the reader turns it on, then kept on this device. */
   const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
@@ -201,7 +198,6 @@ export default function App() {
     writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
-  useEffect(() => { if (devTools) writeParam('held', held, FALLBACK); }, [held]);
 
   // Back from Google, or from a link in one of Breader's emails.
   useEffect(() => {
@@ -1260,8 +1256,6 @@ export default function App() {
           onMode={setPreview}
           theme={theme}
           onTheme={setTheme}
-          held={held}
-          onHeld={setHeld}
           onReset={() => void lib.reset()}
         />
       )}
