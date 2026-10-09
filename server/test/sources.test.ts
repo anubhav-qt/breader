@@ -315,7 +315,8 @@ describe('one search everywhere', () => {
   });
 
   it('shows only the kinds asked, by a series’ genres or first language, one of no known kind only with every kind', async () => {
-    const { b, sw, dexCalls } = await setup(['Dex Manga', 'Dex Manhwa', 'Dex Comic'], undefined, { 'Dex Manhwa': 'ko', 'Dex Comic': 'en' });
+    // Every title has what's searched for in it: a search by name shows only those.
+    const { b, sw, dexCalls } = await setup(['Dex Source Manga', 'Dex Source Manhwa', 'Dex Source Comic'], undefined, { 'Dex Source Manhwa': 'ko', 'Dex Source Comic': 'en' });
     sw.state.series = [
       { id: 1, source: '11', title: 'Source Manga', genre: ['Manga', 'Action'] },
       { id: 2, source: '11', title: 'Source Manhwa', genre: ['Action', 'Manwha'] },
@@ -325,18 +326,18 @@ describe('one search everywhere', () => {
     const kinds = (body: { items: MangaFound[] }) => body.items.map((x) => `${x.card.title}: ${x.card.kind}`).sort();
     const all = await b.get('/v1/manga/search?q=source');
     expect(kinds(all.body)).toEqual([
-      'Dex Comic: comics',
-      'Dex Manga: manga',
-      'Dex Manhwa: manhwa',
+      'Dex Source Comic: comics',
+      'Dex Source Manga: manga',
+      'Dex Source Manhwa: manhwa',
       'Source Manga: manga',
       'Source Manhua: manhua',
       'Source Manhwa: manhwa',
       'Source Untyped: null',
     ]);
     const some = await b.get('/v1/manga/search?q=source&kinds=manhwa,manga');
-    expect(kinds(some.body)).toEqual(['Dex Manga: manga', 'Dex Manhwa: manhwa', 'Source Manga: manga', 'Source Manhwa: manhwa']);
+    expect(kinds(some.body)).toEqual(['Dex Source Manga: manga', 'Dex Source Manhwa: manhwa', 'Source Manga: manga', 'Source Manhwa: manhwa']);
     const comics = await b.get('/v1/manga/search?q=source&kinds=comics');
-    expect(kinds(comics.body)).toEqual(['Dex Comic: comics']);
+    expect(kinds(comics.body)).toEqual(['Dex Source Comic: comics']);
     // MangaDex is asked for those first published in their languages, or for any but the others'.
     const lists = dexCalls.filter((u) => u.pathname === '/manga');
     expect(lists).toHaveLength(3);
@@ -506,8 +507,8 @@ describe('a series’ copies', () => {
     expect(r.body).toEqual({
       chapters: 4,
       copies: [
-        { group: { id: 'official', name: 'official' }, chapters: 4, width: 700, height: 1600 },
-        { group: { id: 'unofficial', name: 'unofficial' }, chapters: 4, width: 1067, height: 1600 },
+        { group: { id: 'official', name: 'Official' }, chapters: 4, width: 700, height: 1600 },
+        { group: { id: 'unofficial', name: 'Unofficial' }, chapters: 4, width: 1067, height: 1600 },
       ],
     });
     // Two pages from the middle of chapter 3 in each.
