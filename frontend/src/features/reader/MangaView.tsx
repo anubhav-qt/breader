@@ -581,8 +581,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const img = pics.image(i);
     if (!url || !img) return null;
     const frames = await framesSoon(img);
-    return stepsOf(frames, rtl);
-  }, [pics, rtl]);
+    return stepsOf(frames);
+  }, [pics]);
 
   /** Page i's steps, when its panels have been found already. */
   const stepsKnown = useCallback((i: number): Box[] | null => {
@@ -590,8 +590,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     if (!img) return null;
     const frames = framesKnown(img);
     if (!frames) return null;
-    return stepsOf(frames, rtl);
-  }, [pics, rtl]);
+    return stepsOf(frames);
+  }, [pics]);
 
   /** Panels: the page's steps and the one shown. Until its panels are found, the page shows whole. */
   const [step, setStep] = useState<{ page: number; k: number; steps: Box[] } | null>(null);
@@ -742,7 +742,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     let shown: { from: number; to: number } | undefined;
     if (what !== 'page') {
       const frames = await framesSoon(img);
-      steps = stepsOf(frames, rtl);
+      steps = stepsOf(frames);
       const hit = frameAt(frames, x, y);
       if (hit) {
         box = hit.panel;

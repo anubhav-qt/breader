@@ -1,9 +1,9 @@
 /*
  * A manga page's panels, found in its picture, and the order they're read in. The page is cut
  * along its gutters, straight or slanted, again and again: into rows read top to bottom where a
- * gutter runs all the way across, into columns read right to left (left to right for comics)
- * where one runs all the way down instead, and each of those the same way. What can't be cut
- * further is a panel.
+ * gutter runs all the way across, into columns read right to left where one runs all the way down
+ * instead, and each of those the same way. What can't be cut further is a panel. The order is the
+ * same whichever way the pages turn: that only swaps which side goes on.
  *
  * A gutter is a band of paper with a panel's edge close by on both sides, or a thin black band
  * (some pages draw their gutters black). A balloon or a character drawn over a gutter still lets
@@ -26,11 +26,10 @@ export interface Group {
   panels: Box[];
 }
 
-/** A page's groups, and its panels in the order they're read, right to left and left to right. */
+/** A page's groups, and its panels in the order they're read. */
 export interface Frames {
   groups: Group[];
-  rtl: Box[];
-  ltr: Box[];
+  panels: Box[];
 }
 
 /** Pictures are looked at about this wide at most (a page, not a spread): plenty to find gutters in, and quick to go over. */
@@ -755,17 +754,17 @@ function within(r: Rect, panels: Rect[]): boolean {
   return panels.some((o) => o !== r && sizeOf(o) >= sizeOf(r) && shareIn(r, o) >= INSIDE);
 }
 
-/** The panels of a cut page in the order they're read: rows top to bottom, and across them right to left, or left to right. */
-function orderOf(node: Node, rtl: boolean): Rect[] {
+/** The panels of a cut page in the order they're read: rows top to bottom, and across them right to left. */
+function orderOf(node: Node): Rect[] {
   if ('panel' in node) return [node.panel];
   let kids = node.kids;
-  if (!node.across && rtl) kids = [...kids].reverse();
-  return kids.flatMap((k) => orderOf(k, rtl));
+  if (!node.across) kids = [...kids].reverse();
+  return kids.flatMap((k) => orderOf(k));
 }
 
 /** The page's groups of panels, and its panels in order: none when nothing on it can be told apart. */
 export function framesIn(pic: Picture): Frames {
-  const none = { groups: [], rtl: [], ltr: [] };
+  const none = { groups: [], panels: [] };
   const { w, h } = pic;
   const page = trimOf(pic);
   const ring = ringOf(page, w);
@@ -775,16 +774,15 @@ export function framesIn(pic: Picture): Frames {
   const tree = new Cutter(pic, out, page).cut(page);
   if (!tree) return none;
   const small = SMALLEST * w * h;
-  const big = orderOf(tree, true).filter((r) => sizeOf(r) >= small);
-  const rtl = big.filter((r) => !within(r, big));
+  const big = orderOf(tree).filter((r) => sizeOf(r) >= small);
+  const order = big.filter((r) => !within(r, big));
   // One panel the size of the page is no panel at all: nothing on it could be told apart.
-  if (rtl.length < 2) return none;
-  const ltr = orderOf(tree, false).filter((r) => rtl.includes(r));
+  if (order.length < 2) return none;
 
   // Panels whose drawing joins across a gutter are a group: the stretch of drawing most of each is in.
   const { label, found } = drawings(pic, out, queue);
   const byDrawing = new Map<number, Rect[]>();
-  for (const r of rtl) {
+  for (const r of order) {
     const count = new Map<number, number>();
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
@@ -811,13 +809,13 @@ export function framesIn(pic: Picture): Frames {
     if (d) r = { x0: Math.min(r.x0, d.x0), y0: Math.min(r.y0, d.y0), x1: Math.max(r.x1, d.x1), y1: Math.max(r.y1, d.y1) };
     groups.push({ box: boxOf(r, w, h), panels: panels.map((p) => boxOf(p, w, h)) });
   }
-  return { groups, rtl: rtl.map((r) => boxOf(r, w, h)), ltr: ltr.map((r) => boxOf(r, w, h)) };
+  return { groups, panels: order.map((r) => boxOf(r, w, h)) };
 }
 
 /** The page's groups of panels and their order: none when nothing on it can be told apart. */
 export function framesOf(img: HTMLImageElement): Frames {
   const pic = greysOf(img);
-  if (!pic) return { groups: [], rtl: [], ltr: [] };
+  if (!pic) return { groups: [], panels: [] };
   return framesIn(pic);
 }
 
@@ -850,7 +848,7 @@ export function frameAt(frames: Frames, x: number, y: number): { group: Box; pan
     const panel = nearest(hit.panels, x, y) ?? hit.box;
     return { group: hit.box, panel };
   }
-  const panel = nearest(frames.rtl, x, y);
+  const panel = nearest(frames.panels, x, y);
   if (!panel) return null;
   const group = frames.groups.find((g) => g.panels.some((p) => same(p, panel)));
   return { group: group?.box ?? panel, panel };
@@ -863,7 +861,7 @@ export function same(a: Box, b: Box): boolean {
   return Math.abs(a.w - b.w) <= near && Math.abs(a.h - b.h) <= near;
 }
 
-const none: Frames = { groups: [], rtl: [], ltr: [] };
+const none: Frames = { groups: [], panels: [] };
 
 /** Pages' frames, by their picture, looked for once each, and those found already. */
 const seen = new Map<string, Promise<Frames>>();
