@@ -4,9 +4,11 @@ import { WORDS_PER_MANGA_PAGE } from '../../books/manga';
 import type { MangaBook, Position, RemoteChapter } from '../../books/types';
 import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
-import { frameAt, framesFor } from './frames';
+import { frameAt, framesKnown, framesSoon, type Box } from './frames';
+import { PanelPicture } from './MangaPanels';
 import { MangaZoom, type Look } from './MangaZoom';
-import type { Layout, MangaDir } from './settings';
+import type { MangaDir, MangaLayout } from './settings';
+import { WHOLE, fallbackOf, shownOf, stepAt, stepsOf } from './steps';
 import { runTurn } from './turn';
 
 /*
@@ -21,12 +23,15 @@ import { runTurn } from './turn';
  * A click on a panel brings it (and any drawn together with it) to the middle of the screen; three
  * clicks or a long press, just the one panel. Two clicks bring the page closer around them. On a
  * touch screen a tap is the reader's, for the controls, so it's two taps that bring the panels
- * closer (or the page, off a panel), and three the one panel.
+ * closer (or the page, off a panel), and three the one panel. From a panel, the arrows go on to the
+ * next in the order it's read, and past a page's last, the page underneath turns to the next one's
+ * first. In panels, a page is read that way from the start, a panel at a time, each fitted to the
+ * screen, the arrows, keys and swipes that turn pages stepping through them instead.
  */
 
 interface Props {
   book: MangaBook;
-  layout: Layout;
+  layout: MangaLayout;
   dir: MangaDir;
   /** Scrolled: the column at its widest. */
   width: number;
@@ -157,6 +162,11 @@ class Pictures {
     return img?.naturalWidth ? img.naturalHeight / img.naturalWidth : 0;
   }
 
+  /** Page i's picture as it's drawn off screen, once it's opened. */
+  image(i: number): HTMLImageElement | null {
+    return this.drawn.get(i) ?? null;
+  }
+
   /** Page i's picture, or null when it won't open. */
   get(i: number): Promise<string | null> {
     let u = this.urls.get(i);
@@ -210,6 +220,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   // A series opened a few chapters at a time counts the words of all of it, not those open.
   const per = WORDS_PER_MANGA_PAGE;
   const rtl = dir === 'rtl';
+  /** Turned a page (or a panel) at a time, rather than scrolled. */
+  const paged = layout !== 'scroll';
   const [at, setAt] = useState<At>(() => startAt(start, total, book));
   const [size, setSize] = useState({ w: 0, h: 0 });
   /** Each page's height over its width, 0 until known. */
@@ -348,8 +360,10 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     return { tops, heights, height: y + ((bands.get(total)?.length ?? 0) + (next ? 1 : 0)) * BAND + TAIL };
   }, [ratio, total, colW, bands, prev, next]);
 
-  // The width the controls line up with: steady from page to page.
-  const pageW = layout === 'pages' ? Math.min(areaW, ((two ? 2 : 1) * areaH) / typical) : colW;
+  // The width the controls line up with: steady from page to page, and in panels, the screen's.
+  let pageW = colW;
+  if (layout === 'pages') pageW = Math.min(areaW, ((two ? 2 : 1) * areaH) / typical);
+  if (layout === 'panels') pageW = areaW;
   useEffect(() => { if (pageW > 0) onWidth(pageW); }, [onWidth, pageW]);
 
   // Scrolled: the pages near the screen, to show.
@@ -438,7 +452,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   useEffect(() => () => pics.keep(1, 0), [pics]);
   const [srcs, setSrcs] = useState<ReadonlyMap<number, string | null>>(() => new Map());
   const s = spreadAt[Math.min(total - 1, at.page)];
-  const [wantFrom, wantTo] = layout === 'pages'
+  const [wantFrom, wantTo] = paged
     ? [spreads[Math.max(0, s - 1)]?.[0] ?? 0, spreads[Math.min(spreads.length - 1, s + 2)]?.slice(-1)[0] ?? total - 1]
     : [win[0], win[1] + 4];
   useEffect(() => {
@@ -461,11 +475,19 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     return () => { live = false; };
   }, [pics, wantFrom, wantTo, total, shaped]);
 
+  // The panels of the pages about the one read, found ahead, so a panel held or stepped to is there at once.
   useEffect(() => {
-    const shown = layout === 'pages' ? spread : [at.page];
+    for (const i of [at.page, at.page + 1, at.page - 1, at.page + 2]) {
+      const img = pics.image(i);
+      if (srcs.get(i) && img) void framesSoon(img);
+    }
+  }, [srcs, at.page, pics]);
+
+  useEffect(() => {
+    const shown = paged ? spread : [at.page];
     const first = shown[0];
     const last = shown[shown.length - 1];
-    const end = layout === 'pages' ? last >= total - 1 : at.end;
+    const end = paged ? last >= total - 1 : at.end;
     const exact = layout === 'scroll' ? at.page + at.frac : first;
     // Of a series opened a few chapters at a time, how far through all of it.
     const progress = book.progressOf ? book.progressOf(exact, end) : end ? 1 : exact / total;
@@ -478,7 +500,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       offset: layout === 'scroll' ? Math.round(at.frac * 1000) : 0,
       progress,
       sectionWordsLeft: Math.round(Math.max(1, nextAt - exact) * per),
-      bookWordsLeft: book.progressOf ? Math.round((1 - progress) * book.words) : end ? 0 : Math.round((total - (layout === 'pages' ? last + 1 : exact)) * per),
+      bookWordsLeft: book.progressOf ? Math.round((1 - progress) * book.words) : end ? 0 : Math.round((total - (paged ? last + 1 : exact)) * per),
       line: ch ? `${chapterOf(ch, book.remote!.chapters)}, page ${first - ch.first + 1} of ${ch.pages}` : `Page ${first + 1} of ${total}`,
       page: first,
       pages: total,
@@ -486,7 +508,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     });
     // The spread is new each time pages change shape; its first and last pages are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [at, layout, spread[0], spread[spread.length - 1], total, per, book]);
+  }, [at, layout, paged, spread[0], spread[spread.length - 1], total, per, book]);
 
   // Opened a few chapters at a time: nearing the last of them, the next few open, and the pages carry
   // on past these as though they'd been there all along. Once a book: if they won't open, its last
@@ -509,8 +531,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     );
   }, [at.page, book, onGrow]);
 
-  /** Goes to a page (and scrolled, that far down it). */
-  const goTo = useCallback(async (p: number, frac = 0) => {
+  /** Goes to a page (and scrolled, that far down it), and in pages, `also` changes what else shows with it as it turns. */
+  const goTo = useCallback(async (p: number, frac = 0, also?: () => void) => {
     const page = Math.max(0, Math.min(total - 1, p));
     if (layout === 'scroll') {
       const el = scrollRef.current;
@@ -532,7 +554,10 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     // A later turn took over.
     if (goal.current !== target[0]) return;
     const d: 1 | -1 = to > from ? 1 : -1;
-    const el = rootRef.current?.querySelector('.mg-spread');
+    // In panels, the room the page is shown in turns, as the panel shown fills it.
+    let shownIn = '.mg-spread';
+    if (layout === 'panels') shownIn = '.mg-panels';
+    const el = rootRef.current?.querySelector(shownIn);
     const rect = el?.getBoundingClientRect();
     if (rect) onTurn?.({ dir: d, chapter: Math.abs(to - from) > 1, rect });
     anchor.current = { page: target[0], frac: 0 };
@@ -541,13 +566,86 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       flushSync(() => {
         if (urls) setSrcs((m) => { const next = new Map(m); target.forEach((i, k) => next.set(i, urls[k])); return next; });
         setAt({ page: target[0], frac: 0, end: false });
+        also?.();
       });
       // Until here, a turn pressed again goes on from this one.
       if (goal.current === target[0]) goal.current = null;
-      const imgs = Array.from(rootRef.current?.querySelectorAll<HTMLImageElement>('.mg-spread img') ?? []);
+      const imgs = Array.from(rootRef.current?.querySelectorAll<HTMLImageElement>(`${shownIn} img`) ?? []);
       await Promise.race([Promise.all(imgs.map((im) => im.decode().catch(() => {}))), wait(700)]);
     }, rect);
   }, [layout, total, tops, heights, spreadAt, spreads, at.page, pics, rtl, onTurn]);
+
+  /** Page i's steps, in the order they're read (steps.ts), once its picture's open and its panels found; null when it won't open. */
+  const stepsFor = useCallback(async (i: number): Promise<Box[] | null> => {
+    const url = await pics.get(i);
+    const img = pics.image(i);
+    if (!url || !img) return null;
+    const frames = await framesSoon(img);
+    return stepsOf(frames, rtl, fallbackOf());
+  }, [pics, rtl]);
+
+  /** Page i's steps, when its panels have been found already. */
+  const stepsKnown = useCallback((i: number): Box[] | null => {
+    const img = pics.image(i);
+    if (!img) return null;
+    const frames = framesKnown(img);
+    if (!frames) return null;
+    return stepsOf(frames, rtl, fallbackOf());
+  }, [pics, rtl]);
+
+  /** Panels: the page's steps and the one shown. Until its panels are found, the page shows whole. */
+  const [step, setStep] = useState<{ page: number; k: number; steps: Box[] } | null>(null);
+  /** The step shown, or the one a turn on its way will show, so steps pressed quickly follow on from it. */
+  const stepNow = useRef(step);
+  useEffect(() => { stepNow.current = step; }, [step]);
+  /** Panels: a page turned back to, before its panels were found, opens at its last step once they are. */
+  const landLast = useRef(false);
+
+  // Panels: a page come to otherwise (opened, or gone to from the contents) starts at its first step, once its panels are found.
+  useEffect(() => {
+    if (layout !== 'panels') return;
+    if (step && step.page === at.page) return;
+    if (!srcs.get(at.page)) return;
+    let live = true;
+    const page = at.page;
+    void stepsFor(page).then((steps) => {
+      if (!live || !steps) return;
+      let k = 0;
+      if (landLast.current) k = steps.length - 1;
+      landLast.current = false;
+      setStep({ page, k, steps });
+    });
+    return () => { live = false; };
+  }, [layout, at.page, srcs, step, stepsFor]);
+
+  /** Panels: on to the next step (or back to the one before), and past the page's last (or first), the page after (or before), at its first step (or last). */
+  const stepPanel = useCallback((d: 1 | -1) => {
+    const here = goal.current ?? at.page;
+    let s = stepNow.current;
+    if (s && s.page !== here) s = null;
+    if (s) {
+      const k = s.k + d;
+      if (k >= 0 && k < s.steps.length) {
+        const next = { ...s, k };
+        stepNow.current = next;
+        // Mid-turn, the turn shows it as it lands.
+        if (goal.current === null) setStep(next);
+        return;
+      }
+    }
+    const i = here + d;
+    if (i < 0 || i >= total) return;
+    const steps = stepsKnown(i);
+    stepNow.current = null;
+    if (steps) stepNow.current = { page: i, k: d > 0 ? 0 : steps.length - 1, steps };
+    landLast.current = d < 0;
+    void goTo(i, 0, () => {
+      const landing = stepNow.current;
+      if (!landing || landing.page !== i) return;
+      landLast.current = false;
+      setStep(landing);
+    });
+  }, [at.page, total, stepsKnown, goTo]);
 
   const turn = useCallback((d: 1 | -1) => {
     if (layout === 'scroll') {
@@ -556,9 +654,13 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       if (r) glide(r, d * Math.max(80, r.clientHeight - 2 * BAR - 80));
       return;
     }
+    if (layout === 'panels') {
+      stepPanel(d);
+      return;
+    }
     const next = spreads[spreadAt[Math.min(total - 1, goal.current ?? at.page)] + d];
     if (next) void goTo(next[0]);
-  }, [layout, spreads, spreadAt, total, at.page, goTo]);
+  }, [layout, spreads, spreadAt, total, at.page, goTo, stepPanel]);
 
   useImperativeHandle(ref, () => ({
     goTo: (i) => void goTo(i),
@@ -607,23 +709,117 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   // A page looked at closely (MangaZoom.tsx).
   const [look, setLook] = useState<Look | null>(null);
 
-  /** Brings a page closer: the panels drawn together at a point on its picture, the one panel there, or the page around it. False when there's no panel there. */
-  const zoom = (img: HTMLImageElement, cx: number, cy: number, what: 'group' | 'panel' | 'page'): boolean => {
+  /** Where page i is drawn on the screen now, or null when it isn't. */
+  const drawnAt = (i: number): DOMRect | null => {
+    const el = scrollRef.current;
+    if (layout === 'scroll') {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return new DOMRect(r.left + (el.clientWidth - colW) / 2, r.top + tops[i] - el.scrollTop, colW, heights[i]);
+    }
+    const pg = rootRef.current?.querySelector<HTMLElement>(`.mg-pg[data-page="${i}"]`);
+    const img = pg?.querySelector('img');
+    if (img?.naturalWidth) return drawnOf(img);
+    return pg?.getBoundingClientRect() ?? null;
+  };
+
+  /**
+   * Brings a page closer: the panels drawn together at a point on its picture, the one panel there,
+   * or the page around it. False when there's no panel there. From a panel (or panels), the arrows
+   * step on through the page's others. Held where none can be told apart, a page falls back as the
+   * fallback picked says (steps.ts).
+   */
+  const zoom = async (img: HTMLImageElement, cx: number, cy: number, what: 'group' | 'panel' | 'page'): Promise<boolean> => {
     // Turned away from while the taps were counted.
     if (!img.isConnected || !img.naturalWidth) return false;
-    const from = drawnOf(img);
-    if (from.width <= 0 || from.height <= 0) return false;
-    const x = (cx - from.left) / from.width;
-    const y = (cy - from.top) / from.height;
-    let box = null;
+    const drawn = drawnOf(img);
+    if (drawn.width <= 0 || drawn.height <= 0) return false;
+    const x = (cx - drawn.left) / drawn.width;
+    const y = (cy - drawn.top) / drawn.height;
+    const page = Number(img.closest<HTMLElement>('.mg-pg')?.dataset.page);
+    let box: Box | null = null;
+    let steps: Box[] | undefined;
+    let shown: { from: number; to: number } | undefined;
     if (what !== 'page') {
-      const hit = frameAt(framesFor(img), x, y);
-      if (!hit) return false;
-      box = hit.panel;
-      if (what === 'group') box = hit.group;
+      const frames = await framesSoon(img);
+      const fallback = fallbackOf();
+      steps = stepsOf(frames, rtl, fallback);
+      const hit = frameAt(frames, x, y);
+      if (hit) {
+        box = hit.panel;
+        if (what === 'group') box = hit.group;
+        shown = shownOf(steps, box) ?? undefined;
+      } else if (what === 'group') {
+        return false;
+      } else if (fallback === 'closer') {
+        shown = { from: 0, to: steps.length - 1 };
+      } else {
+        const k = stepAt(steps, x, y);
+        box = steps[k];
+        shown = { from: k, to: k };
+      }
     }
-    setLook({ src: img.currentSrc || img.src, natural: img.naturalWidth, from, box, x, y });
+    // Turned away from while its panels were looked for.
+    if (!img.isConnected) return false;
+    setLook({ src: img.currentSrc || img.src, natural: img.naturalWidth, from: drawnOf(img), box, x, y, page, steps, shown });
     return true;
+  };
+
+  /** The page looked at put back, with the part last looked at: scrolled, the column moves to show it, when it's off the screen. */
+  const backTo = (i: number, box: Box | null): DOMRect | null => {
+    const el = scrollRef.current;
+    if (layout === 'scroll' && el && box) {
+      const top = tops[i] + box.y * heights[i];
+      const bottom = top + box.h * heights[i];
+      const off = top < el.scrollTop + BAR || bottom > el.scrollTop + el.clientHeight - BAR;
+      if (off) {
+        el.scrollTop = Math.max(0, (top + bottom) / 2 - el.clientHeight / 2);
+        placeFromScroll();
+      }
+    }
+    return drawnAt(i);
+  };
+
+  /**
+   * From the page looked at past its first panel or its last: the page before or after, at its last
+   * panel or its first, with the pages underneath turned (or scrolled) to it as it wipes in.
+   */
+  const crossing = useRef(false);
+  const beyond = async (from: number, d: 1 | -1) => {
+    const i = from + d;
+    if (crossing.current || i < 0 || i >= total) return;
+    crossing.current = true;
+    const steps = await stepsFor(i);
+    const img = pics.image(i);
+    const url = await pics.get(i);
+    // The pair it's in, in pages, ready before it's turned to.
+    let target = [i];
+    if (paged) target = spreads[spreadAt[i]];
+    const urls = await Promise.all(target.map((p) => pics.get(p)));
+    if (!steps || !img || !url) {
+      crossing.current = false;
+      return;
+    }
+    const k = d > 0 ? 0 : steps.length - 1;
+    runTurn('wipe', rtl ? (-d as 1 | -1) : d, 'page', async () => {
+      const el = scrollRef.current;
+      if (layout === 'scroll' && el) {
+        anchor.current = { page: i, frac: 0 };
+        el.scrollTop = tops[i] - BAR;
+        placeFromScroll();
+      } else if (spreadAt[i] !== spreadAt[at.page]) {
+        anchor.current = { page: target[0], frac: 0 };
+        flushSync(() => {
+          setSrcs((m) => { const next = new Map(m); target.forEach((p, j) => next.set(p, urls[j])); return next; });
+          setAt({ page: target[0], frac: 0, end: false });
+        });
+        const shownImg = rootRef.current?.querySelector<HTMLImageElement>(`.mg-pg[data-page="${i}"] img`);
+        if (shownImg) await Promise.race([shownImg.decode().catch(() => {}), wait(700)]);
+      }
+      const rect = drawnAt(i) ?? new DOMRect(0, 0, window.innerWidth, window.innerWidth * img.naturalHeight / img.naturalWidth);
+      flushSync(() => setLook({ src: url, natural: img.naturalWidth, from: rect, box: steps[k], x: 0.5, y: 0.5, page: i, steps, shown: { from: k, to: k }, here: true }));
+      crossing.current = false;
+    });
   };
 
   /**
@@ -631,16 +827,21 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
    * the one panel. Tapped, one is the reader's (the controls, in full screen); two, the panels there,
    * or the page off a panel; three, the one panel.
    */
-  const tapped = (n: number, img: HTMLImageElement, x: number, y: number, touch: boolean) => {
+  const tapped = async (n: number, img: HTMLImageElement, x: number, y: number, touch: boolean) => {
     if (n === 1) {
-      if (touch || !zoom(img, x, y, 'group')) onTap?.();
+      if (touch) {
+        onTap?.();
+        return;
+      }
+      if (!(await zoom(img, x, y, 'group'))) onTap?.();
       return;
     }
     if (n === 2) {
-      if (!touch || !zoom(img, x, y, 'group')) zoom(img, x, y, 'page');
+      if (touch && (await zoom(img, x, y, 'group'))) return;
+      await zoom(img, x, y, 'page');
       return;
     }
-    if (!zoom(img, x, y, 'panel')) zoom(img, x, y, 'page');
+    if (!(await zoom(img, x, y, 'panel'))) await zoom(img, x, y, 'page');
   };
 
   /** Taps on a picture, counted until they stop coming, and a press held on one. */
@@ -665,7 +866,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       p.long = true;
       window.clearTimeout(taps.current?.timer);
       taps.current = null;
-      zoom(img, p.x, p.y, 'panel');
+      void zoom(img, p.x, p.y, 'panel');
     }, LONG);
     press.current = p;
   };
@@ -696,12 +897,12 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     // Three is as many as count: no need to wait for a fourth.
     if (done.n >= 3) {
       taps.current = null;
-      tapped(done.n, done.img, done.x, done.y, done.touch);
+      void tapped(done.n, done.img, done.x, done.y, done.touch);
       return;
     }
     done.timer = window.setTimeout(() => {
       taps.current = null;
-      tapped(done.n, done.img, done.x, done.y, done.touch);
+      void tapped(done.n, done.img, done.x, done.y, done.touch);
     }, TAPS);
   };
   const onPagesCancel = () => {
@@ -741,34 +942,68 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       </div>
     ));
   };
+  /** Panels: the page, its step shown fitted to the room, or whole until its panels are found. */
+  const panelOf = (i: number) => {
+    const src = srcs.get(i);
+    const img = pics.image(i);
+    if (!src || !img?.naturalWidth) {
+      return <div data-page={i} className="mg-pg" style={{ width: areaW, height: areaH }}>{picture(i)}</div>;
+    }
+    let shownStep = null;
+    if (step && step.page === i) shownStep = step;
+    let box = WHOLE;
+    if (shownStep) box = shownStep.steps[shownStep.k];
+    return <PanelPicture key={i} src={src} ratio={ratio(i)} natural={img.naturalWidth} box={box} steps={shownStep?.steps ?? []} width={areaW} height={areaH} />;
+  };
+
+  /** The space beside a page that turns it (or in panels, steps), right to left, the left side going on. */
+  const zones = (what: string) => (
+    <>
+      <button type="button" tabIndex={-1} className="fv-zone is-prev" aria-label={rtl ? `Next ${what}` : `Previous ${what}`} onClick={() => turn(rtl ? 1 : -1)}><span>‹</span></button>
+      <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label={rtl ? `Previous ${what}` : `Next ${what}`} onClick={() => turn(rtl ? -1 : 1)}><span>›</span></button>
+    </>
+  );
+  /** A series opened a few chapters at a time: on to the chapters after these, at their end, or back to those before, at their start. */
+  const moreAt = (
+    <>
+      {next && spread[spread.length - 1] >= total - 1 && (
+        <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>Carry on to {next.label} ›</button>
+      )}
+      {prev && spread[0] === 0 && !(next && spread[spread.length - 1] >= total - 1) && (
+        <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>‹ Back to {prev.label}</button>
+      )}
+    </>
+  );
+
   return (
     <div ref={rootRef} className={`mgv is-${layout}`} style={{ '--vw': `${Math.max(0, pageW)}px` } as CSSProperties}>
-      {layout === 'pages' ? (
+      {layout === 'panels' ? (
+        <>
+          <div className="mg-panels" style={{ left: side, right: side }}>
+            {size.w > 0 && panelOf(at.page)}
+          </div>
+          {moreAt}
+          {zones('panel')}
+        </>
+      ) : layout === 'pages' ? (
         <>
           <div className="mg-pages" {...pageTaps}>
             {paired && size.w > 0 && (
               <div className={`mg-spread${rtl ? ' is-rtl' : ''}`}>
                 {fit(spread).map(({ i, w, h }) => (
-                  <div key={i} className={`mg-pg${ratios[i] ? ' is-sized' : ''}`} style={{ width: w, height: h }}>{picture(i)}</div>
+                  <div key={i} data-page={i} className={`mg-pg${ratios[i] ? ' is-sized' : ''}`} style={{ width: w, height: h }}>{picture(i)}</div>
                 ))}
               </div>
             )}
           </div>
-          {next && spread[spread.length - 1] >= total - 1 && (
-            <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>Carry on to {next.label} ›</button>
-          )}
-          {prev && spread[0] === 0 && !(next && spread[spread.length - 1] >= total - 1) && (
-            <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>‹ Back to {prev.label}</button>
-          )}
-          {/* Right to left, the left side goes on. */}
-          <button type="button" tabIndex={-1} className="fv-zone is-prev" aria-label={rtl ? 'Next page' : 'Previous page'} onClick={() => turn(rtl ? 1 : -1)}><span>‹</span></button>
-          <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label={rtl ? 'Previous page' : 'Next page'} onClick={() => turn(rtl ? -1 : 1)}><span>›</span></button>
+          {moreAt}
+          {zones('page')}
         </>
       ) : (
         <div ref={scrollRef} className="mg-scroll" onScroll={onScroll} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
           <div className="mg-column" style={{ width: colW, height }} {...pageTaps}>
             {colW > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).map((i) => (
-              <div key={i} className={`mg-pg${ratios[i] ? ' is-sized' : ''}`} style={{ top: tops[i], height: heights[i] }}>{picture(i)}</div>
+              <div key={i} data-page={i} className={`mg-pg${ratios[i] ? ' is-sized' : ''}`} style={{ top: tops[i], height: heights[i] }}>{picture(i)}</div>
             ))}
             {colW > 0 && bands.size > 0 && Array.from({ length: shownTo - shownFrom + 1 }, (_, k) => shownFrom + k).flatMap((i) => bandsAt(i, tops[i]))}
             {colW > 0 && shownTo === total - 1 && bandsAt(total, tops[total - 1] + heights[total - 1] + (bands.get(total)?.length ?? 0) * BAND)}
@@ -785,7 +1020,16 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
           </div>
         </div>
       )}
-      {look && <MangaZoom look={look} onClose={() => setLook(null)} />}
+      {look && (
+        <MangaZoom
+          key={`${look.page}:${look.src}:${look.here ? 'here' : ''}`}
+          look={look}
+          rtl={rtl}
+          onClose={() => setLook(null)}
+          onBeyond={(d) => void beyond(look.page, d)}
+          backTo={(box) => backTo(look.page, box)}
+        />
+      )}
     </div>
   );
 });

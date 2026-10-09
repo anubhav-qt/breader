@@ -309,3 +309,17 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-zoom.is-pan:active { cursor: grabbing; }
 .mg-zoom-bg { position: absolute; inset: 0; background: color-mix(in srgb, var(--r-bg) 94%, transparent); }
 .mg-zoom img { position: absolute; display: block; max-width: none; transform-origin: 0 0; background: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* From a panel, the sides step to the next and the one before (MangaZoom.tsx), their arrows always
+   showing, as on a phone there's no pointer to bring them out. */
+.mg-zoom .fv-zone { top: 0; bottom: 0; width: max(56px, 18%); }
+.mg-zoom .fv-zone span { display: grid; place-items: center; width: 40px; height: 40px; padding-bottom: 3px; border-radius: 50%; background: color-mix(in srgb, var(--r-bg) 82%, transparent); box-shadow: 0 0 0 1px var(--r-line); font-size: 26px; opacity: 0.85; transform: none; }
+@media (hover: hover) {
+  .mg-zoom .fv-zone:hover span { opacity: 1; }
+}
+
+/* Panels: a page read a panel at a time, each fitted to the room between the lines of controls
+   (MangaPanels.tsx). The sides step, as they turn pages. */
+.mg-panels { position: absolute; top: 76px; bottom: 76px; overflow: hidden; }
+.mg-panels > img { position: absolute; left: 0; top: 0; display: block; max-width: none; transform-origin: 0 0; background: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.mg-panels > .mg-pg { margin: 0 auto; }
+.mgv.is-panels .fv-zone { width: max(56px, 20%); }

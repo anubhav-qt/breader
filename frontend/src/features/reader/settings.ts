@@ -7,6 +7,8 @@ export type Style = 'book' | 'modern';
 export type ThemeName = 'auto' | 'day' | 'warm' | 'dusk' | 'night';
 export type FontKey = 'dongle' | 'oxanium' | 'literata' | 'garamond' | 'atkinson';
 export type Layout = 'pages' | 'scroll';
+/** A manga can be read a panel at a time too, each fitted to the screen (MangaView.tsx). */
+export type MangaLayout = Layout | 'panels';
 /** Which way a manga's pages turn: right to left as manga is read, or left to right as comics are. */
 export type MangaDir = 'rtl' | 'ltr';
 
@@ -26,16 +28,16 @@ export interface ReaderSettings {
   book: StyleSettings;
   modern: StyleSettings;
   pdfLayout: Layout;
-  /** Manga: scrolled down a column of pages, or turned a page (or two, side by side) at a time. */
-  mangaLayout: Layout;
+  /** Manga: scrolled down a column of pages, turned a page (or two, side by side) at a time, or read a panel at a time. */
+  mangaLayout: MangaLayout;
   mangaDir: MangaDir;
   /**
    * Each manga's own layout and direction, by its id: `layout` on a wide screen, `narrow` on a narrow
    * one (NARROW). Those without start as the last picked there.
    */
-  mangaOwn?: Record<string, { layout: Layout; dir: MangaDir; narrow?: Layout }>;
+  mangaOwn?: Record<string, { layout: MangaLayout; dir: MangaDir; narrow?: MangaLayout }>;
   /** The layout last picked for a manga on a narrow screen; scrolled until one is. */
-  mangaNarrow?: Layout;
+  mangaNarrow?: MangaLayout;
   /** Manga scrolled on a wide screen: how wide the column of pages is (MANGA_WIDTHS). */
   mangaWidth?: number;
   /** 2 voices: the colour her lines light in, and his (book colours, data/colors.ts). */
@@ -207,7 +209,7 @@ export function useNarrow(): boolean {
 
 /** How a manga reads: `narrow`, the screen is, so it's in the layout picked for narrow screens. */
 export interface MangaLook {
-  layout: Layout;
+  layout: MangaLayout;
   dir: MangaDir;
   width: number;
   narrow: boolean;
@@ -225,7 +227,7 @@ export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean): Man
  * A manga's own layout (on a screen as `narrow` as this, or not) and direction, changed by `patch`;
  * the next new one starts with them too.
  */
-export function withMangaLook(s: ReaderSettings, id: string, patch: { layout?: Layout; dir?: MangaDir }, narrow = false): ReaderSettings {
+export function withMangaLook(s: ReaderSettings, id: string, patch: { layout?: MangaLayout; dir?: MangaDir }, narrow = false): ReaderSettings {
   const own = s.mangaOwn?.[id] ?? { layout: s.mangaLayout, dir: s.mangaDir };
   const next = { ...own, dir: patch.dir ?? own.dir };
   if (patch.layout && narrow) next.narrow = patch.layout;

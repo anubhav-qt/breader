@@ -381,7 +381,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
 
   /* A quick, mostly sideways swipe turns the page in the paged layouts. */
   const layout = book.kind === 'pdf' ? settings.pdfLayout : book.kind === 'manga' ? mangaLook.layout : settings[settings.style].layout;
-  const paged = layout === 'pages';
+  const paged = layout !== 'scroll';
   /** A manga's pages turning right to left: swipes and arrows go on the other way. */
   const rtl = book.kind === 'manga' && paged && mangaLook.dir === 'rtl';
   const swipe = useRef<{ x: number; y: number; t: number } | null>(null);

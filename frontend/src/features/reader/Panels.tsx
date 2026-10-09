@@ -7,7 +7,7 @@ import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
-import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type Layout, type MangaDir, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
+import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
 
@@ -163,7 +163,7 @@ interface LookProps {
 /** `saver`: read from MangaDex, whose pages can come smaller. */
 export interface MangaControls {
   look: MangaLook;
-  pick: (patch: { layout?: Layout; dir?: MangaDir }) => void;
+  pick: (patch: { layout?: MangaLayout; dir?: MangaDir }) => void;
   widen: (width: number) => void;
   saver: boolean;
 }
@@ -225,17 +225,18 @@ function DataSaver() {
  */
 function MangaLookControls({ look, pick, widen, saver }: MangaControls) {
   const keeps = look.narrow ? 'Each manga keeps its own layout on a screen this narrow, apart from wider ones.' : 'Each manga keeps its own layout.';
-  let note = `One page after another, down the screen. ${keeps}`;
+  let note = `One page after another, down the screen. A panel held steps on to the next in the direction picked. ${keeps}`;
   if (look.layout === 'pages') {
     const shown = look.narrow ? 'One page at a time, and a spread printed across two pages whole: tap it twice to look closer.' : 'Two pages side by side when the screen is wide enough.';
     note = `${shown} Manga reads right to left, comics left to right. ${keeps}`;
   }
+  if (look.layout === 'panels') {
+    note = `One panel at a time, fitted to the screen, in the order it’s read: the arrows or a swipe glide on to the next, and after a page’s last panel, turn the page. Manga reads right to left, comics left to right. ${keeps}`;
+  }
   return (
     <>
-      <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
-      {look.layout === 'pages' && (
-        <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
-      )}
+      <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }, { v: 'panels', label: 'Panels' }]} />
+      <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
       {!look.narrow && look.layout === 'scroll' && (
         <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
       )}
