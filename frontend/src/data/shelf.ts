@@ -10,17 +10,17 @@ import { store } from '../lib/store';
  * Shared libraries. Each reader's key opens the books they share (server routes/shelf.ts): anyone
  * they give it to can read them and copy them, never change them. The reader's own shared books
  * come from their own library. Each key of someone else's adds a library of its own to a list,
- * Shared Library 1, 2 and on until the reader names it, kept by the token the key was traded for
- * (never the key) in the synced reader settings, so the list follows the reader between browsers,
- * and so does which library the tab opens at: the reader's pick, or the first in the list. Each
- * library's last list of books is kept here too, so the tab opens at once and offline.
+ * Shared 1, 2 and on until the reader names it, kept by the token the key was traded for (never
+ * the key) in the synced reader settings, so the list follows the reader between browsers, and so
+ * does which library the tab opens at: the reader's pick, or the first in the list. Each library's
+ * last list of books is kept here too, so the tab opens at once and offline.
  */
 
 export interface SavedLibrary {
   token: string;
-  /** The reader's own name for it, over Shared Library N. */
+  /** The reader's own name for it, over Shared N. */
   name?: string;
-  /** Its N in Shared Library N: the lowest free when it was added. */
+  /** Its N in Shared N: the lowest free when it was added. */
   n?: number;
   at: number;
 }
@@ -211,11 +211,11 @@ export function renameLibrary(which: Showing, name: string) {
   keepSaved(shared.saved.map((l) => (l.token === which ? { ...l, name: clean || undefined } : l)));
 }
 
-/** A library's name: the reader's own for it, or Shared Library N. */
+/** A library's name: the reader's own for it, or Shared for their own and Shared N for someone else's. */
 export function libraryName(s: Shared, which: Showing): string {
-  if (which === 'own') return s.ownName ?? 'Your shared library';
+  if (which === 'own') return s.ownName ?? 'Shared';
   const l = s.saved.find((x) => x.token === which);
-  return l?.name ?? `Shared Library ${l?.n ?? ''}`.trim();
+  return l?.name ?? `Shared ${l?.n ?? ''}`.trim();
 }
 
 /** A library in the list that shares this file, to fetch it through, for a book not yet the reader's own. */

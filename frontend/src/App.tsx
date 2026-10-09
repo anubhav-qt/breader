@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
-import { BulkBar } from './components/BulkBar';
+import { BulkBar, type BulkAction } from './components/BulkBar';
 import { Header, type Tab } from './components/Header';
-import { IconPlus } from './components/icons';
+import { IconAddBook, IconLock, IconPeople, IconPlus, IconStar, IconTrash } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { categoryOf, countOf, type Category } from './books/category';
@@ -18,6 +18,7 @@ import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PRE
 import { useMangaPreview } from './data/mangaPreview';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { namesOf, type MangaFound } from '@breader/shared/manga';
+import { useLabels } from './data/labels';
 import { addLibrary, libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
@@ -34,6 +35,7 @@ import { Browse } from './features/manga/Browse';
 import { urlOf } from './features/manga/copies';
 import { MangaSheet, type About, type Picked } from './features/manga/MangaSheet';
 import { LibraryMenu } from './features/shared/LibraryMenu';
+import { OwnLibraryMenu } from './features/shared/OwnLibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
@@ -70,6 +72,13 @@ function writeParam(name: string, value: string, fallback: string) {
 }
 
 const byRecent = (a: ShelfItem, b: ShelfItem) => b.lastOpened - a.lastOpened;
+
+/** What stopping sharing some books at once says. */
+function stoppedSharing(n: number, category: Category): string {
+  let after = 'Anyone well into one keeps their copy.';
+  if (n === 1) after = 'Anyone well into it keeps their copy.';
+  return `Stopped sharing ${countOf(n, category)}. ${after}`;
+}
 
 /** Links that bring the reader back to the app: from Google, and from Breader's emails. */
 const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
@@ -138,15 +147,21 @@ export default function App() {
     return () => { live = false; };
   }, [category, mdOn]);
   if ((category !== 'manga' || mdOn === false) && tab === 'browse') setTab('mine');
-  /** Picking books to favourite or remove together: on which shelf, and the ones ticked. */
-  const [picking, setPicking] = useState<{ category: Category; ids: ReadonlySet<string> } | null>(null);
-  // Picking is in the reader's own library as it shows: it ends when anything else shows.
-  if (picking && (picking.category !== category || tab !== 'mine' || route.name !== 'library')) setPicking(null);
+  /**
+   * Picking books to act on together: where (the shelf, the library and, for a shared one, which)
+   * and the ones ticked. It's in the library as it shows, and ends when anything else shows.
+   */
+  const [picking, setPicking] = useState<{ place: string; ids: ReadonlySet<string> } | null>(null);
+  let pickPlace = '';
+  if (route.name === 'library' && tab === 'mine') pickPlace = `${category} mine`;
+  if (route.name === 'library' && tab === 'shelf') pickPlace = `${category} shelf ${sharing.showing}`;
+  if (picking && picking.place !== pickPlace) setPicking(null);
   // Each tab's library stays once it's been seen, so switching back finds it as it was.
   const [seen, setSeen] = useState<ReadonlySet<Tab>>(() => new Set([tab]));
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
+  const labels = useLabels();
   /** Manga's covers without their titles: off until the reader turns it on, then kept on this device. */
   const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
@@ -809,10 +824,10 @@ export default function App() {
     say(`Added “${b.title}” to ${categoryOf(b) === 'manga' ? 'My manga' : 'My books'}`);
   }, [recordById, lib, say]);
   /**
-   * A series from someone's shared library, put in the reader's own books at once, last book first
-   * so the first is the newest in Recent. Undo takes out the ones it added.
+   * Books from someone's shared library, put in the reader's own at once, last book first so the
+   * first is the newest in Recent. Returns the ones it added.
    */
-  const keepAll = useCallback(async (books: ShelfItem[], series: string) => {
+  const keepBooks = useCallback(async (books: ShelfItem[]) => {
     const had = new Set(lib.records.map((r) => r.id));
     const added: string[] = [];
     for (const b of [...books].reverse()) {
@@ -821,19 +836,25 @@ export default function App() {
       const rec = await lib.startShelfBook(entry);
       if (!had.has(rec.id)) added.push(rec.id);
     }
+    return added;
+  }, [recordById, lib]);
+  /** A series from someone's shared library, put in the reader's own books. Undo takes out the ones it added. */
+  const keepAll = useCallback(async (books: ShelfItem[], series: string) => {
+    const added = await keepBooks(books);
     if (!added.length) return;
     const on = categoryOf(books[0]);
     say(`Added ${countOf(added.length, on)} of “${series}” to ${on === 'manga' ? 'My manga' : 'My books'}`, {
       action: { label: 'Undo', run: () => { for (const id of added) void lib.removeBook(id); } },
     });
-  }, [recordById, lib, say]);
+  }, [keepBooks, lib, say]);
   const manga = category === 'manga';
 
-  /* Picking books in the reader's own library, to favourite or remove them together. */
+  /* Picking books in the library showing, to act on them together. */
   const pickedBooks = useMemo(() => {
     if (!picking) return [];
-    return items.mine.filter((b) => picking.ids.has(b.id));
-  }, [picking, items.mine]);
+    return books.filter((b) => picking.ids.has(b.id));
+  }, [picking, books]);
+  const yours = manga ? 'My manga' : 'My books';
   const allFavourites = pickedBooks.length > 0 && pickedBooks.every((b) => b.favorite);
   /** Ticks these books, or takes the tick off when they all have one already (a series' card). */
   const pick = useCallback((books: ShelfItem[]) => {
@@ -869,18 +890,104 @@ export default function App() {
     }
     void removeAll(ids, [], fromKeyboard);
   };
+  /** The picked books that can be shared: shares them, or stops sharing them when they all are already. They stay picked. */
+  const shareable = pickedBooks.filter((b) => canShare(b));
+  const allShared = shareable.length > 0 && shareable.every((b) => b.shared);
+  const sharePicked = () => {
+    if (allShared) {
+      for (const b of shareable) lib.setShared(b.id, false);
+      say(stoppedSharing(shareable.length, category));
+      return;
+    }
+    const newly = shareable.filter((b) => !b.shared);
+    for (const b of newly) lib.setShared(b.id, true);
+    say(`Shared ${countOf(newly.length, category)} with your key`);
+  };
+  /** In the reader's own shared library: the picked books taken out of their own books, put back in. */
+  const outOfMine = pickedBooks.filter((b) => b.sharedOnly);
+  const addBackPicked = (fromKeyboard: boolean) => {
+    const ids = outOfMine.map((b) => b.id);
+    for (const id of ids) lib.setSharedOnly(id, false);
+    setPicking(null);
+    say(`Added ${countOf(ids.length, category)} to ${yours}`, {
+      action: { label: 'Undo', run: () => { for (const id of ids) lib.setSharedOnly(id, true); } },
+      focus: fromKeyboard,
+    });
+  };
+  /**
+   * In the reader's own shared library: stops sharing the picked books, with one Undo for all.
+   * Those out of their own books already would be nowhere, so they go.
+   */
+  const unsharePicked = async (fromKeyboard: boolean) => {
+    const stopped: string[] = [];
+    const removed: RemovedBook[] = [];
+    const hiding: string[] = [];
+    for (const b of pickedBooks) {
+      if (!b.sharedOnly) {
+        lib.setShared(b.id, false);
+        stopped.push(b.id);
+        continue;
+      }
+      forget(b.id);
+      hiding.push(b.id);
+      const gone = await lib.removeBook(b.id);
+      if (gone) removed.push(gone);
+    }
+    setHidden((h) => new Set([...h, ...hiding]));
+    setPicking(null);
+    const undo = async () => {
+      for (const r of [...removed].reverse()) await lib.restoreBook(r);
+      for (const id of stopped) lib.setShared(id, true);
+      setHidden((h) => {
+        const next = new Set(h);
+        for (const id of hiding) next.delete(id);
+        return next;
+      });
+    };
+    say(stoppedSharing(pickedBooks.length, category), {
+      action: { label: 'Undo', run: () => void undo() },
+      focus: fromKeyboard,
+    });
+  };
+  /** In someone else's shared library: the picked books the reader doesn't have yet, into their own. */
+  const notKept = pickedBooks.filter((b) => !b.kept);
+  const keepPicked = async (fromKeyboard: boolean) => {
+    const added = await keepBooks(notKept);
+    setPicking(null);
+    if (!added.length) return;
+    say(`Added ${countOf(added.length, category)} to ${yours}`, {
+      action: { label: 'Undo', run: () => { for (const id of added) void lib.removeBook(id); } },
+      focus: fromKeyboard,
+    });
+  };
+
+  /** What can be done with the picked books, by the library they're in. */
+  let actions: BulkAction[] = [];
+  if (tab === 'mine') {
+    let shareAction: BulkAction = { key: 'share', label: 'Share', icon: <IconPeople />, disabled: !shareable.length, run: sharePicked };
+    if (allShared) shareAction = { ...shareAction, label: 'Unshare', icon: <IconLock /> };
+    actions = [
+      { key: 'favourite', label: allFavourites ? 'Unfavourite' : 'Favourite', icon: <IconStar />, run: favouritePicked },
+      shareAction,
+      { key: 'remove', label: 'Remove', icon: <IconTrash />, danger: true, run: removePicked },
+    ];
+  } else if (showing === 'own') {
+    actions = [
+      { key: 'add', label: 'Add', icon: <IconAddBook />, disabled: !outOfMine.length, run: addBackPicked },
+      { key: 'unshare', label: 'Unshare', icon: <IconLock />, run: (k) => void unsharePicked(k) },
+    ];
+  } else {
+    actions = [
+      { key: 'add', label: 'Add', icon: <IconAddBook />, disabled: !notKept.length, run: (k) => void keepPicked(k) },
+    ];
+  }
   let bulkBar: ReactNode = null;
   if (picking) {
-    bulkBar = (
-      <BulkBar
-        count={pickedBooks.length}
-        favourites={allFavourites}
-        onFavourite={favouritePicked}
-        onRemove={removePicked}
-        onDone={() => setPicking(null)}
-      />
-    );
+    bulkBar = <BulkBar count={pickedBooks.length} actions={actions} onDone={() => setPicking(null)} />;
   }
+  /** Select, where the library showing has books to pick. */
+  let startPicking: (() => void) | undefined = undefined;
+  if (tab !== 'browse' && books.length > 0) startPicking = () => setPicking({ place: pickPlace, ids: new Set() });
 
   const flipCovers = () => {
     const next = !coversOnly;
@@ -923,7 +1030,7 @@ export default function App() {
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
             browse={mdOn !== false}
             shelfName={libraryName(sharing, showing)}
-            canAdd={books.length > 0}
+            labels={labels}
             onTab={setTab}
             onAdd={() => setAdding({ mode: 'file' })}
             onBrowse={() => setTab('browse')}
@@ -937,6 +1044,7 @@ export default function App() {
                 say={say}
               />
             )}
+            ownMenu={() => <OwnLibraryMenu key="own" name={labels.mine} count={items.mine.length} category={category} />}
             settings={(
               <SettingsMenu
                 account={account}
@@ -948,7 +1056,7 @@ export default function App() {
                 onCoversOnly={flipCovers}
               />
             )}
-            onSelect={tab === 'mine' && items.mine.length > 0 ? () => setPicking({ category, ids: new Set() }) : undefined}
+            onSelect={startPicking}
             bulk={bulkBar}
           />
           {lib.ready && (['mine', 'shelf'] as const).filter((t) => seen.has(t)).map((t) => (
@@ -981,7 +1089,7 @@ export default function App() {
                 lib.setShared(b.id, shared);
                 say(shared ? `“${b.title}” is shared with your key` : `Stopped sharing “${b.title}”. Anyone well into it keeps their copy.`);
               }}
-              picked={t === 'mine' && picking ? picking.ids : undefined}
+              picked={picking && t === tab ? picking.ids : undefined}
               onPick={pick}
             />
           ))}

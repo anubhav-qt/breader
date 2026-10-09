@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { IconEye, IconKey, IconSettings } from '../../components/icons';
+import { IconEye, IconKey, IconPencil, IconSettings } from '../../components/icons';
+import { DEFAULT_LABELS, LABEL_CHARS, readLabels, renameLabel, type LibraryLabels } from '../../data/labels';
 import { useSyncStatus } from '../../data/sync';
 import { loginError, sendVerification, type AccountState } from '../../lib/account';
 import { springs } from '../../lib/springs';
@@ -19,12 +20,13 @@ interface Props {
 }
 
 /**
- * The header's settings: manga's covers on their own, the library key, and logging in, or who's
- * logged in and logging out.
+ * The header's settings: manga's covers on their own, the names of the switch between libraries,
+ * the library key, and logging in, or who's logged in and logging out.
  */
 export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, onCoversOnly }: Props) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [naming, setNaming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -45,6 +47,7 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
   useEffect(() => {
     if (open) return;
     setConfirming(false);
+    setNaming(false);
     setMessage(null);
   }, [open]);
 
@@ -137,6 +140,13 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
                 <span className="switch" aria-hidden="true" />
               </button>
             )}
+            {naming ? (
+              <LibraryNames />
+            ) : (
+              <button type="button" role="menuitem" className="acct-item" onClick={() => setNaming(true)}>
+                <IconPencil /> Rename libraries
+              </button>
+            )}
             <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onKey)}>
               <IconKey /> Library key
             </button>
@@ -146,4 +156,53 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
       </AnimatePresence>
     </div>
   );
+}
+
+/**
+ * The two names of the switch between libraries, side by side as the switch has them.
+ * Each is saved as it's left, on Enter, and as the menu closes; a blank one goes back to its default.
+ */
+function LibraryNames() {
+  const [drafts, setDrafts] = useState<LibraryLabels>(readLabels);
+  const latest = useRef(drafts);
+  latest.current = drafts;
+
+  // Closing the menu takes this away before its fields are left.
+  useEffect(() => {
+    const last = latest;
+    return () => {
+      saveName('mine', last.current.mine);
+      saveName('shelf', last.current.shelf);
+    };
+  }, []);
+
+  const field = (which: keyof LibraryLabels, label: string, first: boolean) => (
+    <input
+      className="acct-name"
+      autoFocus={first}
+      value={drafts[which]}
+      maxLength={LABEL_CHARS}
+      placeholder={DEFAULT_LABELS[which]}
+      aria-label={label}
+      onChange={(e) => setDrafts({ ...drafts, [which]: e.target.value })}
+      onBlur={() => saveName(which, drafts[which])}
+      onKeyDown={(e) => { if (e.key === 'Enter') saveName(which, drafts[which]); }}
+    />
+  );
+
+  return (
+    <div className="acct-names">
+      <span>Library names</span>
+      <div className="acct-names-row">
+        {field('mine', 'Name for your own library', true)}
+        {field('shelf', 'Name for the shared libraries', false)}
+      </div>
+    </div>
+  );
+}
+
+/** Saves one of the names, where it changed. */
+function saveName(which: keyof LibraryLabels, name: string) {
+  if (name.trim() === readLabels()[which]) return;
+  renameLabel(which, name);
 }

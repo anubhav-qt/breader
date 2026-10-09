@@ -1,7 +1,7 @@
-/* Between the reader's own library and the shared ones (LibrarySwitch): two halves, the chosen one
-   lit, and the shared ones' list. Beside the books-or-manga switch, a little closer to it than the
-   header's gaps. */
-.ls { position: relative; min-width: 0; flex: 0 1 auto; margin-left: -32px; }
+/* Between the reader's own library and the shared ones (LibrarySwitch): two halves of one width,
+   the chosen one lit, and the + button at the end. At the header's end on wide screens, a little
+   apart from the icons either side of it. */
+.ls { position: relative; min-width: 0; margin: 0 4px; }
 .ls-seg { display: flex; align-items: center; min-width: 0; padding: 3px; border-radius: 12px; background: var(--fill); }
 .ls-tabs { display: flex; min-width: 0; }
 .ls-tab {
@@ -18,26 +18,31 @@
   white-space: nowrap;
   transition: color 160ms ease;
 }
-/* Short of room, a shared library's long name gives way; the reader's own stays whole. */
-.ls-tab:first-child { flex: none; }
+/* Both halves one width, whatever they're called: a long name ends in an ellipsis. */
+.ls-tabs .ls-tab { flex: none; width: 112px; justify-content: center; }
 .ls-tab:hover, .ls-tab[aria-selected="true"] { color: var(--ink); }
-.ls-tab .ls-name { position: relative; min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
-.ls-tab .ls-count { position: relative; flex: none; font-size: 11.5px; opacity: 0.75; }
+.ls-tab .ls-name { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ls-on { position: absolute; inset: 0; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
-.ls-caret {
+/* The + button, filled, as tall as the halves: Add on the Books shelf and Browse on the Manga one,
+   one width, so switching shelves leaves the switch as it was. */
+.ls-plus {
   flex: none;
-  width: 28px;
-  height: 28px;
-  margin-left: 2px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--ink-2);
-  transition: color 140ms ease, background-color 140ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 90px;
+  height: 30px;
+  margin-left: 3px;
+  border-radius: 9px;
+  font: var(--ui-w) 13px/1 var(--ui);
+  background: var(--ink);
+  color: var(--canvas);
+  transition: opacity 140ms ease;
 }
-.ls-caret:hover, .ls-caret.is-open { color: var(--ink); background: var(--canvas); }
-.ls-caret svg { width: 16px; height: 16px; transition: transform 160ms ease; }
-.ls-caret.is-open svg { transform: rotate(180deg); }
+.ls-plus:hover { opacity: 0.86; }
+.ls-plus:active { transform: scale(0.96); }
+.ls-plus svg { flex: none; width: 16px; height: 16px; stroke-width: 2.3; }
 
 /* While picking (BulkBar): the same pill, with how many are picked and what to do with them. */
 .ls-bulk .ls-seg { animation: ls-in 160ms ease; }
@@ -46,10 +51,14 @@
 .ls-bulk .ls-tab:disabled { opacity: 0.4; }
 .ls-bulk .ls-tab.is-danger { color: var(--danger); }
 .ls-bulk .ls-tab.is-done { color: var(--ink); background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
+/* Each action is its icon; its word is left for screen readers and the tooltip. */
+.ls-bulk .ls-act { justify-content: center; width: 34px; padding: 0; }
+.ls-act svg { flex: none; width: 18px; height: 18px; }
+.ls-act .ls-act-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* Phones, and screens too narrow for it beside the rest of the header: the pill floats over the
-   library, at the thumb, its list opening upwards. */
-@media (max-width: 880px) {
+/* Phones, and screens too narrow for it at the header's end with the library's name in the very
+   middle (exactly from 1077px): the pill floats over the library, at the thumb. */
+@media (max-width: 1080px) {
   .ls {
     position: fixed;
     left: 50%;
@@ -68,19 +77,42 @@
     box-shadow: 0 0 0 1px var(--tile-border), var(--float-shadow);
   }
   .ls-tab { height: 38px; padding: 0 13px; border-radius: 12px; font-size: 14px; }
-  .ls-tab .ls-name { max-width: 14ch; }
+  .ls-tabs .ls-tab { width: 124px; }
   .ls-on { background: var(--ink); box-shadow: none; }
   .ls-tab[aria-selected="true"] { color: var(--canvas); }
-  .ls-caret { width: 34px; height: 34px; }
+  /* Only the + down here. */
+  .ls-plus { width: 38px; height: 38px; margin-left: 4px; border-radius: 12px; }
+  .ls-plus svg { width: 18px; height: 18px; }
+  .ls-plus-word { display: none; }
   .ls-picked { font-size: 14px; }
   .ls-bulk .ls-tab { padding: 0 11px; }
+  .ls-bulk .ls-act { width: 40px; padding: 0; }
   .ls-bulk .ls-tab.is-done { color: var(--canvas); background: var(--ink); box-shadow: none; }
-  .ls .lm {
-    top: auto;
-    bottom: calc(100% + 10px);
-    left: calc(50% - min(170px, 50vw - 16px));
-    transform-origin: bottom center;
-  }
+
   /* Messages rise above it rather than cover it. */
   :root:has(.ls) .toast-host { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
 }
+@media (max-width: 360px) {
+  .ls-tabs .ls-tab { width: 112px; }
+}
+
+/* The library showing, in the header's middle column (LibraryTitle), and its dropdown under the
+   header's middle. */
+.lt { grid-column: 2; min-width: 0; display: flex; justify-content: center; }
+.lt-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border-radius: 10px;
+  font: var(--ui-w) 13px/1 var(--ui);
+  color: var(--ink);
+  transition: background-color 140ms ease;
+}
+.lt-btn:hover, .lt-btn.is-open { background: var(--fill); }
+.lt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-btn svg { flex: none; width: 16px; height: 16px; color: var(--ink-2); transition: transform 160ms ease; }
+.lt-btn.is-open svg { transform: rotate(180deg); }
+.lt .lm { top: calc(100% + 6px); left: calc(50% - min(170px, 50vw - 16px)); transform-origin: top center; }

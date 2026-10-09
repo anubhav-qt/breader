@@ -113,6 +113,8 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   const keepable = !!onKeep && theirs;
   // The corner's buttons: keep or finished, favourite and the edit button, which the first line keeps clear of.
   let tools = (theirs ? 0 : 1) + (keepable || done ? 1 : 0) + (b.favorite ? 1 : 0);
+  // While picking, the tick stands in for the edit and keep buttons.
+  if (picked !== undefined) tools = 1 + (done ? 1 : 0) + (b.favorite ? 1 : 0);
   // A series' card has none, but for its tick while picking.
   if (stack) tools = picked === undefined ? 0 : 1;
   useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);

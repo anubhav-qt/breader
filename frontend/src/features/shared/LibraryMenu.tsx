@@ -17,8 +17,8 @@ interface Props {
 }
 
 /**
- * The shared libraries tab's list: the libraries opened with someone's key, Shared Library 1, 2
- * and on, then the reader's own shared books. Each can be named; others' come off the list with ×.
+ * The shared libraries tab's list: the libraries opened with someone's key, Shared 1, 2 and on,
+ * then the reader's own shared books, Shared. Each can be named; others' come off the list with ×.
  * The star picks the one the tab opens at, the first unless the reader picks another. A key pasted
  * below adds one. Others see the reader's shared books by the name they give their own.
  */
@@ -89,7 +89,7 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
                   autoFocus
                   value={draft}
                   maxLength={60}
-                  placeholder={which === 'own' ? 'Your shared library' : name}
+                  placeholder={which === 'own' ? 'Shared' : name}
                   aria-label={`Name for ${name}`}
                   onChange={(e) => setDraft(e.target.value)}
                   onBlur={saveRename}

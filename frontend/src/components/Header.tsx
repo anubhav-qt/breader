@@ -1,14 +1,26 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { CATEGORIES, type Category } from '../books/category';
+import type { LibraryLabels } from '../data/labels';
 import { springs } from '../lib/springs';
-import { IconPlus } from './icons';
+import { IconSelect } from './icons';
 import { LibrarySwitch } from './LibrarySwitch';
+import { LibraryTitle } from './LibraryTitle';
 import { Logo } from './Logo';
 import './header.css';
 
 /** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened by its button, not a tab. */
 export type Tab = 'mine' | 'shelf' | 'browse';
+
+/** The + button: Add book on the Books shelf, Browse on the Manga one. */
+export interface PlusButton {
+  label: string;
+  /** The word beside the + on wide screens: Add, or Browse. */
+  word: string;
+  run: () => void;
+  /** Browse is open. */
+  pressed?: boolean;
+}
 
 interface Props {
   /** Books or manga: the libraries, their counts and the Add button are the category's. */
@@ -20,23 +32,30 @@ interface Props {
   browse: boolean;
   /** The shared library the second tab shows: the reader's own, or someone's from their list. */
   shelfName: string;
-  /** False while the open tab is empty: the empty library has its own centred button. */
-  canAdd: boolean;
+  /** The names of the switch between libraries, and of the reader's own library. */
+  labels: LibraryLabels;
   onTab: (t: Tab) => void;
   onAdd: () => void;
   onBrowse: () => void;
   /** The list of shared libraries (features/shared/LibraryMenu.tsx). */
   libraries: (close: () => void) => ReactNode;
+  /** The reader's own library's dropdown, to rename it (features/shared/OwnLibraryMenu.tsx). */
+  ownMenu: (close: () => void) => ReactNode;
   /** Settings: manga's covers on their own, the library key, and logging in or out. */
   settings: ReactNode;
-  /** Starts picking books to favourite or remove together, where there are books of the reader's own. */
+  /** Starts picking books to act on together, where the library showing has any: Select is greyed out where not. */
   onSelect?: () => void;
   /** While picking: the bar (BulkBar) that takes the place of the switch between libraries. */
   bulk?: ReactNode;
 }
 
-export function Header({ category, onCategory, tab, counts, browse, shelfName, canAdd, onTab, onAdd, onBrowse, libraries, settings, onSelect, bulk }: Props) {
+export function Header({ category, onCategory, tab, counts, browse, shelfName, labels, onTab, onAdd, onBrowse, libraries, ownMenu, settings, onSelect, bulk }: Props) {
   const manga = category === 'manga';
+
+  // On every library, empty ones too, which also have their own centred button.
+  let plus: PlusButton | null = null;
+  if (manga && browse) plus = { label: 'Browse', word: 'Browse', run: onBrowse, pressed: tab === 'browse' };
+  if (!manga) plus = { label: 'Add book', word: 'Add', run: onAdd };
 
   // One Tab stop for the pair too; the arrow keys switch between them, as radio buttons do.
   const onCategoryArrow = (e: KeyboardEvent) => {
@@ -49,48 +68,35 @@ export function Header({ category, onCategory, tab, counts, browse, shelfName, c
 
   return (
     <header className="hdr">
-      <Logo />
-      <div className="cats" role="radiogroup" aria-label="Shelf" onKeyDown={onCategoryArrow}>
-        {CATEGORIES.map((c) => (
-          <button
-            key={c}
-            id={`cat-${c}`}
-            type="button"
-            role="radio"
-            className="cat"
-            aria-checked={category === c}
-            tabIndex={category === c ? 0 : -1}
-            onClick={() => onCategory(c)}
-          >
-            {category === c && <motion.span className="cat-on" layoutId="cat-on" transition={springs.snappy} />}
-            <span className="cat-name">{c === 'manga' ? 'Manga' : 'Books'}</span>
-          </button>
-        ))}
+      <div className="hdr-start">
+        <Logo />
+        <div className="cats" role="radiogroup" aria-label="Shelf" onKeyDown={onCategoryArrow}>
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              id={`cat-${c}`}
+              type="button"
+              role="radio"
+              className="cat"
+              aria-checked={category === c}
+              tabIndex={category === c ? 0 : -1}
+              onClick={() => onCategory(c)}
+            >
+              {category === c && <motion.span className="cat-on" layoutId="cat-on" transition={springs.snappy} />}
+              <span className="cat-name">{c === 'manga' ? 'Manga' : 'Books'}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      {bulk ?? (
-        <LibrarySwitch
-          category={category}
-          tab={tab}
-          counts={counts}
-          shelfName={shelfName}
-          onTab={onTab}
-          libraries={libraries}
-        />
-      )}
+      {/* The library showing, with its dropdown: a rename, or the shared ones' list. */}
+      {tab === 'mine' && <LibraryTitle name={labels.mine} label="Rename" menu={ownMenu} />}
+      {tab === 'shelf' && <LibraryTitle name={shelfName} label="Shared libraries" menu={libraries} />}
       <div className="hdr-actions">
-        {onSelect && !bulk && (
-          <button type="button" className="btn btn-ghost hdr-select" onClick={onSelect}>Select</button>
-        )}
-        {/* Not animated: a fading copy would sit beside the empty library's own Add button,
-            and on phones that fade can stall and leave both on screen. */}
-        {canAdd && manga && browse && (
-          <button type="button" className="btn btn-primary hdr-add" onClick={onBrowse} aria-label="Browse" aria-pressed={tab === 'browse'}>
-            <IconPlus /> <span className="hdr-label">Browse</span>
-          </button>
-        )}
-        {canAdd && !manga && (
-          <button type="button" className="btn btn-primary hdr-add" onClick={onAdd} aria-label="Add book">
-            <IconPlus /> <span className="hdr-label">Add book</span>
+        {bulk ?? <LibrarySwitch category={category} tab={tab} counts={counts} labels={labels} onTab={onTab} plus={plus} />}
+        {/* Where there's nothing to pick it stays, greyed out, so nothing around it moves. */}
+        {!bulk && (
+          <button type="button" className="btn btn-ghost hdr-icon" onClick={onSelect} disabled={!onSelect} aria-label="Select" title="Select">
+            <IconSelect />
           </button>
         )}
         {settings}

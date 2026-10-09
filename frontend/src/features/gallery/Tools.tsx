@@ -8,7 +8,7 @@ interface Props {
   open: boolean;
   /** The edit button, which a right-click on the card opens the popover at too. */
   moreRef: Ref<HTMLButtonElement>;
-  /** Picking books to favourite or remove together: whether this one is ticked. Absent otherwise. */
+  /** Picking books to act on together: whether this one is ticked. Absent otherwise. */
   picked?: boolean;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
   onKeep?: (book: ShelfItem) => void;
@@ -16,14 +16,14 @@ interface Props {
 
 /**
  * A card's corner: keep (someone's shared book) or a tick once it's finished, the favourite star,
- * and the edit button, whose popover marks it finished. While picking, a tick takes the edit
- * button's place.
+ * and the edit button, whose popover marks it finished. While picking, a tick takes the place of
+ * the edit and keep buttons.
  */
 export function Tools({ book: b, open, picked, moreRef, onEdit, onKeep }: Props) {
   const done = b.progress >= 1;
   // Someone else's book, in their shared library: theirs to change. It can only be read, or kept.
   const theirs = b.source === 'shelf';
-  const keepable = !!onKeep && theirs;
+  const keepable = !!onKeep && theirs && picked === undefined;
   return (
     <div className="tile-tools">
       {keepable && (

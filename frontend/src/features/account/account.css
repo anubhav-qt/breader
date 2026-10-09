@@ -59,5 +59,20 @@
 .acct-toggle .switch { margin-left: auto; }
 .acct-toggle[aria-checked="true"] .switch { background: var(--ink); }
 .acct-toggle[aria-checked="true"] .switch::after { transform: translateX(16px); }
+/* The switch between libraries' names: on phones, the only place the switch shows them. */
+.acct-names { display: grid; gap: 8px; }
+.acct-names > span { font: var(--ui-w) 11.5px/1 var(--ui); color: var(--ink-2); }
+.acct-names-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.acct-name {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas);
+  padding: 9px 10px;
+  font: var(--ui-w) 14px/1.2 var(--ui);
+  outline: none;
+  transition: border-color 140ms ease;
+}
+.acct-name:focus { border-color: var(--accent); }
 .acct-confirm p { margin: 0; font: var(--ui-w) 12.5px/1.45 var(--ui); color: var(--ink-2); }
 .acct-confirm .add-actions { margin-top: 10px; }

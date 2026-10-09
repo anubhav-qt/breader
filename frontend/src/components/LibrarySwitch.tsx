@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import type { KeyboardEvent } from 'react';
+import { motion } from 'motion/react';
 import { countOf, type Category } from '../books/category';
+import type { LibraryLabels } from '../data/labels';
 import { springs } from '../lib/springs';
-import type { Tab } from './Header';
-import { IconCaret } from './icons';
+import type { PlusButton, Tab } from './Header';
+import { IconPlus } from './icons';
 import './library-switch.css';
 
 const TABS: Array<'mine' | 'shelf'> = ['mine', 'shelf'];
@@ -12,37 +13,23 @@ interface Props {
   category: Category;
   tab: Tab;
   counts: Record<'mine' | 'shelf', number>;
-  /** The shared library the second one shows: the reader's own, or someone's from their list. */
-  shelfName: string;
+  /** The names of the two halves, the same for books and manga. */
+  labels: LibraryLabels;
   onTab: (t: Tab) => void;
-  /** The list of shared libraries (features/shared/LibraryMenu.tsx). */
-  libraries: (close: () => void) => ReactNode;
+  /** The + button at the end: Add book, or Browse, with its word on wide screens. */
+  plus: PlusButton | null;
 }
 
 /**
- * Between the reader's own library and the shared ones: two halves of a pill, in the header on
- * wide screens and floating at the bottom on phones, where a thumb reaches it.
+ * Between the reader's own library and the shared ones: two halves of a pill, one width, carrying
+ * the reader's names for them, Personal and Shared to start with, and the + button at the end. At
+ * the header's end on wide screens and floating at the bottom on phones, where a thumb reaches it.
+ * The library showing is named in the header's middle, with its dropdown (LibraryTitle).
  */
-export function LibrarySwitch({ category, tab, counts, shelfName, onTab, libraries }: Props) {
-  const [menu, setMenu] = useState(false);
-  const wrap = useRef<HTMLDivElement>(null);
-  const mine = category === 'manga' ? 'My manga' : 'My books';
+export function LibrarySwitch({ category, tab, counts, labels, onTab, plus }: Props) {
   // With Browse open, neither is chosen: the reader's own keeps the Tab stop.
   let focusable: 'mine' | 'shelf' = 'mine';
   if (tab === 'shelf') focusable = 'shelf';
-  const close = () => setMenu(false);
-
-  useEffect(() => {
-    if (!menu) return;
-    const away = (e: PointerEvent) => { if (!wrap.current?.contains(e.target as Node)) setMenu(false); };
-    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setMenu(false); };
-    window.addEventListener('pointerdown', away);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('pointerdown', away);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [menu]);
 
   // One Tab stop for both; the arrow keys switch between them.
   const onArrow = (e: KeyboardEvent) => {
@@ -57,7 +44,7 @@ export function LibrarySwitch({ category, tab, counts, shelfName, onTab, librari
   };
 
   return (
-    <div className="ls" ref={wrap}>
+    <div className="ls">
       <div className="ls-seg">
         <div className="ls-tabs" role="tablist" aria-label="Library" onKeyDown={onArrow}>
           {TABS.map((t) => (
@@ -70,30 +57,22 @@ export function LibrarySwitch({ category, tab, counts, shelfName, onTab, librari
               aria-selected={tab === t}
               aria-controls={`library-${t}`}
               tabIndex={focusable === t ? 0 : -1}
-              // The shared one, chosen already, opens its list of libraries.
-              onClick={() => (t === 'shelf' && tab === 'shelf' ? setMenu((m) => !m) : onTab(t))}
+              onClick={() => onTab(t)}
             >
               {tab === t && <motion.span className="ls-on" layoutId="ls-on" transition={springs.snappy} />}
               {t === 'shelf' && <span className="sr-only">Shared library: </span>}
-              <span className="ls-name">{t === 'mine' ? mine : shelfName}</span>
-              <span className="ls-count" aria-hidden="true">{counts[t]}</span>
+              <span className="ls-name">{labels[t]}</span>
               <span className="sr-only">, {countOf(counts[t], category)}</span>
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className={`ls-caret${menu ? ' is-open' : ''}`}
-          aria-label="Shared libraries"
-          aria-haspopup="dialog"
-          aria-expanded={menu}
-          title="Shared libraries"
-          onClick={() => setMenu((m) => !m)}
-        >
-          <IconCaret />
-        </button>
+        {plus && (
+          <button type="button" className="ls-plus" aria-label={plus.label} aria-pressed={plus.pressed} onClick={plus.run}>
+            <IconPlus />
+            <span className="ls-plus-word">{plus.word}</span>
+          </button>
+        )}
       </div>
-      <AnimatePresence>{menu && libraries(close)}</AnimatePresence>
     </div>
   );
 }
