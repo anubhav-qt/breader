@@ -108,7 +108,8 @@ describe('the daily prefetch', () => {
       }),
       copies: vi.fn(async (id: string) => { asked.push(`copies ${id}`); return {} as never; }),
       cover: vi.fn(async (id: string, _file: string, size: string) => { asked.push(`cover ${id} ${size}`); return {} as never; }),
-      sourceCover: vi.fn(async (id: string) => { asked.push(`cover ${id}`); return {} as never; }),
+      sourceCover: vi.fn(async (id: string, size: string) => { asked.push(`cover ${id} ${size}`); return {} as never; }),
+      coversFor: vi.fn(async (id: string, freshFor: number) => { asked.push(`for ${id} ${freshFor / 86_400_000}d`); }),
       page: say('page'),
       sourcePages: vi.fn(async (id: string) => { asked.push(`pages ${id}`); return 3; }),
       sourcePage: say('page'),
@@ -117,45 +118,57 @@ describe('the daily prefetch', () => {
     return { manga, asked };
   }
 
-  it('fetches each list’s series, and once each, what its sheet asks for', async () => {
+  it('fetches each list’s series, and once each, what its sheet asks for, covers kept by the list that changes most', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] });
     try {
       const { manga, asked } = fakeManga();
       const going = prefetch(manga);
       await vi.runAllTimersAsync();
       const r = await going;
-      // Four orders, with every kind and each of four alone.
-      expect(r.lists).toBe(20);
+      // Three orders, with every kind and each of four alone.
+      expect(r.lists).toBe(15);
       expect(r.series).toBe(2);
       expect(r.failed).toBe(0);
       const lists = manga.search.mock.calls.filter(([q]) => !q.q).map(([q]) => `${q.sort} ${q.kinds?.join('+')} ${q.next ?? ''}`);
       expect(lists).toContain('popular manga+manhwa+manhua+comics ');
       expect(lists).toContain('rated comics md:10');
       expect(manga.search.mock.calls.every(([q]) => q.lang === 'en' && !q.adult)).toBe(true);
+      // Every series is in Updated too, so its covers are fetched again daily.
       expect(asked).toEqual([
         'series a',
         'places Alpha alpha',
-        'cover a 256',
+        'for a 1d',
         'cover a 512',
         'chapters a',
         'copies a',
-        'cover sw:1',
+        'for sw:1 1d',
+        'cover sw:1 512',
         'chapters sw:1',
         'pages sw:1.1',
         'pages sw:1.2',
         'copies sw:1',
-        'cover sw:2',
+        'for sw:2 1d',
+        'cover sw:2 512',
         'chapters sw:2',
         'pages sw:2.1',
         'pages sw:2.2',
         'copies sw:2',
         'series b',
         'places Beta beta',
-        'cover b 256',
+        'for b 1d',
         'cover b 512',
         'chapters b',
         'copies b',
       ]);
+
+      // In Popular and Top rated alone: Popular's three days, the shorter.
+      const other = fakeManga();
+      const lists2 = other.manga.search.getMockImplementation()!;
+      other.manga.search.mockImplementation(async (q) => (q.sort === 'latest' && !q.q ? { items: [], next: null } : lists2(q)));
+      const going2 = prefetch(other.manga);
+      await vi.runAllTimersAsync();
+      await going2;
+      expect(other.asked.filter((a) => a.startsWith('for '))).toEqual(['for a 3d', 'for sw:1 3d', 'for sw:2 3d', 'for b 3d']);
     } finally {
       vi.useRealTimers();
     }

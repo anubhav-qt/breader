@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
@@ -11,7 +11,7 @@ import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
-import { placeChapter, remoteCover, remoteOf } from './books/remote';
+import { placeChapter, remoteCover, remoteOf, withAlso } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
@@ -22,7 +22,6 @@ import { useLabels } from './data/labels';
 import { addLibrary, keepShelfCover, libraryName, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
-import { AddBook } from './features/add/AddBook';
 import { KeyDialog } from './features/add/KeyDialog';
 import { SettingsMenu } from './features/account/SettingsMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
@@ -30,10 +29,8 @@ import { Gallery } from './features/gallery/Gallery';
 import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
-import { Reader } from './features/reader/Reader';
-import { Browse } from './features/manga/Browse';
 import { urlOf } from './features/manga/copies';
-import { MangaSheet, type About, type Picked } from './features/manga/MangaSheet';
+import type { About, Picked } from './features/manga/MangaSheet';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { OwnLibraryMenu } from './features/shared/OwnLibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
@@ -82,6 +79,26 @@ function stoppedSharing(n: number, category: Category): string {
 
 /** Links that bring the reader back to the app: from Google, and from Breader's emails. */
 const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
+
+/*
+ * The reader, Browse, a series' sheet and Add book come in pieces of their own, so the library
+ * opens on less. Each is fetched once the app is idle, so it's here before it's wanted.
+ */
+const loadReader = () => import('./features/reader/Reader');
+const loadBrowse = () => import('./features/manga/Browse');
+const loadSheet = () => import('./features/manga/MangaSheet');
+const loadAdd = () => import('./features/add/AddBook');
+const Reader = lazy(() => loadReader().then((m) => ({ default: m.Reader })));
+const Browse = lazy(() => loadBrowse().then((m) => ({ default: m.Browse })));
+const MangaSheet = lazy(() => loadSheet().then((m) => ({ default: m.MangaSheet })));
+const AddBook = lazy(() => loadAdd().then((m) => ({ default: m.AddBook })));
+function loadSoon() {
+  const all = () => { for (const load of [loadReader, loadBrowse, loadSheet, loadAdd]) void load().catch(() => {}); };
+  // Safari has no requestIdleCallback.
+  const idle = window.requestIdleCallback as typeof window.requestIdleCallback | undefined;
+  if (idle) window.requestIdleCallback(all, { timeout: 4000 });
+  else window.setTimeout(all, 2000);
+}
 
 const WELCOME: Record<AccountResponse['outcome'], string> = {
   adopted: 'Logged in. Your books are saved to your account.',
@@ -139,6 +156,7 @@ export default function App() {
   const [sheet, setSheet] = useState<MangaFound[] | null>(null);
   /** A chapter picked in a sheet: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
+  useEffect(loadSoon, []);
   // Whether the Manga shelf has its Browse button: the laptop says. Out of reach, it stays and Browse says so.
   useEffect(() => {
     if (category !== 'manga' || mdOn !== null) return;
@@ -498,7 +516,7 @@ export default function App() {
 
   /** Read from a series' sheet: into My manga if it isn't, then open, at the chapter picked if one was. */
   const readSeries = useCallback(async (about: About, picked: Picked, had: BookRecord | undefined, from: Position | undefined, rect: DOMRect | undefined) => {
-    const url = urlOf(picked.found, picked.group, picked.lang);
+    const url = withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also);
     let rec = had;
     // Read in another language than the one kept, it's read in that one from now on.
     if (rec && rec.url !== url) {
@@ -519,7 +537,7 @@ export default function App() {
   }, [lib, addSeries, startLoad, finishOpen]);
 
   const addSeriesOnly = useCallback(async (about: About, picked: Picked) => {
-    const rec = await addSeries(about, urlOf(picked.found, picked.group, picked.lang));
+    const rec = await addSeries(about, withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also));
     say(`Added “${rec.title}” to ${labels.mine}`);
   }, [addSeries, say, labels.mine]);
 
@@ -528,7 +546,7 @@ export default function App() {
    * places go by chapter number; what it kept offline goes the next time the app opens (sweepKept).
    */
   const moveSeries = useCallback((rec: BookRecord, picked: Picked, site: string) => {
-    lib.setRemoteUrl(rec.id, urlOf(picked.found, picked.group, picked.lang));
+    lib.setRemoteUrl(rec.id, withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also));
     say(`“${rec.title}” is read from ${site} now.`);
   }, [lib, say]);
 
@@ -1127,19 +1145,22 @@ export default function App() {
             />
           ))}
           {lib.ready && mdOn !== false && seen.has('browse') && (
-            <Browse
-              hidden={!manga || tab !== 'browse'}
-              have={haveSeries}
-              prefs={mdPrefs}
-              onPrefs={setMdPrefs}
-              onPick={setSheet}
-            />
+            <Suspense fallback={null}>
+              <Browse
+                hidden={!manga || tab !== 'browse'}
+                have={haveSeries}
+                prefs={mdPrefs}
+                onPrefs={setMdPrefs}
+                onPick={setSheet}
+              />
+            </Suspense>
           )}
         </div>
       )}
 
       {shown && shownRec && (
         <div className={`rd-host${leaving ? ' is-leaving' : ''}`} ref={hostRef}>
+          <Suspense fallback={<div className="loading"><span className="add-spinner" /> Opening…</div>}>
           <Reader
             key={shown.id}
             record={shownRec}
@@ -1158,6 +1179,7 @@ export default function App() {
             // A series opened a few chapters at a time, with the next few added as it's read on.
             onBook={(grown) => setLoaded((l) => (l && l.id === shown.id ? { id: l.id, book: grown } : l))}
           />
+          </Suspense>
         </div>
       )}
       {route.name === 'read' && !reading && !opening && (
@@ -1191,8 +1213,8 @@ export default function App() {
 
       <AnimatePresence>
         {adding && (
+          <Suspense key="add" fallback={null}>
           <AddBook
-            key="add"
             initialFile={adding.file}
             initialMode={adding.mode}
             manga={manga}
@@ -1206,6 +1228,7 @@ export default function App() {
             onKey={lib.setKey}
             onLogin={loggedIn ? undefined : loginInstead}
           />
+          </Suspense>
         )}
         {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
         {askingAll && (
@@ -1223,8 +1246,8 @@ export default function App() {
         {/* A key made as a series was read waits for the library. */}
         {freshKey && route.name === 'library' && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
         {sheet && route.name === 'library' && (
+          <Suspense key={`sheet-${sheet[0].card.id}`} fallback={null}>
           <MangaSheet
-            key={`sheet-${sheet[0].card.id}`}
             found={sheet}
             prefs={mdPrefs}
             recordOf={recordOf}
@@ -1234,6 +1257,7 @@ export default function App() {
             onMove={moveSeries}
             onClose={() => setSheet(null)}
           />
+          </Suspense>
         )}
         {login && (
           <LoginDialog

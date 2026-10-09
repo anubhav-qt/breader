@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { MANGA_KINDS, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
+import { createPortal } from 'react-dom';
+import { AnimatePresence } from 'motion/react';
+import { MANGA_KINDS, seriesName, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
+import { Modal } from '../../components/Modal';
 import { useLabels } from '../../data/labels';
 import { LANGS, langName, mangadex, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
 import { entriesOf, viewOf } from './found';
@@ -8,10 +11,11 @@ import './manga.css';
 
 /*
  * The Manga shelf's Browse, opened by its button in the header: one search across every place Breader's computer looks (MangaDex
- * and its Suwayomi sources), by name or by what's popular, new or just updated, in a language. The
+ * and its Suwayomi sources), by name or by what's popular, just updated or top rated, in a language. The
  * same series found in several places is one card (found.ts), saying where under the title. Under
  * the search, one line holds the order, the kinds to show, Doujinshi, 18+ and the language, each a
- * dot that lights when it's on. Series for adults show only once 18+ is on. Picking one opens its
+ * dot that lights when it's on, sliding sideways where it doesn't all fit. Series for adults show only once 18+ is on, which asks
+ * whether they show alone or mixed in with the rest. Picking one opens its
  * sheet (MangaSheet.tsx), to pick a copy, read it or add it to My manga.
  */
 
@@ -25,10 +29,10 @@ interface Props {
   onPick: (found: MangaFound[]) => void;
 }
 
+// No New: a source has no list of series just added, so New was its latest list, the same series Updated shows.
 const SORTS: Array<{ v: MangaSort; label: string }> = [
   { v: 'popular', label: 'Popular' },
   { v: 'latest', label: 'Updated' },
-  { v: 'new', label: 'New' },
   { v: 'rated', label: 'Top rated' },
 ];
 
@@ -41,9 +45,13 @@ const KINDS: Array<{ v: MangaKind; label: string; about: string }> = [
 
 /**
  * ask: the search these are for (askKey), so a lot asked for by an earlier one is never added.
- * next: where the next lot starts, as the server said, or null once every place is done.
+ * next: where the next lot starts, as the server said, or null once every place is done. coming:
+ * the first lot is still coming in, a place at a time.
  */
-type Found = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; ask: string; items: MangaFound[]; next: string | null };
+type Found =
+  | { state: 'loading' }
+  | { state: 'error'; message: string }
+  | { state: 'ready'; ask: string; items: MangaFound[]; next: string | null; coming?: boolean };
 
 /** What one lot found, and where the one after it starts. */
 type Lot = { items: MangaFound[]; next: string | null };
@@ -59,6 +67,20 @@ const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
  */
 let kept: { text: string; found: Extract<Found, { state: 'ready' }>; top: number } | null = null;
 
+/**
+ * What's shown, with what's come since added: the cards already shown stay where they are, as a
+ * reader may be looking at them, and new ones follow, those going by the very name searched for
+ * ahead of the rest.
+ */
+function joined(shown: MangaFound[], come: MangaFound[], q: string): MangaFound[] {
+  const seen = new Set(shown.map((x) => x.card.id));
+  const fresh = come.filter((x) => !seen.has(x.card.id));
+  if (!fresh.length) return shown;
+  const wanted = seriesName(q).key;
+  const exact = (x: MangaFound) => wanted !== '' && x.keys.includes(wanted);
+  return [...shown.filter(exact), ...fresh.filter(exact), ...shown.filter((x) => !exact(x)), ...fresh.filter((x) => !exact(x))];
+}
+
 function messageOf(e: unknown): string {
   if (e instanceof Error) return e.message;
   return 'Breader couldn’t reach it.';
@@ -73,6 +95,8 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   const back = useRef(kept?.top ?? 0);
   const restored = useRef(kept?.found);
   const [tries, setTries] = useState(0);
+  /** 18+ being turned on: asked whether it's those series alone, or mixed in with the rest. */
+  const [asking18, setAsking18] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const row = useRef<HTMLDivElement>(null);
   /** The line of dots, sliding sideways on a phone: whether there's more of it either way. */
@@ -86,7 +110,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   // Searching, the best match comes first; otherwise the order picked.
   let sort: MangaSort = prefs.sort;
   if (q) sort = 'relevance';
-  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, kinds: prefs.kinds });
+  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds: prefs.kinds });
 
   // A pause in typing searches.
   useEffect(() => {
@@ -98,8 +122,9 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
    * A lot of results from every place, from where the search had got to. Only series that can be
    * read here show, and a slow place shows with the next lot, so a lot can be short or even empty.
    */
+  const searchOf = (next: string | null) => ({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds: prefs.kinds, next: next ?? undefined });
   const fetchLot = async (next: string | null): Promise<Lot> => {
-    const r = await mangadex.search({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, doujinshi: prefs.doujinshi, kinds: prefs.kinds, next: next ?? undefined });
+    const r = await mangadex.search(searchOf(next));
     return { items: r.items, next: r.next };
   };
 
@@ -130,8 +155,18 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     back.current = 0;
     setFound({ state: 'loading' });
     scroller.current?.scrollTo({ top: 0 });
-    fetchLot(null).then(
-      (r) => { if (live) setFound({ state: 'ready', ask: askKey, ...r }); },
+    // The first lot shows as each place brings its series, not once the slowest has.
+    const ask = askKey;
+    const add = (items: MangaFound[], next: string | null, coming: boolean) => {
+      if (!live) return;
+      setFound((f) => {
+        let shown: MangaFound[] = [];
+        if (f.state === 'ready' && f.ask === ask) shown = f.items;
+        return { state: 'ready', ask, items: joined(shown, items, q), next, coming };
+      });
+    };
+    mangadex.searchAsItComes(searchOf(null), (items) => add(items, null, true)).then(
+      (r) => add(r.items, r.next, false),
       (e) => { if (live) setFound({ state: 'error', message: messageOf(e) }); },
     );
     return () => { live = false; };
@@ -162,7 +197,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   }, [hidden]);
 
   useEffect(() => {
-    if (found.state !== 'ready') return;
+    if (found.state !== 'ready' || found.coming) return;
     kept = { text, found, top: kept?.found.ask === found.ask ? kept.top : 0 };
   }, [text, found]);
 
@@ -286,7 +321,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
             </li>
           ))}
         </ul>
-        <div ref={end} className="mdx-end">{found.next ? <span className="add-spinner" /> : null}</div>
+        <div ref={end} className="mdx-end">{found.next || found.coming ? <span className="add-spinner" /> : null}</div>
       </>
     );
   }
@@ -318,9 +353,9 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
                 <span className="mdx-led" />
                 Doujin
               </button>
-              <button type="button" className="mdx-dot" aria-pressed={prefs.adult} title="Series for adults too" onClick={() => set({ adult: !prefs.adult })}>
+              <button type="button" className="mdx-dot" aria-pressed={prefs.adult} title={prefs.adultOnly ? 'Series for adults only' : 'Series for adults too'} onClick={() => (prefs.adult ? set({ adult: false, adultOnly: false }) : setAsking18(true))}>
                 <span className="mdx-led" />
-                18+
+                {prefs.adultOnly ? '18+ only' : '18+'}
               </button>
             </div>
             <label className="mdx-lang">
@@ -339,6 +374,24 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       <p className="mdx-credit">
         Series come from <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a>, and the sites Breader’s Suwayomi reads, each card saying which. Chapters credit the scanlation groups that made them, and where a publisher puts a series up itself, its sheet links there.
       </p>
+
+      {createPortal(
+        <AnimatePresence>
+          {asking18 && (
+            <Modal title="Show 18+ series" onClose={() => setAsking18(false)} width={420}>
+              <div className="rm">
+                <p className="rm-ask">Only series for adults, or mixed in with everything else?</p>
+                <p className="rm-note">Tap 18+ again to hide them.</p>
+                <div className="rm-actions">
+                  <button type="button" className="btn btn-quiet" onClick={() => { setAsking18(false); set({ adult: true, adultOnly: false }); }}>Mixed</button>
+                  <button type="button" className="btn btn-primary" onClick={() => { setAsking18(false); set({ adult: true, adultOnly: true }); }}>Only 18+</button>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </section>
   );
 }

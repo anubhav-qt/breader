@@ -58,7 +58,10 @@ function coverOf(f: MangaFound): EntryView['cover'] {
     return { src: small, srcSet: `${small} 256w, ${big} 512w` };
   }
   if (!f.card.cover) return null;
-  return { src: sources.coverUrl(f.card.cover), srcSet: undefined };
+  // The laptop makes each source's cover at both widths (server manga/covers.ts).
+  const small = sources.coverUrl(`${f.card.cover}?size=256`);
+  const big = sources.coverUrl(`${f.card.cover}?size=512`);
+  return { src: small, srcSet: `${small} 256w, ${big} 512w` };
 }
 
 function adultOf(f: MangaFound): boolean {

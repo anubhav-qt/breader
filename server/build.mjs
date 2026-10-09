@@ -13,8 +13,9 @@ await build({
   format: 'esm',
   sourcemap: true,
   // pg tries pg-native only when asked to; it isn't installed. The MP3 encoder is LGPL, so it
-  // stays its own package beside the bundle (the Dockerfile copies it) rather than inside it.
-  external: ['pg-native', '@breezystack/lamejs'],
+  // stays its own package beside the bundle (the Dockerfile copies it) rather than inside it. The
+  // cover encoder is native code, installed for the image's own platform (the Dockerfile).
+  external: ['pg-native', '@breezystack/lamejs', 'sharp'],
   // Bundled CommonJS packages still call require().
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
   logLevel: 'info',

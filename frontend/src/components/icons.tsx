@@ -9,6 +9,7 @@ export const IconList = (p: P) => (
 );
 export const IconSidebar = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><rect x="3.5" y="5" width="17" height="14" rx="3" /><path d="M9.5 5v14" /></svg>);
 export const IconUpload = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M12 15V4.5M7.5 9 12 4.5 16.5 9" /><path d="M4.5 14.5v3a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" /></svg>);
+export const IconDownload = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M12 4.5V15M7.5 10.5 12 15l4.5-4.5" /><path d="M4.5 14.5v3a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" /></svg>);
 export const IconPaste = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><rect x="5" y="5" width="14" height="16" rx="2.5" /><rect x="9" y="3" width="6" height="4" rx="1.2" /><path d="M8.5 12h7M8.5 16h4.5" /></svg>);
 export const IconKey = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><circle cx="8" cy="14" r="4.5" /><path d="m11.3 10.8 8.2-8.2M16.5 5.5l2.5 2.5M14 8l2 2" /></svg>);
 export const IconClose = (p: P) => (<svg {...base} {...p}><path d="M6 6l12 12M18 6 6 18" /></svg>);

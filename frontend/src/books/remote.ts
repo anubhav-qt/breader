@@ -1,9 +1,8 @@
 import type { MangaChapter, SourceSeries } from '@breader/shared/manga';
-import { flush } from '../data/sync';
 import { ApiError, OfflineError } from '../lib/api';
 import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
-import { keptNote, pageFor } from './kept';
+import { countPages, keptNote, pageFor } from './kept';
 import { WORDS_PER_MANGA_PAGE } from './manga';
 import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './types';
 
@@ -17,10 +16,13 @@ import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './
  * language does.
  */
 
-/** group: the group whose uploads it's read in (its copy), or null for whichever. */
+/**
+ * group: the group whose uploads it's read in (its copy), or null for whichever. also: the next
+ * best copies elsewhere, in turn, for the chapters this one hasn't got.
+ */
 export type Remote =
-  | { kind: 'mangadex'; series: string; lang: string; group: string | null; key: string }
-  | { kind: 'source'; id: string; group: string | null; key: string };
+  | { kind: 'mangadex'; series: string; lang: string; group: string | null; key: string; also: Remote[] }
+  | { kind: 'source'; id: string; group: string | null; key: string; also: Remote[] };
 
 /** The group at the end of a url, after a #. */
 function groupOf(part: string | undefined): string | null {
@@ -32,15 +34,33 @@ function groupOf(part: string | undefined): string | null {
   }
 }
 
-/** Where a remote book is read from, by its url. `key` names it for what's kept offline. */
-export function remoteOf(url: string | undefined): Remote | null {
-  const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?(?:#(.+))?$/.exec(url ?? '');
-  if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', group: groupOf(md[3]), key: md[1] };
+/** One copy's url. */
+function oneRemote(url: string): Remote | null {
+  const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?(?:#(.+))?$/.exec(url);
+  if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', group: groupOf(md[3]), key: md[1], also: [] };
   // A series on Breader's Suwayomi: its url is its id there.
-  const source = /^(sw:[1-9]\d{0,9})(?:#(.+))?$/.exec(url ?? '');
-  if (source) return { kind: 'source', id: source[1], group: groupOf(source[2]), key: source[1] };
+  const source = /^(sw:[1-9]\d{0,9})(?:#(.+))?$/.exec(url);
+  if (source) return { kind: 'source', id: source[1], group: groupOf(source[2]), key: source[1], also: [] };
   return null;
 }
+
+/**
+ * Where a remote book is read from, by its url. `key` names it for what's kept offline. After a |,
+ * each copy filling in the chapters it hasn't got (copies.ts alsoOf).
+ */
+export function remoteOf(url: string | undefined): Remote | null {
+  const [first, ...rest] = (url ?? '').split('|');
+  const w = oneRemote(first);
+  if (!w) return null;
+  for (const part of rest) {
+    const also = oneRemote(part);
+    if (also && also.key !== w.key && !w.also.some((x) => x.key === also.key)) w.also.push(also);
+  }
+  return w;
+}
+
+/** A url read from its own copy, the chapters it hasn't got from these, in turn. */
+export const withAlso = (url: string, also: string[]) => [url, ...also].join('|');
 
 /** The end of a url naming the group a series is read in, or nothing for whichever. */
 function groupPart(group: string | null): string {
@@ -85,6 +105,14 @@ const keyOf = (c: MangaChapter) => {
   return n !== null ? `n${n}` : `x${(c.title ?? '').trim().toLowerCase() || 'oneshot'}`;
 };
 
+/** By number, extras after, each as it came. */
+const ofSort = (a: MangaChapter, b: MangaChapter) => {
+  const x = numberOf(a);
+  const y = numberOf(b);
+  if (x !== null && y !== null) return x - y || a.at - b.at;
+  return x !== null ? -1 : y !== null ? 1 : a.at - b.at;
+};
+
 /**
  * One upload of each chapter, in order. Of several, one that can be read here before one read on
  * its publisher's site; then the one by the group picked (the copy it's read in), where it has
@@ -107,13 +135,39 @@ export function pickChapters(all: MangaChapter[], prefer: string | null = null):
     const had = best.get(k);
     if (!had || better(c, had) > 0) best.set(k, c);
   }
-  return [...best.values()].sort((a, b) => {
-    const x = numberOf(a);
-    const y = numberOf(b);
-    if (x !== null && y !== null) return x - y || a.at - b.at;
-    // Extras after the numbered chapters, as they came.
-    return x !== null ? -1 : y !== null ? 1 : a.at - b.at;
-  });
+  // Extras after the numbered chapters, as they came.
+  return [...best.values()].sort(ofSort);
+}
+
+/** A copy filling in, its chapters picked one of each (pickChapters), and the site it's on, to credit with them. */
+export interface Fill {
+  site: string;
+  chapters: MangaChapter[];
+}
+
+/**
+ * A copy's chapters, picked one of each, with those it hasn't got (or only links to on its
+ * publisher's site) from the next copies in turn, each one credited with its site. Only numbered
+ * chapters fill in: extras go by their names, which sites write differently.
+ */
+export function filledIn(own: MangaChapter[], fills: Fill[]): MangaChapter[] {
+  if (!fills.length) return own;
+  const at = new Map<string, MangaChapter>();
+  for (const c of own) at.set(keyOf(c), c);
+  let added = false;
+  for (const f of fills) {
+    for (const c of f.chapters) {
+      if (numberOf(c) === null || c.external) continue;
+      const k = keyOf(c);
+      const had = at.get(k);
+      if (had && !had.external) continue;
+      const groups = c.groups.length ? c.groups.map((g) => ({ ...g, name: `${g.name} · ${f.site}` })) : [{ id: f.site, name: f.site }];
+      at.set(k, { ...c, groups });
+      added = true;
+    }
+  }
+  if (!added) return own;
+  return [...at.values()].sort(ofSort);
 }
 
 /** "Ch. 12", or an unnumbered one's own name. */
@@ -136,6 +190,9 @@ async function kept<T>(key: string, get: () => Promise<T>): Promise<T> {
     throw e;
   }
 }
+
+/** A chapter on a Suwayomi source, by its id (sw:12), rather than MangaDex's. */
+const onSource = (id: string) => id.startsWith('sw:');
 
 /** A place's block: its chapter's number and its page in it (books/types.ts MangaBook.anchor). */
 const PER = 1000;
@@ -217,9 +274,8 @@ function bookOf(rec: BookRecord, remote: NonNullable<MangaBook['remote']>, total
   };
 }
 
-async function openMangaDex(rec: BookRecord, series: string, lang: string, group: string | null): Promise<MangaBook> {
-  const list = await kept(`mdlist:${series}:${lang}`, async () => (await mangadex.chapters(series, lang)).chapters);
-  const { chapters, total } = laidOut(pickChapters(list, group));
+async function openMangaDex(rec: BookRecord, series: string, picked: MangaChapter[]): Promise<MangaBook> {
+  const { chapters, total } = laidOut(picked);
   if (!total) {
     throw new Error(chapters.length
       ? 'Every chapter of this manga in this language is read on its publisher’s own site. The links are in its chapter list.'
@@ -261,17 +317,6 @@ async function aboutSource(id: string): Promise<{ name: string; page: string | n
   }
 }
 
-/** A chapter's pages, as its source counts them. A library made a moment ago signs in with its first sync. */
-async function pagesOf(chapter: string): Promise<number> {
-  try {
-    return await sources.pages(chapter);
-  } catch (e) {
-    if (!(e instanceof ApiError && e.code === 'signed_out')) throw e;
-    await flush();
-    return sources.pages(chapter);
-  }
-}
-
 /** How many of these counts come before the first that failed (0: its source couldn't say). */
 function inARow(counts: number[]): number {
   let n = 0;
@@ -279,12 +324,11 @@ function inARow(counts: number[]): number {
   return n;
 }
 
-async function openSource(rec: BookRecord, id: string, group: string | null, at?: Position): Promise<MangaBook> {
-  const [about, list] = await Promise.all([
-    aboutSource(id),
-    kept(`srclist:${id}`, async () => (await sources.chapters(id)).chapters),
-  ]);
-  const picked = pickChapters(list, group);
+/**
+ * A series a few chapters at a time: a source's, or MangaDex's with chapters filled in from one.
+ * `id` names it for what's kept offline.
+ */
+async function openWindowed(rec: BookRecord, id: string, about: { name: string; page: string | null }, picked: MangaChapter[], at?: Position): Promise<MangaBook> {
   if (!picked.length) throw new Error('There are no chapters of this series yet.');
 
   // Suwayomi learns a chapter's pages by asking its source, so a few chapters around the place open.
@@ -295,10 +339,12 @@ async function openSource(rec: BookRecord, id: string, group: string | null, at?
   const note = await keptNote(id);
   /** A chapter's pages: counted by its source, unless they're kept here already. 0 when it can't say. */
   const count = async (c: MangaChapter): Promise<number> => {
+    // MangaDex says how many pages its chapters have with them.
+    if (!onSource(c.id)) return c.pages;
     const k = note[c.id];
     if (k?.done) return k.pages;
     try {
-      return await pagesOf(c.id);
+      return await countPages(c.id);
     } catch {
       return 0;
     }
@@ -370,9 +416,56 @@ async function openSource(rec: BookRecord, id: string, group: string | null, at?
   return build(to, counted.slice(0, to - from));
 }
 
+/** A copy's chapters, as they came, or as they were last time when there's no reaching where they come from. */
+export function listOf(w: Remote): Promise<MangaChapter[]> {
+  if (w.kind === 'mangadex') return kept(`mdlist:${w.series}:${w.lang}`, async () => (await mangadex.chapters(w.series, w.lang)).chapters);
+  return kept(`srclist:${w.id}`, async () => (await sources.chapters(w.id)).chapters);
+}
+
+/** Its site's name, to credit chapters filled in from it. */
+async function siteOf(w: Remote): Promise<string> {
+  if (w.kind === 'mangadex') return 'MangaDex';
+  return (await aboutSource(w.id)).name;
+}
+
+/** The copies filling in, in turn: those that answer, with their own groups, as their copy is picked. */
+async function fillsOf(also: Remote[]): Promise<Fill[]> {
+  const got = await Promise.all(also.map(async (w): Promise<Fill | null> => {
+    try {
+      const [list, site] = await Promise.all([listOf(w), siteOf(w)]);
+      return { site, chapters: pickChapters(list, w.group) };
+    } catch {
+      return null;
+    }
+  }));
+  return got.filter((f): f is Fill => f !== null);
+}
+
+/**
+ * Every chapter of a series as Read lays it out, its other copies filling in what its own copy
+ * hasn't got, to keep the whole of it offline (books/kept.ts): those read on a publisher's own site
+ * aside. A source's chapters have no pages yet, being counted as they're kept. key: what's kept is
+ * kept under.
+ */
+export async function wholeSeries(url: string | undefined): Promise<{ key: string; chapters: RemoteChapter[] }> {
+  const where = remoteOf(url);
+  if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
+  const [list, fills] = await Promise.all([listOf(where), fillsOf(where.also)]);
+  const picked = filledIn(pickChapters(list, where.group), fills).filter((c) => c.pages > 0 || onSource(c.id));
+  return { key: where.key, chapters: laidOut(picked).chapters };
+}
+
 export async function openRemote(rec: BookRecord, at?: Position): Promise<MangaBook> {
   const where = remoteOf(rec.url);
   if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
-  if (where.kind === 'mangadex') return openMangaDex(rec, where.series, where.lang, where.group);
-  return openSource(rec, where.id, where.group, at);
+  // The chapters its copy hasn't got, from the next best copies elsewhere, asked alongside.
+  const [list, fills] = await Promise.all([listOf(where), fillsOf(where.also)]);
+  let picked = filledIn(pickChapters(list, where.group), fills);
+  if (where.kind === 'mangadex') {
+    // Every page counted already, the whole series opens; with a source's chapters, a few at a time.
+    if (!picked.some((c) => onSource(c.id))) return openMangaDex(rec, where.series, picked);
+    picked = picked.filter((c) => !c.external);
+    return openWindowed(rec, where.key, { name: 'MangaDex', page: `https://mangadex.org/title/${where.series}` }, picked, at);
+  }
+  return openWindowed(rec, where.key, await aboutSource(where.id), picked, at);
 }

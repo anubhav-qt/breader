@@ -5,11 +5,11 @@ import { Modal } from '../../components/Modal';
 import { IconCheck, IconChevron, IconOut } from '../../components/icons';
 import { useLabels } from '../../data/labels';
 import { keptNote } from '../../books/kept';
-import { laidOut, madeBy, pickChapters, remoteOf, startOf } from '../../books/remote';
+import { filledIn, laidOut, listOf, madeBy, pickChapters, remoteOf, startOf, type Fill } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
 import { byLang, KIND_NAME, langName, mangadex, RATING_NAME, sources, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
-import { copyKey, inOrder, sharpest, useCopies, type Copy, type Place } from './copies';
+import { alsoOf, alsoUrls, copyKey, inOrder, sharpest, urlOf, useCopies, type Copy, type Place } from './copies';
 
 /*
  * A series: what it is, its copies, and its chapters in the copy it's read in, each with the group
@@ -23,11 +23,15 @@ import { copyKey, inOrder, sharpest, useCopies, type Copy, type Place } from './
 /** What the series is, from where it was picked: for its card in My manga. */
 export type About = { kind: 'mangadex'; series: MangaSeries } | { kind: 'source'; series: SourceSeries };
 
-/** The copy to read: its place, its group, and the language MangaDex's chapters are in. */
+/**
+ * The copy to read: its place, its group, and the language MangaDex's chapters are in. also: the
+ * urls of the copies filling in the chapters it hasn't got, in turn (copies.ts alsoOf).
+ */
 export interface Picked {
   found: MangaFound;
   group: string | null;
   lang: string;
+  also: string[];
 }
 
 interface Props {
@@ -52,6 +56,8 @@ function errorText(e: unknown): string {
   if (e instanceof Error) return e.message;
   return 'Breader couldn’t reach it.';
 }
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 const dateText = (at: number) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
@@ -222,10 +228,35 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
     return () => { live = false; };
   }, [asking, keptFrom]);
 
-  const picked = useMemo(() => (list.state === 'ready' ? pickChapters(list.value, group) : []), [list, group]);
+  // The chapters it hasn't got, from the next best copies elsewhere, once every copy's measured. Until
+  // then, one in My manga fills in from those it did last time.
+  const fillers = settled ? alsoOf(places, shown.card.id) : [];
+  let also = alsoUrls(fillers, lang);
+  if (!settled && had) also = had.url?.split('|').slice(1) ?? [];
+  const fillKey = also.join('|');
+  const [fills, setFills] = useState<Fill[]>([]);
+  useEffect(() => {
+    let live = true;
+    setFills([]);
+    const sites = new Map(fillers.map((c) => [urlOf(c.found, c.group?.id ?? null, lang), c.found.source]));
+    const going = also.map(async (url): Promise<Fill | null> => {
+      const w = remoteOf(url);
+      if (!w) return null;
+      try {
+        return { site: sites.get(url) || (w.kind === 'mangadex' ? 'MangaDex' : 'its site'), chapters: pickChapters(await listOf(w), w.group) };
+      } catch {
+        return null;
+      }
+    });
+    void Promise.all(going).then((got) => { if (live) setFills(got.filter((f): f is Fill => f !== null)); });
+    return () => { live = false; };
+    // The copies filling in, by their urls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillKey]);
+  const picked = useMemo(() => (list.state === 'ready' ? filledIn(pickChapters(list.value, group), fills) : []), [list, group, fills]);
   const { chapters, total } = useMemo(() => laidOut(picked), [picked]);
   const rect = () => coverRef.current?.getBoundingClientRect();
-  const pickedNow: Picked = { found: shown, group, lang };
+  const pickedNow: Picked = { found: shown, group, lang, also };
 
   /** A place's name: as found, or, opened from My manga before a search found it, as its sheet says. */
   const siteOf = (f: MangaFound) => {
@@ -369,13 +400,18 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
     if (!had || !asking) return;
     let movedGroup: string | null = null;
     if (asking.group) movedGroup = asking.group.id;
-    onMove(had, { found: asking.found, group: movedGroup, lang }, siteOf(asking.found));
+    onMove(had, { found: asking.found, group: movedGroup, lang, also: alsoUrls(alsoOf(places, asking.found.card.id), lang) }, siteOf(asking.found));
     setAsking(null);
   };
 
+  // Counted as the reader counts them ("Ch. 12 of 147"): by whole numbers, the halves and extras besides.
   let count = 'Chapters';
-  if (list.state === 'ready' && chapters.length === 1) count = '1 chapter';
-  else if (list.state === 'ready') count = `${chapters.length} chapters`;
+  if (list.state === 'ready') {
+    const whole = new Set(chapters.filter((c) => c.number !== null && c.number >= 1 && Number.isInteger(c.number)).map((c) => c.number)).size;
+    const extras = chapters.length - whole;
+    if (!whole) count = plural(chapters.length, 'chapter');
+    else count = extras ? `${plural(whole, 'chapter')} · ${plural(extras, 'extra')}` : plural(whole, 'chapter');
+  }
 
   let credit = `From ${siteOf(shown)}, through Breader’s own computer. Breader asks it for each chapter’s pages as they’re read.`;
   if (shown.kind === 'mangadex') credit = 'Chapters come from MangaDex, made by the scanlation groups named with each. Reading them here, Breader asks MangaDex for each page as it’s read.';

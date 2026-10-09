@@ -15,6 +15,7 @@ import {
 import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
+import type { Cover, Covers, CoverWidth } from './covers.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
 import { WARM, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { web } from './genres.ts';
@@ -138,14 +139,16 @@ export interface MangaDex {
   chapters(id: string, lang: string): Promise<MangaChapters>;
   /** Page n of a chapter (from 0), or its data-saver copy. */
   page(chapterId: string, n: number, saver: boolean): Promise<Picture>;
-  cover(mangaId: string, file: string, size: '256' | '512'): Promise<Picture>;
+  /** A series' cover at a width; early: the prefetch's (covers.ts). */
+  cover(mangaId: string, file: string, size: '256' | '512', early?: number): Promise<Cover>;
   /** Checks Popular's and Updated's first screens ahead of readers. */
   warm(): Promise<void>;
 }
 
 export interface MangaDexOptions {
-  /** Where pages and covers are kept. */
+  /** Where pages are kept. */
   disk: Disk;
+  covers: Covers;
   fetch?: typeof fetch;
   /** Calls a window: MangaDex's API overall, and its page servers' addresses. Tests go faster. */
   pace?: { api: [number, number]; home: [number, number] };
@@ -164,6 +167,8 @@ interface Ask {
   lang?: string;
   field: string;
   adult: boolean;
+  /** 18+ series alone. */
+  adultOnly?: boolean;
   doujinshi: boolean;
   /** In MANGA_KINDS' order. */
   kinds: MangaKind[];
@@ -461,7 +466,12 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
 
   /** One lot of MangaDex's results, kept a while. */
   function list(a: Ask, offset: number) {
-    const rating = a.adult ? 'adult' : 'safe';
+    let rating = a.adult ? 'adult' : 'safe';
+    let ratings = a.adult ? ALL : SAFE;
+    if (a.adultOnly) {
+      rating = 'only';
+      ratings = ADULT_RATINGS;
+    }
     const doujinshi = a.doujinshi ? 'doujinshi' : 'plain';
     let kinds = a.kinds.join('+');
     if (a.kinds.length === MANGA_KINDS.length) kinds = 'all';
@@ -478,7 +488,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
           offset,
           title: a.q || undefined,
           includes: ['cover_art', 'author', 'artist'],
-          contentRating: a.adult ? ALL : SAFE,
+          contentRating: ratings,
           excludedTags: excluded,
           excludedTagsMode: 'OR',
           availableTranslatedLanguage: a.lang ? [a.lang] : undefined,
@@ -622,7 +632,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
     const by = ORDER[w.sort ?? (w.q ? 'relevance' : 'popular')];
     // Relevance needs words to be relevant to.
     const field = by === 'relevance' && !w.q ? 'followedCount' : by;
-    const ask: Ask = { q: w.q, lang: w.lang, field, adult: w.adult, doujinshi: w.doujinshi, kinds: w.kinds };
+    const ask: Ask = { q: w.q, lang: w.lang, field, adult: w.adult, adultOnly: w.adultOnly, doujinshi: w.doujinshi, kinds: w.kinds };
     const started = Date.now();
     const found: Found[] = [];
     let failed: unknown = null;
@@ -695,9 +705,11 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       });
     },
 
-    async cover(mangaId, file, size) {
+    async cover(mangaId, file, size, early) {
       await allowed(mangaId);
-      return disk.keep(`cover:${mangaId}:${file}:${size}`, () => picture(`${UPLOADS}/covers/${mangaId}/${file}.${size}.jpg`, false));
+      // Both widths are made from MangaDex's 512 (covers.ts): one fetch, and a 256 as sharp as its own.
+      const original = () => picture(`${UPLOADS}/covers/${mangaId}/${file}.512.jpg`, false);
+      return opts.covers.get(`md:${mangaId}:${file}`, mangaId, Number(size) as CoverWidth, original, early);
     },
 
     async warm() {

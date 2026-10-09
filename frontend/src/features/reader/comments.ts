@@ -7,7 +7,7 @@ import {
   type CommentThreads,
   type NameCheck,
 } from '@breader/shared/comments';
-import { hasKey } from '../../data/sync';
+import { hasKey, watchSync } from '../../data/sync';
 import { api, ApiError } from '../../lib/api';
 import { screenWords } from '../../books/mark';
 import type { BookRecord, ReadMark } from '../../books/types';
@@ -83,7 +83,18 @@ export function useTalk(thread: string, on: boolean): Talk {
     if (!on) return;
     void refreshTalk(thread);
     const t = window.setInterval(() => { if (!document.hidden) void refreshTalk(thread); }, REFRESH);
-    return () => window.clearInterval(t);
+    // A book added a moment ago reaches the server with the next sync, a few seconds on: its comments
+    // are asked for again then, not two minutes later.
+    let last: number | null | undefined;
+    const stop = watchSync((s) => {
+      if (s.state !== 'synced' || s.lastSynced === last) return;
+      last = s.lastSynced;
+      if (get(thread).state === 'off') void refreshTalk(thread);
+    });
+    return () => {
+      window.clearInterval(t);
+      stop();
+    };
   }, [thread, on]);
   return useSyncExternalStore(subscribe, () => get(thread));
 }

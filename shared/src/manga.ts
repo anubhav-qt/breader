@@ -58,12 +58,16 @@ export const MangaSearchQuery = z.object({
   sort: z.enum(MANGA_SORTS).optional(),
   /** 18+ series too (erotica and pornographic). The loli and shota tags stay out whatever this says. */
   adult: Flag.optional(),
+  /** 18+ series and nothing else: adult, without the rest. */
+  adultOnly: Flag.optional(),
   /** Doujinshi (fan-made works) and anthologies too, which stay out unless asked. */
   doujinshi: Flag.optional(),
   /** Only these kinds; every kind when left out. A series of no known kind shows only then. */
   kinds: Kinds.optional(),
   /** Only series going by one of these names: a series' sheet, looking for its other copies with its title. */
   names: Names.optional(),
+  /** Each place's series as they come, as server-sent events (MangaSearchEvent), before the whole lot. */
+  stream: Flag.optional(),
   /** Where the last lot said to carry on from; the first lot without it. */
   next: Next.optional(),
 });
@@ -238,6 +242,15 @@ export interface MangaSearchResult {
   items: MangaFound[];
   next: string | null;
 }
+
+/**
+ * A streamed search's events: what's found so far, each time a place brings something, then the
+ * whole lot, as a plain search answers it; or what went wrong.
+ */
+export type MangaSearchEvent =
+  | { kind: 'some'; items: MangaFound[] }
+  | { kind: 'lot'; items: MangaFound[]; next: string | null }
+  | { kind: 'error'; status: number; code: string; message: string };
 
 export interface MangaChapters {
   lang: string;

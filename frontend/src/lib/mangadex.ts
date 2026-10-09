@@ -1,4 +1,4 @@
-import { MANGA_KINDS, type MangaChapters, type MangaCopies, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
+import { MANGA_KINDS, type MangaChapters, type MangaCopies, type MangaFound, type MangaKind, type MangaSearchEvent, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
 import { api, ApiError, laptopUrl } from './api';
 import { readLocal, writeLocal } from './store';
 
@@ -24,6 +24,8 @@ export interface MangaSearch {
   lang?: string;
   sort?: MangaSort;
   adult?: boolean;
+  /** 18+ series and nothing else. */
+  adultOnly?: boolean;
   /** Doujinshi and anthologies too, which stay out unless asked for. */
   doujinshi?: boolean;
   /** Only these kinds; every kind when left out. */
@@ -48,10 +50,42 @@ const query = (q: Record<string, string | number | undefined>) => {
   return s ? `?${s}` : '';
 };
 
+const searchPath = (s: MangaSearch, stream = false) =>
+  `/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, adultOnly: s.adultOnly ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, kinds: kindsOf(s.kinds), names: s.names?.join(','), next: s.next, stream: stream ? 1 : undefined })}`;
+
+/** A streamed search's events, as the server sends them (routes/manga.ts). */
+async function* eventsOf(res: Response): AsyncGenerator<MangaSearchEvent> {
+  const reader = res.body!.getReader();
+  const text = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buf += text.decode(value, { stream: true });
+    for (let end = buf.indexOf('\n\n'); end >= 0; end = buf.indexOf('\n\n')) {
+      const event = buf.slice(0, end);
+      buf = buf.slice(end + 2);
+      const data = event.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6)).join('\n');
+      if (data) yield JSON.parse(data) as MangaSearchEvent;
+    }
+  }
+}
+
 export const mangadex = {
   state: () => ask(() => api.laptop.get<MangaState>('/v1/manga')),
-  search: (s: MangaSearch) =>
-    ask(() => api.laptop.get<MangaSearchResult>(`/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, kinds: kindsOf(s.kinds), names: s.names?.join(','), next: s.next })}`, 20_000)),
+  search: (s: MangaSearch) => ask(() => api.laptop.get<MangaSearchResult>(searchPath(s), 20_000)),
+  /** The same lot, with what's found so far given to onSome each time a place brings something. */
+  async searchAsItComes(s: MangaSearch, onSome: (items: MangaFound[]) => void): Promise<MangaSearchResult> {
+    const res = await ask(() => api.laptop.raw(searchPath(s, true), undefined, 20_000));
+    // A server from before streaming answers with the whole lot at once.
+    if (!res.body || !res.headers.get('content-type')?.includes('text/event-stream')) return res.json() as Promise<MangaSearchResult>;
+    for await (const e of eventsOf(res)) {
+      if (e.kind === 'some') onSome(e.items);
+      else if (e.kind === 'lot') return { items: e.items, next: e.next };
+      else throw new ApiError(e.status, e.code, e.message);
+    }
+    throw new ApiError(503, 'manga_cut', 'The search was cut off. Try again.');
+  },
   series: (id: string, adult: boolean) => ask(() => api.laptop.get<MangaSeries>(`/v1/manga/series/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter in a language. A long series is several calls to MangaDex, so it can take a while. */
   chapters: (id: string, lang: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),
@@ -105,12 +139,14 @@ export const sources = {
 };
 
 /**
- * How this device looks for manga: in what language and order, which kinds, whether 18+ series and
- * doujinshi (and anthologies) show, and data saver.
+ * How this device looks for manga: in what language and order, which kinds, whether 18+ series (or
+ * only they) and doujinshi (and anthologies) show, and data saver.
  */
 export interface MangaPrefs {
   lang: string;
   adult: boolean;
+  /** With 18+ on, those series alone, not mixed in with the rest. */
+  adultOnly: boolean;
   /** Doujinshi (fan-made works) and anthologies show in the results too. */
   doujinshi: boolean;
   /** At least one, in MANGA_KINDS' order. */
@@ -120,7 +156,7 @@ export interface MangaPrefs {
 }
 
 const PREFS = 'breader.mangadex.v1';
-const DEFAULTS: MangaPrefs = { lang: 'en', adult: false, doujinshi: false, kinds: [...MANGA_KINDS], sort: 'popular', saver: false };
+const DEFAULTS: MangaPrefs = { lang: 'en', adult: false, adultOnly: false, doujinshi: false, kinds: [...MANGA_KINDS], sort: 'popular', saver: false };
 
 export function readMangaPrefs(): MangaPrefs {
   const prefs = { ...DEFAULTS, ...readLocal<Partial<MangaPrefs>>(PREFS, {}) };
@@ -128,7 +164,10 @@ export function readMangaPrefs(): MangaPrefs {
   let kinds: MangaKind[] = [];
   if (Array.isArray(prefs.kinds)) kinds = MANGA_KINDS.filter((k) => prefs.kinds.includes(k));
   if (kinds.length === 0) kinds = [...MANGA_KINDS];
-  return { ...prefs, kinds };
+  // New is gone from Browse: kept on it, Browse opens on Updated, which lists the same series.
+  let sort = prefs.sort;
+  if (sort === 'new') sort = 'latest';
+  return { ...prefs, kinds, sort, adultOnly: prefs.adult && !!prefs.adultOnly };
 }
 export const writeMangaPrefs = (p: MangaPrefs) => writeLocal(PREFS, p);
 

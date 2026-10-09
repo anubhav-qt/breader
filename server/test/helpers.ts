@@ -36,7 +36,7 @@ export function browser(ip = `10.${rand()}.${rand()}.${rand()}`, to = app) {
     return { status: res.status, body: json, headers: res.headers };
   };
   return {
-    get: (path: string) => call('GET', path),
+    get: (path: string, headers?: Record<string, string>) => call('GET', path, undefined, headers),
     post: (path: string, body?: unknown, headers?: Record<string, string>) => call('POST', path, body ?? {}, headers),
     del: (path: string) => call('DELETE', path),
     /** The key session cookie, as the other tests knew it. */
