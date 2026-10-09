@@ -14,6 +14,9 @@ import { libraries } from '../db/schema.ts';
  * at the sharer's file. A copy is a source of that file for others once its reader has read
  * KEEP_WORDS of it; until then it only passes on what a source still shares, so a book its owner
  * stops sharing goes from everyone who barely started it, copies of copies too.
+ *
+ * A series read from a catalogue (a remote book) has no file: shared, it's its url, and a copy of
+ * it reads from the catalogue too, so it's the reader's to keep from the start.
  */
 
 /** Item `s` shares its file in its own right: the owner's book, or a copy read far enough to keep. */
@@ -50,11 +53,14 @@ export const keeps = (libraryId: string, file: AnyPgColumn | SQL): SQL => sql`EX
     AND (h.origin IS NULL OR coalesce(r.words_read, 0) >= ${KEEP_WORDS})
 )`;
 
-/** This library's copies of shared books that it read too little of to keep, which no source shares any more. */
+/**
+ * This library's copies of shared books that it read too little of to keep, which no source shares
+ * any more. A series read from a catalogue never goes: its pages were never the sharer's.
+ */
 export const lapsedIn = (libraryId: string): SQL => sql`
   SELECT h.book_id AS id FROM library_items h
   LEFT JOIN reading_states r ON r.library_id = h.library_id AND r.book_id = h.book_id
-  WHERE h.library_id = ${libraryId} AND h.origin IS NOT NULL AND h.removed_at IS NULL
+  WHERE h.library_id = ${libraryId} AND h.origin IS NOT NULL AND h.removed_at IS NULL AND h.source = 'file'
     AND coalesce(r.words_read, 0) < ${KEEP_WORDS}
     AND NOT ${sharedSomewhere(sql.raw('h.file_id'))}`;
 

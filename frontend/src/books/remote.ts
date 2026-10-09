@@ -60,6 +60,20 @@ export function sourceUrl(id: string, group: string | null = null): string {
   return id + groupPart(group);
 }
 
+/** A remote book's cover, through the laptop: none when it has none or the laptop's away. */
+export async function remoteCover(url: string | undefined): Promise<Blob | undefined> {
+  const w = remoteOf(url);
+  if (!w) return undefined;
+  if (w.kind === 'source') return sources.cover(`/v1/manga/source/${w.id}/cover`);
+  try {
+    const s = await mangadex.series(w.series, true);
+    if (!s.cover) return undefined;
+    return await mangadex.cover(s.id, s.cover, 512);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Its number: 12, 12.5; null for a oneshot or an extra. */
 export function numberOf(c: { chapter: string | null }): number | null {
   const n = parseFloat(c.chapter ?? '');

@@ -125,7 +125,10 @@ export interface BookRecord {
    * remote: a series read from a catalogue like MangaDex, through the laptop, by its url.
    */
   source: 'file' | 'sample' | 'placeholder' | 'shelf' | 'remote';
-  /** A sample's bundled file, or a remote book's series (mangadex:<id>, and :<language> when not English). */
+  /**
+   * A sample's bundled file, or a remote book's series (mangadex:<id>, and :<language> when not
+   * English), a shared one's too.
+   */
   url?: string;
   shared: boolean;
   /** Taken out of the reader's own books but left in their shared library. */

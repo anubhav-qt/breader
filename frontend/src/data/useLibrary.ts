@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import type { Edit, Mutation, NewMutation, PullResponse } from '@breader/shared/protocol';
 import { forget } from '../books/load';
 import { laterMark } from '../books/mark';
+import { remoteOf } from '../books/remote';
 import { report } from '../lib/report';
 import { store } from '../lib/store';
 import { onNews, tell, withData } from '../lib/tabs';
@@ -417,12 +418,20 @@ async function setCover(id: string, cover: Blob) {
  * Starting a book from someone's shared library (or adding it) puts a copy of it in this library,
  * pointing at the sharer's file, with its own place, colour and card, and shared here too until the
  * reader says otherwise. A copy of a copy goes by the first book, so a book is only ever in a
- * library once: starting it again, from anyone's library, finds the one here.
+ * library once: starting it again, from anyone's library, finds the one here. A shared series from
+ * a catalogue is read from there, as the sharer reads it, and found here however it came in.
  */
 async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
   const first = entry.origin ?? entry.id;
   const had = view.records.find((r) => r.id === first || r.origin === first);
   if (had) return had;
+  const series = remoteOf(entry.url);
+  if (series) {
+    const same = view.records.find((r) => r.source === 'remote' && remoteOf(r.url)?.key === series.key);
+    if (same) return same;
+  }
+  let source: BookRecord['source'] = 'file';
+  if (series) source = 'remote';
   const now = Date.now();
   const cover = await shelfCover(entry.id);
   const copy: BookRecord = {
@@ -430,7 +439,8 @@ async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
     title: entry.title,
     author: entry.author,
     format: entry.format,
-    source: 'file',
+    source,
+    ...(series ? { url: entry.url } : {}),
     shared: true,
     addedAt: now,
     words: entry.words,

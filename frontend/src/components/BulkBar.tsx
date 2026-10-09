@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { IconSelect } from './icons';
 import './library-switch.css';
 
 /** Something to do with every book picked. */
@@ -15,6 +16,10 @@ export interface BulkAction {
 interface Props {
   /** How many books are ticked. */
   count: number;
+  /** Every book in the library showing is ticked. */
+  all: boolean;
+  /** Ticks every book in the library showing, or none when they all are. */
+  onAll: () => void;
   /** What the library they're in lets the reader do with them. */
   actions: BulkAction[];
   onDone: () => void;
@@ -22,12 +27,20 @@ interface Props {
 
 /**
  * While picking books to act on together, the switch between libraries becomes this bar, in its
- * place: at the header's end on wide screens, floating at the bottom on phones. The actions are icons.
+ * place: at the header's end on wide screens, floating at the bottom on phones. The actions are icons,
+ * Select all first.
  */
-export function BulkBar({ count, actions, onDone }: Props) {
+export function BulkBar({ count, all, onAll, actions, onDone }: Props) {
+  let allLabel = 'Select all';
+  if (all) allLabel = 'Select none';
+
   return (
     <div className="ls ls-bulk" role="toolbar" aria-label="Picked">
       <div className="ls-seg">
+        <button type="button" className={`ls-tab ls-act ls-all${all ? ' is-all' : ''}`} title={allLabel} onClick={onAll}>
+          <IconSelect />
+          <span className="ls-act-label">{allLabel}</span>
+        </button>
         <span className="ls-picked" role="status">{count} picked</span>
         {actions.map((a) => (
           <button

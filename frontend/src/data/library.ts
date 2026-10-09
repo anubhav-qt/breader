@@ -262,8 +262,8 @@ export function shelfRecords(now: number): BookRecord[] {
   }));
 }
 
-/** Any of the reader's own books can be shared with their key, copies of others' too. */
-export const canShare = (rec: BookRecord) => rec.source === 'file';
+/** Any of the reader's own books can be shared with their key, copies of others' too, and series from Browse. */
+export const canShare = (rec: BookRecord) => rec.source === 'file' || rec.source === 'remote';
 
 /** Books in other people's shared libraries are theirs to take out, not yours. */
 export const canRemove = (rec: BookRecord) => rec.source !== 'shelf' && !(rec.shared && rec.source === 'placeholder');

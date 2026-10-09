@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import {
   LIBRARY_NAME,
@@ -60,12 +60,17 @@ export function shelfRoutes(deps: Deps) {
     return c.json({ token: sharedToken(lib, env.KEY_PEPPER), name: await nameOf(lib.id), own: mine?.id === lib.id } satisfies SharedOpenResponse);
   });
 
-  /** The books a library shares, newest first. */
+  /**
+   * The books a library shares, newest first: its files, and the series it reads from a catalogue,
+   * which anyone it's shared with reads from there too.
+   */
   r.post('/shared/books', rateLimit({ name: 'shared-books', max: 240, windowMs: 60_000 }), async (c) => {
     const lib = await opened(parse(SharedBooksRequest, await readJson(c)).token);
     const rows = await db
       .select({
         id: libraryItems.bookId,
+        source: libraryItems.source,
+        url: libraryItems.url,
         origin: libraryItems.origin,
         title: sql<string>`coalesce(${libraryItems.editTitle}, ${libraryItems.title})`,
         author: libraryItems.author,
@@ -83,18 +88,27 @@ export function shelfRoutes(deps: Deps) {
         genre: sql<string | null>`case when ${libraryItems.editGenre} is not null then nullif(${libraryItems.editGenre}, '') else ${libraryItems.genre} end`,
       })
       .from(libraryItems)
-      .innerJoin(blobs, eq(blobs.id, libraryItems.fileId))
+      .leftJoin(blobs, eq(blobs.id, libraryItems.fileId))
       .where(and(
         eq(libraryItems.libraryId, lib.id),
         eq(libraryItems.shared, true),
         isNull(libraryItems.removedAt),
-        eq(libraryItems.source, 'file'),
-        eq(blobs.status, 'ready'),
-        readable('library_items'),
+        or(
+          and(eq(libraryItems.source, 'file'), eq(blobs.status, 'ready'), readable('library_items')),
+          and(eq(libraryItems.source, 'remote'), isNotNull(libraryItems.url)),
+        ),
       ))
       .orderBy(desc(libraryItems.addedAt))
       .limit(SHELF_LIMIT);
-    const books = rows.map((b) => ({ ...b, format: b.format as SharedBooksResponse['books'][number]['format'], addedAt: b.addedAt.getTime(), fileId: b.fileId! }));
+    const books = rows.map(({ source, url, ...b }) => {
+      const book: SharedBooksResponse['books'][number] = {
+        ...b,
+        format: b.format as SharedBooksResponse['books'][number]['format'],
+        addedAt: b.addedAt.getTime(),
+      };
+      if (source === 'remote' && url) book.url = url;
+      return book;
+    });
     c.header('Cache-Control', 'private, no-store');
     return c.json({ name: await nameOf(lib.id), books } satisfies SharedBooksResponse);
   });

@@ -11,7 +11,7 @@ import { categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
-import { placeChapter, remoteOf } from './books/remote';
+import { placeChapter, remoteCover, remoteOf } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
@@ -19,7 +19,7 @@ import { useMangaPreview } from './data/mangaPreview';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { namesOf, type MangaFound } from '@breader/shared/manga';
 import { useLabels } from './data/labels';
-import { addLibrary, libraryName, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
+import { addLibrary, keepShelfCover, libraryName, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
 import { AddBook } from './features/add/AddBook';
@@ -260,6 +260,16 @@ export default function App() {
     () => new Set(lib.records.filter((r) => !hidden.has(r.id) && !lapsed.has(r.id) && !r.sharedOnly).map((r) => r.origin ?? r.id)),
     [lib.records, lapsed, hidden],
   );
+  /** Series from a catalogue in the reader's own books, however they came in, by where they're read. */
+  const keptSeries = useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of lib.records) {
+      if (r.source !== 'remote' || hidden.has(r.id) || r.sharedOnly) continue;
+      const w = remoteOf(r.url);
+      if (w) keys.add(w.key);
+    }
+    return keys;
+  }, [lib.records, hidden]);
 
   const recordById = useMemo(() => {
     const m = new Map<string, BookRecord>();
@@ -274,12 +284,20 @@ export default function App() {
     const view = (recs: BookRecord[]) =>
       recs.filter((r) => !hidden.has(r.id)).map((r) => withReading(r, lib.reads, covers, lib.edits)).sort(byRecent);
     const liveMine = view(lib.records.filter((r) => !lapsed.has(r.id) && !r.sharedOnly));
+    /** A book of theirs the reader has too: a copy of it, or the same series from a catalogue. */
+    const isKept = (b: BookRecord) => {
+      if (b.source !== 'shelf') return false;
+      if (keptFirsts.has(b.origin ?? b.id)) return true;
+      const w = remoteOf(b.url);
+      if (!w) return false;
+      return keptSeries.has(w.key);
+    };
     // No one's reading shows in a shared library, the reader's own included, newest first. Copies
     // go by their first book, so a card stays put however many hands it passed through.
     const onShelf = sharedRecords
       .filter((r) => !hidden.has(r.id))
       .map((r) => withReading(r, {}, covers, showing === 'own' ? lib.edits : {}))
-      .map((b) => ({ ...b, key: b.origin ?? b.id, ...(b.source === 'shelf' && keptFirsts.has(b.origin ?? b.id) ? { kept: true } : {}) }))
+      .map((b) => ({ ...b, key: b.origin ?? b.id, ...(isKept(b) ? { kept: true } : {}) }))
       .sort((a, b) => b.addedAt - a.addedAt);
     let mine: ShelfItem[];
     switch (preview) {
@@ -294,7 +312,7 @@ export default function App() {
     // Blank series, numbers and genres filled in from the rest of both libraries, and one name a series.
     const filled = fillGaps([...mine, ...onShelf]);
     return { mine: filled.slice(0, mine.length), shelf: filled.slice(mine.length) };
-  }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, sharing.covers, sharedRecords, keptFirsts, showing, previewSets, mangaPreview, preview, hidden]);
+  }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, sharing.covers, sharedRecords, keptFirsts, keptSeries, showing, previewSets, mangaPreview, preview, hidden]);
   // Each tab shows the chosen shelf's books; series and genres are offered from both.
   const items = useMemo(() => ({
     mine: everything.mine.filter((b) => categoryOf(b) === category),
@@ -525,23 +543,29 @@ export default function App() {
   useEffect(() => {
     if (!libIsReady || category !== 'manga') return;
     for (const r of libRecords) {
-      const w = r.source === 'remote' && !r.hasCover && !coverAsked.current.has(r.id) ? remoteOf(r.url) : null;
-      if (!w) continue;
+      if (r.source !== 'remote' || r.hasCover || coverAsked.current.has(r.id)) continue;
       coverAsked.current.add(r.id);
-      if (w.kind === 'source') {
-        void sources.cover(`/v1/manga/source/${w.id}/cover`).then((blob) => {
-          if (blob) void setCover(r.id, blob);
-        });
-        continue;
-      }
-      void mangadex.series(w.series, true)
-        .then(async (s) => {
-          const blob = s.cover ? await mangadex.cover(s.id, s.cover, 512) : undefined;
-          if (blob) await setCover(r.id, blob);
-        })
-        .catch(() => {});
+      void remoteCover(r.url).then((blob) => {
+        if (blob) void setCover(r.id, blob);
+      });
     }
   }, [libIsReady, libRecords, category, setCover]);
+
+  // Someone's shared series brings its cover through the laptop too, once, then from this browser.
+  const shelfCoverAsked = useRef(new Set<string>());
+  useEffect(() => {
+    if (category !== 'manga') return;
+    for (const r of sharedRecords) {
+      if (r.source !== 'shelf' || !r.url) continue;
+      if (sharing.covers[r.id] || shelfCoverAsked.current.has(r.id)) continue;
+      shelfCoverAsked.current.add(r.id);
+      void shelfCover(r.id)
+        .then((kept) => kept ?? remoteCover(r.url))
+        .then((blob) => {
+          if (blob) void keepShelfCover(r.id, blob);
+        });
+    }
+  }, [category, sharedRecords, sharing.covers]);
 
   // Closing waits two frames, so the library underneath has laid out the card to land on.
   useEffect(() => {
@@ -890,18 +914,17 @@ export default function App() {
     }
     void removeAll(ids, [], fromKeyboard);
   };
-  /** The picked books that can be shared: shares them, or stops sharing them when they all are already. They stay picked. */
-  const shareable = pickedBooks.filter((b) => canShare(b));
-  const allShared = shareable.length > 0 && shareable.every((b) => b.shared);
+  /** The picked books that can be shared and aren't yet: shares them with the reader's key. They stay picked. */
+  const toShare = pickedBooks.filter((b) => canShare(b) && !b.shared);
   const sharePicked = () => {
-    if (allShared) {
-      for (const b of shareable) lib.setShared(b.id, false);
-      say(stoppedSharing(shareable.length, category));
-      return;
-    }
-    const newly = shareable.filter((b) => !b.shared);
-    for (const b of newly) lib.setShared(b.id, true);
-    say(`Shared ${countOf(newly.length, category)} with your key`);
+    for (const b of toShare) lib.setShared(b.id, true);
+    say(`Shared ${countOf(toShare.length, category)} with your key`);
+  };
+  /** The picked books shared already: stops sharing them. They stay picked. */
+  const toStop = pickedBooks.filter((b) => canShare(b) && b.shared);
+  const stopSharingPicked = () => {
+    for (const b of toStop) lib.setShared(b.id, false);
+    say(stoppedSharing(toStop.length, category));
   };
   /** In the reader's own shared library: the picked books taken out of their own books, put back in. */
   const outOfMine = pickedBooks.filter((b) => b.sharedOnly);
@@ -964,11 +987,10 @@ export default function App() {
   /** What can be done with the picked books, by the library they're in. */
   let actions: BulkAction[] = [];
   if (tab === 'mine') {
-    let shareAction: BulkAction = { key: 'share', label: 'Share', icon: <IconPeople />, disabled: !shareable.length, run: sharePicked };
-    if (allShared) shareAction = { ...shareAction, label: 'Unshare', icon: <IconLock /> };
     actions = [
       { key: 'favourite', label: allFavourites ? 'Unfavourite' : 'Favourite', icon: <IconStar />, run: favouritePicked },
-      shareAction,
+      { key: 'share', label: 'Share', icon: <IconPeople />, disabled: !toShare.length, run: sharePicked },
+      { key: 'unshare', label: 'Unshare', icon: <IconLock />, disabled: !toStop.length, run: stopSharingPicked },
       { key: 'remove', label: 'Remove', icon: <IconTrash />, danger: true, run: removePicked },
     ];
   } else if (showing === 'own') {
@@ -981,9 +1003,20 @@ export default function App() {
       { key: 'add', label: 'Add', icon: <IconAddBook />, disabled: !notKept.length, run: (k) => void keepPicked(k) },
     ];
   }
+  /** Every book in the library showing is picked. */
+  const allPicked = pickedBooks.length > 0 && pickedBooks.length === books.length;
+  /** Picks every book in the library showing, or none when they all are already. */
+  const pickAll = () => {
+    let ids = new Set<string>();
+    if (!allPicked) ids = new Set(books.map((b) => b.id));
+    setPicking((p) => {
+      if (!p) return p;
+      return { ...p, ids };
+    });
+  };
   let bulkBar: ReactNode = null;
   if (picking) {
-    bulkBar = <BulkBar count={pickedBooks.length} actions={actions} onDone={() => setPicking(null)} />;
+    bulkBar = <BulkBar count={pickedBooks.length} all={allPicked} onAll={pickAll} actions={actions} onDone={() => setPicking(null)} />;
   }
   /** Select, where the library showing has books to pick. */
   let startPicking: (() => void) | undefined = undefined;

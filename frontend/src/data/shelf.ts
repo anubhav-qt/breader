@@ -229,6 +229,12 @@ export function tokenForFile(fileId: string): string | null {
 /** The cover this browser holds for a shared book, to give a copy of it the same one. */
 export const shelfCover = (id: string) => store.get<Blob>(`shelfcover:${id}`);
 
+/** A shared series' cover, which comes from its catalogue rather than the sharer: kept, and shown. */
+export async function keepShelfCover(id: string, blob: Blob) {
+  await store.set(`shelfcover:${id}`, blob);
+  set({ covers: { ...shared.covers, [id]: URL.createObjectURL(blob) } });
+}
+
 /** A shared book as a card, as its owner has it. Starting it makes a copy in the reader's library. */
 export function shelfRecord(b: ShelfBook): BookRecord {
   return {
@@ -245,7 +251,8 @@ export function shelfRecord(b: ShelfBook): BookRecord {
     progress: 0,
     line: b.line,
     lastOpened: b.addedAt,
-    fileId: b.fileId,
+    ...(b.fileId ? { fileId: b.fileId } : {}),
+    ...(b.url ? { url: b.url } : {}),
     ...(b.origin ? { origin: b.origin } : {}),
     ...(b.coverId ? { coverId: b.coverId } : {}),
     ...(b.series ? { series: b.series } : {}),

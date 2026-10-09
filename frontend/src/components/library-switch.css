@@ -55,6 +55,10 @@
 .ls-bulk .ls-act { justify-content: center; width: 34px; padding: 0; }
 .ls-act svg { flex: none; width: 18px; height: 18px; }
 .ls-act .ls-act-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Select all's tick fills in once every book is picked. */
+.ls-all.is-all { color: var(--ink); }
+.ls-all.is-all circle { fill: currentColor; }
+.ls-all.is-all path { stroke: var(--canvas); }
 
 /* Phones, and screens too narrow for it at the header's end with the library's name in the very
    middle (exactly from 1077px): the pill floats over the library, at the thumb. */

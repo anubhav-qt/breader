@@ -141,6 +141,29 @@ describe('shared libraries', () => {
     expect(await ids(token)).toContain(shared.id);
   });
 
+  it('share a series read from a catalogue by its url, and let a copy of it stay however little it’s read', async () => {
+    const { b: owner, key } = await registered();
+    const url = 'mangadex:0e1d2c3b-4a59-4687-9a6b-5c4d3e2f1a0b';
+    const series = book({ shared: true, source: 'remote', url, format: 'CBZ', words: 0, line: '' });
+    const hidden = book({ source: 'remote', url: 'sw:42', format: 'CBZ', words: 0, line: '' });
+    expect((await owner.post('/v1/sync/push', push('o', { type: 'book.put', book: series }, { type: 'book.put', book: hidden }))).body.rejected).toEqual([]);
+    const token = await tokenFor(key);
+    const listed = (await browser().post('/v1/shared/books', { token })).body.books;
+    expect(listed).toEqual([expect.objectContaining({ id: series.id, url, fileId: null, coverId: null })]);
+
+    // A reader adds it: their copy reads from the catalogue and shares it on.
+    const { b: reader, key: readerKey } = await registered();
+    const copy = book({ shared: true, source: 'remote', url, format: 'CBZ', words: 0, line: '', origin: series.id });
+    expect((await reader.post('/v1/sync/push', push('r', { type: 'book.put', book: copy }))).body.rejected).toEqual([]);
+    expect(await ids(await tokenFor(readerKey))).toEqual([copy.id]);
+
+    // The owner stops sharing it: the reader's copy stays, unread as it is.
+    await owner.post('/v1/sync/push', push('o2', { type: 'book.put', book: { ...series, shared: false } }));
+    expect(await ids(token)).toEqual([]);
+    expect((await reader.get('/v1/sync/pull?since=0')).body.lapsed).toEqual([]);
+    expect(await ids(await tokenFor(readerKey))).toEqual([copy.id]);
+  });
+
   it('lets a private file be borrowed by nobody', async () => {
     const { mine } = await sharer();
     const { b: reader } = await registered();

@@ -236,8 +236,11 @@ export const ShelfBook = z.object({
   addedAt: Millis,
   /** Its first sentence. */
   line: z.string(),
-  fileId: Id,
+  /** None for a series read from a catalogue. */
+  fileId: Id.nullable(),
   coverId: Id.nullable(),
+  /** A series read from a catalogue: where (REMOTE_URL), for anyone it's shared with to read it there too. */
+  url: z.string().regex(REMOTE_URL).optional(),
   series: z.string().nullish(),
   seriesIndex: z.number().nullish(),
   /** The sharer's genres for it, their own picks over the ones it was added with. */
