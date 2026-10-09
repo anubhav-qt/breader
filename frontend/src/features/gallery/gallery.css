@@ -492,6 +492,27 @@
 .ep-share { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
 .ep-share .ep-label { margin: 0; }
 .ep-note { margin: -4px 0 0; font: var(--ui-w) 11.5px/1.35 var(--ui); color: var(--ink-2); }
+.ep-off { display: grid; gap: 8px; }
+.ep-off-b { display: flex; align-items: center; gap: 6px; }
+.ep-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--ink);
+  font: var(--ui-w) 12.5px/1 var(--ui);
+  white-space: nowrap;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.ep-mini:hover { background: var(--line); }
+.ep-mini svg { width: 14px; height: 14px; }
+.ep-mini.is-quiet { background: none; color: var(--ink-2); }
+.ep-mini.is-quiet:hover { color: var(--ink); background: var(--fill); }
+.ep-mini.is-go { background: var(--ink); color: var(--paper); }
+.ep-mini.is-go:hover { background: var(--ink); opacity: 0.88; }
 .ep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .ep-act {
   flex: 1 1 0;

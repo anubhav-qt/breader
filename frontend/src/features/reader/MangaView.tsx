@@ -61,6 +61,8 @@ const TAIL = BAR + 24;
 const BATCH = 24;
 /** Pages kept open past those wanted, so going back a little doesn't open them again. */
 const SPARE = 6;
+/** Pages fetched at a time, so the one read comes first and isn't sharing the line with a dozen after it. */
+const AT_ONCE = 3;
 /** Scrolled: the line before each chapter of a series read from MangaDex. */
 const BAND = 56;
 /** Taps this close in time count together, as a double or triple tap. */
@@ -150,10 +152,61 @@ class Pictures {
   private urls = new Map<number, Promise<string | null>>();
   /** Each picture drawn once off screen, and held, so a page scrolled onto shows at once, never blank while it's drawn. */
   private drawn = new Map<number, HTMLImageElement>();
+  /** Pages waiting their turn to be fetched, each with how it starts, or how it's dropped. */
+  private waiting = new Map<number, { go: () => void; drop: () => void }>();
+  private fetching = 0;
+  private soon = false;
   /** The book the pictures come from: more chapters added at its end keep its pages where they are. */
   book: MangaBook;
+  /** The page read: pages are fetched from it outwards (turnOf). */
+  focus = 0;
   constructor(book: MangaBook) {
     this.book = book;
+  }
+
+  /** Page i's file, fetched in its turn (turnOf), a few at a time. */
+  private fetch(i: number): Promise<Blob> {
+    return new Promise<Blob>((done, fail) => {
+      const go = () => {
+        this.fetching += 1;
+        this.book.page(i).then(done, fail).finally(() => {
+          this.fetching -= 1;
+          this.next();
+        });
+      };
+      this.waiting.set(i, { go, drop: () => fail(new Error('dropped')) });
+      // Once every page asked for together is waiting, so the first picked is the nearest of them.
+      if (!this.soon) {
+        this.soon = true;
+        queueMicrotask(() => {
+          this.soon = false;
+          this.next();
+        });
+      }
+    });
+  }
+
+  /**
+   * A page's turn: the page read, then the one either side of it, behind first, then two either
+   * side, then on ahead one by one, as that's the way it's read; the rest behind it last.
+   */
+  private turnOf(i: number): number {
+    const d = i - this.focus;
+    if (d >= -2 && d <= 2) return d < 0 ? -2 * d - 1 : 2 * d;
+    if (d > 0) return d + 2;
+    return 1e9 - d;
+  }
+
+  private next() {
+    while (this.fetching < AT_ONCE && this.waiting.size) {
+      let pick = -1;
+      for (const i of this.waiting.keys()) {
+        if (pick < 0 || this.turnOf(i) < this.turnOf(pick)) pick = i;
+      }
+      const w = this.waiting.get(pick)!;
+      this.waiting.delete(pick);
+      w.go();
+    }
   }
 
   /** Page i's height over its width, once its picture is open; 0 until then. */
@@ -171,7 +224,7 @@ class Pictures {
   get(i: number): Promise<string | null> {
     let u = this.urls.get(i);
     if (!u) {
-      u = this.book.page(i).then(
+      u = this.fetch(i).then(
         async (b) => {
           const url = URL.createObjectURL(b);
           const img = new Image();
@@ -198,6 +251,9 @@ class Pictures {
   keep(from: number, to: number) {
     for (const [i, u] of this.urls) {
       if (i >= from && i <= to) continue;
+      // Not fetched yet, it never is.
+      this.waiting.get(i)?.drop();
+      this.waiting.delete(i);
       this.urls.delete(i);
       this.drawn.delete(i);
       void u.then((url) => { if (url) URL.revokeObjectURL(url); });
@@ -455,6 +511,9 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const [wantFrom, wantTo] = paged
     ? [spreads[Math.max(0, s - 1)]?.[0] ?? 0, spreads[Math.min(spreads.length - 1, s + 2)]?.slice(-1)[0] ?? total - 1]
     : [win[0], win[1] + 4];
+  // Before the pages are asked for, so they're fetched from the one read on.
+  const focus = paged ? (spreads[s]?.[0] ?? at.page) : at.page;
+  useEffect(() => { pics.focus = focus; }, [pics, focus]);
   useEffect(() => {
     let live = true;
     const from = Math.max(0, wantFrom);
@@ -549,6 +608,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     if (from === to && goal.current === null) return;
     const target = spreads[to];
     goal.current = target[0];
+    pics.focus = target[0];
     // The new page is ready before it's turned to, so the turn shows it, not a blank.
     const urls = await Promise.race([Promise.all(target.map((i) => pics.get(i))), wait(800)]);
     // A later turn took over.

@@ -29,6 +29,7 @@
     "onnxruntime-web": "1.30.0",
     "pg": "^8.23.0",
     "pino": "^10.3.1",
+    "sharp": "^0.35.5",
     "zod": "^4.6.5"
   },
   "devDependencies": {

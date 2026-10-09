@@ -5,9 +5,9 @@ import { newLibraryKey, seriesName, type MangaFound } from '@breader/shared';
 import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app.ts';
 import type { Store } from '../src/lib/cache.ts';
-import { find, rank, type Found, type Place } from '../src/manga/find.ts';
+import { find, namedLike, rank, type Found, type Place } from '../src/manga/find.ts';
 import { makeManga } from '../src/manga/index.ts';
-import { chapterTitle } from '../src/manga/suwayomi.ts';
+import { chapterTitle, tidy } from '../src/manga/suwayomi.ts';
 import { browser, deps } from './helpers.ts';
 
 /*
@@ -666,6 +666,13 @@ describe('browsing the quick sources, searching every one', () => {
     expect(shown(r.body).sort()).toEqual(['Asura Scans: Asura One', 'MangaDex: Dex One']);
   });
 
+  it('browses Top rated on MangaDex alone, as no source lists by rating', async () => {
+    const { b, sw } = await setup(['Dex One']);
+    sw.state.series = [{ id: 1, source: '11', title: 'Asura One' }];
+    const r = await b.get('/v1/manga/search?lang=en&sort=rated');
+    expect(shown(r.body)).toEqual(['MangaDex: Dex One']);
+  });
+
   it('browses MangaDex when Suwayomi is down', async () => {
     const { b, sw } = await setup(['Dex One']);
     sw.state.down = true;
@@ -787,5 +794,44 @@ describe('a source chapter’s title', () => {
     expect(chapterTitle('Ch. 40 - Later', 4)).toBe('Ch. 40 - Later');
     expect(chapterTitle('Prologue', -1)).toBe('Prologue');
     expect(chapterTitle('  ', -1)).toBeNull();
+  });
+});
+
+describe('a source’s chapters, tidied', () => {
+  const DAY = 86_400_000;
+  const ch = (n: number, title: string | null, at: number, by = 'official') =>
+    ({ id: `sw:${n}`, chapter: String(n), volume: null, title, pages: 0, external: null, groups: [{ id: by, name: by }], at });
+
+  it('drops a title many chapters share, and a scanlator’s tag with a scrap after it', () => {
+    const out = tidy([ch(1, '(1r0n) f2', 1), ch(2, '(1r0n) f2', 2 * DAY), ch(3, '(1r0n) f2', 3 * DAY), ch(4, '(1r0n) f', 4 * DAY), ch(5, '(1r0n) Phantoms of the Dead', 5 * DAY), ch(6, 'The Journey', 6 * DAY)]);
+    expect(out.map((c) => c.title)).toEqual([null, null, null, null, 'Phantoms of the Dead', 'The Journey']);
+  });
+
+  it('forgets dates when nearly every chapter has the same one, the day they were fetched', () => {
+    const fetched = 20_000 * DAY + 3_600_000;
+    const out = tidy([ch(1, null, fetched), ch(2, null, fetched + 60_000), ch(3, null, fetched + 120_000), ch(4, null, fetched + 180_000), ch(5, null, fetched + 240_000)]);
+    expect(out.map((c) => c.at)).toEqual([0, 0, 0, 0, 0]);
+    const real = tidy([ch(1, null, DAY), ch(2, null, 9 * DAY), ch(3, null, 30 * DAY)]);
+    expect(real.map((c) => c.at)).toEqual([DAY, 9 * DAY, 30 * DAY]);
+  });
+
+  it('keeps official and unofficial as two copies, named properly', () => {
+    const out = tidy([ch(1, null, DAY, 'official'), ch(1, null, DAY, 'unofficial')]);
+    expect(out.map((c) => c.groups[0])).toEqual([{ id: 'official', name: 'Official' }, { id: 'unofficial', name: 'Unofficial' }]);
+  });
+});
+
+describe('a search by name', () => {
+  const keys = (...titles: string[]) => titles.map((t) => seriesName(t).key);
+
+  it('keeps series going by what was searched for, by the whole of it or its main words', () => {
+    expect(namedLike('frieren', keys('Sousou no Frieren'))).toBe(true);
+    expect(namedLike('sousou no frieren', keys("Frieren - Beyond Journey's End"))).toBe(true);
+    expect(namedLike('Frieren', keys('Mieruko-chan'))).toBe(false);
+    expect(namedLike('frieren', keys("The Duke's Darling Daughter-in-Law"))).toBe(false);
+    expect(namedLike('one piece', keys('One Punch-Man'))).toBe(false);
+    expect(namedLike('one piece', keys('ONE PIECE (Official Colored)'))).toBe(true);
+    expect(namedLike('no', keys('Kimetsu no Yaiba'))).toBe(true);
+    expect(namedLike('葬送のフリーレン', keys('Sousou no Frieren', '葬送のフリーレン'))).toBe(true);
   });
 });

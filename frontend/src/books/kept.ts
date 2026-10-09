@@ -63,6 +63,17 @@ export async function pageFor(chapter: string, n: number): Promise<Blob> {
   return (await keptPage(chapter, n)) ?? fetchPage(chapter, n);
 }
 
+/** A source's chapter's pages, as it counts them. A library made a moment ago signs in with its first sync. */
+export async function countPages(chapter: string): Promise<number> {
+  try {
+    return await sources.pages(chapter);
+  } catch (e) {
+    if (!(e instanceof ApiError && e.code === 'signed_out')) throw e;
+    await flush();
+    return sources.pages(chapter);
+  }
+}
+
 /** A series' chapters kept here. */
 export const keptNote = (series: string) => noteOf(series);
 
@@ -89,6 +100,10 @@ let queue: Array<{ series: string; chapter: RemoteChapter }> = [];
 let now: Keeping | null = null;
 let failed: string | null = null;
 let stopped = false;
+/** Chapters that wouldn't come, one after another: past GIVE_UP, the rest wait for another try too. */
+let missed = 0;
+/** A chapter that won't come is passed over; this many in a row, and the site or the laptop is likely down. */
+const GIVE_UP = 3;
 /** Series let go of while one of their chapters was being kept: what it brought goes too. */
 const gone = new Set<string>();
 const listeners = new Set<() => void>();
@@ -102,12 +117,18 @@ async function run() {
     const note = await noteOf(series);
     if (note[chapter.id]?.done) continue;
     now = { series, chapter: chapter.id, label: chapter.label, done: 0, of: chapter.pages };
-    note[chapter.id] = { pages: chapter.pages, bytes: note[chapter.id]?.bytes ?? 0, done: false };
-    await set(noteKey(series), note, store);
     tell();
     let bytes = 0;
     try {
-      for (let n = 0; n < chapter.pages; n++) {
+      // A source's chapter not opened yet: counted first.
+      let pages = chapter.pages;
+      if (!pages && onSource(chapter.id)) pages = await countPages(chapter.id);
+      if (!pages) throw new Error(`${chapter.label} has no pages to keep.`);
+      now = { ...now, of: pages };
+      note[chapter.id] = { pages, bytes: note[chapter.id]?.bytes ?? 0, done: false };
+      await set(noteKey(series), note, store);
+      tell();
+      for (let n = 0; n < pages; n++) {
         if (stopped) break;
         let blob = await keptPage(chapter.id, n);
         if (!blob) {
@@ -121,27 +142,37 @@ async function run() {
         tell();
       }
       if (gone.delete(series)) {
-        for (let n = 0; n < chapter.pages; n++) await del(pageKey(chapter.id, n), store).catch(() => {});
+        for (let n = 0; n < pages; n++) await del(pageKey(chapter.id, n), store).catch(() => {});
         continue;
       }
       const after = await noteOf(series);
-      after[chapter.id] = { pages: chapter.pages, bytes, done: !stopped };
+      after[chapter.id] = { pages, bytes, done: !stopped };
       await set(noteKey(series), after, store);
+      missed = 0;
     } catch (e) {
       failed = e instanceof Error ? e.message : 'A page wouldn’t come.';
-      queue = [];
+      missed += 1;
+      if (missed >= GIVE_UP) queue = [];
     }
   }
   now = null;
   stopped = false;
+  missed = 0;
   tell();
 }
 
-/** Keeps these chapters of a series here, after any already being kept. */
+/**
+ * Keeps these chapters of a series here, after any already being kept. A source's chapter not
+ * opened yet (no pages) is counted when its turn comes.
+ */
 export function keepChapters(series: string, chapters: RemoteChapter[]) {
   failed = null;
   const queued = new Set(queue.map((q) => q.chapter.id));
-  for (const c of chapters) if (c.pages > 0 && !queued.has(c.id) && now?.chapter !== c.id) queue.push({ series, chapter: c });
+  for (const c of chapters) {
+    if (!(c.pages > 0 || onSource(c.id)) || queued.has(c.id) || now?.chapter === c.id) continue;
+    queue.push({ series, chapter: c });
+    queued.add(c.id);
+  }
   tell();
   void run();
 }

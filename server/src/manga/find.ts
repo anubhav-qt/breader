@@ -31,6 +31,8 @@ export interface Wanted {
   lang?: string;
   sort?: MangaSort;
   adult: boolean;
+  /** 18+ series alone (adult is on too). */
+  adultOnly?: boolean;
   doujinshi: boolean;
   /** At least one. */
   kinds: MangaKind[];
@@ -49,6 +51,41 @@ export function wantedName(titles: string[], w: Wanted): boolean {
   if (!w.names) return true;
   for (const t of titles) {
     if (w.names.includes(seriesName(t).key)) return true;
+  }
+  return false;
+}
+
+/** Words this short ("no", "wa") say too little on their own: a search of only these goes by its whole name. */
+const SHORT = 3;
+
+/** A search's words, keyed as names are (seriesName). */
+function wordsOf(q: string): string[] {
+  const parts = q.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const out: string[] = [];
+  for (const p of parts) {
+    const k = seriesName(p).key;
+    if (k.length >= SHORT && k !== 'the' && !out.includes(k)) out.push(k);
+  }
+  return out;
+}
+
+/**
+ * A series going by these names (seriesName keys) is one a search by name wants: one of them has
+ * the whole of it, or every word of it, or half its words and its longest. A site's search that
+ * also turns up whatever's like it in some way (MangaFire's does) loses what isn't.
+ */
+export function namedLike(q: string, names: Iterable<string>): boolean {
+  const whole = seriesName(q).key;
+  if (!whole) return true;
+  const words = wordsOf(q);
+  let longest = '';
+  for (const w of words) if (w.length > longest.length) longest = w;
+  for (const n of names) {
+    if (n.includes(whole)) return true;
+    if (!words.length) continue;
+    let hit = 0;
+    for (const w of words) if (n.includes(w)) hit += 1;
+    if (hit === words.length || (hit * 2 >= words.length && n.includes(longest))) return true;
   }
   return false;
 }
@@ -101,9 +138,9 @@ function within(going: Promise<Lot>, ms: number): Promise<Answer> {
 
 /**
  * Each place's lot, or that it was late or failed: each waited for up to `deadline`, and once one
- * has brought something, the rest only `grace` longer.
+ * has brought something, the rest only `grace` longer. onLot: each lot as it comes, in time.
  */
-function answersOf(going: Promise<Lot>[], deadline: number, grace: number | null): Promise<Answer[]> {
+function answersOf(going: Promise<Lot>[], deadline: number, grace: number | null, onLot?: (i: number, lot: Lot) => void): Promise<Answer[]> {
   return new Promise((done) => {
     const answers: Array<Answer | undefined> = going.map(() => undefined);
     const timers: Array<ReturnType<typeof setTimeout>> = [];
@@ -126,6 +163,7 @@ function answersOf(going: Promise<Lot>[], deadline: number, grace: number | null
         (lot) => {
           if (over) return;
           answers[i] = { lot, late: false, error: null };
+          onLot?.(i, lot);
           left -= 1;
           if (left === 0) finish();
           else if (grace !== null && !graced && lot.found.length > 0) {
@@ -195,9 +233,10 @@ interface Group {
 
 /**
  * What every place found, in the order a reader sees it: series grouped by name, each group's
- * cards side by side. Doujinshi and anthologies go last, and make groups of their own.
+ * cards side by side. Doujinshi and anthologies go last, and make groups of their own. strict: a
+ * search by name keeps only series that go by it (namedLike), any of a group's names will do.
  */
-export function rank(q: string | undefined, lots: Array<{ place: Place; found: Found[] }>): MangaFound[] {
+export function rank(q: string | undefined, lots: Array<{ place: Place; found: Found[] }>, strict = false): MangaFound[] {
   // Each place's series take turns: every place's first, then every place's second, and so on.
   const turns: Array<{ found: Found; place: string; at: number }> = [];
   for (let p = 0; p < lots.length; p++) {
@@ -237,7 +276,9 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
     if (a.places.size !== b.places.size) return b.places.size - a.places.size;
     return a.first - b.first;
   });
-  return groups.flatMap((g) => g.items);
+  let shown = groups;
+  if (strict && q) shown = groups.filter((g) => namedLike(q, g.names));
+  return shown.flatMap((g) => g.items);
 }
 
 /**
@@ -245,14 +286,27 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
  * out from then on; one that's late is asked again next time. Only when every place failed is that
  * the answer. When every place is late, a lot with nothing in it would only be asked for again, so
  * it waits a while longer for the first to come. grace: null waits out the deadline for every place.
+ * strict: only series going by what was searched for (rank). onSome: what's come so far, as each
+ * place brings something, before the lot's whole.
  */
-export async function find(places: Place[], q: string | undefined, next: string | undefined, deadline = DEADLINE, grace: number | null = GRACE): Promise<MangaSearchResult> {
+export async function find(places: Place[], q: string | undefined, next: string | undefined, deadline = DEADLINE, grace: number | null = GRACE, strict = false, onSome?: (items: MangaFound[]) => void): Promise<MangaSearchResult> {
   const byName = [...places].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
   const known = byName.slice(0, MOST_PLACES);
   const at = startsAt(known, next);
   const asked = known.filter((p) => at.has(p.key));
   const going = asked.map((p) => p.lot(at.get(p.key)!));
-  let answers = await answersOf(going, deadline, grace);
+  // What's come so far, ranked as the whole lot will be, each time a place brings something.
+  const come: Array<{ place: Place; found: Found[] } | null> = asked.map(() => null);
+  let onLot: ((i: number, lot: Lot) => void) | undefined;
+  if (onSome) {
+    onLot = (i, lot) => {
+      if (lot.found.length === 0) return;
+      come[i] = { place: asked[i], found: lot.found };
+      const items = rank(q, come.filter((x) => x !== null), strict);
+      if (items.length > 0) onSome(items);
+    };
+  }
+  let answers = await answersOf(going, deadline, grace, onLot);
   if (allLate(answers)) {
     await firstOf(going, LONGEST - deadline);
     // Those come by now answer straight away; the rest are late.
@@ -282,5 +336,5 @@ export async function find(places: Place[], q: string | undefined, next: string 
 
   let carryOn: string | null = null;
   if (carry.length > 0) carryOn = carry.join(',');
-  return { items: rank(q, lots), next: carryOn };
+  return { items: rank(q, lots, strict), next: carryOn };
 }

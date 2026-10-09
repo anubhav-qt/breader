@@ -11,6 +11,7 @@ import { seriesKey, spellSeries, type SeriesName } from './series';
 import { SeriesField, type SeriesValue } from './SeriesField';
 import { genreIds, joinGenres } from '@breader/shared/genres';
 import { GenreField } from './GenreField';
+import { Download } from './Download';
 
 interface Props {
   book: ShelfItem;
@@ -52,7 +53,8 @@ function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
 
 /**
  * A small popover beside the card's corner button: rename, put in a series, file under a genre,
- * recolour, share, let an AI read along, mark finished, favourite or remove.
+ * recolour, share, let an AI read along, download a manga to read offline, mark finished,
+ * favourite or remove.
  */
 export function EditPopover({ book, seriesNames, noSeries = false, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onChapters, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -253,6 +255,8 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
           <p className="ep-note" id="ep-ai-why">{book.ai ? AI_ON : AI_WHY}</p>
         </>
       )}
+      {/* A manga read through the laptop: the whole of it, to read offline. */}
+      {book.source === 'remote' && <Download book={book} />}
       <div className="ep-actions">
         {onChapters && (
           <button type="button" className="ep-act" title="Its chapters, and the language they’re read in" onClick={onChapters}>

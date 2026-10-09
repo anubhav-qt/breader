@@ -1,10 +1,13 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
-import { MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type MangaState } from '@breader/shared';
+import { streamSSE } from 'hono/streaming';
+import { MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type MangaSearchEvent, type MangaState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, signedOut } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { readSession } from '../lib/session.ts';
+import { log } from '../log.ts';
+import type { Cover } from '../manga/covers.ts';
 import type { Picture } from '../manga/disk.ts';
 
 /*
@@ -42,13 +45,38 @@ export function mangaRoutes(deps: Deps) {
   const sourceId = (c: Context<AppEnv>) => parse(SourceId, c.req.param('id'));
   const picture = (c: Context<AppEnv>, pic: Picture, maxAge: number) =>
     c.body(pic.data as Uint8Array<ArrayBuffer>, 200, { 'content-type': pic.type, 'cache-control': `private, max-age=${maxAge}` });
+  /** A cover, kept by the browser until it's due to be fetched again (manga/covers.ts), then asked after by its tag. */
+  const cover = (c: Context<AppEnv>, got: Cover) => {
+    const headers = { 'cache-control': `private, max-age=${got.maxAge}`, etag: got.tag };
+    if (c.req.header('if-none-match') === got.tag) return c.body(null, 304, headers);
+    return c.body(got.pic.data as Uint8Array<ArrayBuffer>, 200, { 'content-type': got.pic.type, ...headers });
+  };
 
   r.get('/manga/search', rateLimit({ name: 'manga-search', max: 120, windowMs: 60_000 }), async (c) => {
     const q = parse(MangaSearchQuery, c.req.query());
     // Never kept by the browser: a lot where every place was late answers differently a moment
     // later, and a kept copy would be shown instead, over and over. The server keeps its own.
     c.header('Cache-Control', 'private, no-store');
-    return c.json(await manga!.search(q));
+    if (!q.stream) return c.json(await manga!.search(q));
+    // Streamed: each place's series as they come, so a slow site doesn't hold up a quick one's. The
+    // events go one after another, each written before the next.
+    return streamSSE(c, async (s) => {
+      const send = (e: MangaSearchEvent) => s.writeSSE({ data: JSON.stringify(e) });
+      let sent = Promise.resolve();
+      try {
+        const lot = await manga!.search(q, (items) => { sent = sent.then(() => send({ kind: 'some', items })); });
+        await sent;
+        await send({ kind: 'lot', items: lot.items, next: lot.next });
+      } catch (err) {
+        await sent.catch(() => {});
+        if (err instanceof ApiError) {
+          await send({ kind: 'error', status: err.status, code: err.code, message: err.message });
+          return;
+        }
+        log.error({ err, path: c.req.path }, 'a streamed search failed');
+        await send({ kind: 'error', status: 500, code: 'server_error', message: 'Something went wrong on the server. Try again in a moment.' });
+      }
+    });
   });
 
   r.get('/manga/series/:id', rateLimit({ name: 'manga-series', max: 120, windowMs: 60_000 }), async (c) => {
@@ -78,7 +106,7 @@ export function mangaRoutes(deps: Deps) {
 
   r.get('/manga/cover/:id/:file{[\\w-]{1,80}\\.(?:jpe?g|png|webp|gif)}', rateLimit({ name: 'manga-cover', max: 600, windowMs: 60_000 }), async (c) => {
     const { size } = parse(MangaCoverQuery, c.req.query());
-    return picture(c, await manga!.cover(id(c), c.req.param('file'), size), 604_800);
+    return cover(c, await manga!.cover(id(c), c.req.param('file'), size));
   });
 
   // A series on Suwayomi, by ids like sw:12.
@@ -108,7 +136,8 @@ export function mangaRoutes(deps: Deps) {
   });
 
   r.get('/manga/source/:id/cover', rateLimit({ name: 'manga-cover', max: 600, windowMs: 60_000 }), async (c) => {
-    return picture(c, await manga!.sourceCover(sourceId(c)), 86_400);
+    const { size } = parse(MangaCoverQuery, c.req.query());
+    return cover(c, await manga!.sourceCover(sourceId(c), size));
   });
 
   return r;

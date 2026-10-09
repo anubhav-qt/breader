@@ -24,6 +24,16 @@ COPY ai/build.mjs ai/
 COPY ai/tools ai/tools
 RUN node ai/build.mjs
 
+# The cover encoder (manga/covers.ts) is native code: the build for the image's own platform,
+# fetched on the CI machine's, at the version the lockfile has.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS sharp
+ARG TARGETARCH
+WORKDIR /sharp
+COPY package-lock.json /tmp/
+RUN cpu=$TARGETARCH && if [ "$cpu" = amd64 ]; then cpu=x64; fi \
+  && v=$(node -p "require('/tmp/package-lock.json').packages['node_modules/sharp'].version") \
+  && npm install --no-package-lock --no-audit --no-fund --ignore-scripts --os=linux --libc=musl --cpu=$cpu "sharp@$v"
+
 FROM node:24-alpine
 # pg_dump for backups (must be at least the copy's major version), tini to forward signals.
 RUN apk add --no-cache postgresql17-client tini tzdata \
@@ -35,8 +45,10 @@ ARG RELEASE=dev
 ENV RELEASE=$RELEASE
 COPY --from=build /app/server/dist ./dist
 COPY --from=build /app/server/drizzle ./drizzle
-# The server voice's MP3 encoder sits beside the bundle rather than in it (build.mjs).
+# The server voice's MP3 encoder sits beside the bundle rather than in it (build.mjs), and the
+# cover encoder too, built for this platform.
 COPY --from=build /app/node_modules/@breezystack/lamejs ./node_modules/@breezystack/lamejs
+COPY --from=sharp /sharp/node_modules ./node_modules
 # The marker, which the worker runs: its bundle, the procedure its prompts quote, the sealed NVIDIA
 # key (ai/tools/seal.ts), and the two packages that load files of their own (ai/build.mjs): jsdom
 # whole, and only the build of pdf.js it uses.

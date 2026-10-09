@@ -152,6 +152,28 @@ export function inOrder(places: Place[]): Copy[] {
   return [...plain.sort(order), ...editions.sort(order)];
 }
 
+/** Copies filling in at most: past the third, a chapter none of them has is one no site has. */
+const MOST_ALSO = 3;
+
+/**
+ * The copies filling in the chapters the one read (in the place `read`) hasn't got, in turn: the
+ * sharpest of each other place, editions (Color) left out, as their chapters are drawn differently.
+ */
+export function alsoOf(places: Place[], read: string): Copy[] {
+  const out: Copy[] = [];
+  const seen = new Set([read]);
+  for (const c of inOrder(places)) {
+    if (c.found.edition || seen.has(c.found.card.id)) continue;
+    seen.add(c.found.card.id);
+    out.push(c);
+    if (out.length === MOST_ALSO) break;
+  }
+  return out;
+}
+
+/** Their urls, for a series' url (books/remote.ts withAlso). */
+export const alsoUrls = (also: Copy[], lang: string) => also.map((c) => urlOf(c.found, c.group?.id ?? null, lang));
+
 /**
  * The series' places and their copies, as they're found and measured. settled: the search is done
  * and every place measured, or failed to be. lang: the language MangaDex's copies are in.

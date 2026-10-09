@@ -1,24 +1,27 @@
 import { MANGA_KINDS, sameKind, type MangaChapter, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared';
 import { freshly } from '../lib/cache.ts';
 import { log } from '../log.ts';
+import { FRESH_ANYWAY, FRESH_FOR } from './covers.ts';
 import type { Manga } from './index.ts';
 
 /*
  * Once a day, at 04:00 in India (22:30 UTC), Browse's first screens are fetched ahead of readers: the first
- * 50 series in each order (Popular, Updated, New, Top rated), with every kind on and with each kind
+ * 100 series in each order (Popular, Updated, Top rated), with every kind on and with each kind
  * alone, in English and without 18+ or doujinshi, as Browse first opens. Then, for each series,
  * what its sheet asks for: the series, the other places it's in, each place's copies measured, its
  * chapters and its cover, and what Read opens on: a source's first two chapters, their pages
  * counted. Everything it touches is brought up to date and kept on for days
  * (lib/cache.ts), so readers are given it straight away, and what they open is fetched again
- * behind them. One call at a time, with a pause between series, so readers' own calls go first.
+ * behind them. Covers are fetched again by the list they're in, a series in several by the one
+ * whose covers change most (covers.ts). One call at a time, with a pause between series, so
+ * readers' own calls go first.
  */
 
-const SORTS: MangaSort[] = ['popular', 'latest', 'new', 'rated'];
+const SORTS: MangaSort[] = ['popular', 'latest', 'rated'];
 /** Every kind together, as Browse opens, and each alone. */
 const KINDS: MangaKind[][] = [[...MANGA_KINDS], ...MANGA_KINDS.map((k) => [k])];
 /** Series fetched in each list. */
-const FIRST = 50;
+const FIRST = 100;
 /** Lots a list asks for at most, should many come short. */
 const MOST_LOTS = 20;
 /** The other places a series' sheet looks for it in: the first three lots of a search for its title (frontend copies.ts). */
@@ -28,6 +31,8 @@ const MOST_NAMES = 40;
 const LANG = 'en';
 /** Between series, so a reader's calls never wait long behind these. */
 const BREATHER = 1_000;
+/** A cover due within this is fetched again now, so a daily run never finds one a few minutes short of its day. */
+const COVER_EARLY = 6 * 3_600_000;
 
 export interface Prefetched {
   lists: number;
@@ -64,7 +69,7 @@ function cardsOf(items: MangaFound[]): MangaFound[][] {
   return cards;
 }
 
-/** The first 50 cards of one of Browse's lists. */
+/** The first FIRST cards of one of Browse's lists. */
 async function list(manga: Manga, sort: MangaSort, kinds: MangaKind[], signal?: AbortSignal): Promise<MangaFound[][]> {
   const items: MangaFound[] = [];
   let next: string | undefined = undefined;
@@ -93,8 +98,11 @@ function namesIn(found: MangaFound[]): string[] {
   return out.slice(0, MOST_NAMES);
 }
 
-/** What a series' sheet asks for. Returns how many places it's in, and how many of the asks failed. */
-async function sheet(manga: Manga, card: MangaFound[]): Promise<{ places: number; failed: number }> {
+/**
+ * What a series' sheet asks for, its covers kept for freshFor (covers.ts). Returns how many places
+ * it's in, and how many of the asks failed.
+ */
+async function sheet(manga: Manga, card: MangaFound[], freshFor: number): Promise<{ places: number; failed: number }> {
   let failed = 0;
   const step = async (what: () => Promise<unknown>) => {
     try {
@@ -131,16 +139,15 @@ async function sheet(manga: Manga, card: MangaFound[]): Promise<{ places: number
 
   for (const f of places) {
     const id = f.card.id;
+    await step(() => manga.coversFor(id, freshFor));
+    // A cover's every width is made at once (covers.ts).
     if (f.kind === 'mangadex') {
       const file = f.card.cover;
-      if (file) {
-        await step(() => manga.cover(id, file, '256'));
-        await step(() => manga.cover(id, file, '512'));
-      }
+      if (file) await step(() => manga.cover(id, file, '512', COVER_EARLY));
       await step(() => manga.chapters(id, LANG));
       await step(() => manga.copies(id, LANG));
     } else {
-      if (f.card.cover) await step(() => manga.sourceCover(id));
+      if (f.card.cover) await step(() => manga.sourceCover(id, '512', COVER_EARLY));
       let chapters: MangaChapter[] = [];
       await step(async () => {
         chapters = (await manga.sourceChapters(id)).chapters;
@@ -157,8 +164,11 @@ async function sheet(manga: Manga, card: MangaFound[]): Promise<{ places: number
 export function prefetch(manga: Manga, signal?: AbortSignal): Promise<Prefetched> {
   return freshly(async () => {
     const started = Date.now();
-    const done = new Set<string>();
     const out: Prefetched = { lists: 0, series: 0, places: 0, failed: 0, minutes: 0 };
+    // Every list first, so a series in several is known by all of them: fetched once, its covers
+    // kept for the shortest of their times.
+    const series: Array<{ card: MangaFound[]; freshFor: number }> = [];
+    const byId = new Map<string, (typeof series)[number]>();
     for (const kinds of KINDS) {
       for (const sort of SORTS) {
         if (signal?.aborted) break;
@@ -171,18 +181,25 @@ export function prefetch(manga: Manga, signal?: AbortSignal): Promise<Prefetched
           log.warn({ err, sort, kinds }, 'a list couldn’t be prefetched');
           continue;
         }
+        const freshFor = FRESH_FOR[sort] ?? FRESH_ANYWAY;
         for (const card of cards) {
-          if (signal?.aborted) break;
-          // A series in several lists is fetched once.
-          if (card.some((f) => done.has(f.card.id))) continue;
-          for (const f of card) done.add(f.card.id);
-          const r = await sheet(manga, card);
-          out.series += 1;
-          out.places += r.places;
-          out.failed += r.failed;
-          await sleep(BREATHER, signal);
+          let one = card.map((f) => byId.get(f.card.id)).find((x) => x !== undefined);
+          if (one) one.freshFor = Math.min(one.freshFor, freshFor);
+          else {
+            one = { card, freshFor };
+            series.push(one);
+          }
+          for (const f of card) byId.set(f.card.id, one);
         }
       }
+    }
+    for (const { card, freshFor } of series) {
+      if (signal?.aborted) break;
+      const r = await sheet(manga, card, freshFor);
+      out.series += 1;
+      out.places += r.places;
+      out.failed += r.failed;
+      await sleep(BREATHER, signal);
     }
     out.minutes = Math.round((Date.now() - started) / 60_000);
     return out;

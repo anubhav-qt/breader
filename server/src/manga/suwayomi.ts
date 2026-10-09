@@ -3,6 +3,7 @@ import { MANGA_PAGE, type MangaChapter, type MangaChapters, type SourceCard, typ
 import { freshly, Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
+import type { Cover, Covers, CoverWidth } from './covers.ts';
 import { pictureType, type Disk, type Picture } from './disk.ts';
 import { wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { adultGenre, kindGenre, neverGenre, sideGenre, sideTitle, web } from './genres.ts';
@@ -133,15 +134,17 @@ export interface Suwayomi {
   pages(chapterId: number): Promise<number>;
   /** Page n of a chapter, from 0. */
   page(chapterId: number, n: number): Promise<Picture>;
-  cover(id: number): Promise<Picture>;
+  /** A series' cover at a width; early: the prefetch's (covers.ts). */
+  cover(id: number, width: CoverWidth, early?: number): Promise<Cover>;
   /** Shelves every English source's Popular and Updated lists ahead of readers, their covers too. */
   warm(): Promise<void>;
 }
 
 export interface SuwayomiOptions {
   url: string;
-  /** Where pages and covers are kept. */
+  /** Where pages are kept. */
   disk: Disk;
+  covers: Covers;
   fetch?: typeof fetch;
   /** Calls a window to each source. Tests go faster. */
   pace?: [number, number];
@@ -223,6 +226,44 @@ function chapterOf(c: RawChapter): MangaChapter {
   return { id: `sw:${c.id}`, chapter, volume: null, title: chapterTitle(c.name, c.chapterNumber), pages: 0, external: null, groups, at };
 }
 
+/** A tag in brackets at the start of a title ("(1r0n) f2"), a scanlator's mark more than a title. */
+const TAG = /^\s*[([{][^)\]}]{1,24}[)\]}]\s*/;
+
+/**
+ * A source's chapters cleaned of what it fills in when it doesn't know (MangaFire is the worst):
+ * a "title" that's the same on many chapters, or a scanlator's tag with a scrap after it, and the
+ * date Suwayomi fetched them written as the day each came out, when nearly all came out that day.
+ * "Official" and "unofficial" stay as they are, two copies of the series to choose between.
+ */
+export function tidy(chapters: MangaChapter[]): MangaChapter[] {
+  const lower = (t: string | null) => t?.toLowerCase() ?? null;
+  const counts = new Map<string, number>();
+  const bump = (k: string | null) => { if (k) counts.set(k, (counts.get(k) ?? 0) + 1); };
+  const tags = new Map<string, number>();
+  for (const c of chapters) {
+    bump(lower(c.title));
+    const tag = c.title?.match(TAG)?.[0].trim().toLowerCase();
+    if (tag) tags.set(tag, (tags.get(tag) ?? 0) + 1);
+  }
+  const days = new Map<number, number>();
+  for (const c of chapters) if (c.at > 0) days.set(Math.floor(c.at / DAY), (days.get(Math.floor(c.at / DAY)) ?? 0) + 1);
+  let fetched: number | null = null;
+  for (const [day, n] of days) if (chapters.length >= 3 && n >= 0.8 * chapters.length) fetched = day;
+  return chapters.map((c) => {
+    let title = c.title;
+    if (title && (counts.get(title.toLowerCase()) ?? 0) >= 3) title = null;
+    const tag = title?.match(TAG)?.[0];
+    if (title && tag && (tags.get(tag.trim().toLowerCase()) ?? 0) >= 3) {
+      const rest = title.slice(tag.length).trim();
+      title = rest.length > 2 ? rest : null;
+    }
+    let at = c.at;
+    if (fetched !== null && Math.floor(at / DAY) === fetched) at = 0;
+    const groups = c.groups.map((g) => (/^(un)?official$/i.test(g.name) ? { ...g, name: g.name[0].toUpperCase() + g.name.slice(1).toLowerCase() } : g));
+    return { ...c, title, at, groups };
+  });
+}
+
 /** By number, oldest first, those without one first of all. */
 function byNumber(a: RawChapter, b: RawChapter): number {
   if (a.chapterNumber !== b.chapterNumber) return a.chapterNumber - b.chapterNumber;
@@ -236,9 +277,10 @@ function listOf(source: RawSource, w: Wanted): List {
   return 'POPULAR';
 }
 
-/** A series a search wants by its card: 18+ and doujinshi only when asked, and only the kinds asked. */
+/** A series a search wants by its card: 18+ and doujinshi only when asked (or 18+ alone), and only the kinds asked. */
 function wants(card: SourceCard, w: Wanted): boolean {
   if (card.adult && !w.adult) return false;
+  if (!card.adult && w.adultOnly) return false;
   if (card.side && !w.doujinshi) return false;
   return wantedKind(card.kind, w);
 }
@@ -401,12 +443,14 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     return { m, source };
   }
 
-  function chapterList(id: number, source: string): Promise<MangaChapter[]> {
-    return chapterLists.get(String(id), async () => {
+  async function chapterList(id: number, source: string): Promise<MangaChapter[]> {
+    const list = await chapterLists.get(String(id), async () => {
       const r = await ask<{ fetchChapters: { chapters: RawChapter[] } }>(CHAPTERS, { id }, source);
       const raw = [...r.fetchChapters.chapters].sort(byNumber);
       return raw.map(chapterOf);
     });
+    // Out of the keeping, so lists kept before are cleaned too.
+    return tidy(list);
   }
 
   /** Every chapter of the series can be read here, by its source's own list. Kept a day. */
@@ -529,9 +573,9 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       }
     }
     for (const id of covers) {
-      if (await opts.disk.has(`sw-cover:${id}`)) continue;
+      if (await opts.covers.has(`sw:${id}`)) continue;
       try {
-        await coverOf(id);
+        await coverOf(id, 512);
       } catch {
         // Fetched when a reader's Browse asks for it instead.
       }
@@ -668,9 +712,9 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     }
   }
 
-  async function coverOf(id: number): Promise<Picture> {
+  async function coverOf(id: number, width: CoverWidth, early?: number): Promise<Cover> {
     await allowed(id);
-    return opts.disk.keep(`sw-cover:${id}`, () => picture(`/api/v1/manga/${id}/thumbnail`));
+    return opts.covers.get(`sw:${id}`, `sw:${id}`, width, () => picture(`/api/v1/manga/${id}/thumbnail`), early);
   }
 
   return {

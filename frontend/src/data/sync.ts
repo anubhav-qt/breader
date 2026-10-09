@@ -690,6 +690,12 @@ export async function startSync(h: SyncHost) {
   void fetchCovers(h.snapshot().records.filter((r) => r.coverId).map((r) => ({ id: r.id, coverId: r.coverId!, removedAt: null })));
 }
 
+/** Calls fn with the status each time it changes, until the returned stop is called. */
+export function watchSync(fn: (s: SyncStatus) => void): () => void {
+  watchers.add(fn);
+  return () => { watchers.delete(fn); };
+}
+
 export function useSyncStatus() {
   const [s, setS] = useState(status);
   useEffect(() => {

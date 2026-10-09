@@ -508,12 +508,17 @@ describe('MangaDex through the laptop', () => {
     expect(r.body.code).toBe('manga_unreachable');
   });
 
-  it('brings covers at the size asked, and only cover files', async () => {
+  it('brings covers at the size asked, made from MangaDex’s 512, and only cover files', async () => {
     const { b, dex } = await setup();
     const r = await b.get(`/v1/manga/cover/${FRIEREN}/cover-1.jpg?size=256`);
     expect(r.status).toBe(200);
+    // Not a whole picture, so it goes as it came rather than as WebP.
     expect(r.headers.get('content-type')).toBe('image/jpeg');
-    expect(dex.asked('uploads.mangadex.org', /./)[0].url.pathname).toBe(`/covers/${FRIEREN}/cover-1.jpg.256.jpg`);
+    expect(dex.asked('uploads.mangadex.org', /./)[0].url.pathname).toBe(`/covers/${FRIEREN}/cover-1.jpg.512.jpg`);
+    // Asked again by its tag: nothing to send.
+    const again = await b.get(`/v1/manga/cover/${FRIEREN}/cover-1.jpg?size=256`, { 'if-none-match': r.headers.get('etag')! });
+    expect(again.status).toBe(304);
+    expect(dex.asked('uploads.mangadex.org', /./)).toHaveLength(1);
     expect((await b.get(`/v1/manga/cover/${FRIEREN}/..%2F..%2Fetc`)).status).toBe(404);
   });
 
