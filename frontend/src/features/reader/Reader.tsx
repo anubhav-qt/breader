@@ -343,12 +343,10 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const voiceKeys = narration.playing || !immersive || byVoice;
   /** Where the keys move from: the light, or the voice, or the top of the page when neither has been anywhere. */
   const keyFrom = async (): Promise<Spot | null> => {
-    if (immersive) {
-      const h = pacing.current() ?? lastStop();
-      if (h) return h;
-    }
-    const v = narration.place();
-    if (v) return v;
+    let from: Spot | null = null;
+    if (immersive && !narration.playing) from = pacing.current() ?? lastStop();
+    if (!from) from = narration.place();
+    if (from) return from;
     const list = (await view.current?.listen.from()) ?? [];
     if (!list[0]) return null;
     return { s: list[0], at: 0 };
@@ -450,8 +448,6 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (k.do === 'size') return book.kind === 'flow';
     if (k.do === 'find' || k.do === 'keys') return !pictures;
     if (k.do === 'toggle' || k.do === 'mute' || k.do === 'speed') return narrates;
-    // Typed while choosing where to begin, numbers are paragraphs' (the ¶ sheet).
-    if (k.do === 'chapter' && choosing) return false;
     return narrates && keysOn;
   };
 
