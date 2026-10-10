@@ -12,13 +12,12 @@ import { validate } from './validate.ts';
  * to 5, after research (step 2), whether Antigravity did it by hand or cast.ts read the cast from
  * the book. Each call gets the rules, the whole book, research.md, the cast so far and the
  * previous part's marks if there are any, and answers with a part's marks plus any new people.
- * Every part goes at once, since the whole book is there to read. Then check, and one call to fix
- * every part with errors together. Kimi K3 marks the parts; Nemotron 3 Ultra takes over only
- * while it's down, and its parts are marked again by Kimi before the book is packed. Who marked
- * each part is kept in marked-by.json. Nothing it prints has the book's text in it.
+ * Every part goes at once, since the whole book is there to read. Then check, and a call to fix
+ * every part with errors together, again and again while each leaves fewer. Kimi K3 marks the
+ * parts; Nemotron 3 Ultra takes over only while it's down, and its parts are marked again by Kimi
+ * before the book is packed. Who marked each part is kept in marked-by.json. Nothing it prints
+ * has the book's text in it.
  */
-
-const ROUNDS = 3;
 
 const PROC = readFileSync(join(AI, 'procedure.md'), 'utf8');
 const between = (from: string, to: string) => PROC.slice(PROC.indexOf(from), PROC.indexOf(to));
@@ -117,13 +116,14 @@ export async function markParts(book: Book, ns: number[], lb: Balancer, alsoFix:
 
 /**
  * One call for every part check found errors in, with their marks and the errors, to fix them
- * together, and another if some are left (ROUNDS calls in all, counting the first).
+ * together, then another for whatever is left, for as long as each round leaves fewer errors. A
+ * part's fixed marks are kept only when they have fewer errors than before.
  */
 async function fixParts(book: Book, ns: number[], lb: Balancer) {
-  for (let round = 2; round <= ROUNDS; round++) {
+  for (let round = 2; ; round++) {
     const bad = ns.filter((n) => errorsFor(book, n).length);
     if (!bad.length) return;
-    stageOf.set(book.key, `Fixing what the check found (round ${round - 1} of ${ROUNDS - 1})`);
+    stageOf.set(book.key, `Fixing what the check found (round ${round - 1})`);
     const sections = bad.map((n) => {
       const errors = errorsFor(book, n);
       return `## Part ${n}\n\nIts marks:\n${readFileSync(marksFile(book, n), 'utf8').trim()}\n\ncheck's ${errors.length === 1 ? 'error' : `${errors.length} errors`}:\n${errors.slice(0, 80).join('\n')}`;
@@ -151,13 +151,26 @@ async function fixParts(book: Book, ns: number[], lb: Balancer) {
       else if (/^(cast|change)\s/.test(t)) castLines.push(t);
       else if (at !== null) byPart.get(at)!.push(raw);
     }
+    const before = new Map(bad.map((n) => [n, errorsFor(book, n).length]));
+    mergeCast(book, castLines, rung.name);
     for (const [n, body] of byPart) {
       if (!bad.includes(n)) continue;
+      const old = readFileSync(marksFile(book, n), 'utf8');
       writeFileSync(marksFile(book, n), split(body.join('\n')).marks);
-      stamp(book, n, rung.name, reply.secs, false);
+      if (errorsFor(book, n).length < before.get(n)!) {
+        stamp(book, n, rung.name, reply.secs, false);
+      } else {
+        writeFileSync(marksFile(book, n), old);
+      }
     }
-    mergeCast(book, castLines, rung.name);
     console.log(`  fix, round ${round}: ${rung.name}, ${mins(reply.secs)}, parts ${bad.join(', ')}; errors left: ${bad.map((n) => `part ${n} ${errorsFor(book, n).length}`).join(', ')}`);
+    let was = 0;
+    let left = 0;
+    for (const n of bad) {
+      was += before.get(n)!;
+      left += errorsFor(book, n).length;
+    }
+    if (left >= was) return;
   }
 }
 
