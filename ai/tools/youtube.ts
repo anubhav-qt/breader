@@ -118,15 +118,39 @@ export async function video(id: string): Promise<Video> {
   return v;
 }
 
+/**
+ * Ways of asking YouTube for a track, tried in turn while it refuses: as yt-dlp asks by itself,
+ * then over IPv4 (a stream's link may only work from the address that asked for it), then as two
+ * other YouTube players. The server was refused once (HTTP 403) the first way, and each of these
+ * worked from a Mac on 2026-10-10. The mobile player may have no audio on its own, so a video's
+ * audio will do.
+ */
+const WAYS = [
+  [],
+  ['--force-ipv4'],
+  ['--force-ipv4', '--extractor-args', 'youtube:player_client=web_embedded'],
+  ['--force-ipv4', '--extractor-args', 'youtube:player_client=mweb'],
+];
+
 /** The track's audio here, downloading it first unless it's here already. */
 export async function audioFile(id: string): Promise<string> {
   if (!TRACK_ID.test(id)) throw new Error(`${id} isn’t a YouTube video id.`);
   const file = join(AUDIO, `${id}.m4a`);
   if (existsSync(file)) return file;
   mkdirSync(AUDIO, { recursive: true });
-  await runner(['-f', 'bestaudio[ext=m4a]/bestaudio', '-x', '--audio-format', 'm4a', '--no-playlist', '-o', join(AUDIO, '%(id)s.%(ext)s'), watchUrl(id)]);
-  if (!existsSync(file)) throw new Error(`yt-dlp downloaded ${id} but left no audio.`);
-  return file;
+  const failed: string[] = [];
+  for (const way of WAYS) {
+    try {
+      await runner([...way, '-f', 'bestaudio[ext=m4a]/bestaudio/best', '-x', '--audio-format', 'm4a', '--no-playlist', '-o', join(AUDIO, '%(id)s.%(ext)s'), watchUrl(id)]);
+    } catch (e) {
+      failed.push(e instanceof Error ? e.message : String(e));
+      continue;
+    }
+    if (!existsSync(file)) throw new Error(`yt-dlp downloaded ${id} but left no audio.`);
+    if (failed.length) console.log(`  ${id}: YouTube refused ${failed.length} ${failed.length === 1 ? 'way' : 'ways'}, then answered to ${way.join(' ')}`);
+    return file;
+  }
+  throw new Error(`YouTube refused ${id} all ${WAYS.length} ways. The first: ${failed[0]}`);
 }
 
 async function stored(key: string): Promise<boolean> {
