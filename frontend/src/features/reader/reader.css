@@ -144,6 +144,7 @@ label.clbl { display: block; }
 .tg[aria-checked="true"] { background: var(--r-acc); }
 .tg[aria-checked="true"]::after { transform: translateX(18px); background: var(--r-bg); }
 .tg:disabled { opacity: 0.55; cursor: default; }
+.tg.is-muted { opacity: 0.4; }
 
 /* Stage */
 .rd-stage { position: absolute; inset: 0; }

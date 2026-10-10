@@ -92,9 +92,9 @@ export interface ChromeProps {
   revisit: { read: number; load: () => Promise<{ notes: RevisitResponse; offline: boolean }> } | null;
   /** 2 voices for this book: ready (an AI marked who says what), soon (its switch is on), or off. */
   two: 'ready' | 'soon' | 'off';
-  /** The book has background music (music.ts), for the voice sheet's row. */
-  music: boolean;
-  /** Turns the book's AI switch on or off from the reader, where 2 voices asks for it. */
+  /** Background music for this book (music.ts): ready, soon (its switch is on), or off, as 2 voices is. */
+  music: 'ready' | 'soon' | 'off';
+  /** Turns the book's AI switch on or off from the reader, where 2 voices and the music ask for it. */
   letAi?: (on: boolean) => void;
   /**
    * Comments on the book (comments.ts), for the speech bubble a PDF has in place of the tail:

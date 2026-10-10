@@ -4,8 +4,8 @@ import { execFile } from 'node:child_process';
  * What a track sounds like, as far as numbers go: ffmpeg's EBU R128 meter over the whole of it.
  * How loud it is overall, how much it swells and falls, its energy through each tenth, and how
  * long it takes to come in and to fade out. The director (music.ts) reads this when choosing
- * between tracks. Gemini can't hear through Antigravity (two plain tones came back described as
- * four bell chimes), so the numbers are what there is.
+ * between tracks, with what a listening model heard in it (clap.ts). Gemini can't hear through
+ * Antigravity (two plain tones came back described as four bell chimes), so these are what there is.
  */
 
 export interface Profile {
@@ -19,6 +19,8 @@ export interface Profile {
   quietStart: number;
   quietEnd: number;
   seconds: number;
+  /** What CLAP heard in it (clap.ts), when it could listen. */
+  heard?: string;
 }
 
 /** Below this, a moment counts as quiet: well under the track's own level. */
@@ -115,5 +117,7 @@ export function describe(p: Profile): string {
   let top = -70;
   for (const t of p.tenths) top = Math.max(top, t);
   const bars = p.tenths.map((t) => bar(t, top)).join('');
-  return `${p.seconds} s. Loudness ${p.lufs} LUFS (${loudnessWord(p.lufs)}), range ${p.range} LU (${rangeWord(p.range)}). Energy through each tenth: ${bars}. Comes in after ${p.quietStart} s, fades over the last ${p.quietEnd} s.`;
+  const line = `${p.seconds} s. Loudness ${p.lufs} LUFS (${loudnessWord(p.lufs)}), range ${p.range} LU (${rangeWord(p.range)}). Energy through each tenth: ${bars}. Comes in after ${p.quietStart} s, fades over the last ${p.quietEnd} s.`;
+  if (!p.heard) return line;
+  return `${line} Heard as: ${p.heard}.`;
 }

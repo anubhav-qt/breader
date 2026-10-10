@@ -9,6 +9,7 @@ import { blockAt, bookDir, cmp, count, hasText, inPart, partName, parsePos, posT
 import type { Msg } from './nim.ts';
 import { noHarness } from './proxy.ts';
 import { oneAtATime, seriesName, seriesResearch } from './research.ts';
+import { hear } from './clap.ts';
 import { describe, profile, type Profile } from './sound.ts';
 import { readPageTool, webSearchTool } from './web.ts';
 import { audioFile, LONGEST_S, MUSIC, search, SHORTEST_S, store, video } from './youtube.ts';
@@ -19,10 +20,10 @@ import { audioFile, LONGEST_S, MUSIC, search, SHORTEST_S, store, video } from '.
  * 1. The soundtrack, once per series, by the harness (harness.ts): Gemini looks for the series'
  *    official music first, every season and film of its adaptations, by its English and Japanese
  *    names, finds each track on YouTube, and when there's none, or too little, the best
- *    alternates. Every track it adds is downloaded and measured (sound.ts) and described: its feel
- *    and the scenes it fits. A series keeps its soundtrack from one volume to the next and brings
- *    it up to date once it's a month old, as new seasons come out. Gemini gets the series' names
- *    and its research from the web (research.ts), never the book.
+ *    alternates. Every track it adds is downloaded, measured (sound.ts), listened to (clap.ts) and
+ *    described: its feel and the scenes it fits. A series keeps its soundtrack from one volume to
+ *    the next and brings it up to date once it's a month old, as new seasons come out. Gemini gets
+ *    the series' names and its research from the web (research.ts), never the book.
  *
  * 2. The score, by the NVIDIA models, who read the whole book (kimi.ts): one call plans it (whose
  *    themes are which, the biggest moments and what's saved for them), then every part at once
@@ -128,7 +129,10 @@ const isFresh = (s: Soundtrack) => Date.now() - Date.parse(s.made) < FRESH_DAYS 
 
 const clock = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
-/** How a track sounds, measured once: downloaded, metered and the audio let go again. */
+/**
+ * How a track sounds, once: downloaded, metered, listened to and the audio let go again. A track
+ * the listening model can't hear (clap.ts) still has its loudness, so the soundtrack carries on.
+ */
 async function soundOf(id: string): Promise<Profile> {
   const file = join(SOUNDS, `${id}.json`);
   if (existsSync(file)) return readJson<Profile>(file);
@@ -136,6 +140,11 @@ async function soundOf(id: string): Promise<Profile> {
   if (v.seconds > LONGEST_S) throw new Error(`${id} is ${clock(v.seconds)} long, too long for a scene (up to ${clock(LONGEST_S)}): find the track's own upload.`);
   const audio = await audioFile(id);
   const p = await profile(audio);
+  try {
+    p.heard = await hear(audio, p.seconds);
+  } catch (e) {
+    console.log(`  couldn’t listen to ${id}: ${e instanceof Error ? e.message : String(e)}`);
+  }
   mkdirSync(SOUNDS, { recursive: true });
   writeJson(file, p);
   rmSync(audio, { force: true });
@@ -214,7 +223,7 @@ function soundtrackTools(b: Brain, s: Soundtrack) {
 
   const listen = tool(
     'listen',
-    'How a track sounds, measured: its loudness, how much it swells and falls, its energy through each tenth, and how long it takes to come in and fade out.',
+    'How a track sounds, measured: its loudness, how much it swells and falls, its energy through each tenth, and how long it takes to come in and fade out; and as a listening model heard it: its mood, instruments, whether anyone sings, and its pace (a model’s best guesses).',
     Type.Object({ id: Type.String({ description: 'The video’s id.' }) }),
     async (args) => describe(await soundOf(args.id)),
   );
@@ -339,7 +348,7 @@ How a book is scored:
 - A cue holds for a scene: don't change tracks every few paragraphs. A track plays from its start; one shorter than its scene can play again (loop) while the scene lasts; otherwise it plays once and silence follows.
 - Themes come back: the main theme at the big turns, a person's or a place's track where they matter, the same track for the same kind of moment. Save the strongest tracks for the biggest moments, and don't wear any track out.
 - Official tracks first, where they fit: they're how the series sounds. Alternates fill in where none does.
-- Match each track's sound to its scene: a soft one under a quiet scene, one that swells under a scene that builds, one that comes in slowly where the scene eases in.
+- Match each track's sound to its scene: a soft one under a quiet scene, one that swells under a scene that builds, one that comes in slowly where the scene eases in. "Heard as" is what a listening model made of a track (its mood, instruments, singing and pace): good guesses, though the track's use comes first.
 
 The book is given with each paragraph's number in brackets: section:paragraph.`;
 

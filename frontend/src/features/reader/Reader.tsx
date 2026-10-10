@@ -723,7 +723,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     } : null,
     revisit: aiStatus.revisit ? { read: marker.get()?.progress ?? 0, load: loadNotes } : null,
     two: marks ? 'ready' : ai ? 'soon' : 'off',
-    music: aiStatus.music,
+    music: aiStatus.music ? 'ready' : ai ? 'soon' : 'off',
     letAi: onAi,
     talk: { view: talkView, opens: opened, at: talkAt, open: openTalk },
   };

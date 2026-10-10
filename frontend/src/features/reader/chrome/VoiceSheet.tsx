@@ -22,7 +22,8 @@ import { CloseDots, DotIcon } from './parts';
  * ones first, then the heavy ones, which are for computers. Each voice has lines to hear before
  * anything downloads: a greeting, a bit of a story and a question, one at a time. For the accounts
  * it's open to, the server can read instead (voice/server.ts). A book with background music
- * (music.ts) has it on or off here, and how loud.
+ * (music.ts) has it on or off here, and how loud; until its music is made, the switch looks off
+ * and a tap says why, as 2 voices does.
  */
 
 const ABOUT: Record<Mode, string> = {
@@ -47,9 +48,28 @@ const SERVER: Record<Mode, string> = {
 
 /*
  * Two voices, a woman's and a man's, need the book read through first to know who says each line
- * (ai/procedure.md). Until this book has been, 2 looks off and a tap on it says why, warmly, with
- * the book's AI switch right there when it's off.
+ * (ai/procedure.md), and its background music to know each scene. Until this book has been, 2 and
+ * the music look off and a tap on them says why, warmly, with the book's AI switch right there
+ * when it's off.
  */
+type Soon = 'two' | 'music';
+/** What the card says of each: its name, what it will be, why the book is read first, and what turns on. */
+const SOON: Record<Soon, { title: string; promise: string; asked: string; told: string; name: string }> = {
+  two: {
+    title: 'Two voices',
+    promise: 'Soon a book can be read by two voices, a woman’s and a man’s, so every conversation sounds like people talking.',
+    asked: 'To get each line right, an AI reads the whole book first, noting who says what.',
+    told: 'To get each line right, the whole book is read first, noting who says what.',
+    name: '2 voices',
+  },
+  music: {
+    title: 'Background music',
+    promise: 'Soon a book can have music of its own, scored the way an anime is: a track or a silence under every scene while it reads aloud or lights up.',
+    asked: 'To choose each scene’s music, an AI reads the whole book first.',
+    told: 'To choose each scene’s music, the whole book is read first.',
+    name: 'background music',
+  },
+};
 const counts = (ready: boolean) => [
   { v: 1 as const, label: '1 voice' },
   { v: 2 as const, label: '2 voices', muted: !ready },
@@ -78,8 +98,8 @@ interface Props {
   canPace: boolean;
   /** 2 voices for this book: ready, soon (an AI will read it), or off (its AI switch is off). */
   two: 'ready' | 'soon' | 'off';
-  /** The book has background music. */
-  music: boolean;
+  /** Background music for this book: ready, soon (an AI will score it), or off (its AI switch is off). */
+  music: 'ready' | 'soon' | 'off';
   /** Turns the book's AI switch on or off. */
   onAi?: (on: boolean) => void;
 }
@@ -108,7 +128,8 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   // The note about two voices sits in the middle of the reader, outside the drop, which clips.
   const [page, setPage] = useState<HTMLElement | null>(null);
   const onRoot = useCallback((el: HTMLDivElement | null) => { if (el) setPage(el.closest<HTMLElement>('.rd')); }, []);
-  const [waiting, setWaiting] = useState(false);
+  // What the card in the middle says isn't ready yet.
+  const [waiting, setWaiting] = useState<Soon | null>(null);
 
   useEffect(() => { void refreshVoices(); void refreshSpeech(); }, []);
   // Whether Immersive can run here, asked before it offers a download.
@@ -127,7 +148,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     else setVoicePrefs({ voice: { ...prefs.voice, [voices]: v.key } });
   };
   const setCount = (n: 1 | 2) => {
-    if (n === 2 && two !== 'ready') { setWaiting(true); return; }
+    if (n === 2 && two !== 'ready') { setWaiting('two'); return; }
     setVoicePrefs({ count: { ...prefs.count, [mode]: n } });
   };
   const setMode = (m: Mode) => setVoicePrefs({ mode: m });
@@ -158,6 +179,11 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   };
 
   const pace = mode === 'immersive' && <Pace />;
+  // Until the book's music is made, its switch says why instead.
+  let musicLocked: (() => void) | undefined;
+  if (music !== 'ready') musicLocked = () => setWaiting('music');
+  let soonOff = two === 'off';
+  if (waiting === 'music') soonOff = music === 'off';
 
   if (!onStart || !onStop) {
     return (
@@ -166,7 +192,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
         <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
         <p className="p-note vs-about">{NO_VOICES[mode]}</p>
         {canPace && pace}
-        {canPace && music && <Music />}
+        {canPace && music === 'ready' && <Music />}
       </div>
     );
   }
@@ -220,7 +246,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       <p className="p-note vs-about">{server ? SERVER[mode] : fallback ? FALLBACK : ABOUT[mode]}</p>
       {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
-      {music && <Music />}
+      <Music onLocked={musicLocked} />
       <Segmented label="Voices" value={two === 'ready' ? prefs.count[mode] : 1} onChange={setCount} options={counts(two === 'ready')} />
       {paired && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
@@ -269,16 +295,17 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
           <span>{playing ? (loading ? 'Cancel' : 'Stop') : bytes ? `Download ${mb(bytes)} and read` : 'Read aloud'}</span>
         </button>
       </div>
-      {page && createPortal(<AnimatePresence>{waiting && <TwoVoicesSoon off={two === 'off'} onAi={onAi} onClose={() => setWaiting(false)} />}</AnimatePresence>, page)}
+      {page && createPortal(<AnimatePresence>{waiting && <NotYet what={waiting} off={soonOff} onAi={onAi} onClose={() => setWaiting(null)} />}</AnimatePresence>, page)}
     </div>
   );
 }
 
 /**
- * Why 2 voices can't be picked yet: a small card in the middle, over the sheet. `off`: the book's AI
- * switch is, and the card has it, to turn on there and then.
+ * Why 2 voices or the music can't be had yet: a small card in the middle, over the sheet. `off`:
+ * the book's AI switch is, and the card has it, to turn on there and then.
  */
-function TwoVoicesSoon({ off, onAi, onClose }: { off: boolean; onAi?: (on: boolean) => void; onClose: () => void }) {
+function NotYet({ what, off, onAi, onClose }: { what: Soon; off: boolean; onAi?: (on: boolean) => void; onClose: () => void }) {
+  const say = SOON[what];
   // Asked while the switch was off: it stays on the card, on or off, until the card closes.
   const [asked] = useState(off && !!onAi);
   const first = useRef<HTMLButtonElement>(null);
@@ -314,23 +341,23 @@ function TwoVoicesSoon({ off, onAi, onClose }: { off: boolean; onAi?: (on: boole
         transition={springs.snappy}
       >
         <CloseDots onClick={onClose} />
-        <div className="pnl-h">Two voices</div>
+        <div className="pnl-h">{say.title}</div>
         <p className="vs-soon-t" id="vs-soon-t">Not quite yet</p>
-        <p className="p-note">Soon a book can be read by two voices, a woman’s and a man’s, so every conversation sounds like people talking.</p>
+        <p className="p-note">{say.promise}</p>
         {asked ? (
           <>
-            <p className="p-note">To get each line right, an AI reads the whole book first, noting who says what. Let one read along with this book, and it joins the queue.</p>
+            <p className="p-note">{say.asked} Let one read along with this book, and it joins the queue.</p>
             <div className="ctl tgrow vs-soon-ai">
               <span className="clbl" id="vs-soon-ai">{AI_LABEL}</span>
               <button type="button" className="tg" role="switch" aria-checked={!off} aria-labelledby="vs-soon-ai" ref={first} disabled={!off} onClick={() => onAi!(true)} />
             </div>
-            <p className="p-note" aria-live="polite">{off ? 'It never keeps your book or learns from it. Once on, it stays on, for everyone who has this book.' : 'It’s in the queue. Once it’s ready, 2 voices turns on here by itself. Thank you for bearing with us.'}</p>
+            <p className="p-note" aria-live="polite">{off ? 'It never keeps your book or learns from it. Once on, it stays on, for everyone who has this book.' : `It’s in the queue. Once it’s ready, ${say.name} turns on here by itself. Thank you for bearing with us.`}</p>
           </>
         ) : (
           <>
-            <p className="p-note">To get each line right, the whole book is read first, noting who says what. That takes a while, and this book isn’t ready yet. Sorry for the wait, and thank you for bearing with us.</p>
+            <p className="p-note">{say.told} That takes a while, and this book isn’t ready yet. Sorry for the wait, and thank you for bearing with us.</p>
             {off && <p className="p-note">This book hasn’t let an AI read along yet. Turn that on from its ⋯ in your library, and it joins the queue.</p>}
-            <p className="p-note">Once it’s ready, 2 voices turns on here by itself.</p>
+            <p className="p-note">Once it’s ready, {say.name} turns on here by itself.</p>
           </>
         )}
         <button type="button" className="vs-go" ref={asked ? undefined : first} onClick={onClose}>{asked && off ? 'Not now' : 'I’ll wait'}</button>
@@ -354,14 +381,25 @@ function Pace() {
   );
 }
 
-/** Background music, on books that have it: on or off, and how loud, apart from the voice. */
-function Music() {
+/**
+ * Background music: on or off, and how loud, apart from the voice. A book whose music isn't made
+ * yet has the switch looking off, and a tap on it says why (onLocked), as 2 voices does.
+ */
+function Music({ onLocked }: { onLocked?: () => void }) {
   const { music, musicVolume } = useVoicePrefs();
   const toggle = () => {
     setVoicePrefs({ music: !music });
     // Turned on while it reads, the music starts from this tap.
     if (!music) unlockMusic();
   };
+  if (onLocked) {
+    return (
+      <div className="ctl tgrow">
+        <span className="clbl">Background music</span>
+        <button type="button" className="tg is-muted" role="switch" aria-checked={false} aria-label="Background music while it reads aloud or lights up" onClick={onLocked} />
+      </div>
+    );
+  }
   return (
     <>
       <div className="ctl tgrow">
