@@ -1,5 +1,6 @@
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { SHRINKS } from './kimi.ts';
 import { chat, CallError, type Failure, type Msg, type Reply } from './nim.ts';
 import { WORK } from './lib.ts';
 
@@ -21,7 +22,11 @@ import { WORK } from './lib.ts';
  *   run (the marker, which never ends) asks it again an hour later instead.
  * - An empty answer or a refused request (another 4xx) is about one prompt, not the model. That
  *   call alone waits and asks again, and after EMPTY_TRIES empty answers, or one refusal, it asks
- *   the next model on the ladder. When no model is left for it, the call fails.
+ *   again smaller, when the call comes in sizes: the book cut by a fifth, then two, then three
+ *   (kimi.ts, context), keeping the parts nearest the one it's about. Kimi answers a smaller call
+ *   it kept refusing whole often enough that this goes before any other model. Only at the
+ *   smallest does it ask the next model on the ladder, which starts at full size again. When no
+ *   model is left for it, the call fails.
  * - Every Balancer in a process shares each model's state (calls in flight, cooldown): they all
  *   call the same model with the same key.
  * - A `low` Balancer's calls wait while Balancer.holdLow is on. The marker turns it on while a book
@@ -91,9 +96,14 @@ export interface Answer {
   tries: number;
 }
 
+/** A call that comes in sizes: the whole of it at level 0, smaller at each level up to SHRINKS. */
+export type Sized = (level: number) => Msg[];
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Half to one and a half times n. */
 export const jitter = (n: number) => n * (0.5 + Math.random());
+/** A wait after `strikes` failures in a row: `base` doubling with each, up to `cap`, with jitter. */
+export const backoffS = (strikes: number, base: number, cap: number) => jitter(Math.min(cap, base * 2 ** (strikes - 1)));
 const LOG = join(WORK, '_calls.jsonl');
 
 export class Balancer {
@@ -185,39 +195,61 @@ export class Balancer {
     s.strikes++;
     let secs: number;
     if (e.retryAfterS) secs = e.retryAfterS + Math.random() * 10;
-    else secs = jitter(Math.min(cap, base * 2 ** (s.strikes - 1)));
+    else secs = backoffS(s.strikes, base, cap);
     s.coolUntil = Date.now() + secs * 1000;
   }
 
-  /** One chat call on the best model free, retried across the ladder until it answers. */
-  async chat(messages: Msg[], label: Record<string, unknown>): Promise<Answer> {
+  /**
+   * One chat call on the best model free, retried across the ladder until it answers. A call
+   * given in sizes is asked again smaller when a model keeps refusing it.
+   */
+  async chat(request: Msg[] | Sized, label: Record<string, unknown>): Promise<Answer> {
+    let sized: Sized;
+    if (typeof request === 'function') sized = request;
+    else sized = () => request;
+    const smallest = typeof request === 'function' ? SHRINKS : 0;
     let cuts = 0;
     const skip = new Map<string, string>();
     const empties = new Map<string, number>();
+    // How small each model is asked: each starts at full size.
+    const levels = new Map<string, number>();
     for (let tries = 1; ; tries++) {
       const r = await this.next(skip);
       const s = STATES.get(r.model)!;
+      const level = levels.get(r.model) ?? 0;
       s.inFlight++;
       const at = new Date().toISOString();
       let pause = 0;
       try {
-        const reply = await chat(r.model, messages, { maxTokens: r.maxTokens, extra: r.extra });
+        const reply = await chat(r.model, sized(level), { maxTokens: r.maxTokens, extra: r.extra });
         s.strikes = 0;
         s.coolUntil = 0;
         s.gone = false;
-        log({ at, ...label, model: r.name, ok: true, secs: round(reply.secs), firstS: round(reply.firstS), promptTokens: reply.promptTokens, outTokens: reply.outTokens, thinkChars: reply.thinkChars });
+        log({ at, ...label, model: r.name, ok: true, level, secs: round(reply.secs), firstS: round(reply.firstS), promptTokens: reply.promptTokens, outTokens: reply.outTokens, thinkChars: reply.thinkChars });
         return { reply, rung: r, tries };
       } catch (e) {
         if (!(e instanceof CallError)) throw e;
-        log({ at, ...label, model: r.name, ok: false, kind: e.kind, why: e.message, secs: round((Date.now() - Date.parse(at)) / 1000) });
+        log({ at, ...label, model: r.name, ok: false, level, kind: e.kind, why: e.message, secs: round((Date.now() - Date.parse(at)) / 1000) });
         console.log(`    ${r.name}: ${e.kind} (${e.message.slice(0, 90)})`);
-        if (e.kind === 'bad') {
-          skip.set(r.model, `${r.name} refused it (${e.message.slice(0, 120)})`);
-        } else if (e.kind === 'empty') {
-          const n = (empties.get(r.model) ?? 0) + 1;
-          empties.set(r.model, n);
-          if (n >= EMPTY_TRIES) skip.set(r.model, `${r.name} answered it empty ${n} times`);
-          else pause = jitter(EMPTY_WAIT_S * 2 ** (n - 1)) * 1000;
+        if (e.kind === 'bad' || e.kind === 'empty') {
+          let why = `${r.name} refused it (${e.message.slice(0, 120)})`;
+          let refused = true;
+          if (e.kind === 'empty') {
+            const n = (empties.get(r.model) ?? 0) + 1;
+            empties.set(r.model, n);
+            why = `${r.name} answered it empty ${n} times`;
+            if (n < EMPTY_TRIES) {
+              refused = false;
+              pause = jitter(EMPTY_WAIT_S * 2 ** (n - 1)) * 1000;
+            }
+          }
+          if (refused && level < smallest) {
+            levels.set(r.model, level + 1);
+            empties.delete(r.model);
+            console.log(`    ${r.name}: asking again a size smaller (${level + 1} of ${smallest})`);
+          } else if (refused) {
+            skip.set(r.model, why);
+          }
         } else if (e.kind === 'cut') {
           cuts++;
           if (cuts >= 2) throw new Error(`${r.name} ran out of room twice: ${e.message}`);
@@ -234,6 +266,7 @@ export class Balancer {
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;
-function log(entry: Record<string, unknown>) {
+/** One line in the call log: timings and token counts, never text. */
+export function log(entry: Record<string, unknown>) {
   try { appendFileSync(LOG, `${JSON.stringify(entry)}\n`); } catch { /* logging never stops a run */ }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AiStatus, AiVoicesResponse, RevisitResponse } from '@breader/shared/ai';
+import type { AiMusicResponse } from '@breader/shared/music';
 import { flush, hasKey } from '../../data/sync';
 import { api } from '../../lib/api';
 import { readLocal, writeLocal } from '../../lib/store';
@@ -7,16 +8,18 @@ import { marksOf, type Marks } from './voice/two';
 
 /*
  * What an AI made of the open book, when the reader said yes to it (the book's AI switch):
- * Revisit's notes and 2 voices' marks (server/src/routes/ai.ts). The server only hands over the
- * notes up to how far the reader has read. Each answer is kept on this device too, for offline.
+ * Revisit's notes, 2 voices' marks and the background music (server/src/routes/ai.ts). The server
+ * only hands over the notes up to how far the reader has read. Each answer is kept on this device
+ * too, for offline.
  */
 
 const STATUS = 'breader.ai.status.v1';
 const REVISIT = 'breader.ai.revisit.v1';
 const VOICES = 'breader.ai.voices.v1';
+const MUSIC = 'breader.ai.music.v1';
 /** Books whose notes and marks are kept here, the most recently opened ones. */
 const KEEP = 6;
-const NONE: AiStatus = { made: null, revisit: false, voices: false };
+const NONE: AiStatus = { made: null, revisit: false, voices: false, music: false };
 const path = (bookId: string, what: string) => `/v1/books/${encodeURIComponent(bookId)}/${what}`;
 
 /** Keeps one book's answer under `key`, with the few most recent books' before it. */
@@ -35,7 +38,7 @@ export function useAiStatus(bookId: string, on: boolean): AiStatus {
   useEffect(() => {
     if (!on || !hasKey()) {
       setStatus(NONE);
-      if (!on) { keep(STATUS, bookId, null); keep(REVISIT, bookId, null); keep(VOICES, bookId, null); }
+      if (!on) { keep(STATUS, bookId, null); keep(REVISIT, bookId, null); keep(VOICES, bookId, null); keep(MUSIC, bookId, null); }
       return;
     }
     let live = true;
@@ -76,6 +79,19 @@ export async function loadVoiceMarks(bookId: string, made: string): Promise<AiVo
     const marks = await api.get<AiVoicesResponse>(path(bookId, 'voices'));
     keep(VOICES, bookId, marks);
     return marks;
+  } catch {
+    return have;
+  }
+}
+
+/** The book's background music: kept here once fetched, and fetched again only when it changes. */
+export async function loadMusic(bookId: string, made: string): Promise<AiMusicResponse | null> {
+  const have = kept<AiMusicResponse>(MUSIC, bookId);
+  if (have?.made === made) return have;
+  try {
+    const music = await api.get<AiMusicResponse>(path(bookId, 'music'));
+    keep(MUSIC, bookId, music);
+    return music;
   } catch {
     return have;
   }

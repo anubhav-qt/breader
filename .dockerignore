@@ -1,6 +1,6 @@
 # The server image only needs the workspace manifests, shared/ and server/, and for the marker the
-# ai tools, the sealed NVIDIA key and the app's book parsers. Never ai/work, ai/out or ai/.env:
-# books and the key in the clear.
+# ai tools and pi's agent loop, the sealed NVIDIA key and the app's book parsers. Never ai/work,
+# ai/out or ai/.env: books and the key in the clear.
 *
 !package.json
 !package-lock.json
@@ -13,6 +13,7 @@
 !ai/procedure.md
 !ai/nvidia-key.enc
 !ai/tools/
+!ai/pi/
 !frontend/src/books/
 !frontend/src/lib/format.ts
 !frontend/src/features/reader/dom.ts

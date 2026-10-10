@@ -1,4 +1,4 @@
-import { AI_KINDS, type AiAt, type AiEntry, type AiFile, type AiGender, type AiVoicesResponse, type RevisitEntry, type RevisitResponse } from '@breader/shared';
+import { AI_KINDS, type AiAt, type AiEntry, type AiFile, type AiGender, type AiMusicResponse, type AiVoicesResponse, type RevisitEntry, type RevisitResponse } from '@breader/shared';
 
 /*
  * The spoiler line. An AI read the whole book (shared/src/ai.ts); a reader has read up to their
@@ -92,6 +92,12 @@ function soundAt(c: Voices['cast'][number], p: AiAt): AiGender {
   let g = c.g;
   for (const ch of (c.changes ?? []).slice().sort(before)) if (le(ch, p)) g = ch[2];
   return g;
+}
+
+/** A book's soundtrack as a reader gets it: each track by its number, without what it's for. */
+export function musicFor(f: { made: string; sections: string[]; music: NonNullable<AiFile['music']> }): AiMusicResponse {
+  const tracks = f.music.tracks.map((t, n) => ({ n, title: t.title, source: t.source, seconds: t.seconds }));
+  return { made: f.made, sections: f.sections, tracks, cues: f.music.cues };
 }
 
 /**

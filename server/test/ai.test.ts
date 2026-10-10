@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { book, browser, primary, push, registered } from './helpers.ts';
+import type { AiFile } from '@breader/shared';
 import { aiFile } from './ai-fixture.ts';
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -24,8 +25,8 @@ async function reader(bytes = Buffer.from(`a book ${Math.random()}`), ai = true)
   return { b, a, bytes, sha256: sha(bytes) };
 }
 
-async function notes(sha256: string) {
-  const f = aiFile(sha256);
+async function notes(sha256: string, more: Partial<AiFile> = {}) {
+  const f = { ...aiFile(sha256), ...more };
   await primary.pool.query('INSERT INTO ai_notes (sha256, data, made, by) VALUES ($1, $2, $3, $4)', [sha256, JSON.stringify(f), f.made, f.by]);
   return f;
 }
@@ -38,7 +39,7 @@ const names = async (b: Reader, bookId: string) => ((await b.get(`/v1/books/${bo
 describe('ai notes', () => {
   it('has nothing for a book until the AI has read it and its switch is on', async () => {
     const { b, a, sha256 } = await reader(undefined, false);
-    expect((await b.get(`/v1/books/${a.id}/ai`)).body).toEqual({ made: null, revisit: false, voices: false });
+    expect((await b.get(`/v1/books/${a.id}/ai`)).body).toEqual({ made: null, revisit: false, voices: false, music: false });
     await notes(sha256);
     expect((await b.get(`/v1/books/${a.id}/ai`)).body.made).toBeNull();
     expect((await b.get(`/v1/books/${a.id}/revisit`)).status).toBe(404);
@@ -46,7 +47,7 @@ describe('ai notes', () => {
 
     await b.post('/v1/sync/push', push('r', { type: 'edit.put', bookId: a.id, edit: { ai: true } }));
     const status = await b.get(`/v1/books/${a.id}/ai`);
-    expect(status.body).toEqual({ made: '2026-09-29T08:00:00.000Z', revisit: true, voices: true });
+    expect(status.body).toEqual({ made: '2026-09-29T08:00:00.000Z', revisit: true, voices: true, music: false });
     expect(status.headers.get('cache-control')).toBe('private, no-store');
   });
 
@@ -77,6 +78,41 @@ describe('ai notes', () => {
     expect(res.body.spans).toEqual([[0, 2, 0, 10, 'F'], [1, 9, 0, 4, 'M']]);
     expect(res.body.narration[0]).toEqual([0, 0, 'F']);
     expect(JSON.stringify(res.body)).not.toMatch(/Anna|Tomas|stranger/);
+  });
+
+  it('hands over the music as cues and numbered tracks, each track through a signed link', async () => {
+    const { b, a, sha256 } = await reader();
+    const music: AiFile['music'] = {
+      tracks: [
+        { id: 'dQw4w9WgXcQ', title: 'Main Theme', source: 'An OST channel', seconds: 180, role: 'Anna’s theme' },
+        { id: 'abcdefghijk', title: 'Night Rain', source: 'Another channel', seconds: 95, role: 'quiet nights' },
+      ],
+      cues: [[0, 1, 0, 0], [1, 4, -1, 0], [2, 0, 1, 1]],
+    };
+    await notes(sha256, { music });
+    expect((await b.get(`/v1/books/${a.id}/ai`)).body.music).toBe(true);
+
+    const res = await b.get(`/v1/books/${a.id}/music`);
+    expect(res.status).toBe(200);
+    expect(res.body.tracks).toEqual([
+      { n: 0, title: 'Main Theme', source: 'An OST channel', seconds: 180 },
+      { n: 1, title: 'Night Rain', source: 'Another channel', seconds: 95 },
+    ]);
+    expect(res.body.cues).toEqual(music.cues);
+    expect(JSON.stringify(res.body)).not.toMatch(/Anna|dQw4w9WgXcQ/);
+
+    const link = await b.get(`/v1/books/${a.id}/music/1`);
+    expect(link.status).toBe(200);
+    expect(link.body.url).toContain('music/abcdefghijk.m4a');
+    expect((await b.get(`/v1/books/${a.id}/music/2`)).status).toBe(404);
+    expect((await b.get(`/v1/books/${a.id}/music/x`)).status).toBe(404);
+  });
+
+  it('has no music for a book the marker hasn’t scored yet', async () => {
+    const { b, a, sha256 } = await reader();
+    await notes(sha256);
+    expect((await b.get(`/v1/books/${a.id}/music`)).status).toBe(404);
+    expect((await b.get(`/v1/books/${a.id}/music/0`)).status).toBe(404);
   });
 
   it('serves one file’s notes to every library that holds it, once any of them said yes', async () => {

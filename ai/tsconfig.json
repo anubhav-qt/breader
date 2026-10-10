@@ -12,5 +12,5 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client"]
   },
-  "include": ["tools"]
+  "include": ["tools", "pi"]
 }

@@ -1,8 +1,8 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { AiFile, AiStatus, AiVoicesResponse, RevisitResponse } from '@breader/shared';
+import { TRACK_ID, trackKey, type AiFile, type AiMusicResponse, type AiStatus, type AiVoicesResponse, type MusicLink, type RevisitResponse } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
-import { cutAt, revisitFor, voicesFor } from '../lib/ai.ts';
+import { cutAt, musicFor, revisitFor, voicesFor } from '../lib/ai.ts';
 import { ApiError } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
@@ -10,13 +10,15 @@ import { requireLibrary } from '../lib/library.ts';
 /*
  * What an AI made of a book (ai_notes, loaded by ai/tools/import.ts), for a reader whose library
  * has the book with its AI switch on. The notes are the whole book's, so they never leave whole:
- * Revisit is cut at the reader's mark here, and the voice marks go without names.
+ * Revisit is cut at the reader's mark here, and the voice marks go without names. Its music goes
+ * as cues and tracks by number, each track's file through a signed link for a while.
  */
 
 const none = () => new ApiError(404, 'not_found', 'There are no notes for this book.');
+const noMusic = () => new ApiError(404, 'not_found', 'There is no music for this book.');
 
 export function aiRoutes(deps: Deps) {
-  const { db } = deps;
+  const { db, storage } = deps;
   const r = new Hono<AppEnv>();
   r.use('/books/:bookId/*', requireLibrary(deps));
 
@@ -39,12 +41,14 @@ export function aiRoutes(deps: Deps) {
   }
 
   r.get('/books/:bookId/ai', rateLimit({ name: 'ai', max: 240, windowMs: 60_000 }), async (c) => {
-    const row = await notes<{ made: Date; revisit: boolean; voices: boolean }>(c.var.library.id, c.req.param('bookId'), sql`
+    const row = await notes<{ made: Date; revisit: boolean; voices: boolean; music: boolean }>(c.var.library.id, c.req.param('bookId'), sql`
       n.made,
       (jsonb_array_length(n.data->'revisit'->'people') + jsonb_array_length(n.data->'revisit'->'places') + jsonb_array_length(n.data->'revisit'->'terms')) > 0 AS revisit,
-      jsonb_array_length(n.data->'voices'->'spans') > 0 AS voices`);
+      jsonb_array_length(n.data->'voices'->'spans') > 0 AS voices,
+      n.data ? 'music' AS music`);
     c.header('Cache-Control', 'private, no-store');
-    const status: AiStatus = row ? { made: new Date(row.made).toISOString(), revisit: row.revisit, voices: row.voices } : { made: null, revisit: false, voices: false };
+    let status: AiStatus = { made: null, revisit: false, voices: false, music: false };
+    if (row) status = { made: new Date(row.made).toISOString(), revisit: row.revisit, voices: row.voices, music: row.music };
     return c.json(status);
   });
 
@@ -68,6 +72,27 @@ export function aiRoutes(deps: Deps) {
     if (!row) throw none();
     c.header('Cache-Control', 'private, no-store');
     return c.json(voicesFor({ made: new Date(row.made).toISOString(), sections: row.sections, voices: row.voices }) satisfies AiVoicesResponse);
+  });
+
+  r.get('/books/:bookId/music', rateLimit({ name: 'ai-music', max: 60, windowMs: 60_000 }), async (c) => {
+    const row = await notes<{ made: Date; sections: string[]; music: AiFile['music'] | null }>(
+      c.var.library.id,
+      c.req.param('bookId'),
+      sql`n.made, n.data->'sections' AS sections, n.data->'music' AS music`,
+    );
+    if (!row || !row.music) throw noMusic();
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(musicFor({ made: new Date(row.made).toISOString(), sections: row.sections, music: row.music }) satisfies AiMusicResponse);
+  });
+
+  /** One of the book's tracks, by its number: a signed link to its file. */
+  r.get('/books/:bookId/music/:n', rateLimit({ name: 'ai-music-track', max: 240, windowMs: 60_000 }), async (c) => {
+    const n = Number(c.req.param('n'));
+    if (!Number.isInteger(n) || n < 0 || n > 1000) throw noMusic();
+    const row = await notes<{ id: string | null }>(c.var.library.id, c.req.param('bookId'), sql`n.data->'music'->'tracks'->(${n}::int)->>'id' AS id`);
+    if (!row || !row.id || !TRACK_ID.test(row.id)) throw noMusic();
+    c.header('Cache-Control', 'private, no-store');
+    return c.json((await storage.downloadLink(trackKey(row.id))) satisfies MusicLink);
   });
 
   return r;

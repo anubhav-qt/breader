@@ -19,6 +19,8 @@ export const LADDER: Rung[] = [
 export const TOP = LADDER[0];
 export const PRIMARY = LADDER.filter((r) => r.primary);
 const LONG: Record<string, string> = { 'kimi-k3': 'Kimi K3 (reasoning high, NVIDIA)', 'deepseek-v4.1-flash': 'DeepSeek V4.1 Flash (thinking, NVIDIA)' };
+/** A model's long name for the pack's "by". */
+export const longName = (model: string) => LONG[model] ?? model;
 
 export interface Done {
   model: string;
@@ -35,11 +37,75 @@ export const castOf = (book: Book): Cast => readJson<Cast>(join(bookDir(book.key
 /** Every part's text, in order. */
 export const wholeBook = (book: Book) => book.parts.filter((p) => p.words > 0).map((p) => text(book, p.n)).join('\n\n');
 
-/** The whole book and its research notes: the start of every call. */
-export function context(book: Book): string {
+/**
+ * The share of the book a call keeps at each level: all of it, then a fifth less each time. A
+ * model that keeps refusing a call, or answering it empty, is asked again a level smaller
+ * (balancer.ts), which is often enough for it to answer.
+ */
+const KEEP = [1, 0.8, 0.6, 0.4];
+export const SHRINKS = KEEP.length - 1;
+
+/**
+ * The parts a call keeps at a level: every one at level 0; after that, the ones nearest part
+ * `focus` (or from the start, with no focus) up to that level's share of the book's words.
+ */
+export function keptParts(book: Book, focus: number | null, level: number): number[] {
+  const parts = book.parts.filter((p) => p.words > 0);
+  if (level <= 0) return parts.map((p) => p.n);
+  let words = 0;
+  for (const p of parts) words += p.words;
+  const budget = words * KEEP[Math.min(level, SHRINKS)];
+  const nearest = [...parts];
+  if (focus !== null) nearest.sort((a, b) => Math.abs(a.n - focus) - Math.abs(b.n - focus));
+  const kept = new Set<number>();
+  let used = 0;
+  for (const p of nearest) {
+    if (kept.size && used + p.words > budget) break;
+    kept.add(p.n);
+    used += p.words;
+  }
+  return parts.filter((p) => kept.has(p.n)).map((p) => p.n);
+}
+
+/** The book's text, with only the parts in `kept`, and a line where others are left out. */
+export function bookText(book: Book, kept: number[]): string {
+  const out: string[] = [];
+  let gap: number[] = [];
+  const sayGap = () => {
+    if (!gap.length) return;
+    let which = `Part ${gap[0]} is`;
+    if (gap.length > 1) which = `Parts ${gap[0]} to ${gap[gap.length - 1]} are`;
+    out.push(`(${which} left out here, to keep this call smaller.)`);
+    gap = [];
+  };
+  for (const p of book.parts) {
+    if (p.words <= 0) continue;
+    if (kept.includes(p.n)) {
+      sayGap();
+      out.push(text(book, p.n));
+    } else {
+      gap.push(p.n);
+    }
+  }
+  sayGap();
+  return out.join('\n\n');
+}
+
+/** A book's research from the web (research.ts), or null when it has none. */
+export const webFile = (book: { key: string }) => join(bookDir(book.key), 'web.md');
+
+/**
+ * The whole book and its research notes: the start of every call. At a level above 0 the book
+ * is cut down to the parts nearest `focus` (keptParts); the research is always whole.
+ */
+export function context(book: Book, focus: number | null = null, level = 0): string {
   const dir = bookDir(book.key);
   const research = existsSync(join(dir, 'research.md')) ? readFileSync(join(dir, 'research.md'), 'utf8').trim() : '(none)';
-  return `# The whole book\n\n${wholeBook(book)}\n\n# Research notes\n\n${research}`;
+  let heading = '# The whole book';
+  if (level > 0) heading = '# The book, cut down for this call';
+  const out = [`${heading}\n\n${bookText(book, keptParts(book, focus, level))}`, `# Research notes\n\n${research}`];
+  if (existsSync(webFile(book))) out.push(`# Research from the web\n\n${readFileSync(webFile(book), 'utf8').trim()}`);
+  return out.join('\n\n');
 }
 
 export function castText(book: Book): string {
@@ -124,11 +190,13 @@ export function notesBy(book: { key: string }): string {
   return [...new Set(models)].map((m) => LONG[m] ?? m).join(' and ');
 }
 
-/** Who did the research: Antigravity by hand, or a model reading the book alone (cast-by.json). */
+/** Who did the research: Antigravity by hand, or a model reading the book (cast-by.json), with Gemini's research from the web when there's some (research.ts). */
 function researchBy(book: Book): string {
   if (!existsSync(castByFile(book))) return 'research by Antigravity';
   const model = readJson<Done>(castByFile(book)).model;
-  return `cast by ${LONG[model] ?? model}`;
+  const cast = `cast by ${LONG[model] ?? model}`;
+  if (existsSync(webFile(book))) return `${cast} with web research by Gemini`;
+  return cast;
 }
 
 /** The pack's "by": who marked which parts, then who wrote the notes, when notes did. */

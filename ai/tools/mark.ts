@@ -64,13 +64,13 @@ function errorsFor(book: Book, n: number): string[] {
   return validate(book, false).errors.filter((e) => e.startsWith(name) || e.startsWith('cast.json') || (e.startsWith('not in cast.json') && e.includes(name)));
 }
 
-/** What the model gets to mark part n. */
-function partPrompt(book: Book, n: number): Msg[] {
+/** What the model gets to mark part n, the book cut down to `level` (kimi.ts, context). */
+function partPrompt(book: Book, n: number, level: number): Msg[] {
   const part = book.parts[n - 1];
   const quotes = book.segs.filter((g) => inPart(part, [g.s, g.b])).length;
   const prev = n > 1 && existsSync(marksFile(book, n - 1)) ? readFileSync(marksFile(book, n - 1), 'utf8').trim() : '';
   const user = [
-    context(book),
+    context(book, n, level),
     `# The cast so far (id | voice | name | role)\n\n${castText(book)}`,
     prev ? `# Marks of part ${n - 1} (done already)\n\n${prev}` : '',
     `# Mark part ${n}\n\nPart ${n} is paragraphs ${posText(part.from)} to ${posText(part.to)}, with ${quotes} numbered quotes. Here it is again:\n\n${text(book, n)}`,
@@ -99,7 +99,7 @@ function stamp(book: Book, n: number, model: string, secs: number, fresh: boolea
 export async function markParts(book: Book, ns: number[], lb: Balancer, alsoFix: number[] = []): Promise<number[]> {
   const answered: number[] = [];
   const answers = await Promise.allSettled(ns.map(async (n) => {
-    const { reply, rung } = await lb.chat(partPrompt(book, n), { book: book.key, part: n, round: 1 });
+    const { reply, rung } = await lb.chat((level) => partPrompt(book, n, level), { book: book.key, part: n, round: 1 });
     const { marks, cast } = split(reply.text);
     writeFileSync(marksFile(book, n), marks);
     const merged = mergeCast(book, cast, rung.name);
@@ -128,14 +128,14 @@ async function fixParts(book: Book, ns: number[], lb: Balancer) {
       const errors = errorsFor(book, n);
       return `## Part ${n}\n\nIts marks:\n${readFileSync(marksFile(book, n), 'utf8').trim()}\n\ncheck's ${errors.length === 1 ? 'error' : `${errors.length} errors`}:\n${errors.slice(0, 80).join('\n')}`;
     });
-    const user = [
-      context(book),
+    const user = (level: number) => [
+      context(book, bad[0], level),
       `# The cast so far (id | voice | name | role)\n\n${castText(book)}`,
       `# Fix these\n\ncheck found errors in the marks of ${bad.length === 1 ? 'this part' : `these ${bad.length} parts`}. Fix them, and send back the whole fixed marks file for each part, each starting with a line like:\n=== part ${bad[0]} ===\nThen the cast lines for anyone new.\n\n${sections.join('\n\n')}`,
     ].join('\n\n');
     let answer;
     try {
-      answer = await lb.chat([{ role: 'system', content: SYSTEM }, { role: 'user', content: user }], { book: book.key, fix: bad.join(','), round });
+      answer = await lb.chat((level) => [{ role: 'system', content: SYSTEM }, { role: 'user', content: user(level) }], { book: book.key, fix: bad.join(','), round });
     } catch (e) {
       console.log(`  fix, round ${round}: no answer (${e instanceof Error ? e.message : String(e)})`);
       return;
@@ -174,12 +174,12 @@ async function settle(book: Book, lb: Balancer) {
     const { file, n } = lineOf(sp.where);
     return { i: i + 1, file, n, line: readFileSync(file, 'utf8').split(/\r?\n/)[n - 1].trim() };
   });
-  const user = [
-    context(book),
+  const user = (level: number) => [
+    context(book, null, level),
     `# The cast (id | voice | name | role)\n\n${castText(book)}`,
     `# Settle these\n\nThese ${items.length} marks are unsure. Read each one's paragraph again, with everything the book says around it, and decide. Answer with one line per item, its number and then the mark, fixed or kept, with ? only if two readings still fit:\nU1 12:2.1 marlo\nAnswer with those lines only, plus cast lines for anyone new.\n\n${items.map((x) => `U${x.i} ${x.line}`).join('\n')}`,
   ].join('\n\n');
-  const { reply, rung } = await lb.chat([{ role: 'system', content: SYSTEM }, { role: 'user', content: user }], { book: book.key, settle: items.length });
+  const { reply, rung } = await lb.chat((level) => [{ role: 'system', content: SYSTEM }, { role: 'user', content: user(level) }], { book: book.key, settle: items.length });
   // The last answer, to see why lines stayed unsure. Marks and cast lines only, never the book's text.
   writeFileSync(join(bookDir(book.key), 'settle-answer.txt'), reply.text);
   const files = [...new Set(items.map((x) => x.file))];

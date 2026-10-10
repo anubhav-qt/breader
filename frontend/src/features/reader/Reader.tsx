@@ -17,6 +17,7 @@ import { keepLooking, looking, stopLook } from './look';
 import { PAGE_KEYS, partWay, playerKey, sentenceOn, wordsOn, type Part, type PlayerKey } from './keys';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
 import { MangaView } from './MangaView';
+import { unlockMusic, useMusic } from './music';
 import { overlaps, usePacing, type Spot } from './pacing';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
@@ -112,6 +113,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   /** A manga's pages are pictures: nothing to read aloud or search. */
   const pictures = book.kind === 'manga';
   const pacing = usePacing(view, immersive && !closing, loc);
+  // Background music while the voice reads or the light moves, on a book that has it (music.ts).
+  useMusic(view, record.id, aiStatus, !closing, narration, pacing);
   // Voices readers uploaded, so the one picked last time is known, and whether the server reads for this account.
   useEffect(() => { if (canNarrate && !pictures) { void refreshVoices(); void refreshSpeech(); } }, [pictures]);
   const { busy: speaking, media } = narration;
@@ -182,6 +185,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const lightFrom = (s: Sentence, at = 0) => {
     const l = view.current?.listen;
     if (!l) return;
+    // The music can only start in the tap.
+    unlockMusic();
     setAsking(false);
     if (l.onScreen(s, at)) { pacing.begin(s, at); return; }
     l.reach(s, at);
@@ -206,6 +211,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   /** From the top of the page on screen. */
   const fromTop = () => {
     if (byVoice) { voiceFrom('top'); return; }
+    unlockMusic();
     void view.current?.listen.from().then((list) => { if (list[0]) lightFrom(list[0]); });
   };
   /*
@@ -717,6 +723,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     } : null,
     revisit: aiStatus.revisit ? { read: marker.get()?.progress ?? 0, load: loadNotes } : null,
     two: marks ? 'ready' : ai ? 'soon' : 'off',
+    music: aiStatus.music,
     letAi: onAi,
     talk: { view: talkView, opens: opened, at: talkAt, open: openTalk },
   };

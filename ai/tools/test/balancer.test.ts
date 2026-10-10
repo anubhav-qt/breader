@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
 import type { Rung } from '../balancer.ts';
-import { answerByModel, calls } from './nvidia.ts';
+import { answerByModel, answerWith, calls } from './nvidia.ts';
 
 /*
  * The balancer in virtual time: NVIDIA is a script (nvidia.ts) and the clock moves only when the
@@ -160,4 +160,47 @@ test('notes calls wait while a book is being marked, then go', async (t) => {
   const r = await run(t, waiting);
   assert.equal(r.value?.reply.text, 'a note');
   assert.ok(r.secs <= 11, `waited ${r.secs} s after the hold`);
+});
+
+/** A call in sizes: its one message says how small it was asked. */
+const sized = (level: number) => [{ role: 'user' as const, content: `size ${level}` }];
+const sizesAsked = (r: Rung) => calls.filter((c) => c.model === r.model).map((c) => c.user);
+
+test('a call in sizes that gets refused is asked again smaller, and answers when it is small enough', async (t) => {
+  virtualTime(t);
+  const { kimi, nemo } = rungs();
+  answerWith((model, user) => {
+    if (model === kimi.model && user !== 'size 2') return 400;
+    return `${model} read ${user}`;
+  });
+  const r = await run(t, new Balancer([kimi, nemo], patient).chat(sized, {}));
+  assert.equal(r.value?.reply.text, `${kimi.model} read size 2`);
+  assert.deepEqual(sizesAsked(kimi), ['size 0', 'size 1', 'size 2']);
+  assert.equal(who(nemo), 0, 'the top model is asked smaller before any other model');
+  assert.ok(r.secs <= 1);
+});
+
+test('refused at every size, a call goes to the next model, which starts at full size again', async (t) => {
+  virtualTime(t);
+  const { kimi, nemo } = rungs();
+  answerWith((model, user) => {
+    if (model === kimi.model) return 400;
+    return `${model} read ${user}`;
+  });
+  const r = await run(t, new Balancer([kimi, nemo], patient).chat(sized, {}));
+  assert.equal(r.value?.reply.text, `${nemo.model} read size 0`);
+  assert.deepEqual(sizesAsked(kimi), ['size 0', 'size 1', 'size 2', 'size 3']);
+});
+
+test('three empty answers at a size, and the call is asked a size smaller', async (t) => {
+  virtualTime(t);
+  const { kimi, nemo } = rungs();
+  answerWith((model, user) => {
+    if (model === kimi.model && user === 'size 0') return '';
+    return `${model} read ${user}`;
+  });
+  const r = await run(t, new Balancer([kimi, nemo], patient).chat(sized, {}));
+  assert.equal(r.value?.reply.text, `${kimi.model} read size 1`);
+  assert.deepEqual(sizesAsked(kimi), ['size 0', 'size 0', 'size 0', 'size 1']);
+  assert.equal(who(nemo), 0);
 });

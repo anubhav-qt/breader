@@ -5,8 +5,10 @@ import { pruneReadFeed } from './jobs/chores.ts';
 import { cleanUp } from './jobs/cleanup.ts';
 import { restoreDrill } from './jobs/drill.ts';
 import { updateExtensions } from './jobs/extensions.ts';
+import { startCliproxy } from './jobs/cliproxy.ts';
 import { startMarker } from './jobs/marker.ts';
 import { repairStorage } from './jobs/repair.ts';
+import { updateYtDlp } from './jobs/ytdlp.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
@@ -17,8 +19,8 @@ import { makeFileMirror } from './mirror/files.ts';
 /*
  * The laptop's background process: keeps the copy and the file mirror current, prunes feed
  * records it has read, cleans up, writes the nightly backup and tests that it restores, puts
- * back files missing from R2, keeps Suwayomi's extensions current, and runs the AI marker. It
- * never runs on the fallback.
+ * back files missing from R2, keeps Suwayomi's extensions current, and runs the AI marker with
+ * the proxy for its AI accounts. It never runs on the fallback.
  */
 const env = loadEnv();
 startReporting(env, 'worker');
@@ -89,7 +91,13 @@ if (env.HEARTBEAT_URL) {
     if ((rows[0]?.lag ?? Infinity) < 60) await fetch(url, { signal: AbortSignal.timeout(10_000) });
   })();
 }
-startMarker({ filesDir: env.FILES_DIR, signal: stop.signal });
+// yt-dlp once a day too, for the marker's music, the first time half an hour after start.
+const ytDlp = job('yt-dlp', () => updateYtDlp());
+every(24 * 3_600_000, 'yt-dlp update', ytDlp);
+const later = setTimeout(() => void ytDlp(), 30 * 60_000);
+stop.signal.addEventListener('abort', () => clearTimeout(later));
+const proxy = startCliproxy({ filesDir: env.FILES_DIR, adminToken: env.ADMIN_TOKEN, signal: stop.signal });
+startMarker({ filesDir: env.FILES_DIR, signal: stop.signal, env: proxy ?? undefined });
 log.info({ files: env.FILES_DIR }, 'worker running');
 
 const shutdown = () => {

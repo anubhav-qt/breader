@@ -2,7 +2,7 @@
 #   node dist/api.js         the API (default), as ROLE=laptop or ROLE=fallback
 #   node dist/worker.js      the laptop's feed, file copy and backups
 #   node dist/migrate.js     schema migrations for Supabase and the copy
-#   node ai/dist/marker.js   voice marks and Revisit notes for books with AI on (ai/tools/marker.ts)
+#   node ai/dist/marker.js   voice marks, music and Revisit notes for books with AI on (ai/tools/marker.ts)
 # The bundles are plain JavaScript, so they are built once on the CI machine's own platform.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
@@ -21,6 +21,7 @@ COPY frontend/src/books frontend/src/books
 COPY frontend/src/lib/format.ts frontend/src/lib/
 COPY frontend/src/features/reader/dom.ts frontend/src/features/reader/search.ts frontend/src/features/reader/
 COPY ai/build.mjs ai/
+COPY ai/pi ai/pi
 COPY ai/tools ai/tools
 RUN node ai/build.mjs
 
@@ -34,10 +35,29 @@ RUN cpu=$TARGETARCH && if [ "$cpu" = amd64 ]; then cpu=x64; fi \
   && v=$(node -p "require('/tmp/package-lock.json').packages['node_modules/sharp'].version") \
   && npm install --no-package-lock --no-audit --no-fund --ignore-scripts --os=linux --libc=musl --cpu=$cpu "sharp@$v"
 
+# The AI accounts' proxy, CLIProxyAPI (server/src/jobs/cliproxy.ts): its static build, for the
+# image's platform, checked against the checksums its release lists.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS cliproxy
+ARG TARGETARCH
+ARG CLIPROXY=8.0.5
+WORKDIR /cliproxy
+RUN arch=amd64 && sum=1424923a52a62e3db3b6871e5f97b046da6d000ba071b1c2fe28013668d7b54b \
+  && if [ "$TARGETARCH" = arm64 ]; then arch=aarch64 && sum=3b255caee58136dff328be9a1e307f4d887b1bce5da5549951e7d8ebf3017ce2; fi \
+  && file="CLIProxyAPI_${CLIPROXY}_linux_${arch}_no-plugin.tar.gz" \
+  && wget -q "https://github.com/router-for-me/CLIProxyAPI/releases/download/v${CLIPROXY}/$file" \
+  && echo "$sum  $file" | sha256sum -c - \
+  && tar -xzf "$file" cli-proxy-api
+
 FROM node:24-alpine
 # pg_dump for backups (must be at least the copy's major version), tini to forward signals.
-RUN apk add --no-cache postgresql17-client tini tzdata \
-  && mkdir -p /data/files /data/backups /data/voices /data/manga && chown -R node:node /data
+# ffmpeg and yt-dlp for the marker's music (ai/tools/youtube.ts, sound.ts): yt-dlp in a Python
+# venv the worker can write to, since it keeps it current every day (jobs/ytdlp.ts).
+RUN apk add --no-cache postgresql17-client tini tzdata ffmpeg python3 \
+  && python3 -m venv /opt/yt-dlp \
+  && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]" \
+  && mkdir -p /data/files /data/backups /data/voices /data/manga && chown -R node:node /data /opt/yt-dlp
+ENV YT_DLP=/opt/yt-dlp/bin/yt-dlp
+COPY --from=cliproxy /cliproxy/cli-proxy-api /usr/local/bin/cli-proxy-api
 WORKDIR /app
 ENV NODE_ENV=production
 # The commit, shown by /health, so you can see which version each server runs.

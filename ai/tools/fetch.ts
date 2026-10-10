@@ -17,8 +17,8 @@ import type { Cast } from './validate.ts';
 
 const EXT = { EPUB: 'epub', PDF: 'pdf', TXT: 'txt', MD: 'md', Text: 'txt' } as const;
 
-export async function download(b: QueueBook): Promise<Uint8Array> {
-  if (b.sample) return new Uint8Array(readFileSync(join(ROOT, 'frontend/public', b.sample)));
+/** The file store (R2), with the production settings, and its bucket. */
+export function fileStore() {
   const env = prodEnv();
   const s3 = new S3Client({
     region: env.S3_REGION || 'auto',
@@ -28,7 +28,13 @@ export async function download(b: QueueBook): Promise<Uint8Array> {
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
   });
-  const res = await s3.send(new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: b.r2Key! }));
+  return { s3, bucket: env.S3_BUCKET };
+}
+
+export async function download(b: QueueBook): Promise<Uint8Array> {
+  if (b.sample) return new Uint8Array(readFileSync(join(ROOT, 'frontend/public', b.sample)));
+  const { s3, bucket } = fileStore();
+  const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: b.r2Key! }));
   if (!res.Body) throw new Error(`R2 sent nothing for ${b.title}.`);
   return res.Body.transformToByteArray();
 }

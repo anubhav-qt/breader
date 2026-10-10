@@ -2,7 +2,9 @@
  * The status page itself: one static document that asks for the admin token (kept for this tab
  * only) and reads /admin/status from the same server every few seconds while it's in view, so it
  * stays live. Book titles in the AI marker's section are the only thing on it that comes from
- * readers, and every value is set as text, never as markup.
+ * readers, and every value is set as text, never as markup. On the laptop it also lists the AI
+ * accounts and connects new ones (routes/admin.ts), a minute apart or after each change, since
+ * each look asks every provider for its limits.
  */
 export const adminPage = (nonce: string) => `<!doctype html>
 <html lang="en">
@@ -45,6 +47,13 @@ export const adminPage = (nonce: string) => `<!doctype html>
   [hidden] { display: none; }
   input { flex: 1; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; }
   button { font: inherit; padding: 8px 14px; border: 1px solid var(--fg); border-radius: 8px; background: var(--fg); color: var(--bg); cursor: pointer; }
+  button.quiet { background: transparent; color: inherit; border-color: var(--line); padding: 4px 10px; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .limit { margin-top: 6px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .steps { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+  .steps a { color: inherit; }
+  .paste { display: flex; gap: 8px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -56,6 +65,7 @@ export const adminPage = (nonce: string) => `<!doctype html>
   </form>
   <p id="error" class="bad" hidden></p>
   <div id="out"></div>
+  <div id="accounts"></div>
 </main>
 <script nonce="${nonce}">
 const KEY = 'breader.admin';
@@ -70,7 +80,8 @@ const until = (t) => {
   if (s <= 0) return 'any moment now';
   return 'in ' + dur(s);
 };
-const TASKS = { marks: 'Voice marks (M/F)', notes: 'Revisit notes' };
+const TASKS = { marks: 'Voice marks (M/F)', music: 'Background music', notes: 'Revisit notes' };
+const KINDS = { antigravity: 'Antigravity', claude: 'Claude Code', codex: 'Codex' };
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
@@ -127,7 +138,7 @@ function render(s) {
     ['Stored', ready ? ready.files + ' files, ' + mb(ready.bytes) + pct(ready.bytes, s.files.freeBytes) : 'none'],
     ...files.map((f) => [f.status, f.files + ' files, ' + mb(f.bytes) + (f.unused ? ', ' + f.unused + ' waiting for clean-up' : '')]),
   ]));
-  const names = { 'backup': 'Nightly backup', 'restore-drill': 'Restore test', 'clean-up': 'Clean-up', 'storage-check': 'R2 check', 'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'ai-marker': 'AI marker' };
+  const names = { 'backup': 'Nightly backup', 'restore-drill': 'Restore test', 'clean-up': 'Clean-up', 'storage-check': 'R2 check', 'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'ai-marker': 'AI marker', 'yt-dlp': 'yt-dlp update' };
   out.push(...section('Workers', s.jobs.length ? s.jobs.flatMap((j) => {
     const failing = j.last_error_at && (!j.last_ok_at || new Date(j.last_error_at) > new Date(j.last_ok_at));
     const rows = [[names[j.name] || j.name, 'worked ' + since(j.last_ok_at), !j.last_ok_at]];
@@ -153,6 +164,7 @@ function marker(d) {
   // It says how it's doing at least once a minute, so three quiet minutes mean it has stopped.
   const quiet = Math.round((Date.now() - new Date(d.at).getTime()) / 1000);
   if (quiet > 180) out.push(el('p', 'Not heard from in ' + dur(quiet) + ', so it may have stopped. What follows is from then.', 'bad'));
+  if (d.limitedUntil) out.push(el('p', 'Every Antigravity account is out of Gemini until it fills again ' + until(d.limitedUntil) + ': research and soundtracks wait for it, and everything else carries on.', 'bad'));
 
   out.push(el('h3', 'Working on'));
   if (!d.working.length) out.push(el('p', 'Nothing right now.', 'dim'));
@@ -194,6 +206,166 @@ function marker(d) {
   return out;
 }
 
+/** A call to the admin API with the token. Fails with the server's own words. */
+async function call(method, path, body) {
+  const init = { method, headers: { authorization: 'Bearer ' + sessionStorage.getItem(KEY) }, cache: 'no-store' };
+  if (body) {
+    init.headers['content-type'] = 'application/json';
+    init.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, init);
+  const answer = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = new Error(answer.message || 'The server answered ' + res.status + '.');
+    e.status = res.status;
+    throw e;
+  }
+  return answer;
+}
+
+// The AI accounts: the last list, when it was read, and the sign-in under way, if any.
+let accounts = [];
+let accountsAt = 0;
+let signIn = null;
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+function limit(w) {
+  let line = w.label + ': ' + Math.round(w.usedPercent) + '% used';
+  if (w.resetsAt && w.usedPercent > 0) line += ', full again ' + until(w.resetsAt);
+  const fill = el('div');
+  fill.style.width = w.usedPercent + '%';
+  const bar = el('div', null, 'bar');
+  bar.append(fill);
+  const box = el('div', null, 'limit');
+  box.append(el('div', line, w.usedPercent >= 100 ? 'bad' : 'dim'), bar);
+  return box;
+}
+
+async function loadAccounts() {
+  accountsAt = Date.now();
+  try {
+    accounts = (await call('GET', '/admin/accounts')).accounts;
+  } catch (e) {
+    // Only the laptop has them.
+    if (e.status === 404) { $('accounts').replaceChildren(); return; }
+    $('accounts').replaceChildren(el('h2', 'AI accounts'), el('p', e.message, 'bad'));
+    return;
+  }
+  showAccounts();
+}
+
+function showAccounts() {
+  const out = [el('h2', 'AI accounts')];
+  out.push(el('p', 'The AI marker’s research and music run on these, Antigravity’s Gemini first. With several, one is used until it reaches a limit, then the next.', 'dim'));
+  const list = el('div', null, 'books');
+  for (const a of accounts) {
+    const head = el('div', null, 'head');
+    const remove = el('button', 'Remove', 'quiet');
+    remove.addEventListener('click', () => removeAccount(a));
+    head.append(el('span', (KINDS[a.kind] || a.kind) + ' · ' + a.name, 'title'), remove);
+    const row = el('div', null, 'book');
+    row.append(head);
+    if (a.problem) row.append(el('div', a.problem, 'bad'));
+    if (a.usage) {
+      for (const w of a.usage) row.append(limit(w));
+    } else {
+      row.append(el('div', 'Its limits couldn’t be read.', 'dim'));
+    }
+    list.append(row);
+  }
+  if (accounts.length) out.push(list);
+  else out.push(el('p', 'None connected yet.', 'dim'));
+  if (signIn) {
+    out.push(signIn.panel);
+  } else {
+    const actions = el('div', null, 'actions');
+    for (const kind of Object.keys(KINDS)) {
+      const b = el('button', 'Connect ' + KINDS[kind]);
+      b.addEventListener('click', () => connect(kind));
+      actions.append(b);
+    }
+    out.push(actions);
+  }
+  $('accounts').replaceChildren(...out);
+}
+
+async function connect(kind) {
+  let started;
+  try {
+    started = await call('POST', '/admin/accounts/connect', { kind });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  const panel = el('div', null, 'steps');
+  const open = el('a', 'Open the ' + KINDS[kind] + ' sign-in page');
+  open.href = started.url;
+  open.target = '_blank';
+  open.rel = 'noopener noreferrer';
+  const first = el('p', '1. ');
+  first.append(open, document.createTextNode(' and sign in.'));
+  const second = el('p', '2. It ends on a page that doesn’t load, at a localhost address. Copy that whole address from the address bar and paste it here, within 5 minutes.');
+  const input = el('input');
+  input.type = 'url';
+  input.placeholder = 'http://localhost:…';
+  input.setAttribute('aria-label', 'The address the sign-in ended on');
+  const done = el('button', 'Connect');
+  const cancel = el('button', 'Cancel', 'quiet');
+  const paste = el('div', null, 'paste');
+  paste.append(input, done, cancel);
+  const said = el('p', null, 'dim');
+  panel.append(first, second, paste, said);
+  signIn = { state: started.state, panel, input, said };
+  done.addEventListener('click', () => finish());
+  cancel.addEventListener('click', () => stopSignIn());
+  showAccounts();
+}
+
+function say(text, bad) {
+  signIn.said.textContent = text;
+  signIn.said.className = bad ? 'bad' : 'dim';
+}
+
+async function finish() {
+  const s = signIn;
+  const pasted = s.input.value.trim();
+  if (!pasted) return;
+  say('Finishing the sign-in…');
+  try {
+    await call('POST', '/admin/accounts/finish', { state: s.state, redirectUrl: pasted });
+    for (let i = 0; i < 30; i++) {
+      const r = await call('GET', '/admin/accounts/status?state=' + encodeURIComponent(s.state));
+      if (r.status === 'ok') {
+        signIn = null;
+        await loadAccounts();
+        return;
+      }
+      if (r.status === 'error') throw new Error(r.error);
+      await pause(2000);
+    }
+    throw new Error('It’s taking long. Look at the list again in a minute.');
+  } catch (e) {
+    say(e.message, true);
+  }
+}
+
+async function stopSignIn() {
+  const s = signIn;
+  signIn = null;
+  showAccounts();
+  await call('POST', '/admin/accounts/cancel', { state: s.state }).catch(() => {});
+}
+
+async function removeAccount(a) {
+  if (!confirm('Remove ' + a.name + '? The marker stops using it until it’s connected again.')) return;
+  try {
+    await call('DELETE', '/admin/accounts/' + encodeURIComponent(a.id));
+  } catch (e) {
+    alert(e.message);
+  }
+  await loadAccounts();
+}
+
 async function load() {
   const token = sessionStorage.getItem(KEY);
   if (!token) { $('login').hidden = false; return; }
@@ -205,6 +377,8 @@ async function load() {
     $('dot').className = 'dot on';
     $('login').hidden = true;
     $('error').hidden = true;
+    // Not while a sign-in is under way: it would take the panel away mid-paste.
+    if (!signIn && Date.now() - accountsAt > 60_000) void loadAccounts();
   } catch (e) {
     $('dot').className = 'dot';
     $('error').textContent = e.message;

@@ -1,11 +1,18 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type pg from 'pg';
-import { LIMITS } from '@breader/shared';
+import { z } from 'zod';
+import { ACCOUNT_KINDS, LIMITS } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
-import { ApiError } from '../lib/errors.ts';
+import { cancelSignIn, cliproxyFor, finishSignIn, listAccounts, removeAccount, signInStatus, startSignIn, type Cliproxy } from '../lib/cliproxy.ts';
+import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { adminPage } from './admin-page.ts';
+
+const ConnectRequest = z.object({ kind: z.enum(ACCOUNT_KINDS) });
+const State = z.string().min(1).max(200);
+const FinishRequest = z.object({ state: State, redirectUrl: z.string().min(1).max(4000) });
+const CancelRequest = z.object({ state: State });
 
 const within = <T>(p: Promise<T>, ms: number) =>
   Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
@@ -32,6 +39,9 @@ async function all<T extends pg.QueryResultRow>(pool: pg.Pool, sql: string): Pro
  * how full Supabase and R2 are, and how the worker's jobs went. Both servers serve it, at
  * api.…/admin and fb.…/admin, behind ADMIN_TOKEN. Without the token set, neither path exists.
  * Accounts with an admin role replace the token in Phase 2.
+ *
+ * On the laptop it also connects the AI accounts the marker's research and music run on
+ * (lib/cliproxy.ts): Antigravity, Claude Code and Codex, each with its limits.
  */
 export function adminRoutes(deps: Deps) {
   const { env, pool, mirror } = deps;
@@ -39,6 +49,14 @@ export function adminRoutes(deps: Deps) {
   if (!env.ADMIN_TOKEN) return r;
   const token = Buffer.from(env.ADMIN_TOKEN);
   const started = Date.now();
+
+  const checkToken = (c: Context<AppEnv>) => {
+    const given = Buffer.from((c.req.header('authorization') ?? '').replace(/^Bearer\s+/i, ''));
+    if (given.length !== token.length || !timingSafeEqual(given, token)) {
+      throw new ApiError(401, 'not_admin', 'That isn’t the admin token.');
+    }
+    c.header('Cache-Control', 'no-store');
+  };
 
   r.get('/admin', (c) => {
     const nonce = randomBytes(16).toString('base64');
@@ -49,11 +67,7 @@ export function adminRoutes(deps: Deps) {
   });
 
   r.get('/admin/status', rateLimit({ name: 'admin', max: 30, windowMs: 60_000 }), async (c) => {
-    const given = Buffer.from((c.req.header('authorization') ?? '').replace(/^Bearer\s+/i, ''));
-    if (given.length !== token.length || !timingSafeEqual(given, token)) {
-      throw new ApiError(401, 'not_admin', 'That isn’t the admin token.');
-    }
-    c.header('Cache-Control', 'no-store');
+    checkToken(c);
 
     const [db, feed, libraries, books, files, jobs, meta] = await Promise.all([
       one<{ bytes: number }>(pool, 'SELECT pg_database_size(current_database())::bigint AS bytes'),
@@ -119,6 +133,53 @@ export function adminRoutes(deps: Deps) {
       files: { byStatus: files, freeBytes: 10 * 1024 * 1024 * 1024 },
       jobs,
     });
+  });
+
+  // The AI accounts: only the laptop runs the proxy (in its worker).
+  const accounts = rateLimit({ name: 'admin-accounts', max: 120, windowMs: 60_000 });
+  const proxy = (c: Context<AppEnv>): Cliproxy => {
+    checkToken(c);
+    const p = cliproxyFor(env);
+    if (!p || env.ROLE !== 'laptop') throw new ApiError(404, 'no_proxy', 'AI accounts are on the laptop’s status page only.');
+    return p;
+  };
+
+  r.get('/admin/accounts', accounts, async (c) => {
+    const p = proxy(c);
+    return c.json({ accounts: await listAccounts(p) });
+  });
+
+  r.post('/admin/accounts/connect', accounts, async (c) => {
+    const p = proxy(c);
+    const body = parse(ConnectRequest, await readJson(c));
+    return c.json(await startSignIn(p, body.kind));
+  });
+
+  r.post('/admin/accounts/finish', accounts, async (c) => {
+    const p = proxy(c);
+    const body = parse(FinishRequest, await readJson(c));
+    await finishSignIn(p, body.state, body.redirectUrl.trim());
+    return c.json({ ok: true });
+  });
+
+  r.get('/admin/accounts/status', accounts, async (c) => {
+    const p = proxy(c);
+    const state = parse(State, c.req.query('state'));
+    return c.json(await signInStatus(p, state));
+  });
+
+  r.post('/admin/accounts/cancel', accounts, async (c) => {
+    const p = proxy(c);
+    const body = parse(CancelRequest, await readJson(c));
+    await cancelSignIn(p, body.state);
+    return c.json({ ok: true });
+  });
+
+  r.delete('/admin/accounts/:id', accounts, async (c) => {
+    const p = proxy(c);
+    const id = parse(z.string().min(1).max(300), c.req.param('id'));
+    await removeAccount(p, id);
+    return c.json({ ok: true });
   });
 
   return r;

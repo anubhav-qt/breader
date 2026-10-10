@@ -332,8 +332,9 @@ function earlierOf(book: Book): Earlier {
 
 /* ---- Calls ---- */
 
-function base(book: Book, earlier: Earlier): string[] {
-  return [context(book), `# The cast (id | voice | name | role)\n\n${castText(book)}`, earlier.text].filter(Boolean);
+/** What every notes call starts with, the book cut down to `level` around part `focus` (kimi.ts, context). */
+function base(book: Book, earlier: Earlier, focus: number | null = null, level = 0): string[] {
+  return [context(book, focus, level), `# The cast (id | voice | name | role)\n\n${castText(book)}`, earlier.text].filter(Boolean);
 }
 const ask = (user: string[]): Msg[] => [{ role: 'system', content: SYSTEM }, { role: 'user', content: user.join('\n\n') }];
 const tokens = (r: { promptTokens: number; outTokens: number; secs: number; firstS: number }) =>
@@ -359,7 +360,7 @@ function rosterProblems(book: Book, d: Draft, clashes: string[]): Array<[string,
 async function makeRoster(book: Book, lb: Balancer, earlier: Earlier, led: NotesLedger): Promise<Draft> {
   const tag = book.title;
   const task = `${ROSTER_TASK}${earlier.text ? ' Anyone or anything from an earlier volume keeps its id, and its first name line is where this book first names it.' : ''}`;
-  const { reply, rung } = await lb.chat(ask([...base(book, earlier), `# Your task: the entries\n\n${task}`]), { book: book.key, notes: 'roster' });
+  const { reply, rung } = await lb.chat((level) => ask([...base(book, earlier, null, level), `# Your task: the entries\n\n${task}`]), { book: book.key, notes: 'roster' });
   let said = parse(reply.text);
   mergeCast(book, said.cast, rung.name);
   const people = () => new Set(castOf(book).people.map((p) => p.id));
@@ -370,10 +371,10 @@ async function makeRoster(book: Book, lb: Balancer, earlier: Earlier, led: Notes
   for (let round = 1; round <= ROUNDS; round++) {
     const problems = rosterProblems(book, d, said.clashes);
     if (!problems.length) break;
-    const user = [...base(book, earlier), `# Your list of entries\n\n${draftText(d)}`, `# Fix it\n\ncheck found ${problems.length === 1 ? 'a problem' : `${problems.length} problems`} with the list:\n${problems.map(([id, p]) => `${id} ${p}`).join('\n')}\n\nSend the whole list back, fixed: every entry, name and merge line, and cast lines for anyone new.`];
+    const user = (level: number) => [...base(book, earlier, null, level), `# Your list of entries\n\n${draftText(d)}`, `# Fix it\n\ncheck found ${problems.length === 1 ? 'a problem' : `${problems.length} problems`} with the list:\n${problems.map(([id, p]) => `${id} ${p}`).join('\n')}\n\nSend the whole list back, fixed: every entry, name and merge line, and cast lines for anyone new.`];
     let answer;
     try {
-      answer = await lb.chat(ask(user), { book: book.key, notes: 'roster-fix', round });
+      answer = await lb.chat((level) => ask(user(level)), { book: book.key, notes: 'roster-fix', round });
     } catch (e) {
       console.log(`  entries, fix ${round}: no answer (${e instanceof Error ? e.message : String(e)})`);
       break;
@@ -408,12 +409,12 @@ async function makeRoster(book: Book, lb: Balancer, earlier: Earlier, led: Notes
   return d;
 }
 
-function partPrompt(book: Book, n: number, roster: Draft, earlier: Earlier): Msg[] {
+function partPrompt(book: Book, n: number, roster: Draft, earlier: Earlier, level: number): Msg[] {
   const part = book.parts[n - 1];
   const first = ordered(roster).filter((e) => e.names.length && inPart(part, pos(e.names[0].at)));
   const firsts = first.length ? `First named in it: ${first.map((e) => `${e.id} (${e.names[0].at})`).join(', ')}.` : 'Nothing on the list is first named in it.';
   return ask([
-    ...base(book, earlier),
+    ...base(book, earlier, n, level),
     `# The entries, from the whole book\n\n${draftText(roster)}`,
     `# Your task: part ${n}\n\nPart ${n} is paragraphs ${posText(part.from)} to ${posText(part.to)}. ${firsts} Here it is again:\n\n${text(book, n)}\n\n${PART_TASK}`,
   ]);
@@ -505,7 +506,7 @@ async function fix(book: Book, d: Draft, lb: Balancer, earlier: Earlier, led: No
     });
     let answer;
     try {
-      answer = await lb.chat(ask([...base(book, earlier), `# The entries\n\n${draftText(d)}`, `# Fix these\n\n${FIX_TASK}\n\n${sections.join('\n\n')}`]), { book: book.key, notes: label, round });
+      answer = await lb.chat((level) => ask([...base(book, earlier, null, level), `# The entries\n\n${draftText(d)}`, `# Fix these\n\n${FIX_TASK}\n\n${sections.join('\n\n')}`]), { book: book.key, notes: label, round });
     } catch (e) {
       console.log(`  ${label}, round ${round}: no answer (${e instanceof Error ? e.message : String(e)})`);
       break;
@@ -549,7 +550,7 @@ function clear(book: Book, d: Draft, earlier: Earlier, fallback?: Draft): string
 
 /** One call reads the whole notes as a reader would, and fixes what it finds. `top`: Kimi's, waited for however long it takes. */
 async function review(book: Book, d: Draft, earlier: Earlier, led: NotesLedger, top: Balancer) {
-  const { reply, rung } = await top.chat(ask([...base(book, earlier), `# The notes\n\n${draftText(d)}`, `# Your task: read them as a reader would\n\n${REVIEW_TASK}`]), { book: book.key, notes: 'review' });
+  const { reply, rung } = await top.chat((level) => ask([...base(book, earlier, null, level), `# The notes\n\n${draftText(d)}`, `# Your task: read them as a reader would\n\n${REVIEW_TASK}`]), { book: book.key, notes: 'review' });
   const said = parse(reply.text);
   mergeCast(book, said.cast, rung.name);
   const r = apply(d, said);
@@ -610,7 +611,7 @@ export async function writeNotes(key: string, lb: Balancer, top: Balancer, flags
       if (todo.length) {
         console.log(`${tag}: notes for parts ${todo.join(', ')}, all at once`);
         const results = await Promise.allSettled(todo.map(async (n) => {
-          const { reply, rung } = await lb.chat(partPrompt(book, n, roster, earlier), { book: book.key, notes: n });
+          const { reply, rung } = await lb.chat((level) => partPrompt(book, n, roster, earlier, level), { book: book.key, notes: n });
           const said = parse(reply.text);
           const merged = mergeCast(book, said.cast, rung.name);
           writeFileSync(partFile(book, n), reply.text);

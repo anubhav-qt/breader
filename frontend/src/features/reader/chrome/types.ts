@@ -92,6 +92,8 @@ export interface ChromeProps {
   revisit: { read: number; load: () => Promise<{ notes: RevisitResponse; offline: boolean }> } | null;
   /** 2 voices for this book: ready (an AI marked who says what), soon (its switch is on), or off. */
   two: 'ready' | 'soon' | 'off';
+  /** The book has background music (music.ts), for the voice sheet's row. */
+  music: boolean;
   /** Turns the book's AI switch on or off from the reader, where 2 voices asks for it. */
   letAi?: (on: boolean) => void;
   /**

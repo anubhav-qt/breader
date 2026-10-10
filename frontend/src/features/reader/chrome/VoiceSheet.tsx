@@ -8,7 +8,8 @@ import { springs } from '../../../lib/springs';
 import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, fromListed, useGpu, type Engine, type Mode, type SamplePart, type VoiceInfo } from '../voice/catalog';
 import { putVoice, refreshVoices, removeVoice, useListedVoices } from '../voice/list';
-import { hung, PACE, pairFor, pickSide, RATES, setVoicePrefs, sideOf, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
+import { unlockMusic } from '../music';
+import { hung, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { AddVoice } from './AddVoice';
@@ -20,7 +21,8 @@ import { CloseDots, DotIcon } from './parts';
  * Immersive lights the words at a pace set here, and play adds a voice that keeps to it, the Normal
  * ones first, then the heavy ones, which are for computers. Each voice has lines to hear before
  * anything downloads: a greeting, a bit of a story and a question, one at a time. For the accounts
- * it's open to, the server can read instead (voice/server.ts).
+ * it's open to, the server can read instead (voice/server.ts). A book with background music
+ * (music.ts) has it on or off here, and how loud.
  */
 
 const ABOUT: Record<Mode, string> = {
@@ -76,11 +78,13 @@ interface Props {
   canPace: boolean;
   /** 2 voices for this book: ready, soon (an AI will read it), or off (its AI switch is off). */
   two: 'ready' | 'soon' | 'off';
+  /** The book has background music. */
+  music: boolean;
   /** Turns the book's AI switch on or off. */
   onAi?: (on: boolean) => void;
 }
 
-export function VoiceSheet({ playing, onStart, onStop, canPace, two, onAi }: Props) {
+export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi }: Props) {
   const prefs = useVoicePrefs();
   const listed = useListedVoices();
   const load = useLoadState();
@@ -162,6 +166,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, onAi }: Pro
         <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
         <p className="p-note vs-about">{NO_VOICES[mode]}</p>
         {canPace && pace}
+        {canPace && music && <Music />}
       </div>
     );
   }
@@ -215,6 +220,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, onAi }: Pro
       <p className="p-note vs-about">{server ? SERVER[mode] : fallback ? FALLBACK : ABOUT[mode]}</p>
       {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
+      {music && <Music />}
       <Segmented label="Voices" value={two === 'ready' ? prefs.count[mode] : 1} onChange={setCount} options={counts(two === 'ready')} />
       {paired && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
@@ -345,6 +351,32 @@ function Pace() {
         <button type="button" aria-label="Faster" disabled={pace >= PACE.max} onClick={() => stepPace(1)}>+</button>
       </div>
     </div>
+  );
+}
+
+/** Background music, on books that have it: on or off, and how loud, apart from the voice. */
+function Music() {
+  const { music, musicVolume } = useVoicePrefs();
+  const toggle = () => {
+    setVoicePrefs({ music: !music });
+    // Turned on while it reads, the music starts from this tap.
+    if (!music) unlockMusic();
+  };
+  return (
+    <>
+      <div className="ctl tgrow">
+        <span className="clbl">Background music</span>
+        <button type="button" className="tg" role="switch" aria-checked={music} aria-label="Background music while it reads aloud or lights up" onClick={toggle} />
+      </div>
+      <div className="ctl">
+        <div className="clbl">Music volume</div>
+        <div className="stp">
+          <button type="button" aria-label="Quieter" disabled={musicVolume <= MUSIC_VOLUME.min} onClick={() => stepMusic(-1)}>−</button>
+          <span className="stp-v" aria-live="polite">{Math.round(musicVolume * 100)}%</span>
+          <button type="button" aria-label="Louder" disabled={musicVolume >= MUSIC_VOLUME.max} onClick={() => stepMusic(1)}>+</button>
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -36,6 +36,10 @@ export interface VoicePrefs {
   /** How loud the voice is, 0 to 1, and whether it's muted (the keys' up, down and M). */
   volume: number;
   muted: boolean;
+  /** Background music (music.ts), on books that have it, while it reads aloud or lights up. */
+  music: boolean;
+  /** How loud the music is, 0 to 1, apart from the voice. */
+  musicVolume: number;
 }
 
 const KEY = 'breader.voice.v3';
@@ -48,6 +52,8 @@ export const RATES = [0.8, 1, 1.25, 1.5, 2];
 export const PACE = { min: 80, max: 600, step: 20, start: 200 };
 /** About how many words a minute a voice says at 1×. */
 const SPOKEN = 170;
+/** Background music's loudness, in tenths. Well under the voice, to start with. */
+export const MUSIC_VOLUME = { min: 0, max: 1, step: 0.1, start: 0.3 };
 
 /** About how many words a minute the voice says, for the keys' seconds. */
 export const spokenWpm = (p: VoicePrefs) => rateOf(p) * SPOKEN;
@@ -95,6 +101,8 @@ let prefs: VoicePrefs = {
   server: stored.server ?? false,
   volume: stored.volume ?? 1,
   muted: stored.muted ?? false,
+  music: stored.music ?? true,
+  musicVolume: stored.musicVolume ?? MUSIC_VOLUME.start,
 };
 if (hung && voice.immersive === hung) {
   voice.immersive = normal;
@@ -112,6 +120,12 @@ export const voicePrefs = () => prefs;
 
 /** A step slower or faster. */
 export const stepPace = (dir: 1 | -1) => setVoicePrefs({ pace: Math.max(PACE.min, Math.min(PACE.max, prefs.pace + dir * PACE.step)) });
+/** Background music a step quieter or louder. */
+export function stepMusic(dir: 1 | -1) {
+  const next = prefs.musicVolume + dir * MUSIC_VOLUME.step;
+  const kept = Math.max(MUSIC_VOLUME.min, Math.min(MUSIC_VOLUME.max, next));
+  setVoicePrefs({ musicVolume: Math.round(kept * 100) / 100 });
+}
 /** Normal's next speed down or up. */
 export function stepRate(dir: 1 | -1) {
   let i = RATES.indexOf(prefs.rate);

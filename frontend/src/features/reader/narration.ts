@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { Loc, ViewHandle } from './FlowView';
 import { lookAt, lookFor, stopLook } from './look';
+import { unlockMusic } from './music';
 import { checkGpu, type Mode, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
@@ -570,6 +571,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       jumped.current = true;
     }
     unlock();
+    unlockMusic();
     retry();
     const gen = ++run.current;
     player.current?.stop();
@@ -592,6 +594,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     const p = voicePrefs();
     // Sound can only start in the tap itself.
     unlock();
+    unlockMusic();
     if (p.mode === 'immersive') await checkGpu();
     let bytes = 0;
     for (const v of marks.current && p.count[p.mode] === 2 ? both(p.mode) : [voiceFor(p.mode)]) bytes += (await missing(v)).bytes;

@@ -38,6 +38,11 @@ const Env = z.object({
   CLIENT_IP_HEADER: z.enum(['none', 'cf-connecting-ip', 'x-forwarded-for']).default('none'),
   /** Opens /admin, the status page. The page is off without it. */
   ADMIN_TOKEN: z.string().min(32).optional(),
+  /**
+   * The worker's CLIProxyAPI, for the AI accounts on the admin page (lib/cliproxy.ts). Defaults to
+   * the worker on the compose network, http://worker:8327.
+   */
+  CLIPROXY_URL: z.string().url().optional(),
   /** Sentry project DSN. Errors are only logged without it. */
   SENTRY_DSN: z.string().url().optional(),
 

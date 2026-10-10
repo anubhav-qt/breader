@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRACK_ID } from './music.ts';
 
 /*
  * What an AI made from one book file, read through once offline (ai/procedure.md): Revisit notes
@@ -60,6 +61,20 @@ export const AiFile = z.strictObject({
     /** Every spoken line: [section, block, start, end, voice, speaker (cast index), a thought 1 or 0]. */
     spans: z.array(z.tuple([N, N, N, N, AiGender, N, z.union([z.literal(0), z.literal(1)])])),
   }),
+  /** The book's soundtrack (shared/src/music.ts), once the marker has scored it. */
+  music: z.strictObject({
+    /** The tracks the book plays, by their YouTube id, and what each is for in the series: a theme, a mood. */
+    tracks: z.array(z.strictObject({
+      id: z.string().regex(TRACK_ID),
+      title: z.string().max(300),
+      /** The YouTube channel it came from, for credit. */
+      source: z.string().max(200),
+      seconds: N,
+      role: z.string().max(200),
+    })),
+    /** From each paragraph on: [section, block, track (an index) or -1 for silence, 1 to play it again while the scene lasts]. */
+    cues: z.array(z.tuple([N, N, z.number().int().min(-1), z.union([z.literal(0), z.literal(1)])])),
+  }).optional(),
 });
 export type AiFile = z.infer<typeof AiFile>;
 
@@ -111,6 +126,26 @@ export function aiProblems(f: AiFile): string[] {
     if (s < last[0] || (s === last[0] && (b < last[1] || (b === last[1] && start < last[2])))) out.push(`a line at ${where(s, b)} is out of order`);
     last = [s, b, end];
   }
+  if (f.music) out.push(...musicProblems(f.music, real));
+  return out;
+}
+
+/** The soundtrack's own checks: each track once, and cues on real paragraphs, in order, playing tracks it has. */
+function musicProblems(music: NonNullable<AiFile['music']>, real: (s: number, b: number) => boolean): string[] {
+  const out: string[] = [];
+  const ids = new Set<string>();
+  for (const t of music.tracks) {
+    if (ids.has(t.id)) out.push(`music: track ${t.id} is listed twice`);
+    ids.add(t.id);
+  }
+  let last: [number, number] = [-1, -1];
+  for (const [s, b, track] of music.cues) {
+    const where = `${s}:${b}`;
+    if (!real(s, b)) out.push(`music: a cue at ${where}, which isn’t a paragraph`);
+    if (track >= music.tracks.length) out.push(`music: the cue at ${where} plays a track it doesn’t have`);
+    if (s < last[0] || (s === last[0] && b <= last[1])) out.push(`music: the cue at ${where} is out of order`);
+    last = [s, b];
+  }
   return out;
 }
 
@@ -125,6 +160,8 @@ export interface AiStatus {
   made: string | null;
   revisit: boolean;
   voices: boolean;
+  /** Background music (shared/src/music.ts). */
+  music: boolean;
 }
 
 /** A person, place or word, as far as the reader has read and no further. */
