@@ -12,9 +12,12 @@ import type { Cast } from './validate.ts';
 // A book's parts all go at once, so each model takes as many calls as a long book has parts. The
 // primary ones share the calls as equals; Nemotron steps in only while they're all down. DeepSeek V4.1
 // Flash was a primary for Vol. 9 of Mushoku; its name stays in LONG for the packs it marked.
+// maxTokens is the most each model gives on NVIDIA, found by asking for more on 2026-10-10: Kimi
+// K3 turns down anything over 1,048,576, and counts the prompt in that (nim.ts asks again for what
+// the prompt leaves); Nemotron takes any number, so it's its context, 1,048,576.
 export const LADDER: Rung[] = [
-  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 32_000, maxInFlight: 24, primary: true },
-  { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 32_000, maxInFlight: 24 },
+  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 1_048_576, maxInFlight: 24, primary: true },
+  { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 1_048_576, maxInFlight: 24 },
 ];
 export const TOP = LADDER[0];
 export const PRIMARY = LADDER.filter((r) => r.primary);

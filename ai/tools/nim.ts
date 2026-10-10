@@ -70,9 +70,27 @@ export function nvidiaKey(): Key {
 export type Failure = 'rate' | 'busy' | 'slow' | 'empty' | 'cut' | 'bad' | 'gone';
 
 export class CallError extends Error {
-  constructor(public kind: Failure, message: string, public retryAfterS?: number) {
+  /**
+   * room: when a call asked for more than its prompt leaves of the model's limit, the most it can
+   * ask for.
+   */
+  constructor(public kind: Failure, message: string, public retryAfterS?: number, public room?: number) {
     super(message);
   }
+}
+
+/**
+ * Kimi K3 counts the prompt and the answer together against its limit, and says so when a call
+ * asks for more: "This model configuration accepts at most 1048576 combined input and output
+ * tokens. However, your request has 129334 input tokens and asks for ...".
+ */
+const SHARED_LIMIT = /at most (\d+) combined input and output tokens\. However, your request has (\d+) input tokens/;
+
+/** What an error's prompt leaves of the model's limit, or undefined when the error isn't about that. */
+function roomLeft(body: string): number | undefined {
+  const m = body.match(SHARED_LIMIT);
+  if (!m) return undefined;
+  return Number(m[1]) - Number(m[2]);
 }
 
 export interface Msg {
@@ -107,7 +125,23 @@ function kindOf(status: number): Failure {
   return 'bad';
 }
 
+/**
+ * A call to one of NVIDIA's models, asking for as long an answer as the model can give (kimi.ts,
+ * LADDER). A model that counts the prompt against that too is asked again for what the prompt
+ * leaves.
+ */
 export async function chat(model: string, messages: Msg[], o: ChatOptions): Promise<Reply> {
+  try {
+    return await once(model, messages, o);
+  } catch (e) {
+    if (!(e instanceof CallError)) throw e;
+    const room = e.room;
+    if (room === undefined || room <= 0) throw e;
+    return once(model, messages, { ...o, maxTokens: room });
+  }
+}
+
+async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Reply> {
   const t0 = Date.now();
   const ctl = new AbortController();
   let timer: NodeJS.Timeout | undefined;
@@ -138,9 +172,9 @@ export async function chat(model: string, messages: Msg[], o: ChatOptions): Prom
       }),
     });
     if (!res.ok || !res.body) {
-      const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160);
+      const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ');
       const after = Number(res.headers.get('retry-after'));
-      throw new CallError(kindOf(res.status), `HTTP ${res.status} ${body}`, after > 0 ? after : undefined);
+      throw new CallError(kindOf(res.status), `HTTP ${res.status} ${body.slice(0, 160)}`, after > 0 ? after : undefined, roomLeft(body));
     }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
