@@ -7,7 +7,7 @@ import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePref
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { useSpeech } from './voice/server';
-import { failed, hold, letGoKeys, missing, play, prepare, release, retry, synth, unlock, type Clip, type Playing } from './voice/speaker';
+import { failed, hold, letGoKeys, missing, play, prepare, release, retry, setLoudness, synth, unlock, type Clip, type Playing } from './voice/speaker';
 import { inTwo, type Marks, type Two } from './voice/two';
 
 /*
@@ -647,6 +647,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made, server]);
+  // Louder, softer or muted: the sentence being said changes too.
+  useEffect(() => { setLoudness(prefs.volume, prefs.muted); }, [prefs.volume, prefs.muted]);
   // Paused, the lit sentence goes out with a change of mode, which lights its own way.
   const modeAt = useRef(prefs.mode);
   useEffect(() => {
@@ -704,6 +706,12 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const where = useCallback(() => last.current, []);
   /** The sentence being said, or where it stopped. */
   const current = useCallback(() => spot.current?.s ?? last.current, []);
+  /** Where it is in the sentence being said, or the start of where it stopped. */
+  const place = useCallback(() => {
+    if (spot.current) return spot.current;
+    if (last.current) return { s: last.current, at: 0 };
+    return null;
+  }, []);
 
   /** Goes back to a sentence: reading on from there if it's reading, or waiting there for play. */
   const jump = useCallback((s: Sentence) => {
@@ -712,10 +720,12 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     if (playingRef.current) {
       behind.current = true;
       cut.current?.('jump');
+      // Pressed again before it gets there, it goes on from here.
+      spot.current = { s, at: 0 };
     } else {
       view.current?.listen.reach(s, 0);
     }
   }, [view]);
 
-  return { playing, toggle, start, readFrom, stop: halt, busy, where, media, current, jump };
+  return { playing, toggle, start, readFrom, stop: halt, busy, where, media, current, place, jump };
 }

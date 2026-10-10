@@ -14,15 +14,16 @@ import { useBarAsk, useWake } from './focus';
 import { useFullscreen, useFullscreenReading } from './fullscreen';
 import { loadRevisit, useAiStatus, useVoiceMarks } from './ai';
 import { keepLooking, looking, stopLook } from './look';
+import { PAGE_KEYS, partWay, playerKey, sentenceOn, wordsOn, type Part, type PlayerKey } from './keys';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
 import { MangaView } from './MangaView';
-import { overlaps, usePacing } from './pacing';
+import { overlaps, usePacing, type Spot } from './pacing';
 import { PdfView } from './PdfView';
 import { refreshVoices } from './voice/list';
 import { refreshSpeech } from './voice/server';
-import { useVoicePrefs } from './voice/prefs';
+import { setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
-import { TWO_COLORS, mangaLookOf, useNarrow, useReaderSettings, withMangaLook, type ThemeName } from './settings';
+import { SIZE_MAX, SIZE_MIN, TWO_COLORS, mangaLookOf, useNarrow, useReaderSettings, withMangaLook, type ThemeName } from './settings';
 import { flash, readBook, type Found } from './search';
 import { useSleepWatch } from './sleep';
 import { keepStop, stopIn, type Stop } from './stops';
@@ -255,12 +256,16 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     void shown(f.s).then(() => flash(view.current?.listen.range?.(f.s) ?? null, body.current));
   };
   const readAll = useCallback((onRead?: (done: number, of: number) => void) => readBook(book, view.current!.listen, onRead), [book]);
-  /** Back to a checkpoint: the voice reads on from there, or waits there, lit, for play. */
-  const backTo = (s: Sentence) => {
-    openPanel(null);
+  /** The voice to a sentence: reading on from there if it's reading, or waiting there, lit, for play. */
+  const voiceTo = (s: Sentence) => {
     const reading = narration.playing;
     narration.jump(s);
     if (!reading) void shown(s).then(() => (immersive ? pacing.hold(s) : view.current?.listen.show(s, 0)));
+  };
+  /** Back to a checkpoint. */
+  const backTo = (s: Sentence) => {
+    openPanel(null);
+    voiceTo(s);
   };
   /** A tap on the page: on what's lit, it carries on; elsewhere it starts at the start of the paragraph tapped. */
   const tapped = (s: Sentence) => {
@@ -316,6 +321,138 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       return;
     }
     if (canNarrate && !pictures) media(what);
+  };
+
+  /*
+   * A video player's keys (keys.ts). In Immersive, and in Normal once the voice has read this
+   * time, Space plays and pauses and the arrows go back and on, even paused; the page turns with
+   * Page Up and Page Down, and taps. Before that, they turn the page as ever.
+   */
+  const [heard, setHeard] = useState(false);
+  useEffect(() => { if (narration.playing) setHeard(true); }, [narration.playing]);
+  const keysOn = immersive || heard;
+  /** What a key just did, said for a moment above the bottom line. */
+  const [note, setNote] = useState<{ text: string; at: number } | null>(null);
+  const say = (text: string) => setNote({ text, at: performance.now() });
+  useEffect(() => {
+    if (!note) return;
+    const t = window.setTimeout(() => setNote(null), 1200);
+    return () => window.clearTimeout(t);
+  }, [note]);
+  /** The keys move the voice while it reads, or when it's what carries on: Normal's, or Immersive's once play picked it. */
+  const voiceKeys = narration.playing || !immersive || byVoice;
+  /** Where the keys move from: the light, or the voice, or the top of the page when neither has been anywhere. */
+  const keyFrom = async (): Promise<Spot | null> => {
+    if (immersive) {
+      const h = pacing.current() ?? lastStop();
+      if (h) return h;
+    }
+    const v = narration.place();
+    if (v) return v;
+    const list = (await view.current?.listen.from()) ?? [];
+    if (!list[0]) return null;
+    return { s: list[0], at: 0 };
+  };
+  /** The light or the voice to a place: going on from there if it's going, or waiting there, lit. */
+  const keyTo = (to: Spot) => {
+    if (voiceKeys) { voiceTo(to.s); return; }
+    if (pacing.running) { lightFrom(to.s, to.at); return; }
+    const l = view.current?.listen;
+    if (!l) return;
+    if (!l.onScreen(to.s, to.at)) l.reach(to.s, to.at);
+    void shown(to.s).then(() => pacing.hold(to.s, to.at));
+  };
+  /** Seconds back or on: words at the pace it reads. A voice starts at a sentence's start, so on is at least the next one. */
+  const seek = async (seconds: number) => {
+    const l = view.current?.listen;
+    const from = await keyFrom();
+    if (!l || !from) return;
+    const p = voicePrefs();
+    let wpm = p.pace;
+    if (voiceKeys) wpm = spokenWpm(p);
+    let to = await wordsOn(l, from, Math.round((seconds * wpm) / 60));
+    if (to && voiceKeys && seconds > 0 && overlaps(to.s, from.s)) to = await sentenceOn(l, to, 1);
+    if (to) keyTo(to);
+  };
+  /** A chapter's sections (a PDF's pages), with about how many words each has. */
+  const partsOf = (i: number) => {
+    const parts: Part[] = [];
+    const from = i === 0 ? 0 : chapters[i].section;
+    let to = chapters[i + 1]?.section;
+    if (book.kind === 'flow') {
+      to ??= book.sections.length;
+      for (let k = from; k < to; k++) parts.push({ section: k, words: book.sections[k].words });
+    } else if (book.kind === 'pdf') {
+      to ??= book.pages;
+      for (let k = from; k < to; k++) parts.push({ section: k, words: 1 });
+    }
+    return parts;
+  };
+  const playerKeyRef = useRef<(k: PlayerKey) => void>(() => {});
+  playerKeyRef.current = (k) => {
+    const l = view.current?.listen;
+    if (k.do === 'toggle') {
+      mediaKey.current('toggle');
+    } else if (k.do === 'seek') {
+      void seek(k.seconds);
+      say(k.seconds < 0 ? `${-k.seconds} seconds back` : `${k.seconds} seconds on`);
+    } else if (k.do === 'step' && l) {
+      void keyFrom().then(async (from) => {
+        if (!from) return;
+        const to = await sentenceOn(l, from, k.dir);
+        if (to) keyTo(to);
+      });
+      say(k.dir < 0 ? 'Sentence before' : 'Next sentence');
+    } else if (k.do === 'chapter' && l) {
+      void keyFrom().then(async (from) => {
+        const i = chapterAt(chapters, from?.s ?? loc);
+        const to = await partWay(l, partsOf(i), k.at);
+        if (to) keyTo(to);
+      });
+      if (k.at === 0) say('Start of the chapter');
+      else if (k.at === 1) say('Last sentence of the chapter');
+      else say(`${Math.round(k.at * 100)}% into the chapter`);
+    } else if (k.do === 'volume') {
+      const volume = Math.round(Math.max(0, Math.min(1, voicePrefs().volume + k.by)) * 100) / 100;
+      setVoicePrefs({ volume, muted: false });
+      say(`Volume ${Math.round(volume * 100)}%`);
+    } else if (k.do === 'mute') {
+      const muted = !voicePrefs().muted;
+      setVoicePrefs({ muted });
+      if (muted) say('Muted');
+      else say(`Volume ${Math.round(voicePrefs().volume * 100)}%`);
+    } else if (k.do === 'speed') {
+      if (immersive) {
+        stepPace(k.dir);
+        say(`${voicePrefs().pace} words a minute`);
+      } else {
+        stepRate(k.dir);
+        say(`${voicePrefs().rate}×`);
+      }
+    } else if (k.do === 'full') {
+      toggleFocus();
+    } else if (k.do === 'size') {
+      const size = Math.max(SIZE_MIN, Math.min(SIZE_MAX, settings[settings.style].size + k.dir));
+      update((s) => ({ ...s, [s.style]: { ...s[s.style], size } }));
+      say(`Text size ${size}`);
+    } else if (k.do === 'find') {
+      openPanel('find');
+    } else if (k.do === 'keys') {
+      openPanel(panel === 'keys' ? null : 'keys');
+    }
+  };
+  /** Whether a key is this book's to take now: the page keys only once there's a voice or a light to move. */
+  const keyWanted = useRef<(k: PlayerKey, key: string) => boolean>(() => false);
+  keyWanted.current = (k, key) => {
+    const narrates = canNarrate && !pictures;
+    if (PAGE_KEYS.has(key) && !keysOn) return false;
+    if (k.do === 'full') return true;
+    if (k.do === 'size') return book.kind === 'flow';
+    if (k.do === 'find' || k.do === 'keys') return !pictures;
+    if (k.do === 'toggle' || k.do === 'mute' || k.do === 'speed') return narrates;
+    // Typed while choosing where to begin, numbers are paragraphs' (the ¶ sheet).
+    if (k.do === 'chapter' && choosing) return false;
+    return narrates && keysOn;
   };
 
   const [start] = useState<Start>(() => {
@@ -476,6 +613,15 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       const target = e.target as HTMLElement;
       if (target.closest('[data-panel], .rpanel, input, textarea, [role="dialog"]')) return;
       if (e.key === 'Enter' && !target.closest('a, button') && onEnter.current()) { e.preventDefault(); return; }
+      const k = playerKey(e);
+      if (k && keyWanted.current(k, e.key)) {
+        letGo();
+        e.preventDefault();
+        // Held down, only the ones that go by steps repeat.
+        const steps = k.do === 'seek' || k.do === 'step' || k.do === 'volume' || k.do === 'speed' || k.do === 'size';
+        if (!e.repeat || steps) playerKeyRef.current(k);
+        return;
+      }
       const scroll = layout === 'scroll';
       if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !scroll)) { letGo(); view.current?.turn(e.key === 'ArrowRight' && rtl ? -1 : 1); e.preventDefault(); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !scroll)) { letGo(); view.current?.turn(e.key === 'ArrowLeft' && rtl ? 1 : -1); e.preventDefault(); }
@@ -565,6 +711,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       pick: (p: Paragraph) => beginAt(p.s),
     } : null,
     focus: { on: focus, toggle: toggleFocus, ask: bar.ask },
+    note: note?.text ?? null,
     search: pictures ? null : { read: readAll, go: goFound },
     sleep: asked ? {
       asked,

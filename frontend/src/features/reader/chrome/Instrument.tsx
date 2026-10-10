@@ -4,6 +4,7 @@ import { duration, minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, pad2, type Chapter } from '../chapters';
 import { paceLevel } from '../pacing';
+import { KEY_LIST } from '../keys';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
 import { level, useLoadState } from '../voice/speaker';
@@ -30,7 +31,7 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, search, sleep, revisit, two, letAi, talk }: ChromeProps) {
+export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, note, search, sleep, revisit, two, letAi, talk }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [foot, setFoot] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
@@ -188,7 +189,9 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         )}
       </div>
 
-      {choosing && !panel && (
+      {note && !focus.ask ? (
+        <div className="i3-hint" role="status">{note}</div>
+      ) : choosing && !panel && (
         <div className="i3-hint" role="status"><Typed text={`${tap} a paragraph, or type its number`} /></div>
       )}
 
@@ -241,6 +244,8 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
                 <SearchPanel book={book} chapters={chapters} read={search.read} onGo={(f) => { openPanel(null); search.go(f); }} />
               ) : panel === 'revisit' && revisit ? (
                 <RevisitMenu chapters={chapters} current={current} read={revisit.read} onPick={(v) => { setScope(v); openPanel('recap'); }} />
+              ) : panel === 'keys' ? (
+                <KeysPanel />
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
               ) : (
@@ -318,6 +323,24 @@ function SleepPanel({ asked, chapters, playing, onBack, onAwake }: { asked: Asle
           <span>Awake, carry on</span>
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The keys, as a video player has them (keys.ts). */
+function KeysPanel() {
+  return (
+    <div className="pnl">
+      <div className="pnl-h">Keys</div>
+      <p className="p-note">Space and the arrows play and move the voice, or the light, once either has started. Page Up and Page Down turn the page.</p>
+      <dl className="ky-list">
+        {KEY_LIST.map(([keys, does]) => (
+          <div key={keys} className="ky-row">
+            <dt>{keys.split('  ').map((k) => <kbd key={k}>{k}</kbd>)}</dt>
+            <dd>{does}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

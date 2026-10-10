@@ -148,12 +148,12 @@ export function usePacing(view: RefObject<ViewHandle | null>, active: boolean, l
   /** Stops where it is, still lit, to carry on from there. */
   const pauseHere = halt;
 
-  /** Lights a sentence without moving on: where a voice stopped. */
-  const hold = (s: Sentence) => {
+  /** Lights a sentence without moving on: where a voice stopped, or a key moved it to (`at` characters in). */
+  const hold = (s: Sentence, at = 0) => {
     halt();
-    here.current = { s, at: 0 };
+    here.current = { s, at };
     setLit(true);
-    listen()?.show(s, 0);
+    listen()?.show(s, at);
   };
 
   /** Lets go without putting the light out: a voice is taking over from here. */

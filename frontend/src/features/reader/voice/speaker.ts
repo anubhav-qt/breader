@@ -375,7 +375,17 @@ export function letGoKeys() {
   carrier = null;
 }
 
-let current: { clip: Clip; a: HTMLAudioElement; shift: number } | null = null;
+let current: { clip: Clip; a: HTMLAudioElement; shift: number; fade: number } | null = null;
+
+/** The reader's own loudness for the voice, apart from a fade: it changes the sentence being said too. */
+let loudness = { volume: 1, muted: false };
+export function setLoudness(volume: number, muted: boolean) {
+  loudness = { volume, muted };
+  const p = current;
+  if (!p) return;
+  p.a.volume = p.fade * volume;
+  p.a.muted = muted;
+}
 
 /** How loud the voice is right now, 0 to 1, for things that move with it. */
 export function level() {
@@ -410,8 +420,9 @@ export function play(clip: Clip, volume = 1): Playing {
   let stopped = false;
   let started = false;
   a.src = url;
-  a.volume = volume;
-  current = { clip, a, shift };
+  a.volume = volume * loudness.volume;
+  a.muted = loudness.muted;
+  current = { clip, a, shift, fade: volume };
   const out: Playing = { done: null!, refusal: null, time: () => Math.max(0, Math.min(1, (a.currentTime - shift / clip.rate) / length)), stop: () => {} };
   out.done = new Promise((resolve) => {
     let settled = false;

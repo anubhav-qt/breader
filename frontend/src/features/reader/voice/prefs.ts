@@ -33,6 +33,9 @@ export interface VoicePrefs {
   noPov: Two;
   /** Read with the server's voices (server.ts), for accounts it's open to. */
   server: boolean;
+  /** How loud the voice is, 0 to 1, and whether it's muted (the keys' up, down and M). */
+  volume: number;
+  muted: boolean;
 }
 
 const KEY = 'breader.voice.v3';
@@ -45,6 +48,9 @@ export const RATES = [0.8, 1, 1.25, 1.5, 2];
 export const PACE = { min: 80, max: 600, step: 20, start: 200 };
 /** About how many words a minute a voice says at 1×. */
 const SPOKEN = 170;
+
+/** About how many words a minute the voice says, for the keys' seconds. */
+export const spokenWpm = (p: VoicePrefs) => rateOf(p) * SPOKEN;
 
 /** How fast a voice reads: Normal at its speed, Immersive at its pace, as near as a voice goes (RATES). */
 export const rateOf = (p: VoicePrefs) => (p.mode === 'immersive' ? Math.min(RATES[RATES.length - 1], Math.max(RATES[0], p.pace / SPOKEN)) : p.rate);
@@ -87,6 +93,8 @@ let prefs: VoicePrefs = {
   pair,
   noPov: stored.noPov ?? 'F',
   server: stored.server ?? false,
+  volume: stored.volume ?? 1,
+  muted: stored.muted ?? false,
 };
 if (hung && voice.immersive === hung) {
   voice.immersive = normal;
@@ -104,6 +112,13 @@ export const voicePrefs = () => prefs;
 
 /** A step slower or faster. */
 export const stepPace = (dir: 1 | -1) => setVoicePrefs({ pace: Math.max(PACE.min, Math.min(PACE.max, prefs.pace + dir * PACE.step)) });
+/** Normal's next speed down or up. */
+export function stepRate(dir: 1 | -1) {
+  let i = RATES.indexOf(prefs.rate);
+  if (i < 0) i = RATES.indexOf(1);
+  const next = Math.max(0, Math.min(RATES.length - 1, i + dir));
+  setVoicePrefs({ rate: RATES[next] });
+}
 export const useVoicePrefs = () => useSyncExternalStore(
   (f) => { subs.add(f); return () => { subs.delete(f); }; },
   () => prefs,

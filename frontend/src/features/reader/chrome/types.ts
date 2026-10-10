@@ -12,7 +12,7 @@ import type { MangaControls } from '../Panels';
 import type { ReaderSettings } from '../settings';
 
 /** `revisit` is the drop up from the bottom line; `recap` the window it opens (chrome/Revisit.tsx). */
-export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap' | 'comments';
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap' | 'comments' | 'keys';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
@@ -82,6 +82,8 @@ export interface ChromeProps {
    * own, asking whether to hide too (focus.ts).
    */
   focus: { on: boolean; toggle: () => void; ask: BarAsk | null };
+  /** What a key just did (keys.ts), said for a moment above the bottom line. */
+  note: string | null;
   /** Finding words in the book (search.ts): its text, read once (hearing how far it's got), and going to a match. */
   search: { read: (onRead?: (done: number, of: number) => void) => Promise<Block[]>; go: (f: Found) => void } | null;
   /** Did you sleep? What's being asked, going back to a checkpoint, and carrying on (sleep.ts). */
