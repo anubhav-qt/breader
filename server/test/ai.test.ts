@@ -87,7 +87,7 @@ describe('ai notes', () => {
         { id: 'dQw4w9WgXcQ', title: 'Main Theme', source: 'An OST channel', seconds: 180, role: 'Anna’s theme' },
         { id: 'abcdefghijk', title: 'Night Rain', source: 'Another channel', seconds: 95, role: 'quiet nights' },
       ],
-      cues: [[0, 1, 0, 0], [1, 4, -1, 0], [2, 0, 1, 1]],
+      cues: [[0, 1, 0], [1, 4, -1], [2, 0, 1]],
     };
     await notes(sha256, { music });
     expect((await b.get(`/v1/books/${a.id}/ai`)).body.music).toBe(true);

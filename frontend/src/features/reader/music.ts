@@ -15,6 +15,10 @@ import { wav } from './voice/speaker';
  * book is read aloud or lit up in Immersive, never in plain reading, and only where the chapter is
  * the text the music was made for. A chapter that parses differently stays quiet.
  *
+ * A track plays once, from the paragraph its scene starts at, and silence follows it until a scene
+ * with another track. The music follows where the reader is, never a clock: however fast or slow
+ * they read, nothing speeds up, skips or plays again.
+ *
  * The music goes through Web Audio, so its loudness can be set on an iPhone too, where an audio
  * element's own volume can't be. Two decks take turns, so one scene's track fades into the next.
  * The voice keeps the media keys and the lock screen; the music never asks for them.
@@ -172,13 +176,18 @@ async function toCue(bookId: string, score: AiMusicResponse, cue: number) {
     if (resting) await wake(bookId);
     return;
   }
+  let n = -1;
+  if (cue >= 0) n = score.cues[cue][2];
   heard = cue;
+  if (current && current.track === n) {
+    // The next scene has the track that's on: it carries on, or stays over, never starting again.
+    if (resting) await wake(bookId);
+    return;
+  }
   resting = false;
   const was = current;
   current = null;
   if (was) fade(was, 0, CROSSFADE, true);
-  let n = -1;
-  if (cue >= 0) n = score.cues[cue][2];
   if (n < 0) return;
   const link = await linkFor(bookId, n);
   if (!link || heard !== cue) return;
@@ -188,7 +197,6 @@ async function toCue(bookId: string, score: AiMusicResponse, cue: number) {
   d.track = n;
   d.until = link.expiresAt;
   d.el.src = link.url;
-  d.el.loop = score.cues[cue][3] === 1;
   current = d;
   // The voice or the light stopped while the link came: the track starts when it's back.
   if (resting) return;
@@ -199,7 +207,7 @@ async function toCue(bookId: string, score: AiMusicResponse, cue: number) {
 async function wake(bookId: string) {
   resting = false;
   const d = current;
-  // Silence, or a track that played to its end without being asked to go round again.
+  // Silence, or a track that has played to its end: silence follows it.
   if (!d || d.el.ended) return;
   if (d.until - EARLY < Date.now()) {
     const link = await linkFor(bookId, d.track);

@@ -86,7 +86,7 @@ export interface MusicLedger {
 export interface Score {
   made: string;
   tracks: Array<{ id: string; title: string; source: string; seconds: number; role: string }>;
-  cues: Array<[number, number, number, 0 | 1]>;
+  cues: Array<[number, number, number]>;
 }
 
 /** What each book is on right now, for the marker's live view. */
@@ -358,7 +358,7 @@ const DIRECT_SYSTEM = `You are the music director for a book in the Breader e-re
 How a book is scored:
 - Music comes in where a scene's feel is set or turns: a new place or time, an entrance, rising danger, a fight, a reveal, a farewell, the quiet after.
 - Silence is part of the score. Most talk goes without music, unless something crucial is happening in it, or it's an easy slice-of-life moment that a light track carries. Some big moments hit harder in silence.
-- A cue holds for a scene: don't change tracks every few paragraphs. A track plays from its start; one shorter than its scene can play again (loop) while the scene lasts; otherwise it plays once and silence follows.
+- A cue holds for a scene: don't change tracks every few paragraphs. A track plays once from its start and is never played again on its own: when it ends, silence follows until the next line. So write a line only where the music changes, and where a long scene needs music all through, follow its track with another.
 - Themes come back: the main theme at the big turns, a person's or a place's track where they matter, the same track for the same kind of moment. Save the strongest tracks for the biggest moments, and don't wear any track out.
 - Official tracks first, where they fit: they're how the series sounds. Alternates fill in where none does.
 - Match each track's sound to its scene: a soft one under a quiet scene, one that swells under a scene that builds, one that comes in slowly where the scene eases in. "Heard as" is what a listening model made of a track (its mood, instruments, singing and pace): good guesses, though the track's use comes first.
@@ -369,11 +369,11 @@ const PLAN_TASK = `Plan this book's score before it's scored part by part. Plain
 
 const PART_TASK = `Score this part. Answer with lines like these and nothing else:
 12:4 7 | the caravan sets out at dawn
-12:30 7 loop | the long ride, easy talk
+12:30 5 | the long ride, easy talk
 13:2 silence | the argument: the words carry it
-- <paragraph> <track number> | why: that track plays from that paragraph on. loop after the number plays it again while the scene lasts.
+- <paragraph> <track number> | why: that track plays once from that paragraph on, and silence follows when it ends.
 - <paragraph> silence | why: the music stops there.
-Whatever the part before ends with plays on into this part until your first line, so a line at its first paragraph is only for a change there. Every paragraph is exactly as the text shows it in brackets, inside this part, in order.`;
+Write a line only where the music changes. Whatever the part before ends with plays on into this part until your first line, so a line at its first paragraph is only for a change there. Every paragraph is exactly as the text shows it in brackets, inside this part, in order.`;
 
 const FIX_TASK = `check found problems in your lines for this part. Send all of the part's lines back, fixed, and nothing else.`;
 
@@ -391,10 +391,9 @@ interface CueLine {
   at: string;
   /** The track's number in the list, or 0 for silence. */
   track: number;
-  loop: boolean;
 }
 
-const LINE = /^(\d+:\d+)\s+(silence|\d+)(\s+loop)?\s*(?:\|.*)?$/i;
+const LINE = /^(\d+:\d+)\s+(silence|\d+)\s*(?:\|.*)?$/i;
 
 /** A part's lines in the model's answer, and how many of its lines fit no shape. */
 export function parseCues(answer: string): { lines: CueLine[]; odd: number } {
@@ -410,9 +409,7 @@ export function parseCues(answer: string): { lines: CueLine[]; odd: number } {
     }
     let track = 0;
     if (m[2].toLowerCase() !== 'silence') track = Number(m[2]);
-    // Silence has nothing to play again.
-    const loop = track > 0 && !!m[3];
-    lines.push({ at: m[1], track, loop });
+    lines.push({ at: m[1], track });
   }
   return { lines, odd };
 }
@@ -420,7 +417,7 @@ export function parseCues(answer: string): { lines: CueLine[]; odd: number } {
 /** What's wrong with a part's lines, each a line for the model. */
 export function cueProblems(book: Book, part: Part, lines: CueLine[], odd: number, tracks: number): string[] {
   const out: string[] = [];
-  if (odd) out.push(`${odd} ${odd === 1 ? 'line fits' : 'lines fit'} no shape: each is <paragraph> <track number or silence> [loop] | why`);
+  if (odd) out.push(`${odd} ${odd === 1 ? 'line fits' : 'lines fit'} no shape: each is <paragraph> <track number or silence> | why`);
   let last: Pos | null = null;
   for (const l of lines) {
     const at = parsePos(l.at)!;
@@ -532,12 +529,10 @@ export function buildScore(book: Book, tracks: CatalogTrack[], answers: Map<numb
   const cues: Score['cues'] = [];
   // Silence until the first track: no cue is needed for it.
   let playing = 0;
-  let looping = false;
   for (const l of all) {
-    if (l.track === playing && l.loop === looping) continue;
-    if (l.track === 0 && playing === 0) continue;
+    // The track already playing isn't started again, and silence stays silence.
+    if (l.track === playing) continue;
     playing = l.track;
-    looping = l.loop;
     const at = parsePos(l.at)!;
     let index = -1;
     if (l.track > 0) {
@@ -547,7 +542,7 @@ export function buildScore(book: Book, tracks: CatalogTrack[], answers: Map<numb
         index = used.length - 1;
       }
     }
-    cues.push([at[0], at[1], index, l.loop ? 1 : 0]);
+    cues.push([at[0], at[1], index]);
   }
   return {
     made: new Date().toISOString(),

@@ -119,7 +119,7 @@ const SCORE: Score = {
     { id: 'aaaaaaaaaaa', title: 'Opening', source: 'A channel', seconds: 90, role: 'The main theme.' },
     { id: 'bbbbbbbbbbb', title: 'Rain', source: 'A channel', seconds: 150, role: 'Sad scenes.' },
   ],
-  cues: [[0, 1, 0, 1], [0, 4, -1, 0], [1, 2, 1, 0]],
+  cues: [[0, 1, 0], [0, 4, -1], [1, 2, 1]],
 };
 
 test('a file with music in it passes the import’s check, with the music credited', () => {
@@ -135,7 +135,7 @@ test('a file with music in it passes the import’s check, with the music credit
 
 test('music cued past the book, or out of order, fails the check', () => {
   const b = book('Out Of Order');
-  const bad: Score = { ...SCORE, cues: [[1, 2, 1, 0], [0, 1, 0, 0], [5, 0, 0, 0]] };
+  const bad: Score = { ...SCORE, cues: [[1, 2, 1], [0, 1, 0], [5, 0, 0]] };
   const c = checkFile(`${b.sha256}.json`, withMusic(serverFile(b.sha256), b, bad));
   assert.equal(c.problems.length, 2);
   assert.match(c.problems[0], /music: the cue at 0:1 is out of order/);

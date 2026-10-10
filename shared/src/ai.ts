@@ -72,8 +72,8 @@ export const AiFile = z.strictObject({
       seconds: N,
       role: z.string().max(200),
     })),
-    /** From each paragraph on: [section, block, track (an index) or -1 for silence, 1 to play it again while the scene lasts]. */
-    cues: z.array(z.tuple([N, N, z.number().int().min(-1), z.union([z.literal(0), z.literal(1)])])),
+    /** From each paragraph on: [section, block, track (an index) or -1 for silence]. A track plays once, and silence follows it until the next cue. */
+    cues: z.array(z.tuple([N, N, z.number().int().min(-1)])),
   }).optional(),
 });
 export type AiFile = z.infer<typeof AiFile>;

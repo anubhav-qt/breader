@@ -46,19 +46,20 @@ function track(n: number, use = `Track ${n}'s feel.`): CatalogTrack {
 }
 const TRACKS = [track(1, 'Long use. '.repeat(40)), track(2), track(3)];
 
-test('lines are read with their paragraph, track and loop; anything else is counted as odd', () => {
-  const said = parseCues(['```', 'Here are the lines:', '0:1 2 | it begins', '- 0:3 silence | a breath', '', '0:4 3 loop', '```'].join('\n'));
+test('lines are read with their paragraph and track; anything else is counted as odd', () => {
+  const said = parseCues(['```', 'Here are the lines:', '0:1 2 | it begins', '- 0:3 SILENCE | a breath', '', '0:4 3', '```'].join('\n'));
   assert.deepEqual(said.lines, [
-    { at: '0:1', track: 2, loop: false },
-    { at: '0:3', track: 0, loop: false },
-    { at: '0:4', track: 3, loop: true },
+    { at: '0:1', track: 2 },
+    { at: '0:3', track: 0 },
+    { at: '0:4', track: 3 },
   ]);
   assert.equal(said.odd, 1);
 });
 
-test('silence never loops', () => {
-  assert.deepEqual(parseCues('1:1 silence loop | still').lines, [{ at: '1:1', track: 0, loop: false }]);
-  assert.deepEqual(parseCues('1:1 SILENCE').lines, [{ at: '1:1', track: 0, loop: false }]);
+test('nothing loops: a line asking for it fits no shape', () => {
+  const said = parseCues('1:1 3 loop | again and again\n1:2 silence');
+  assert.deepEqual(said.lines, [{ at: '1:2', track: 0 }]);
+  assert.equal(said.odd, 1);
 });
 
 test('check tells the model each problem with its lines', () => {
@@ -73,39 +74,39 @@ test('check tells the model each problem with its lines', () => {
 });
 
 test('good lines have no problems', () => {
-  const said = parseCues(['0:1 1', '0:3 silence', '0:4 2 loop'].join('\n'));
+  const said = parseCues(['0:1 1', '0:3 silence', '0:4 2'].join('\n'));
   assert.deepEqual(cueProblems(BOOK, BOOK.parts[0], said.lines, said.odd, TRACKS.length), []);
 });
 
 test('the score has a cue only where the music changes, and tracks numbered by first use', () => {
   const answers = new Map([
-    [1, ['0:0 silence', '0:1 2', '0:2 1 | no words here, so left out', '0:3 2 | the same again', '0:4 1 loop'].join('\n')],
-    [2, ['1:0 1 loop', '1:1 silence loop', '1:2 3', '1:3 2'].join('\n')],
+    [1, ['0:0 silence', '0:1 2', '0:2 1 | no words here, so left out', '0:3 2 | the same again', '0:4 1'].join('\n')],
+    [2, ['1:0 1 | still on from part 1', '1:1 silence', '1:2 3', '1:3 2'].join('\n')],
   ]);
   const score = buildScore(BOOK, TRACKS, answers);
   assert.deepEqual(score.cues, [
-    [0, 1, 0, 0],
-    [0, 4, 1, 1],
-    [1, 1, -1, 0],
-    [1, 2, 2, 0],
-    [1, 3, 0, 0],
+    [0, 1, 0],
+    [0, 4, 1],
+    [1, 1, -1],
+    [1, 2, 2],
+    [1, 3, 0],
   ]);
   assert.deepEqual(score.tracks.map((t) => t.id), [TRACKS[1].id, TRACKS[0].id, TRACKS[2].id]);
 });
 
 test('silence before the first track needs no cue', () => {
   const score = buildScore(BOOK, TRACKS, new Map([[1, '0:0 silence\n0:1 silence\n0:3 3']]));
-  assert.deepEqual(score.cues, [[0, 3, 0, 0]]);
+  assert.deepEqual(score.cues, [[0, 3, 0]]);
 });
 
-test('the same track starting to loop is a change', () => {
-  const score = buildScore(BOOK, TRACKS, new Map([[1, '0:1 2\n0:3 2 loop']]));
-  assert.deepEqual(score.cues, [[0, 1, 0, 0], [0, 3, 0, 1]]);
+test('the track already playing isn’t started again, but after silence it is', () => {
+  const score = buildScore(BOOK, TRACKS, new Map([[1, '0:1 2\n0:3 2\n0:4 silence'], [2, '1:1 2']]));
+  assert.deepEqual(score.cues, [[0, 1, 0], [0, 4, -1], [1, 1, 0]]);
 });
 
 test('a part with no answer adds nothing, and each track’s role is kept short', () => {
   const score = buildScore(BOOK, TRACKS, new Map([[2, '1:1 1']]));
-  assert.deepEqual(score.cues, [[1, 1, 0, 0]]);
+  assert.deepEqual(score.cues, [[1, 1, 0]]);
   assert.equal(score.tracks[0].role.length, 200);
   assert.deepEqual(Object.keys(score.tracks[0]).sort(), ['id', 'role', 'seconds', 'source', 'title']);
 });

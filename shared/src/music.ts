@@ -32,8 +32,8 @@ export interface AiMusicResponse {
   /** Each section's "blocks:hash", so the app can tell it parsed the same text the AI read. */
   sections: string[];
   tracks: MusicTrack[];
-  /** From each paragraph on: [section, block, track number or -1 for silence, 1 to play it again while the scene lasts]. */
-  cues: Array<[number, number, number, 0 | 1]>;
+  /** From each paragraph on: [section, block, track number or -1 for silence]. A track plays once, and silence follows it until the next cue. */
+  cues: Array<[number, number, number]>;
 }
 
 /** A track's address for a while: the file store's signed link. */
