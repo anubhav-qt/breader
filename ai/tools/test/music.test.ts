@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import type { Book } from '../lib.ts';
 import type { Brain } from '../harness.ts';
@@ -14,7 +14,7 @@ import type { CatalogTrack } from '../music.ts';
  */
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
-const { buildScore, cueProblems, parseCues, soundtrackTools } = await import('../music.ts');
+const { buildScore, cueProblems, fixPart, parseCues, partFile, soundtrackTools } = await import('../music.ts');
 
 const paragraph = (text: string) => ({ tag: 'p', text, words: text.split(' ').length });
 
@@ -76,6 +76,44 @@ test('check tells the model each problem with its lines', () => {
 test('good lines have no problems', () => {
   const said = parseCues(['0:1 1', '0:3 silence', '0:4 2'].join('\n'));
   assert.deepEqual(cueProblems(BOOK, BOOK.parts[0], said.lines, said.odd, TRACKS.length), []);
+});
+
+/** Part 1's lines on disk, as the model first answered: three problems. */
+function firstAnswer() {
+  mkdirSync(dirname(partFile(BOOK, 1)), { recursive: true });
+  writeFileSync(partFile(BOOK, 1), ['nonsense', '0:2 1', '0:4 9'].join('\n'));
+}
+
+/** A model that answers each fix with the next of `answers`, noting how many problems it was sent. */
+function fixesWith(answers: Array<string | null>, sent: number[]) {
+  return async (_answer: string, problems: string[]) => {
+    sent.push(problems.length);
+    return answers.shift() ?? null;
+  };
+}
+
+test('a part is fixed again and again until it has no problems', async () => {
+  firstAnswer();
+  const sent: number[] = [];
+  await fixPart(BOOK, BOOK.parts[0], TRACKS.length, fixesWith(['0:2 1\n0:4 9', '0:4 9', '0:4 2'], sent));
+  assert.deepEqual(sent, [3, 2, 1]);
+  assert.equal(readFileSync(partFile(BOOK, 1), 'utf8'), '0:4 2');
+});
+
+test('a fix that doesn’t leave fewer problems is let go, and fixing stops', async () => {
+  firstAnswer();
+  const sent: number[] = [];
+  await fixPart(BOOK, BOOK.parts[0], TRACKS.length, fixesWith(['0:4 9', 'nonsense\n0:4 9', '0:4 2'], sent));
+  assert.deepEqual(sent, [3, 1]);
+  assert.equal(readFileSync(partFile(BOOK, 1), 'utf8'), '0:4 9');
+});
+
+test('a fix with no answer stops fixing, and the part keeps its lines', async () => {
+  firstAnswer();
+  const sent: number[] = [];
+  await fixPart(BOOK, BOOK.parts[0], TRACKS.length, fixesWith([null], sent));
+  assert.deepEqual(sent, [3]);
+  assert.equal(readFileSync(partFile(BOOK, 1), 'utf8'), 'nonsense\n0:2 1\n0:4 9');
 });
 
 test('the score has a cue only where the music changes, and tracks numbered by first use', () => {

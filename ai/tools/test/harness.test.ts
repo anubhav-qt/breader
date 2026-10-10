@@ -13,7 +13,8 @@ import { test, type TestContext } from 'node:test';
  */
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
-const { cool, failureOf, pick } = await import('../harness.ts');
+const { cool, failureOf, pick, tool } = await import('../harness.ts');
+const { Type } = await import('../../pi/pi-ai/src/index.ts');
 const { FIRST_MODEL, inOrder, isGeminiForText, servesGemini } = await import('../proxy.ts');
 
 test('a limit or quota is a rate failure, however it’s said', () => {
@@ -129,4 +130,11 @@ test('Gemini is served only while the proxy answers with an Antigravity Gemini m
 
   await new Promise<void>((ok) => server.close(() => ok()));
   assert.equal(await servesGemini(), false, 'the proxy doesn’t answer');
+});
+
+test('a tool hands back its whole result, however long', async () => {
+  const long = 'a line of research\n'.repeat(5000);
+  const t = tool('show', 'Shows it all.', Type.Object({}), () => long);
+  const result = await t.execute('call-1', {});
+  assert.deepEqual(result.content, [{ type: 'text', text: long }]);
 });

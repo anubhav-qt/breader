@@ -23,11 +23,8 @@ import { readPageTool, webSearchTool } from './web.ts';
  */
 
 const RESEARCH = join(WORK, 'research');
-/** The longest a section can be, in characters: the people get the most room. */
-const LONGEST = { series: 4000, people: 16000, places: 6000, terms: 6000, adaptations: 4000, volume: 6000 } as const;
-
-type Section = keyof typeof LONGEST;
-const SECTIONS = Object.keys(LONGEST) as Section[];
+const SECTIONS = ['series', 'people', 'places', 'terms', 'adaptations', 'volume'] as const;
+type Section = (typeof SECTIONS)[number];
 const HEADINGS: Record<Section, string> = {
   series: 'The series',
   people: 'People',
@@ -164,10 +161,8 @@ function researchTools(b: Brain, r: SeriesResearch, volume: string) {
       text: Type.String({ description: 'The whole section: plain lines, a person or thing per line.' }),
     }),
     (args) => {
-      const longest = LONGEST[args.section];
       const text = args.text.trim();
       if (!text) throw new Error('That section is empty: write what the sources say, or that they say nothing.');
-      if (text.length > longest) throw new Error(`That's ${count(text.length)} characters; ${args.section} takes up to ${count(longest)}. Make it shorter: a line per person or thing.`);
       const section = args.section as Section;
       if (section === 'volume') r.volumes[volume] = text;
       else r.sections[section] = text;

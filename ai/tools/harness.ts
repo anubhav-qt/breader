@@ -39,8 +39,6 @@ import { geminiModels, geminiOpensAt, noHarness, proxy, THINKING } from './proxy
  *   run, and the next run picks the chat up again.
  */
 
-/** The longest result a tool hands back. */
-const RESULT_CHARS = 20_000;
 /** How long Flash may be cooling, and after how many failures in a row, before another model takes the calls. */
 const WAIT_FOR_FIRST_S = 120;
 const STRIKES_TO_FALL = 2;
@@ -102,8 +100,7 @@ export function tool<T extends TSchema>(name: string, description: string, param
     description,
     parameters,
     execute: async (_id, args) => {
-      let text = await run(args);
-      if (text.length > RESULT_CHARS) text = `${text.slice(0, RESULT_CHARS)}\n(Cut at ${RESULT_CHARS} characters: ask for less at a time.)`;
+      const text = await run(args);
       return { content: [{ type: 'text', text }], details: {} };
     },
   };

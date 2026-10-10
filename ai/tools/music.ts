@@ -28,9 +28,10 @@ import { audioFile, LONGEST_S, MUSIC, search, SHORTEST_S, store, video } from '.
  *
  * 2. The score, by the NVIDIA models, who read the whole book (kimi.ts): one call plans it (whose
  *    themes are which, the biggest moments and what's saved for them), then every part at once
- *    gets a track or silence from each scene's first paragraph, then check, and a call to fix any
- *    part with problems. The cues go in music.json, the tracks they use into the file store, and
- *    who did what in music-by.json, so a stopped run picks up where it was.
+ *    gets a track or silence from each scene's first paragraph, then check, and calls to fix any
+ *    part with problems for as long as each fix leaves fewer. The cues go in music.json, the
+ *    tracks they use into the file store, and who did what in music-by.json, so a stopped run
+ *    picks up where it was.
  *
  * Nothing it prints has the book's text in it.
  */
@@ -43,10 +44,8 @@ const MIN_TRACKS = 12;
 const FRESH_DAYS = 30;
 /** The longest a track's use can be: the app shows it as the track's role. */
 const USE_CHARS = 200;
-/** How many tracks the soundtrack tool shows at a time, well inside what a tool may hand back. */
+/** How many tracks the soundtrack tool shows at a time. */
 const PAGE_TRACKS = 40;
-/** Fix calls for parts with problems. */
-const FIX_ROUNDS = 1;
 
 /** A track in a series' soundtrack. */
 export interface CatalogTrack {
@@ -348,7 +347,7 @@ export async function soundtrackFor(name: string, given?: Brain): Promise<Soundt
 const dirOf = (book: Book) => join(bookDir(book.key), 'music');
 const tracksFile = (book: Book) => join(dirOf(book), 'tracks.json');
 const planFile = (book: Book) => join(dirOf(book), 'plan.txt');
-const partFile = (book: Book, n: number) => join(dirOf(book), `${partName(n)}.txt`);
+export const partFile = (book: Book, n: number) => join(dirOf(book), `${partName(n)}.txt`);
 export const scoreFile = (book: { key: string }) => join(bookDir(book.key), 'music.json');
 export const musicLedgerFile = (book: { key: string }) => join(bookDir(book.key), 'music-by.json');
 export const musicLedger = (book: { key: string }): MusicLedger => {
@@ -435,6 +434,12 @@ export function cueProblems(book: Book, part: Part, lines: CueLine[], odd: numbe
   return out;
 }
 
+/** What's wrong with a part's answer, each a line for the model. */
+function answerProblems(book: Book, part: Part, answer: string, tracks: number): string[] {
+  const said = parseCues(answer);
+  return cueProblems(book, part, said.lines, said.odd, tracks);
+}
+
 /** A part's good lines: in the part, at a paragraph with text, a track the soundtrack has, in order. */
 function goodLines(book: Book, part: Part, lines: CueLine[], tracks: number): CueLine[] {
   const out: CueLine[] = [];
@@ -471,7 +476,27 @@ async function makePlan(book: Book, tracks: CatalogTrack[], lb: Balancer, led: M
   return plan;
 }
 
-/** Every part's lines, fixed once where check finds problems. */
+/**
+ * A part's lines fixed for as long as each fix leaves fewer problems, each one saved as it comes.
+ * `fix` asks the model, and gives back its answer, or null when there's none. A fix that doesn't
+ * leave fewer is let go, and the part keeps the lines it had.
+ */
+export async function fixPart(book: Book, part: Part, tracks: number, fix: (answer: string, problems: string[], round: number) => Promise<string | null>) {
+  let answer = readFileSync(partFile(book, part.n), 'utf8');
+  let problems = answerProblems(book, part, answer, tracks);
+  for (let round = 1; problems.length > 0; round++) {
+    const fixed = await fix(answer, problems, round);
+    if (fixed === null) return;
+    const left = answerProblems(book, part, fixed, tracks);
+    console.log(`  music part ${part.n}, fix ${round}: ${problems.length} problems before, ${left.length} after`);
+    if (left.length >= problems.length) return;
+    writeFileSync(partFile(book, part.n), fixed);
+    answer = fixed;
+    problems = left;
+  }
+}
+
+/** Every part's lines, fixed where check finds problems for as long as each fix leaves fewer. */
 async function scoreParts(book: Book, tracks: CatalogTrack[], plan: string, lb: Balancer, led: MusicLedger) {
   const todo = book.parts.filter((p) => p.words > 0 && !existsSync(partFile(book, p.n))).map((p) => p.n);
   if (todo.length) {
@@ -497,26 +522,23 @@ async function scoreParts(book: Book, tracks: CatalogTrack[], plan: string, lb: 
   let secs = 0;
   for (const part of book.parts) {
     if (part.words <= 0) continue;
-    for (let round = 1; round <= FIX_ROUNDS; round++) {
-      const answer = readFileSync(partFile(book, part.n), 'utf8');
-      const said = parseCues(answer);
-      const problems = cueProblems(book, part, said.lines, said.odd, tracks.length);
-      if (!problems.length) break;
+    const fix = async (answer: string, problems: string[], round: number): Promise<string | null> => {
       const user = (level: number) => [
         ...partUser(book, tracks, plan, part.n, level),
         `# Your lines\n\n${answer.trim()}`,
         `# Fix them\n\n${FIX_TASK}\n\n${problems.join('\n')}`,
       ];
       try {
-        const fixed = await lb.chat((level) => ask(user(level)), { book: book.key, music: `fix-${part.n}`, round });
-        writeFileSync(partFile(book, part.n), fixed.reply.text);
-        model = fixed.rung.name;
-        secs += fixed.reply.secs;
-        console.log(`  music part ${part.n}, fix: ${fixed.rung.name}, ${problems.length} problems before`);
+        const { reply, rung } = await lb.chat((level) => ask(user(level)), { book: book.key, music: `fix-${part.n}`, round });
+        model = rung.name;
+        secs += reply.secs;
+        return reply.text;
       } catch (e) {
-        console.log(`  music part ${part.n}, fix: no answer (${e instanceof Error ? e.message : String(e)}); its good lines stay`);
+        console.log(`  music part ${part.n}, fix ${round}: no answer (${e instanceof Error ? e.message : String(e)}); its good lines stay`);
+        return null;
       }
-    }
+    };
+    await fixPart(book, part, tracks.length, fix);
   }
   led.fixed = done(model || (led.plan?.model ?? ''), secs);
   saveLedger(book, led);
