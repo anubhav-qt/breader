@@ -39,6 +39,38 @@ You can't write research.md, so where the rules say to write why you're unsure, 
 
 ${RULES}`;
 
+/** A line a marks answer has: a mark, the narrator, a rest, a comment, a cast line, or a fix's part heading. */
+const MARK_LINE = /^(\d+:\d+|narrator\b|rest\b|#|cast\s|change\s|=+\s*part\s)/i;
+/** A mark is a short line: a longer one that starts like one is something else. */
+const LONGEST_MARK = 300;
+/** How much of an answer, in characters, comes in before it can be called garbled. */
+const JUDGED_FROM = 2000;
+
+/**
+ * Why an answer isn't marks, or null when it is: most of its lines have to be lines a marks
+ * answer has. Now and then Kimi K3 answers a part with thousands of tokens of nonsense in every
+ * script, so an answer is judged as it comes in (nim.ts), and one like that is stopped and asked
+ * again (balancer.ts).
+ */
+export function garbled(text: string, whole: boolean): string | null {
+  const lines = text.split(/\r?\n/);
+  // The last line may not be finished yet.
+  if (!whole) lines.pop();
+  let chars = 0;
+  let all = 0;
+  let marks = 0;
+  for (const raw of lines) {
+    const line = raw.trim().replace(/^[-*]\s+/, '');
+    if (!line || /^```/.test(line)) continue;
+    chars += line.length;
+    all++;
+    if (MARK_LINE.test(line) && line.length <= LONGEST_MARK) marks++;
+  }
+  if (!whole && chars < JUDGED_FROM) return null;
+  if (marks * 2 >= all) return null;
+  return `a garbled answer: ${marks} of its ${all} lines read as marks`;
+}
+
 export const marksFile = (book: Book, n: number) => join(bookDir(book.key), 'marks', `${partName(n)}.txt`);
 
 /** What markBook is doing for each book, by key, once its parts are marked: for the marker's live view. */
@@ -98,7 +130,7 @@ function stamp(book: Book, n: number, model: string, secs: number, fresh: boolea
 export async function markParts(book: Book, ns: number[], lb: Balancer, alsoFix: number[] = []): Promise<number[]> {
   const answered: number[] = [];
   const answers = await Promise.allSettled(ns.map(async (n) => {
-    const { reply, rung } = await lb.chat((level) => partPrompt(book, n, level), { book: book.key, part: n, round: 1 });
+    const { reply, rung } = await lb.chat((level) => partPrompt(book, n, level), { book: book.key, part: n, round: 1 }, garbled);
     const { marks, cast } = split(reply.text);
     writeFileSync(marksFile(book, n), marks);
     const merged = mergeCast(book, cast, rung.name);
@@ -135,7 +167,7 @@ async function fixParts(book: Book, ns: number[], lb: Balancer) {
     ].join('\n\n');
     let answer;
     try {
-      answer = await lb.chat((level) => [{ role: 'system', content: SYSTEM }, { role: 'user', content: user(level) }], { book: book.key, fix: bad.join(','), round });
+      answer = await lb.chat((level) => [{ role: 'system', content: SYSTEM }, { role: 'user', content: user(level) }], { book: book.key, fix: bad.join(','), round }, garbled);
     } catch (e) {
       console.log(`  fix, round ${round}: no answer (${e instanceof Error ? e.message : String(e)})`);
       return;

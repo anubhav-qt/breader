@@ -1,7 +1,7 @@
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SHRINKS } from './kimi.ts';
-import { chat, CallError, type Failure, type Msg, type Reply } from './nim.ts';
+import { chat, CallError, type Failure, type Judge, type Msg, type Reply } from './nim.ts';
 import { WORK } from './lib.ts';
 
 /*
@@ -201,9 +201,10 @@ export class Balancer {
 
   /**
    * One chat call on the best model free, retried across the ladder until it answers. A call
-   * given in sizes is asked again smaller when a model keeps refusing it.
+   * given in sizes is asked again smaller when a model keeps refusing it. `judge` checks the
+   * answer as it comes in (nim.ts): one it finds no good counts as a refusal.
    */
-  async chat(request: Msg[] | Sized, label: Record<string, unknown>): Promise<Answer> {
+  async chat(request: Msg[] | Sized, label: Record<string, unknown>, judge?: Judge): Promise<Answer> {
     let sized: Sized;
     if (typeof request === 'function') sized = request;
     else sized = () => request;
@@ -221,7 +222,7 @@ export class Balancer {
       const at = new Date().toISOString();
       let pause = 0;
       try {
-        const reply = await chat(r.model, sized(level), { maxTokens: r.maxTokens, extra: r.extra });
+        const reply = await chat(r.model, sized(level), { maxTokens: r.maxTokens, extra: r.extra, judge });
         s.strikes = 0;
         s.coolUntil = 0;
         s.gone = false;

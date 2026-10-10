@@ -108,8 +108,25 @@ export interface Reply {
   secs: number;
 }
 
+/**
+ * Why an answer is no good, or null while it's fine. `whole` is false while the answer is still
+ * coming in, when the last line may not be finished.
+ */
+export type Judge = (text: string, whole: boolean) => string | null;
+
+/** How much more of an answer comes in, in characters, before it's judged again. */
+const JUDGE_EVERY = 1000;
+
+/** An answer without the thinking a model wrote into it, a block that hasn't ended yet too. */
+const withoutThinking = (text: string) => text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+
 export interface ChatOptions {
   maxTokens: number;
+  /**
+   * Judges the answer as it comes in, and whole at the end. One that's no good is stopped there
+   * and then, and refused (balancer.ts asks again).
+   */
+  judge?: Judge;
   extra?: Record<string, unknown>;
   /** Longest wait for the first token. */
   firstS?: number;
@@ -153,6 +170,7 @@ async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Rep
   arm(o.firstS ?? 600, 'no first token');
 
   let text = '';
+  let judgedAt = 0;
   let thinkChars = 0;
   let first = 0;
   let finish = '';
@@ -211,6 +229,14 @@ async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Rep
           if (ch.finish_reason) finish = ch.finish_reason;
         }
       }
+      if (o.judge && text.length - judgedAt >= JUDGE_EVERY) {
+        judgedAt = text.length;
+        const wrong = o.judge(withoutThinking(text), false);
+        if (wrong) {
+          ctl.abort();
+          throw new CallError('bad', wrong);
+        }
+      }
     }
   } catch (e) {
     if (e instanceof CallError) throw e;
@@ -223,6 +249,10 @@ async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Rep
   text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   if (finish === 'length') throw new CallError('cut', `the answer hit max_tokens (${o.maxTokens})`);
   if (!text) throw new CallError('empty', `an empty answer (finish ${finish || 'none'}, ${thinkChars} characters of thinking)`);
+  if (o.judge) {
+    const wrong = o.judge(text, true);
+    if (wrong) throw new CallError('bad', wrong);
+  }
   return {
     text,
     thinkChars,
