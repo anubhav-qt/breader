@@ -16,15 +16,13 @@ import { readPageTool, webSearchTool } from './web.ts';
  * (music.ts).
  *
  * A series' research is kept in research/<series>.json and shared by its volumes: each volume
- * brings it up to date and adds what it covers. The book gets web.md, which every NVIDIA call
+ * brings it up to date and adds what it covers, in the series' one research chat (harness.ts),
+ * which a stopped run carries on from. The book gets web.md, which every NVIDIA call
  * reads after the book (kimi.ts, context), and the cast pass checks against the book (cast.ts).
  * Spoilers are fine here: only the models read it, and the notes keep to what the book shows.
  */
 
 const RESEARCH = join(WORK, 'research');
-/** Calls for a series met for the first time, and for one only brought up to date for a new volume. */
-const FIRST_CALLS = 80;
-const UPDATE_CALLS = 40;
 /** The longest a section can be, in characters: the people get the most room. */
 const LONGEST = { series: 4000, people: 16000, places: 6000, terms: 6000, adaptations: 4000, volume: 6000 } as const;
 
@@ -188,7 +186,8 @@ function researchTools(b: Brain, r: SeriesResearch, volume: string) {
 
 /**
  * A book's research from the web: the series' brought up to date for this volume, into the book's
- * web.md. One series at a time. Waits while every Antigravity account is out of Gemini.
+ * web.md. One series at a time. Waits while every Antigravity account is out of Gemini, and
+ * carries on from the chat where a run before stopped.
  */
 export async function researchBook(b: QueueBook, given?: Brain): Promise<void> {
   const name = seriesName(b);
@@ -207,14 +206,13 @@ export async function researchBook(b: QueueBook, given?: Brain): Promise<void> {
       if (!missing.length) return null;
       return `${missing.join(', ')} ${missing.length === 1 ? 'isn’t' : 'aren’t'} written yet.`;
     };
-    let maxCalls = UPDATE_CALLS;
-    if (first) maxCalls = FIRST_CALLS;
     const started = Date.now();
     await runAgent({
+      chat: `research-${slug(name)}`,
+      ask: volume,
       system: SYSTEM,
-      brief: brief(b, r, volume, others),
+      brief: () => brief(b, r, volume, others),
       tools: researchTools(using, r, volume),
-      maxCalls,
       unfinished,
       label: { book: b.key, research: first ? 'series' : 'volume' },
     }, using);

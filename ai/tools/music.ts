@@ -20,10 +20,11 @@ import { audioFile, LONGEST_S, MUSIC, search, SHORTEST_S, store, video } from '.
  * 1. The soundtrack, once per series, by the harness (harness.ts): Gemini looks for the series'
  *    official music first, every season and film of its adaptations, by its English and Japanese
  *    names, finds each track on YouTube, and when there's none, or too little, the best
- *    alternates. Every track it adds is downloaded, measured (sound.ts), listened to (clap.ts) and
- *    described: its feel and the scenes it fits. A series keeps its soundtrack from one volume to
- *    the next and brings it up to date once it's a month old, as new seasons come out. Gemini gets
- *    the series' names and its research from the web (research.ts), never the book.
+ *    alternates. Every track it adds is downloaded, measured (sound.ts), listened to (clap.ts),
+ *    described (its feel and the scenes it fits) and saved there and then, all in the series' one
+ *    soundtrack chat, which a stopped run carries on from. A series keeps its soundtrack from one
+ *    volume to the next and brings it up to date once it's a month old, as new seasons come out.
+ *    Gemini gets the series' names and its research from the web (research.ts), never the book.
  *
  * 2. The score, by the NVIDIA models, who read the whole book (kimi.ts): one call plans it (whose
  *    themes are which, the biggest moments and what's saved for them), then every part at once
@@ -36,16 +37,14 @@ import { audioFile, LONGEST_S, MUSIC, search, SHORTEST_S, store, video } from '.
 
 const SOUNDTRACKS = join(MUSIC, 'series');
 const SOUNDS = join(MUSIC, 'sound');
-/** A soundtrack needs this many tracks to score every kind of scene, and takes no more than the most. */
+/** A soundtrack needs this many tracks to score every kind of scene. */
 const MIN_TRACKS = 12;
-const MAX_TRACKS = 120;
 /** A soundtrack older than this is brought up to date before the next volume is scored. */
 const FRESH_DAYS = 30;
-/** Calls for a new soundtrack, and for bringing one up to date. */
-const FIRST_CALLS = 150;
-const UPDATE_CALLS = 60;
 /** The longest a track's use can be: the app shows it as the track's role. */
 const USE_CHARS = 200;
+/** How many tracks the soundtrack tool shows at a time, well inside what a tool may hand back. */
+const PAGE_TRACKS = 40;
 /** Fix calls for parts with problems. */
 const FIX_ROUNDS = 1;
 
@@ -173,15 +172,18 @@ function soundtrackBrief(name: string, s: Soundtrack): string {
   if (r?.sections.series) lines.push('', '# What the research found about the series', '', r.sections.series);
   if (r?.sections.adaptations) lines.push('', '# Its adaptations', '', r.sections.adaptations);
   lines.push('');
-  if (s.tracks.length) {
+  const gather = `Gather its soundtrack: at least ${MIN_TRACKS} tracks, as many as it takes to score every kind of scene well. When you finish, the summary says what you found: the official music and which seasons and films it's from, or why it's alternates.`;
+  if (s.made) {
     lines.push(`Its soundtrack was gathered on ${s.made.slice(0, 10)}: ${s.summary}`, '', `Bring it up to date: look for seasons, films and albums that have come out since, add their tracks, and fill any kind of scene it has too few tracks for. Keep what's there unless it's wrong. It has ${s.tracks.length} tracks; see them with soundtrack.`);
+  } else if (s.tracks.length) {
+    lines.push(gather, '', `It's begun: ${s.tracks.length} tracks are in it so far. See them with soundtrack, and carry on from there.`);
   } else {
-    lines.push(`Gather its soundtrack: at least ${MIN_TRACKS} tracks and up to ${MAX_TRACKS}, as many as it takes to score every kind of scene well. When you finish, the summary says what you found: the official music and which seasons and films it's from, or why it's alternates.`);
+    lines.push(gather);
   }
   return lines.join('\n');
 }
 
-function soundtrackTools(b: Brain, s: Soundtrack) {
+export function soundtrackTools(b: Brain, s: Soundtrack) {
   const has = (id: string) => s.tracks.some((t) => t.id === id);
 
   const youtubeSearch = tool(
@@ -228,10 +230,22 @@ function soundtrackTools(b: Brain, s: Soundtrack) {
     async (args) => describe(await soundOf(args.id)),
   );
 
-  const list = tool('soundtrack', 'The soundtrack as it stands: every track with its number, album, use and sound.', Type.Object({}), () => {
-    if (!s.tracks.length) return 'No tracks yet.';
-    return s.tracks.map((t, i) => trackLine(t, i + 1)).join('\n');
-  });
+  const list = tool(
+    'soundtrack',
+    `The soundtrack as it stands: each track with its number, album, use and sound, ${PAGE_TRACKS} at a time.`,
+    Type.Object({ from: Type.Optional(Type.Integer({ minimum: 1, description: 'The number of the first track to show; 1 if left out.' })) }),
+    (args) => {
+      if (!s.tracks.length) return 'No tracks yet.';
+      let from = 1;
+      if (args.from) from = args.from;
+      if (from > s.tracks.length) throw new Error(`The soundtrack has ${s.tracks.length} tracks: start from one of them.`);
+      const to = Math.min(from + PAGE_TRACKS - 1, s.tracks.length);
+      const lines: string[] = [];
+      for (let n = from; n <= to; n++) lines.push(trackLine(s.tracks[n - 1], n));
+      if (to < s.tracks.length) lines.push(`(Tracks ${from} to ${to} of ${s.tracks.length}: call soundtrack with from ${to + 1} for the rest.)`);
+      return lines.join('\n');
+    },
+  );
 
   const add = tool(
     'add_track',
@@ -245,7 +259,6 @@ function soundtrackTools(b: Brain, s: Soundtrack) {
     }),
     async (args) => {
       if (has(args.id)) return `${args.id} is in the soundtrack already.`;
-      if (s.tracks.length >= MAX_TRACKS) throw new Error(`The soundtrack has ${MAX_TRACKS} tracks, the most it takes: remove one first.`);
       const use = args.use.trim();
       if (!use) throw new Error('Say what it’s for: its feel and the scenes it fits.');
       if (use.length > USE_CHARS) throw new Error(`Its use is ${use.length} characters; keep it to ${USE_CHARS}.`);
@@ -285,16 +298,15 @@ function soundtrackTools(b: Brain, s: Soundtrack) {
 }
 
 /**
- * A series' soundtrack, gathered or brought up to date by the harness when it's missing or old.
- * An old one that can't be brought up to date is used as it is.
+ * A series' soundtrack, gathered or brought up to date by the harness when it's missing or old,
+ * in the series' soundtrack chat. An old one that can't be brought up to date this time is used
+ * as it is; its chat is carried on next time.
  */
 export async function soundtrackFor(name: string, given?: Brain): Promise<Soundtrack> {
   return oneAtATime(`music:${slug(name)}`, async () => {
     const had = loadSoundtrack(name);
     if (had && isFresh(had) && had.tracks.length >= MIN_TRACKS) return had;
     const s: Soundtrack = had ?? { name, made: '', summary: '', tracks: [] };
-    let maxCalls = FIRST_CALLS;
-    if (s.tracks.length) maxCalls = UPDATE_CALLS;
     const unfinished = () => {
       if (s.tracks.length >= MIN_TRACKS) return null;
       return `The soundtrack has ${s.tracks.length} tracks; it needs at least ${MIN_TRACKS}, enough for every kind of scene.`;
@@ -304,16 +316,17 @@ export async function soundtrackFor(name: string, given?: Brain): Promise<Soundt
       let using = given;
       if (!using) using = await brain();
       const summary = await runAgent({
+        chat: `soundtrack-${slug(name)}`,
+        ask: 'soundtrack',
         system: SOUNDTRACK_SYSTEM,
-        brief: soundtrackBrief(name, s),
+        brief: () => soundtrackBrief(name, s),
         tools: soundtrackTools(using, s),
-        maxCalls,
         unfinished,
         label: { soundtrack: slug(name) },
       }, using);
       s.summary = summary.slice(0, 1000);
     } catch (e) {
-      if (!had || had.tracks.length < MIN_TRACKS) throw e;
+      if (!had || !had.made || had.tracks.length < MIN_TRACKS) throw e;
       console.log(`${name}: the soundtrack couldn’t be brought up to date (${e instanceof Error ? e.message : String(e)}), so it stays as it was`);
       return had;
     }

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import type { Book } from '../lib.ts';
+import type { Brain } from '../harness.ts';
 import type { CatalogTrack } from '../music.ts';
 
 /*
@@ -13,7 +14,7 @@ import type { CatalogTrack } from '../music.ts';
  */
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
-const { buildScore, cueProblems, parseCues } = await import('../music.ts');
+const { buildScore, cueProblems, parseCues, soundtrackTools } = await import('../music.ts');
 
 const paragraph = (text: string) => ({ tag: 'p', text, words: text.split(' ').length });
 
@@ -107,4 +108,29 @@ test('a part with no answer adds nothing, and each track’s role is kept short'
   assert.deepEqual(score.cues, [[1, 1, 0, 0]]);
   assert.equal(score.tracks[0].role.length, 200);
   assert.deepEqual(Object.keys(score.tracks[0]).sort(), ['id', 'role', 'seconds', 'source', 'title']);
+});
+
+test('the soundtrack is shown a page at a time, however many tracks it has', async () => {
+  const tracks: CatalogTrack[] = [];
+  for (let n = 1; n <= 90; n++) tracks.push(track(n));
+  // The list doesn't call Gemini.
+  const tools = soundtrackTools({} as Brain, { name: 'Two Chapters', made: '', summary: '', tracks });
+  const list = tools.find((t) => t.name === 'soundtrack')!;
+  const shown = async (args: { from?: number }) => {
+    const result = await list.execute('call', args as never);
+    const first = result.content[0];
+    if (first.type !== 'text') throw new Error('not text');
+    return first.text.split('\n');
+  };
+
+  const page = await shown({});
+  assert.equal(page.length, 41);
+  assert.match(page[0], /^1 \| /);
+  assert.equal(page[40], '(Tracks 1 to 40 of 90: call soundtrack with from 41 for the rest.)');
+
+  const last = await shown({ from: 81 });
+  assert.equal(last.length, 10, 'the last page has no note');
+  assert.match(last[9], /^90 \| /);
+
+  await assert.rejects(shown({ from: 91 }), /has 90 tracks/);
 });

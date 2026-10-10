@@ -1,7 +1,10 @@
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Static, TSchema } from 'typebox';
 import { runAgentLoopContinue, type AgentLoopConfig, type AgentMessage, type AgentTool, type StreamFn } from '../pi/pi-agent/src/index.ts';
-import { streamSimple, toToolDeclaration, Type, type AssistantMessage, type Model } from '../pi/pi-ai/src/index.ts';
+import { estimateContextTokens, estimateMessageTokens, streamSimple, toToolDeclaration, Type, type AssistantMessage, type Message, type Model, type UserMessage } from '../pi/pi-ai/src/index.ts';
 import { backoffS, jitter, log } from './balancer.ts';
+import { WORK } from './lib.ts';
 import { geminiModels, geminiOpensAt, noHarness, proxy, THINKING } from './proxy.ts';
 
 /*
@@ -10,32 +13,34 @@ import { geminiModels, geminiOpensAt, noHarness, proxy, THINKING } from './proxy
  * NVIDIA models (balancer.ts) do the big reading; the harness does what needs looking around for,
  * searching the web and YouTube and deciding as it goes.
  *
- * It keeps to what the agent guides agree on:
- * - A plain loop, the tools' results the ground truth at every step, and a stopping condition: a
- *   budget of calls, and a finish tool that only ends the task when the task's own check agrees
- *   (Anthropic, "Building effective agents").
- * - Every tool call gets a result, and a tool that fails says what to do instead. Results are
- *   kept short, and old ones are cleared from the context once they're far behind: the task's
- *   state lives in its tools, which can always say it again (Anthropic, "Writing effective tools
- *   for agents" and "Effective context engineering for AI agents"; agents-best-practices).
- * - Every run ends with a reason, and every call is logged to the NIM calls' log: timings and
- *   tokens, never text.
- * - Failures wait the way the NIM balancer's do (and AWS's "Exponential backoff and jitter"): a
- *   failing model cools down, the wait doubling with each failure in a row up to a cap, with
- *   random jitter, and the next Gemini model takes the calls while Flash cools for long. When
- *   every Antigravity account is out of its 5-hour or weekly limit, the harness waits for the
- *   first to fill again, then carries on. A sign-in turned away stops the run at once, since
- *   waiting doesn't fix it.
+ * Each series' job, its research or its soundtrack, is done in one chat that's kept for good, the
+ * way breader_writer's Procreator plays a scene and Seelie (pde) keeps a chat:
+ * - Every turn is saved to chats/<name>.jsonl in the work folder as soon as it ends, and what the
+ *   tools find is saved by the tools as they go (each track, each section). A run that stops, for
+ *   an error, an outage or a restart, loses nothing: the next run of the job opens the same chat
+ *   and carries on from its last turn. A job asked again later (the next volume, a soundtrack a
+ *   month old) is asked in the same chat too.
+ * - No cap on calls or time: the chat goes on until the task's own check agrees it's finished.
+ * - Every call sends the chat as it stands. It only grows at the end, so Gemini's cache covers all
+ *   but the newest turn.
+ * - Our own compaction, as Procreator's: past 400k tokens, the model first saves with its tools
+ *   whatever it hasn't, then writes the work so far, and the chat goes on from a fresh brief, that
+ *   summary and the latest turns word for word, cut only between turns. Everything before stays
+ *   in the file.
+ * - Every tool call gets a result, and a tool that fails says what to do instead (Anthropic,
+ *   "Writing effective tools for agents"). Every call is logged to the NIM calls' log: timings
+ *   and tokens, never text.
+ * - Failures are waited out the way the NIM balancer's are (and AWS's "Exponential backoff and
+ *   jitter"): a failing model cools down, the wait doubling with each failure in a row up to a
+ *   cap, with random jitter, and the next Gemini model takes the calls while Flash cools for
+ *   long. When every Antigravity account is out of its 5-hour or weekly limit, the harness waits
+ *   for the first to fill again; with the proxy or the network down, it keeps looking until
+ *   they're back. What waiting can't fix (a sign-in turned away, every model refusing) ends the
+ *   run, and the next run picks the chat up again.
  */
 
-/** Tool results kept whole in each call; older ones are cleared. */
-const KEPT_RESULTS = 24;
 /** The longest result a tool hands back. */
 const RESULT_CHARS = 20_000;
-/** Reminders when the model stops without finishing. */
-const NUDGES = 3;
-/** Failed calls in a row before the run gives up. */
-const FAILS = 10;
 /** How long Flash may be cooling, and after how many failures in a row, before another model takes the calls. */
 const WAIT_FOR_FIRST_S = 120;
 const STRIKES_TO_FALL = 2;
@@ -43,18 +48,26 @@ const STRIKES_TO_FALL = 2;
 const COOL = { rate: [60, 1800], busy: [30, 600] } as const;
 /** The longest wait before looking again. */
 const LOOK_AGAIN_MS = 60_000;
+/** A chat is compacted past this many tokens, or sooner on a model whose window can't take that and an answer. */
+export const COMPACT_AT = 400_000;
+/** After a compaction, the latest turns kept word for word take up to this share of it. */
+const KEEP_SHARE = 0.2;
+
+const CHATS = join(WORK, 'chats');
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const round = (n: number) => Math.round(n * 10) / 10;
 
 export interface Task {
+  /** The chat it's done in, one for each series and job: chats/<chat>.jsonl. */
+  chat: string;
+  /** What's asked of the chat this time, such as the volume to research. Asked again once it's finished. */
+  ask: string;
   /** Who the model is and what it's for. */
   system: string;
-  /** What to do, with everything it starts from. */
-  brief: string;
+  /** What to do, with everything it starts from as things stand. Built again after a compaction. */
+  brief: () => string;
   tools: AgentTool<any>[];
-  /** Answered calls before the run gives up. */
-  maxCalls: number;
   /** Why it isn't finished yet, or null when it is. Asked when the model calls finish. */
   unfinished: () => string | null;
   /** For the call log. */
@@ -203,7 +216,7 @@ function systemFor(task: Task): string {
 
 # How you work
 
-You work through tools, and their results are the ground truth: look before you decide, and check what you've done with the tools that show it. Think before each call. When a tool says something went wrong, it says what to do instead: do that, rather than the same call again. You have up to ${task.maxCalls} calls. When everything is done, call finish; if anything is still open, finish says what.`;
+You work through tools, and their results are the ground truth: look before you decide, and check what you've done with the tools that show it. Think before each call. When a tool says something went wrong, it says what to do instead: do that, rather than the same call again. Take as many calls as the work needs. When everything is done, call finish; if anything is still open, finish says what. This chat is kept and goes on from one job to the next: when a new one is asked, it's the one to do.`;
 }
 
 function reminder(task: Task): string {
@@ -212,19 +225,165 @@ function reminder(task: Task): string {
   return 'Everything looks done: call finish with a line on what you did.';
 }
 
-/** The context as sent: tool results far behind are cleared, since the tools can say them again. */
-export function clearOld(messages: AgentMessage[]): AgentMessage[] {
-  const out = [...messages];
-  let seen = 0;
-  for (let i = out.length - 1; i >= 0; i--) {
-    const m = out[i];
-    if (m.role !== 'toolResult') continue;
-    seen++;
-    if (seen <= KEPT_RESULTS) continue;
-    const text = `(Cleared to keep this short: call ${m.toolName} again if you need it.)`;
-    out[i] = { ...m, content: [{ type: 'text', text }] };
+const COMPACT = `This chat is getting long, so it's about to be cut short: everything before your latest turns will leave it. First save with your tools anything you've found that isn't saved yet. Then answer with the work so far, for yourself to carry on from: what's done and saved, what you were in the middle of, what's left, and what you've learned that the tools don't show, such as searches that found nothing and uploads to pass over. Plain lines, and nothing else.`;
+
+/** A line of a chat's file. */
+type Entry =
+  /** A job asked of the chat, from the next segment or message on. */
+  | { kind: 'ask'; ask: string }
+  /** A part of the chat opens: its head, then the chat's messages from number `from` on. */
+  | { kind: 'segment'; at: number; head: string; from: number }
+  | { kind: 'message'; n: number; message: AgentMessage }
+  /** A compaction at work: kept for the record, never sent again. */
+  | { kind: 'fold'; message: AgentMessage }
+  | { kind: 'finished'; ask: string; summary: string };
+
+/** A message in the chat, with its number. */
+export interface Numbered {
+  n: number;
+  message: AgentMessage;
+}
+
+/** A chat as its file keeps it: the segment it's in, its messages, and the job it's on. */
+class Chat {
+  private readonly file: string;
+  private segment: { at: number; head: string; from: number } | null = null;
+  private readonly messages: Numbered[] = [];
+  /** The job it's on, or null when it has none open. */
+  open: string | null = null;
+
+  constructor(name: string) {
+    this.file = join(CHATS, `${name}.jsonl`);
+    if (!existsSync(this.file)) return;
+    const text = readFileSync(this.file, 'utf8');
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      let entry: Entry;
+      try {
+        entry = JSON.parse(line) as Entry;
+      } catch {
+        // A line cut short by a stop mid-write.
+        continue;
+      }
+      this.take(entry);
+    }
+    // What comes next starts on a line of its own, after a line cut short.
+    if (text && !text.endsWith('\n')) appendFileSync(this.file, '\n');
   }
-  return out;
+
+  private take(entry: Entry) {
+    if (entry.kind === 'ask') this.open = entry.ask;
+    if (entry.kind === 'segment') this.segment = { at: entry.at, head: entry.head, from: entry.from };
+    if (entry.kind === 'message') this.messages.push({ n: entry.n, message: entry.message });
+    if (entry.kind === 'finished') this.open = null;
+  }
+
+  private write(entries: Entry[]) {
+    mkdirSync(CHATS, { recursive: true });
+    appendFileSync(this.file, entries.map((e) => `${JSON.stringify(e)}\n`).join(''));
+    for (const e of entries) this.take(e);
+  }
+
+  private next(): number {
+    const last = this.messages[this.messages.length - 1];
+    if (!last) return 1;
+    return last.n + 1;
+  }
+
+  isNew(): boolean {
+    return this.segment === null;
+  }
+
+  /** How many messages it has kept, in all its segments. */
+  size(): number {
+    return this.messages.length;
+  }
+
+  /** The chat's first job, with its brief as the head. */
+  start(ask: string, brief: string) {
+    this.write([{ kind: 'ask', ask }, { kind: 'segment', at: Date.now(), head: brief, from: this.next() }]);
+  }
+
+  /** Another job, asked at the end of the chat. */
+  ask(ask: string, brief: string) {
+    const message: UserMessage = { role: 'user', content: brief, timestamp: Date.now() };
+    this.write([{ kind: 'ask', ask }, { kind: 'message', n: this.next(), message }]);
+  }
+
+  add(messages: AgentMessage[]) {
+    const entries: Entry[] = [];
+    let n = this.next();
+    for (const message of messages) {
+      entries.push({ kind: 'message', n, message });
+      n++;
+    }
+    this.write(entries);
+  }
+
+  fold(messages: AgentMessage[]) {
+    this.write(messages.map((message) => ({ kind: 'fold', message })));
+  }
+
+  /** A new segment: a fresh head, then the messages from number `from` on. */
+  cut(from: number, head: string) {
+    this.write([{ kind: 'segment', at: Date.now(), head, from }]);
+  }
+
+  finish(ask: string, summary: string) {
+    this.write([{ kind: 'finished', ask, summary }]);
+  }
+
+  /** The segment's head, as the model is sent it. Its time is the segment's, so token counts from before it aren't trusted. */
+  head(): UserMessage {
+    if (!this.segment) throw new Error('The chat hasn’t started.');
+    return { role: 'user', content: this.segment.head, timestamp: this.segment.at };
+  }
+
+  /** The messages sent after the head. */
+  sent(): Numbered[] {
+    if (!this.segment) return [];
+    const from = this.segment.from;
+    return this.messages.filter((m) => m.n >= from);
+  }
+}
+
+/** Where a model's chats are compacted. */
+export function compactAt(model: { contextWindow: number; maxTokens: number }): number {
+  let room = model.contextWindow - model.maxTokens;
+  if (room < model.contextWindow / 2) {
+    // A model that can answer with most of its window gets half of it for the chat.
+    room = Math.floor(model.contextWindow / 2);
+  }
+  return Math.min(COMPACT_AT, room);
+}
+
+function tokensIn(sent: Numbered[], from: number, to: number): number {
+  let tokens = 0;
+  for (let i = from; i < to; i++) tokens += estimateMessageTokens(sent[i].message as Message);
+  return tokens;
+}
+
+/**
+ * Where a compaction cuts: the number of the first message kept word for word, or null when
+ * there's no turn before the latest to fold. A cut falls only before one of the model's answers,
+ * so an answer and its tool results stay together. The newest turns are kept while they fit in
+ * `keep` tokens, the latest always, and the oldest always folds.
+ */
+export function keptFrom(sent: Numbered[], keep: number): number | null {
+  const starts: number[] = [];
+  for (let i = 0; i < sent.length; i++) {
+    if (sent[i].message.role === 'assistant') starts.push(i);
+  }
+  if (starts.length < 2) return null;
+  let first = starts.length - 1;
+  let tokens = tokensIn(sent, starts[first], sent.length);
+  while (first > 1) {
+    const older = tokensIn(sent, starts[first - 1], starts[first]);
+    if (tokens + older > keep) break;
+    tokens += older;
+    first--;
+  }
+  return sent[starts[first]].n;
 }
 
 function logCall(label: Record<string, unknown>, m: AssistantMessage, startedAt: number) {
@@ -247,9 +406,31 @@ function logCall(label: Record<string, unknown>, m: AssistantMessage, startedAt:
   log(entry);
 }
 
+function answerIn(messages: AgentMessage[]): AssistantMessage | null {
+  for (const m of messages) {
+    if (m.role === 'assistant') return m;
+  }
+  return null;
+}
+
+function textOf(m: AssistantMessage): string {
+  const parts: string[] = [];
+  for (const c of m.content) {
+    if (c.type === 'text') parts.push(c.text);
+  }
+  return parts.join('\n').trim();
+}
+
+function asksTools(m: AssistantMessage): boolean {
+  return m.content.some((c) => c.type === 'toolCall');
+}
+
 const noEvents = () => {};
 
-/** Runs the task until it's finished. Returns finish's summary; throws with the reason when it can't finish. */
+/**
+ * Runs the task in its chat until it's finished, carrying on from wherever the chat stopped.
+ * Returns finish's summary; throws only for what waiting can't fix, with the chat kept.
+ */
 export async function runAgent(task: Task, given?: Brain): Promise<string> {
   let b = given;
   if (!b) b = await brain();
@@ -269,17 +450,19 @@ export async function runAgent(task: Task, given?: Brain): Promise<string> {
     },
   );
   const tools = [...task.tools, finish];
-  const messages: AgentMessage[] = [
-    { role: 'system', content: systemFor(task), toolsAdded: tools.map(toToolDeclaration), timestamp: 0 },
-    { role: 'user', content: task.brief, timestamp: Date.now() },
-  ];
+  const system: AgentMessage = { role: 'system', content: systemFor(task), toolsAdded: tools.map(toToolDeclaration), timestamp: 0 };
+
+  const chat = new Chat(task.chat);
+  if (chat.isNew()) {
+    chat.start(task.ask, task.brief());
+  } else if (chat.open !== task.ask) {
+    chat.ask(task.ask, task.brief());
+  } else {
+    console.log(`    ${task.chat}: carrying on its chat, ${chat.size()} messages in`);
+  }
 
   const skip = new Map<string, string>();
-  let answered = 0;
-  let fails = 0;
-  let nudges = 0;
   let startedAt = 0;
-
   const config: AgentLoopConfig = {
     model: using.models[0],
     reasoning: THINKING,
@@ -288,62 +471,103 @@ export async function runAgent(task: Task, given?: Brain): Promise<string> {
     maxRetries: 1,
     toolExecution: 'sequential',
     convertToLlm: (all) => all,
-    transformContext: async (all) => clearOld(all),
     prepareRequest: async () => {
       const model = await choose(using.models, skip);
       startedAt = Date.now();
       return { model };
     },
+    // One turn at a time: the run keeps it, and looks at the chat's size, before the next.
     finishTurn: (turn) => {
       const m = turn.message;
       logCall(task.label, m, startedAt);
-      if (m.stopReason === 'error' || m.stopReason === 'aborted') return undefined;
-      answered++;
-      fails = 0;
-      COOLING.delete(m.model);
-      if (outcome.summary !== null) return { action: 'end' };
-      if (answered >= task.maxCalls) return { action: 'end' };
-      return undefined;
-    },
-    getFollowUpMessages: async () => {
-      if (outcome.summary !== null) return [];
-      if (answered >= task.maxCalls) return [];
-      if (nudges >= NUDGES) return [];
-      nudges++;
-      return [{ role: 'user', content: reminder(task), timestamp: Date.now() }];
+      if (m.stopReason !== 'error' && m.stopReason !== 'aborted') COOLING.delete(m.model);
+      return { action: 'end' };
     },
   };
 
-  for (;;) {
-    const fresh = await runAgentLoopContinue({ messages, tools }, config, noEvents, undefined, using.stream);
-    const last = fresh[fresh.length - 1];
-    if (last && last.role === 'assistant' && last.stopReason === 'error') {
-      // The failed answer goes; the run carries on from the message before it.
-      messages.push(...fresh.slice(0, -1));
-      fails++;
-      const why = last.errorMessage ?? 'no reason given';
-      const kind = failureOf(why);
-      if (kind === 'signIn') throw new Error(`Antigravity turned the sign-in away (${why.slice(0, 200)}): connect the account again from the admin page.`);
-      if (kind === 'bad') {
-        skip.set(last.model, `${last.model}: ${why.slice(0, 200)}`);
+  /** What a failed call calls for: a wait, another model, or the end of the run when waiting can't fix it. */
+  async function afterFailure(m: AssistantMessage) {
+    const why = m.errorMessage ?? 'no reason given';
+    const kind = failureOf(why);
+    if (kind === 'signIn') {
+      throw new Error(`Antigravity turned the sign-in away (${why.slice(0, 200)}): connect the account again from the admin page. The chat is kept, and the next run carries on from it.`);
+    }
+    if (kind === 'bad') {
+      skip.set(m.model, `${m.model}: ${why.slice(0, 200)}`);
+      return;
+    }
+    if (kind === 'rate') {
+      const waited = await waitForLimits(using);
+      if (waited) return;
+    }
+    cool(m.model, kind);
+  }
+
+  /** One call, and the tool calls in its answer run: the answer and their results. A failed call is waited out and made again. */
+  async function turn(messages: AgentMessage[]): Promise<AgentMessage[]> {
+    for (;;) {
+      const fresh = await runAgentLoopContinue({ messages: [...messages], tools }, config, noEvents, undefined, using.stream);
+      const answer = answerIn(fresh);
+      if (answer && answer.stopReason === 'error') {
+        await afterFailure(answer);
         continue;
       }
-      if (kind === 'rate') {
-        const waited = await waitForLimits(using);
-        if (waited) {
-          fails = 0;
-          continue;
-        }
+      if (answer && answer.stopReason === 'aborted') throw new Error('The run was stopped.');
+      return fresh;
+    }
+  }
+
+  /**
+   * Compacts the chat: the model saves what isn't saved, then writes the work so far, and a new
+   * segment starts with a fresh brief, that summary and the latest turns. False when there's
+   * nothing older than the latest turn to fold.
+   */
+  async function compact(messages: AgentMessage[], tokens: number): Promise<boolean> {
+    const from = keptFrom(chat.sent(), Math.floor(compactAt(using.models[0]) * KEEP_SHARE));
+    if (from === null) return false;
+    const ask: UserMessage = { role: 'user', content: COMPACT, timestamp: Date.now() };
+    const folding = [...messages, ask];
+    chat.fold([ask]);
+    let summary = '';
+    for (;;) {
+      const fresh = await turn(folding);
+      chat.fold(fresh);
+      folding.push(...fresh);
+      if (outcome.summary !== null) return true;
+      const answer = answerIn(fresh);
+      if (answer && !asksTools(answer)) {
+        summary = textOf(answer);
+        break;
       }
-      cool(last.model, kind);
-      if (fails >= FAILS) throw new Error(`Gemini failed ${fails} times in a row; the last: ${why.slice(0, 200)}`);
+    }
+    // What the tools saved is in the brief, so a fold with no summary still loses nothing that matters.
+    let head = task.brief();
+    if (summary) head = `${head}\n\n# The work so far\n\n${summary}`;
+    chat.cut(from, head);
+    console.log(`    ${task.chat}: compacted at about ${Math.round(tokens / 1000)}k tokens`);
+    return true;
+  }
+
+  for (;;) {
+    const sent = chat.sent().map((m) => m.message);
+    const messages = [system, chat.head(), ...sent];
+    const tokens = estimateContextTokens(messages as Message[]).tokens;
+    if (tokens > compactAt(using.models[0])) {
+      const folded = await compact(messages, tokens);
+      if (outcome.summary !== null) break;
+      if (folded) continue;
+    }
+    const last = messages[messages.length - 1];
+    if (last.role === 'assistant') {
+      // It stopped without finishing.
+      chat.add([{ role: 'user', content: reminder(task), timestamp: Date.now() }]);
       continue;
     }
-    messages.push(...fresh);
-    if (last && last.role === 'assistant' && last.stopReason === 'aborted') throw new Error('The run was stopped.');
-    if (outcome.summary !== null) return outcome.summary;
-    const open = task.unfinished() ?? 'it never called finish';
-    if (answered >= task.maxCalls) throw new Error(`It used all ${task.maxCalls} calls without finishing: ${open}`);
-    throw new Error(`It stopped without finishing, ${NUDGES} reminders on: ${open}`);
+    chat.add(await turn(messages));
+    if (outcome.summary !== null) break;
   }
+  let summary = '';
+  if (outcome.summary !== null) summary = outcome.summary;
+  chat.finish(task.ask, summary);
+  return summary;
 }
