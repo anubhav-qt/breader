@@ -17,6 +17,13 @@ export const TRACK_ID = /^[A-Za-z0-9_-]{11}$/;
 /** Where a track is kept in the file store. */
 export const trackKey = (id: string) => `music/${id}.m4a`;
 
+/**
+ * Where a book's music, scored somewhere else and uploaded from the admin page, waits in the file
+ * store for the AI marker to put it into the book's file (shared/src/ai.ts, MusicImport).
+ */
+export const MUSIC_IMPORTS = 'imports/music/';
+export const musicImportKey = (sha256: string) => `${MUSIC_IMPORTS}${sha256}.json`;
+
 /** A track, as the app gets it: its number in the book's list, how long it is, and where it's from. */
 export interface MusicTrack {
   n: number;

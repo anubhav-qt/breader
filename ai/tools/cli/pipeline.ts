@@ -8,7 +8,7 @@ import { castByFile } from '../kimi.ts';
 import { args, findBook, isFetched, loadBook, main, OUT, readJson, writeJson } from '../lib.ts';
 import { markBook } from '../mark.ts';
 import { balancers, withMusic } from '../marker.ts';
-import { scoreBook } from '../music.ts';
+import { musicBy, scoreBook } from '../music.ts';
 import { writeNotes } from '../notes.ts';
 import { researchBook, researched } from '../research.ts';
 
@@ -41,7 +41,7 @@ main(async () => {
   const score = await scoreBook(b, loadBook(b.key), lbs.music, flags);
 
   const file = join(OUT, `${b.sha256}.json`);
-  const f = withMusic(readJson<AiFile>(file), book, score);
+  const f = withMusic(readJson<AiFile>(file), score, musicBy(book));
   const c = checkFile(`${b.sha256}.json`, f);
   if (c.problems.length) throw new Error(`${b.title}: its file has ${c.problems.length} problems. The first: ${c.problems[0]}`);
   writeJson(file, f);

@@ -100,13 +100,18 @@ function runs(bin: string, versionArg: string): boolean {
   return r.status === 0;
 }
 
+/** Why tracks can't be downloaded and stored here, or null when they can: it needs yt-dlp and ffmpeg. */
+export function noDownloads(): string | null {
+  if (!runs(process.env.YT_DLP || 'yt-dlp', '--version')) return 'yt-dlp isn’t installed';
+  if (!runs(process.env.FFMPEG || 'ffmpeg', '-version')) return 'ffmpeg isn’t installed';
+  return null;
+}
+
 /** Why the marker can't score music here, or null when it can: it needs the harness, yt-dlp and ffmpeg. */
 export function noMusic(): string | null {
   const why = noHarness();
   if (why) return why;
-  if (!runs(process.env.YT_DLP || 'yt-dlp', '--version')) return 'yt-dlp isn’t installed';
-  if (!runs(process.env.FFMPEG || 'ffmpeg', '-version')) return 'ffmpeg isn’t installed';
-  return null;
+  return noDownloads();
 }
 
 /* ---- The soundtrack ---- */
@@ -119,7 +124,7 @@ export function loadSoundtrack(name: string): Soundtrack | null {
   return readJson<Soundtrack>(file);
 }
 
-function saveSoundtrack(s: Soundtrack) {
+export function saveSoundtrack(s: Soundtrack) {
   mkdirSync(SOUNDTRACKS, { recursive: true });
   writeJson(soundtrackFile(s.name), s);
 }

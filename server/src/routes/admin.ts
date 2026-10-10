@@ -1,8 +1,9 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type pg from 'pg';
 import { z } from 'zod';
-import { ACCOUNT_KINDS, LIMITS } from '@breader/shared';
+import { ACCOUNT_KINDS, LIMITS, MusicImport, musicImportKey, musicImportProblems } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { cancelSignIn, cliproxyFor, finishSignIn, listAccounts, removeAccount, signInStatus, startSignIn, type Cliproxy } from '../lib/cliproxy.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
@@ -42,9 +43,13 @@ async function all<T extends pg.QueryResultRow>(pool: pg.Pool, sql: string): Pro
  *
  * On the laptop it also connects the AI accounts the marker's research and music run on
  * (lib/cliproxy.ts): Antigravity, Claude Code and Codex, each with its limits.
+ *
+ * And it takes a book's music scored somewhere else (shared/src/ai.ts, MusicImport): checked
+ * against the book's file here, then left in the file store for the AI marker, which stores its
+ * tracks and puts it into the file (ai/tools/marker.ts).
  */
 export function adminRoutes(deps: Deps) {
-  const { env, pool, mirror } = deps;
+  const { env, pool, mirror, storage } = deps;
   const r = new Hono<AppEnv>();
   if (!env.ADMIN_TOKEN) return r;
   const token = Buffer.from(env.ADMIN_TOKEN);
@@ -134,6 +139,34 @@ export function adminRoutes(deps: Deps) {
       jobs,
     });
   });
+
+  r.post(
+    '/admin/music',
+    rateLimit({ name: 'admin-music', max: 10, windowMs: 60_000 }),
+    bodyLimit({
+      maxSize: 4 * 1024 * 1024,
+      onError: () => { throw new ApiError(413, 'too_large', 'That file is too large for music: 4 MB at most.'); },
+    }),
+    async (c) => {
+      checkToken(c);
+      const upload = parse(MusicImport, await readJson(c));
+      const problems = musicImportProblems(upload);
+      if (problems.length) {
+        throw new ApiError(400, 'bad_music', `The music has ${problems.length} problems. The first: ${problems[0]}`);
+      }
+      const { rows } = await pool.query<{ sections: string[] }>("SELECT data->'sections' AS sections FROM ai_notes WHERE sha256 = $1", [upload.sha256]);
+      const row = rows[0];
+      if (!row) {
+        throw new ApiError(404, 'not_marked', 'No book file with that SHA-256 has AI marks here yet. Its music can go in once it has.');
+      }
+      if (row.sections.join(' ') !== upload.sections.join(' ')) {
+        throw new ApiError(409, 'reads_differently', 'That book file reads differently here than where the music was scored, so the music would land on the wrong paragraphs.');
+      }
+      const body = Buffer.from(JSON.stringify(upload));
+      await storage.put(musicImportKey(upload.sha256), body, body.length);
+      return c.json({ cues: upload.score.cues.length, tracks: upload.score.tracks.length, soundtrack: upload.soundtrack.tracks.length }, 202);
+    },
+  );
 
   // The AI accounts: only the laptop runs the proxy (in its worker).
   const accounts = rateLimit({ name: 'admin-accounts', max: 120, windowMs: 60_000 });

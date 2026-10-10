@@ -9,6 +9,8 @@ import { repairVersions } from '../src/db/restored.ts';
 import { restoreDrill, type PgTools } from '../src/jobs/drill.ts';
 import { repairStorage } from '../src/jobs/repair.ts';
 import { clientIp } from '../src/lib/http.ts';
+import { musicImportKey } from '@breader/shared';
+import { aiFile } from './ai-fixture.ts';
 import { app, book, deps, env, mirror, primary, push, registered } from './helpers.ts';
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -99,6 +101,71 @@ describe('status page', () => {
     expect(s.libraries.total).toBeGreaterThan(0);
     expect(s.jobs.map((j: { name: string }) => j.name)).toContain('clean-up');
     expect(s.request).toMatchObject({ ip: '203.0.113.5', from: 'x-forwarded-for' });
+  });
+});
+
+describe('music scored somewhere else', () => {
+  const admin = { authorization: `Bearer ${env.ADMIN_TOKEN}`, 'content-type': 'application/json' };
+  const send = (body: unknown, headers: Record<string, string> = admin) =>
+    app.request('/admin/music', { method: 'POST', headers, body: JSON.stringify(body) });
+  const tracks = [
+    { id: 'aaaaaaaaaaa', title: 'Opening', source: 'A channel', seconds: 90, role: 'The main theme.' },
+    { id: 'bbbbbbbbbbb', title: 'Rain', source: 'A channel', seconds: 150, role: 'Sad scenes.' },
+  ];
+  /** Music for aiFile's three chapters of ten paragraphs. */
+  const music = (sha256: string) => ({
+    sha256,
+    sections: ['10:0000000a', '10:0000000b', '10:0000000c'],
+    by: 'Gemini and Kimi K3 (reasoning high, NVIDIA)',
+    score: { tracks, cues: [[0, 1, 0], [1, 4, -1], [2, 2, 1]] },
+    soundtrack: {
+      name: 'The Station',
+      made: '2026-10-10T00:00:00.000Z',
+      summary: 'Alternates.',
+      tracks: tracks.map((t) => ({ id: t.id, title: t.title, source: t.source, seconds: t.seconds, album: 'An album', use: t.role, official: false, sound: 'Quiet.' })),
+    },
+  });
+  const marked = async () => {
+    const sha256 = sha(Buffer.from(crypto.randomUUID()));
+    const f = aiFile(sha256);
+    await q('INSERT INTO ai_notes (sha256, data, made, by) VALUES ($1, $2, $3, $4)', [sha256, JSON.stringify(f), f.made, f.by]);
+    return sha256;
+  };
+
+  it('needs the admin token', async () => {
+    const sha256 = await marked();
+    expect((await send(music(sha256), { 'content-type': 'application/json' })).status).toBe(401);
+    expect(await deps.storage.head(musicImportKey(sha256))).toBeNull();
+  });
+
+  it('waits in the file store for the AI marker, once it fits a marked book file', async () => {
+    const sha256 = await marked();
+    const r = await send(music(sha256));
+    expect(r.status).toBe(202);
+    expect(await r.json()).toEqual({ cues: 3, tracks: 2, soundtrack: 2 });
+    const chunks: Buffer[] = [];
+    for await (const chunk of await deps.storage.get(musicImportKey(sha256))) chunks.push(Buffer.from(chunk));
+    expect(JSON.parse(Buffer.concat(chunks).toString('utf8'))).toEqual(music(sha256));
+    await deps.storage.remove(musicImportKey(sha256));
+  });
+
+  it('is turned away for a book file with no marks, one that reads differently, or music with problems', async () => {
+    const unmarked = sha(Buffer.from(crypto.randomUUID()));
+    expect((await send(music(unmarked))).status).toBe(404);
+
+    const sha256 = await marked();
+    const other = { ...music(sha256), sections: ['10:0000000a', '10:0000000b', '10:0000000d'] };
+    expect((await send(other)).status).toBe(409);
+
+    const past = music(sha256);
+    past.score.cues.push([5, 0, 0]);
+    const bad = await send(past);
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { message: string }).message).toMatch(/a cue at 5:0, which isn.t a paragraph/);
+
+    const text = await send({ ...music(sha256), text: 'a whole chapter' });
+    expect(text.status).toBe(400);
+    expect(await deps.storage.head(musicImportKey(sha256))).toBeNull();
   });
 });
 

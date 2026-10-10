@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -12,7 +14,7 @@ import { test, type TestContext } from 'node:test';
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { cool, failureOf, pick } = await import('../harness.ts');
-const { FIRST_MODEL, inOrder, isGeminiForText } = await import('../proxy.ts');
+const { FIRST_MODEL, inOrder, isGeminiForText, servesGemini } = await import('../proxy.ts');
 
 test('a limit or quota is a rate failure, however it’s said', () => {
   assert.equal(failureOf('Server requested 37s retry delay'), 'rate');
@@ -101,4 +103,30 @@ test('only Gemini models that write text are used', () => {
   assert.equal(isGeminiForText('gemini-3.8-flash-high'), true);
   assert.equal(isGeminiForText('gemini-3.1-flash-image'), false);
   assert.equal(isGeminiForText('claude-sonnet-5-5'), false);
+});
+
+test('Gemini is served only while the proxy answers with an Antigravity Gemini model, so music waits for an account', async (t) => {
+  let models: Array<{ id: string; owned_by: string }> = [];
+  const server = createServer((_req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ data: models }));
+  });
+  await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+  const was = { url: process.env.CLIPROXY_URL, key: process.env.CLIPROXY_API_KEY };
+  t.after(() => {
+    process.env.CLIPROXY_URL = was.url ?? '';
+    process.env.CLIPROXY_API_KEY = was.key ?? '';
+  });
+  const { port } = server.address() as AddressInfo;
+  process.env.CLIPROXY_URL = `http://127.0.0.1:${port}`;
+  process.env.CLIPROXY_API_KEY = 'a-key-for-the-tests';
+
+  assert.equal(await servesGemini(), false, 'no account connected');
+  models = [{ id: 'claude-sonnet-5-5', owned_by: 'claude' }];
+  assert.equal(await servesGemini(), false, 'only another kind of account');
+  models = [{ id: 'gemini-3.8-flash-high', owned_by: 'antigravity' }];
+  assert.equal(await servesGemini(), true);
+
+  await new Promise<void>((ok) => server.close(() => ok()));
+  assert.equal(await servesGemini(), false, 'the proxy doesn’t answer');
 });

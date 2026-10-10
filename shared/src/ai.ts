@@ -35,6 +35,24 @@ export type AiEntry = z.infer<typeof AiEntry>;
 export const AI_KINDS = ['people', 'places', 'terms'] as const;
 export type AiKind = (typeof AI_KINDS)[number];
 
+/** A book's soundtrack (shared/src/music.ts), as its file has it. */
+const AiMusic = z.strictObject({
+  /** The tracks the book plays, by their YouTube id, and what each is for in the series: a theme, a mood. */
+  tracks: z.array(z.strictObject({
+    id: z.string().regex(TRACK_ID),
+    title: z.string().max(300),
+    /** The YouTube channel it came from, for credit. */
+    source: z.string().max(200),
+    seconds: N,
+    role: z.string().max(200),
+  })),
+  /** From each paragraph on: [section, block, track (an index) or -1 for silence]. A track plays once, and silence follows it until the next cue. */
+  cues: z.array(z.tuple([N, N, z.number().int().min(-1)])),
+});
+
+/** Each chapter's block count and text hash ("count:fnv1a"), to tell the app parsed the same text. */
+const Sections = z.array(z.string().regex(/^\d+:[0-9a-f]{8}$/));
+
 export const AiFile = z.strictObject({
   v: z.literal(1),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
@@ -46,7 +64,7 @@ export const AiFile = z.strictObject({
   made: z.iso.datetime(),
   by: z.string().min(1).max(200),
   /** Each chapter's block count and text hash ("count:fnv1a"), to tell the app parsed the same text. */
-  sections: z.array(z.string().regex(/^\d+:[0-9a-f]{8}$/)),
+  sections: Sections,
   revisit: z.strictObject({ people: z.array(AiEntry), places: z.array(AiEntry), terms: z.array(AiEntry) }),
   voices: z.strictObject({
     cast: z.array(z.strictObject({
@@ -62,19 +80,7 @@ export const AiFile = z.strictObject({
     spans: z.array(z.tuple([N, N, N, N, AiGender, N, z.union([z.literal(0), z.literal(1)])])),
   }),
   /** The book's soundtrack (shared/src/music.ts), once the marker has scored it. */
-  music: z.strictObject({
-    /** The tracks the book plays, by their YouTube id, and what each is for in the series: a theme, a mood. */
-    tracks: z.array(z.strictObject({
-      id: z.string().regex(TRACK_ID),
-      title: z.string().max(300),
-      /** The YouTube channel it came from, for credit. */
-      source: z.string().max(200),
-      seconds: N,
-      role: z.string().max(200),
-    })),
-    /** From each paragraph on: [section, block, track (an index) or -1 for silence]. A track plays once, and silence follows it until the next cue. */
-    cues: z.array(z.tuple([N, N, z.number().int().min(-1)])),
-  }).optional(),
+  music: AiMusic.optional(),
 });
 export type AiFile = z.infer<typeof AiFile>;
 
@@ -145,6 +151,59 @@ function musicProblems(music: NonNullable<AiFile['music']>, real: (s: number, b:
     if (track >= music.tracks.length) out.push(`music: the cue at ${where} plays a track it doesn’t have`);
     if (s < last[0] || (s === last[0] && b <= last[1])) out.push(`music: the cue at ${where} is out of order`);
     last = [s, b];
+  }
+  return out;
+}
+
+/* ---- Music scored somewhere else, uploaded from the admin page ---- */
+
+/** A track in a series' soundtrack, as the marker keeps it (ai/tools/music.ts). */
+const SoundtrackTrack = z.strictObject({
+  id: z.string().regex(TRACK_ID),
+  title: z.string().max(300),
+  source: z.string().max(200),
+  seconds: N,
+  album: z.string().max(200),
+  /** Its feel, and the scenes it fits. */
+  use: z.string().max(200),
+  /** From the series' own music, not an alternate. */
+  official: z.boolean(),
+  /** How it sounds, measured. */
+  sound: z.string().max(4000),
+});
+
+/**
+ * A book's music, scored somewhere else (a trial on a Mac), uploaded from the admin page and put
+ * into its file by the AI marker (ai/tools/marker.ts): the score, who made it, and the series'
+ * whole soundtrack, so the marker never has to gather it again. No book text: only the sections'
+ * prints, which have to match the file the server has.
+ */
+export const MusicImport = z.strictObject({
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  sections: Sections,
+  /** Who scored it, for the file's "by". */
+  by: z.string().min(1).max(200),
+  score: AiMusic,
+  soundtrack: z.strictObject({
+    name: z.string().min(1).max(300),
+    made: z.iso.datetime(),
+    summary: z.string().max(1000),
+    tracks: z.array(SoundtrackTrack).min(1),
+  }),
+});
+export type MusicImport = z.infer<typeof MusicImport>;
+
+/**
+ * What the schema can't say about an upload: its cues sit on real paragraphs, in order, and play
+ * tracks it has, and every track it plays is in its soundtrack. None when it's sound.
+ */
+export function musicImportProblems(m: MusicImport): string[] {
+  const blocks = m.sections.map((s) => Number(s.split(':')[0]));
+  const real = (s: number, b: number) => s < blocks.length && b < blocks[s];
+  const out = musicProblems(m.score, real);
+  const inSoundtrack = new Set(m.soundtrack.tracks.map((t) => t.id));
+  for (const t of m.score.tracks) {
+    if (!inSoundtrack.has(t.id)) out.push(`music: track ${t.id} isn’t in the soundtrack`);
   }
   return out;
 }

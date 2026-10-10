@@ -4,7 +4,8 @@
  * stays live. Book titles in the AI marker's section are the only thing on it that comes from
  * readers, and every value is set as text, never as markup. On the laptop it also lists the AI
  * accounts and connects new ones (routes/admin.ts), a minute apart or after each change, since
- * each look asks every provider for its limits.
+ * each look asks every provider for its limits. And it uploads a book's music scored somewhere
+ * else, for the AI marker to put in.
  */
 export const adminPage = (nonce: string) => `<!doctype html>
 <html lang="en">
@@ -66,6 +67,15 @@ export const adminPage = (nonce: string) => `<!doctype html>
   <p id="error" class="bad" hidden></p>
   <div id="out"></div>
   <div id="accounts"></div>
+  <section id="music" hidden>
+    <h2>Music scored somewhere else</h2>
+    <p class="dim">A book’s score and its series’ soundtrack, as one .json file. The AI marker downloads the tracks the score plays and puts the music into the book’s file, which shows under Working on.</p>
+    <div class="paste">
+      <input id="music-file" type="file" accept=".json,application/json" aria-label="The music file">
+      <button id="music-send">Upload</button>
+    </div>
+    <p id="music-said" class="dim"></p>
+  </section>
 </main>
 <script nonce="${nonce}">
 const KEY = 'breader.admin';
@@ -165,6 +175,7 @@ function marker(d) {
   const quiet = Math.round((Date.now() - new Date(d.at).getTime()) / 1000);
   if (quiet > 180) out.push(el('p', 'Not heard from in ' + dur(quiet) + ', so it may have stopped. What follows is from then.', 'bad'));
   if (d.limitedUntil) out.push(el('p', 'Every Antigravity account is out of Gemini until it fills again ' + until(d.limitedUntil) + ': research and soundtracks wait for it, and everything else carries on.', 'bad'));
+  if (d.musicWaitsForAccount) out.push(el('p', 'Background music is waiting for an Antigravity account: connect one under AI accounts. Uploaded music still goes in, and everything else carries on.', 'bad'));
 
   out.push(el('h3', 'Working on'));
   if (!d.working.length) out.push(el('p', 'Nothing right now.', 'dim'));
@@ -366,6 +377,30 @@ async function removeAccount(a) {
   await loadAccounts();
 }
 
+async function uploadMusic() {
+  const file = $('music-file').files[0];
+  if (!file) return;
+  const said = $('music-said');
+  said.className = 'dim';
+  said.textContent = 'Uploading…';
+  let music;
+  try {
+    music = JSON.parse(await file.text());
+  } catch {
+    said.className = 'bad';
+    said.textContent = 'That file isn’t JSON.';
+    return;
+  }
+  try {
+    const r = await call('POST', '/admin/music', music);
+    said.textContent = 'Uploaded: ' + r.cues + ' cues playing ' + r.tracks + ' tracks, from a soundtrack of ' + r.soundtrack + '. The AI marker takes it within a minute or two.';
+    $('music-file').value = '';
+  } catch (e) {
+    said.className = 'bad';
+    said.textContent = e.message;
+  }
+}
+
 async function load() {
   const token = sessionStorage.getItem(KEY);
   if (!token) { $('login').hidden = false; return; }
@@ -377,6 +412,7 @@ async function load() {
     $('dot').className = 'dot on';
     $('login').hidden = true;
     $('error').hidden = true;
+    $('music').hidden = false;
     // Not while a sign-in is under way: it would take the panel away mid-paste.
     if (!signIn && Date.now() - accountsAt > 60_000) void loadAccounts();
   } catch (e) {
@@ -386,6 +422,7 @@ async function load() {
   }
 }
 
+$('music-send').addEventListener('click', () => uploadMusic());
 $('login').addEventListener('submit', (e) => {
   e.preventDefault();
   sessionStorage.setItem(KEY, $('token').value.trim());

@@ -13,13 +13,15 @@ import { castByFile, castOf, fitBy, LADDER, mins, notesBy, notesLedger, PRIMARY 
 import { bookDir, isFetched, loadBook, marksFiles, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
 import { listBooks } from './library.ts';
 import { markBook, stageOf } from './mark.ts';
-import { GATHERING, musicBy, musicLedger, musicStage, noMusic, scoreBook, type Score } from './music.ts';
+import { GATHERING, musicBy, musicLedger, musicStage, noDownloads, noMusic, saveSoundtrack, scoreBook } from './music.ts';
 import { nvidiaKey } from './nim.ts';
 import { writeNotes } from './notes.ts';
 import { revisitOf } from './pack.ts';
-import { noHarness } from './proxy.ts';
-import { researchBook, researched } from './research.ts';
+import { noHarness, servesGemini } from './proxy.ts';
+import { researchBook, researched, seriesName } from './research.ts';
+import { dropUpload, fits, readUpload, uploads } from './uploads.ts';
 import { validate, type Notes } from './validate.ts';
+import { store } from './youtube.ts';
 
 /*
  * The marker: mark.ts, music.ts and notes.ts for every book whose AI switch is on, for good, with
@@ -41,7 +43,12 @@ import { validate, type Notes } from './validate.ts';
  *
  * A book being researched on the web, or gathering its series' soundtrack, isn't using NVIDIA, so
  * nothing waits behind it. That matters most while every Antigravity account is out of Gemini and
- * the harness waits for the first to fill again (harness.ts), which can be days.
+ * the harness waits for the first to fill again (harness.ts), which can be days. With no Antigravity
+ * account connected at all, no music starts: it waits for one, and the status page says so.
+ *
+ * Music scored somewhere else and uploaded from the admin page (uploads.ts) goes in whatever else
+ * is running, since it needs no model: the series' soundtrack is kept, the tracks the score plays
+ * are downloaded and stored, and the score goes into the book's file.
  *
  * A call that fails is asked again by the balancer, after a wait that doubles each time, with
  * jitter, for as long as it takes. A book that fails waits 2 minutes, then 4, 8 and so on up to an
@@ -110,8 +117,15 @@ export const musicFailures = new Map<string, Failed>();
 const ended = new Set<string>();
 /** Books being researched on the web right now, by key. */
 const researching = new Set<string>();
-/** What the marker can do here besides marks and notes, set when it starts: research needs the harness; music the harness, yt-dlp and ffmpeg. */
-export const can = { research: false, music: false };
+/**
+ * What the marker can do here besides marks and notes, set when it starts: research needs the
+ * harness; music the harness, yt-dlp and ffmpeg; uploaded music only yt-dlp and ffmpeg.
+ */
+export const can = { research: false, music: false, uploads: false };
+/** Whether an Antigravity account serves Gemini, looked at each round: music waits for one. */
+let accountHere = false;
+/** Uploaded music going in, by book key: how many of its tracks are stored. */
+const uploading = new Map<string, { done: number; of: number }>();
 /** The last look at the books and the server. */
 let seen: { books: QueueBook[]; server: Map<string, OnServer> } | null = null;
 
@@ -342,13 +356,13 @@ export function withNotes(row: AiFile, book: Book): AiFile {
   };
 }
 
-/** The server's file with this book's music in it. */
-export function withMusic(row: AiFile, book: { key: string }, score: Score): AiFile {
+/** The server's file with this book's music in it, scored by `who`. */
+export function withMusic(row: AiFile, music: NonNullable<AiFile['music']>, who: string): AiFile {
   return {
     ...row,
     made: new Date().toISOString(),
-    by: byWith(row.by, 'music', musicBy(book)),
-    music: { tracks: score.tracks, cues: score.cues },
+    by: byWith(row.by, 'music', who),
+    music: { tracks: music.tracks, cues: music.cues },
   };
 }
 
@@ -406,9 +420,39 @@ async function musicJob(b: QueueBook, lbs: Balancers) {
   await research(b, 'music');
   try {
     const score = await scoreBook(b, book, lbs.music);
-    await putBack(withMusic(row, book, score), row.made, 'music');
+    await putBack(withMusic(row, score, musicBy(book)), row.made, 'music');
   } finally {
     musicStage.delete(b.key);
+  }
+}
+
+/**
+ * Music uploaded from the admin page, into a book's file: the series' soundtrack kept under the
+ * name this book's series goes by here, so it's never gathered again, every track the score plays
+ * downloaded and stored, then the score into the file, which has to read as the one it was scored
+ * on. The upload is let go once it's in.
+ */
+async function uploadJob(b: QueueBook) {
+  const progress = { done: 0, of: 0 };
+  uploading.set(b.key, progress);
+  try {
+    musicStage.set(b.key, 'Reading the uploaded music');
+    const upload = await readUpload(b.sha256);
+    const row = await serverFile(b);
+    if (!fits(upload, row)) throw new Error('it reads differently here than where its uploaded music was scored, so the music would land on the wrong paragraphs');
+    saveSoundtrack({ ...upload.soundtrack, name: seriesName(b) });
+    progress.of = upload.score.tracks.length;
+    for (const t of upload.score.tracks) {
+      musicStage.set(b.key, `Keeping its tracks in the file store, ${progress.done + 1} of ${progress.of}`);
+      await store(t.id);
+      progress.done++;
+    }
+    musicStage.set(b.key, 'Saving');
+    await putBack(withMusic(row, upload.score, upload.by), row.made, 'music');
+    await dropUpload(b.sha256);
+  } finally {
+    musicStage.delete(b.key);
+    uploading.delete(b.key);
   }
 }
 
@@ -477,8 +521,18 @@ function musicProgress(key: string, parts: number[]): Progress {
   return { step, parts: done, of: parts.length, percent };
 }
 
+/** How far uploaded music has got: its tracks stored, of the ones it plays, and then saving it counts as one more. */
+function uploadProgress(key: string): Progress {
+  const u = uploading.get(key)!;
+  let percent = 0;
+  if (u.of) percent = Math.floor((100 * u.done) / (u.of + 1));
+  const step = musicStage.get(key) ?? 'Reading the uploaded music';
+  return { step, parts: 0, of: 0, percent };
+}
+
 /** How far a book's marks, music or notes have got, from what's on disk. `parts` is null until it's fetched. */
 export function progressOf(key: string, phase: Phase, parts: number[] | null): Progress {
+  if (uploading.has(key)) return uploadProgress(key);
   if (!parts) return { step: 'Fetching the book', parts: 0, of: 0, percent: 0 };
   if (researching.has(key)) return { step: 'Researching it on the web', parts: 0, of: parts.length, percent: 0 };
   if (phase === 'music') return musicProgress(key, parts);
@@ -552,6 +606,8 @@ export interface Live {
   queue: Waiting[];
   /** While every Antigravity account is out of Gemini, until when: research and soundtracks wait for it. */
   limitedUntil?: string;
+  /** While no Antigravity account serves Gemini at all: music waits for one to be connected. */
+  musicWaitsForAccount?: boolean;
 }
 
 function liveNow(): Live {
@@ -572,6 +628,7 @@ function liveNow(): Live {
   };
   const limited = waitingForLimits();
   if (limited) live.limitedUntil = new Date(limited).toISOString();
+  if (can.music && !accountHere) live.musicWaitsForAccount = true;
   return live;
 }
 
@@ -671,9 +728,26 @@ async function plan() {
   else console.log(`\n${first.title} reads the same here as when it was marked (${here.length} chapters).`);
 }
 
+/** Starts putting in the music uploaded from the admin page, for books on the list here. Others wait. */
+async function startUploads(books: QueueBook[], pool: pg.Pool) {
+  let waiting: string[];
+  try {
+    waiting = await uploads();
+  } catch (e) {
+    console.log(`${clock()} Couldn’t look for uploaded music: ${message(e)}`);
+    return;
+  }
+  for (const sha256 of waiting) {
+    const b = books.find((o) => o.sha256 === sha256);
+    if (!b || running.has(sha256) || resting(b, 'music')) continue;
+    start(b, 'music', () => uploadJob(b), pool);
+  }
+}
+
 /** One look at the books, starting whatever can start. */
 async function round(lbs: Balancers, pool: pg.Pool) {
   const { books, server } = await look(true);
+  if (can.music) accountHere = await servesGemini();
   seen = { books, server };
   ended.clear();
   const byPhase = (p: Phase) => [...running.values()].filter((j) => j.phase === p).length;
@@ -682,10 +756,14 @@ async function round(lbs: Balancers, pool: pg.Pool) {
   for (const b of marks.slice(0, Math.max(0, MARKING - byPhase('marks')))) {
     start(b, 'marks', () => markJob(b, lbs), pool);
   }
-  // Music only while no book is being marked, past its research.
+  // Uploaded music needs no model, so it goes in while books are being marked too.
+  if (can.uploads) await startUploads(books, pool);
+  // Music only while no book is being marked, past its research, and an Antigravity account is connected.
   if (marking()) return;
-  for (const b of toMusic(books, server).slice(0, Math.max(0, MUSICING - byPhase('music')))) {
-    start(b, 'music', () => musicJob(b, lbs), pool);
+  if (accountHere) {
+    for (const b of toMusic(books, server).slice(0, Math.max(0, MUSICING - byPhase('music')))) {
+      start(b, 'music', () => musicJob(b, lbs), pool);
+    }
   }
   // Notes only while no book's music is being scored, past its research and soundtrack.
   if ([...running.values()].some(scoring)) return;
@@ -694,10 +772,11 @@ async function round(lbs: Balancers, pool: pg.Pool) {
   }
 }
 
-/** Whether a job is a book's music using NVIDIA: not being researched, and not gathering its series' soundtrack. */
+/** Whether a job is a book's music using NVIDIA: not being researched, not gathering its series' soundtrack, and not uploaded. */
 function scoring(j: Job): boolean {
   if (j.phase !== 'music') return false;
   if (researching.has(j.b.key)) return false;
+  if (uploading.has(j.b.key)) return false;
   return musicStage.get(j.b.key) !== GATHERING;
 }
 
@@ -732,10 +811,13 @@ export async function runMarker(dry: boolean) {
   const why = noKey();
   const noResearch = noHarness();
   const noScore = noMusic();
+  const noTracks = noDownloads();
   can.research = noResearch === null;
   can.music = noScore === null;
+  can.uploads = noTracks === null;
   if (noResearch) console.log(`${clock()} No research from the web: ${noResearch}.`);
   if (noScore) console.log(`${clock()} No background music: ${noScore}.`);
+  if (noTracks) console.log(`${clock()} No uploaded music either: ${noTracks}.`);
   if (dry) {
     if (why) console.log(`${why}\n`);
     else console.log(`The NVIDIA key comes from ${nvidiaKey().from}.\n`);

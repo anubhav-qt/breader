@@ -149,6 +149,21 @@ export async function geminiModels(p: Proxy): Promise<Array<Model<'google-genera
   return inOrder([...new Set(ids)]).map((id) => modelFor(p, id));
 }
 
+/**
+ * Whether Antigravity serves any Gemini model through the proxy right now: not while no account is
+ * connected, nor while the proxy doesn't answer.
+ */
+export async function servesGemini(): Promise<boolean> {
+  const p = proxy();
+  if (!p) return false;
+  try {
+    await geminiModels(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** A call to the proxy's management API, or null when it can't be made or doesn't answer. */
 async function manage<T>(p: Proxy, path: string, body?: unknown): Promise<T | null> {
   if (!p.managementKey) return null;

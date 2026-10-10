@@ -10,15 +10,16 @@ import type { Score } from '../music.ts';
 
 /*
  * The marker's music: which books get it and in what order, where its credit goes in the file's
- * "by", and that a file with music in it still passes the import's check. Made-up books, no
- * network.
+ * "by", that a file with music in it still passes the import's check, and music uploaded from the
+ * admin page. Made-up books, no network.
  */
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { checkFile } = await import('../import.ts');
 const { writeJson } = await import('../lib.ts');
 const { byWith, can, musicFailures, needsMusic, toMusic, withMusic } = await import('../marker.ts');
-const { musicLedgerFile } = await import('../music.ts');
+const { musicBy, musicLedgerFile } = await import('../music.ts');
+const { fits, uploadProblems } = await import('../uploads.ts');
 
 let made = 0;
 function book(title: string, more: Partial<QueueBook> = {}): QueueBook {
@@ -125,7 +126,7 @@ const SCORE: Score = {
 test('a file with music in it passes the import’s check, with the music credited', () => {
   const b = book('Two Chapters');
   writeJson(musicLedgerFile(b), { plan: { model: 'kimi-k3', rounds: 1, secs: 1, at: '' }, parts: {} });
-  const f = withMusic(serverFile(b.sha256), b, SCORE);
+  const f = withMusic(serverFile(b.sha256), SCORE, musicBy(b));
   const c = checkFile(`${b.sha256}.json`, f);
   assert.deepEqual(c.problems, []);
   assert.deepEqual(c.data?.music, { tracks: SCORE.tracks, cues: SCORE.cues });
@@ -136,8 +137,60 @@ test('a file with music in it passes the import’s check, with the music credit
 test('music cued past the book, or out of order, fails the check', () => {
   const b = book('Out Of Order');
   const bad: Score = { ...SCORE, cues: [[1, 2, 1], [0, 1, 0], [5, 0, 0]] };
-  const c = checkFile(`${b.sha256}.json`, withMusic(serverFile(b.sha256), b, bad));
+  const c = checkFile(`${b.sha256}.json`, withMusic(serverFile(b.sha256), bad, musicBy(b)));
   assert.equal(c.problems.length, 2);
   assert.match(c.problems[0], /music: the cue at 0:1 is out of order/);
   assert.match(c.problems[1], /music: a cue at 5:0, which isn.t a paragraph/);
+});
+
+/** Music for serverFile's book, as the admin page would upload it. */
+function uploaded(sha256: string) {
+  return {
+    sha256,
+    sections: ['5:00000000', '4:00000000'],
+    by: 'Gemini and Kimi K3 (reasoning high, NVIDIA)',
+    score: { tracks: SCORE.tracks, cues: SCORE.cues },
+    soundtrack: {
+      name: 'Two Chapters',
+      made: '2026-01-01T00:00:00.000Z',
+      summary: 'Alternates: there is no adaptation.',
+      tracks: SCORE.tracks.map((t) => ({ id: t.id, title: t.title, source: t.source, seconds: t.seconds, album: 'An album', use: t.role, official: false, sound: 'Quiet.' })),
+    },
+  };
+}
+
+test('uploaded music that’s sound has no problems, fits the book it was scored on, and goes in with its own credit', () => {
+  const b = book('Uploaded');
+  const { upload, problems } = uploadProblems(uploaded(b.sha256));
+  assert.deepEqual(problems, []);
+  const row = serverFile(b.sha256);
+  assert.equal(fits(upload!, row), true);
+  const c = checkFile(`${b.sha256}.json`, withMusic(row, upload!.score, upload!.by));
+  assert.deepEqual(c.problems, []);
+  assert.equal(c.data?.by, 'Kimi K3 (reasoning high, NVIDIA) parts 1-2; music by Gemini and Kimi K3 (reasoning high, NVIDIA); research by Antigravity');
+  assert.deepEqual(c.data?.music, { tracks: SCORE.tracks, cues: SCORE.cues });
+});
+
+test('uploaded music doesn’t fit a book that reads differently, or another book', () => {
+  const b = book('Read Again');
+  const { upload } = uploadProblems(uploaded(b.sha256));
+  const row = serverFile(b.sha256);
+  assert.equal(fits(upload!, { ...row, sections: ['5:00000000', '4:11111111'] }), false);
+  assert.equal(fits(upload!, { ...row, sections: ['5:00000000'] }), false);
+  assert.equal(fits(upload!, serverFile('f'.repeat(64))), false);
+});
+
+test('uploaded music with cues past the book, a track missing from its soundtrack, or the wrong shape has problems', () => {
+  const b = book('Broken Upload');
+  const past = uploaded(b.sha256);
+  past.score = { ...past.score, cues: [[0, 1, 0], [7, 0, 1]] };
+  assert.match(uploadProblems(past).problems.join('\n'), /a cue at 7:0, which isn.t a paragraph/);
+
+  const missing = uploaded(b.sha256);
+  missing.soundtrack.tracks = missing.soundtrack.tracks.slice(1);
+  assert.match(uploadProblems(missing).problems.join('\n'), /track aaaaaaaaaaa isn.t in the soundtrack/);
+
+  const shape = uploadProblems({ ...uploaded(b.sha256), text: 'a whole chapter' });
+  assert.equal(shape.upload, undefined);
+  assert.ok(shape.problems.length > 0, 'nothing besides the score, its credit, the soundtrack and the prints');
 });
