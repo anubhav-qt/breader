@@ -56,22 +56,28 @@ interface Props {
   onPick?: (books: ShelfItem[]) => void;
 }
 
-/** The cards rise in and their colour grows only the first time a library appears after the page loads. */
-let entered = false;
+/**
+ * The cards rise in and their colour grows only the first time a library of books, and of manga,
+ * appears after the page loads. The libraries stay once they've been seen (App.tsx), so switching
+ * back to one shows it at once.
+ */
+const entered = { books: false, manga: false };
 
 /**
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
 export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty, picked, onPick }: Props) {
-  const first = useRef(!entered);
+  let shelf: 'books' | 'manga' = 'books';
+  if (manga) shelf = 'manga';
+  const first = useRef(!entered[shelf]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const [showing, setShowing] = useState<string | null>(null);
   useEffect(() => {
-    const t = window.setTimeout(() => { first.current = false; entered = true; }, 60);
+    const t = window.setTimeout(() => { first.current = false; entered[shelf] = true; }, 60);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [shelf]);
   const picking = !!picked;
   useEffect(() => {
     if (!hidden && !picking) return;
