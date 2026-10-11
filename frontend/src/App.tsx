@@ -1083,7 +1083,6 @@ export default function App() {
             tab={tab}
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
             browse={mdOn !== false}
-            shelfName={libraryName(sharing, showing)}
             labels={labels}
             onTab={setTab}
             onAdd={() => setAdding({ mode: 'file' })}
