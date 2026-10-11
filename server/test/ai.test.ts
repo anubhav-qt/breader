@@ -44,6 +44,7 @@ describe('ai notes', () => {
     expect((await b.get(`/v1/books/${a.id}/ai`)).body.made).toBeNull();
     expect((await b.get(`/v1/books/${a.id}/revisit`)).status).toBe(404);
     expect((await b.get(`/v1/books/${a.id}/voices`)).status).toBe(404);
+    expect((await b.get(`/v1/books/${a.id}/cast`)).status).toBe(404);
 
     await b.post('/v1/sync/push', push('r', { type: 'edit.put', bookId: a.id, edit: { ai: true } }));
     const status = await b.get(`/v1/books/${a.id}/ai`);
@@ -78,6 +79,20 @@ describe('ai notes', () => {
     expect(res.body.spans).toEqual([[0, 2, 0, 10, 'F'], [1, 9, 0, 4, 'M']]);
     expect(res.body.narration[0]).toEqual([0, 0, 'F']);
     expect(JSON.stringify(res.body)).not.toMatch(/Anna|Tomas|stranger/);
+  });
+
+  it('hands over the cast as far as the reader has read', async () => {
+    const { b, a, sha256 } = await reader();
+    await notes(sha256);
+    const first = await b.get(`/v1/books/${a.id}/cast`);
+    expect(first.status).toBe(200);
+    expect(first.headers.get('cache-control')).toBe('private, no-store');
+    expect(first.body).toEqual({ made: '2026-09-29T08:00:00.000Z', upTo: [0, 0], people: [{ key: 0, name: 'the girl', g: 'F', lines: 0, voice: { piper: 'kristin', kokoro: 'af_heart' } }] });
+
+    await readTo(b, a.id, mark(1, 9, 0.6));
+    const later = await b.get(`/v1/books/${a.id}/cast`);
+    expect(later.body.people.map((p: { name: string }) => p.name)).toEqual(['the stranger', 'Anna']);
+    expect(JSON.stringify(later.body)).not.toContain('Tomas');
   });
 
   it('hands over the music as cues and numbered tracks, each track through a signed link', async () => {

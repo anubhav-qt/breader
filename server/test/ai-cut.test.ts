@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AiFile, aiProblems, printOf } from '@breader/shared';
-import { cutAt, revisitFor, voicesFor } from '../src/lib/ai.ts';
+import { castFor, cutAt, revisitFor, voicesFor } from '../src/lib/ai.ts';
 import { aiFile } from './ai-fixture.ts';
 
 const f = aiFile();
@@ -80,6 +80,50 @@ describe('voice marks', () => {
     expect(v.sections).toEqual(f.sections);
     const sent = JSON.stringify(v);
     for (const name of ['Anna', 'Tomas', 'stranger', 'anna']) expect(sent).not.toContain(name);
+  });
+});
+
+describe('the cast', () => {
+  const castAt = (p: [number, number] | null, file = f) => castFor({ made: file.made, voices: file.voices, people: file.revisit.people }, p);
+  const cast = (s: number, b: number) => castAt([s, b]).people.map((c) => [c.name, c.g, c.lines]);
+
+  it('has only who the reader has heard from, by the names they know them by', () => {
+    // Through her eyes from the first paragraph, before the book names her.
+    expect(castAt([0, 0]).people).toEqual([{ key: 0, name: 'the girl', g: 'F', lines: 0, voice: { piper: 'kristin', kokoro: 'af_heart' } }]);
+    expect(cast(0, 3)).toEqual([['the girl', 'F', 1], ['the stranger', 'N', 1]]);
+    expect(cast(1, 7)).toEqual([['Anna', 'F', 1], ['the stranger', 'N', 1]]);
+  });
+
+  it('counts lines so far, the most first, and sounds as the reader believes', () => {
+    expect(cast(1, 9)).toEqual([['the stranger', 'M', 2], ['Anna', 'F', 1]]);
+    expect(castAt(null).people.map((c) => c.name)).toEqual(['the stranger', 'Anna', 'Tomas']);
+    expect(castAt(null).upTo).toBeNull();
+  });
+
+  it('never lets a name, a line or a voice from further on through', () => {
+    const early = JSON.stringify(castAt([0, 3]));
+    for (const later of ['Anna', 'Tomas', 'alan', 'bm_george']) expect(early).not.toContain(later);
+  });
+
+  it('leaves out the generic speakers', () => {
+    const crowd = aiFile();
+    crowd.voices.cast[1] = { id: 'crowd', name: 'Several people at once', g: 'N' };
+    expect(castAt([1, 9], crowd).people.map((c) => c.name)).toEqual(['Anna']);
+  });
+
+  it('has everyone in a book marked before voices were picked, without voices', () => {
+    const old = aiFile();
+    for (const c of old.voices.cast) delete c.voice;
+    expect(castAt([1, 9], old).people).toEqual([
+      { key: 1, name: 'the stranger', g: 'M', lines: 2, voice: null },
+      { key: 0, name: 'Anna', g: 'F', lines: 1, voice: null },
+    ]);
+  });
+
+  it('goes by the marker’s name for someone with no Revisit entry', () => {
+    const bare = aiFile();
+    bare.revisit.people = [];
+    expect(castAt([0, 3], bare).people.map((c) => c.name)).toEqual(['Anna', 'the stranger']);
   });
 });
 

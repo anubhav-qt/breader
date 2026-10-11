@@ -1,5 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import type { AiCastResponse, AiGender } from '@breader/shared/ai';
 import { readLocal, writeLocal } from '../../../lib/store';
+import { keptCast, loadCast } from '../ai';
 import { BUILT_IN, type Engine, type SamplePart, type VoiceInfo } from './catalog';
 import { playSample } from './speaker';
 
@@ -10,60 +12,80 @@ import { playSample } from './speaker';
  * voice of each model (ai/tools/casting.ts) and marks each line with who says it, so a book can
  * hand every name its own voice.
  *
- * Design round: the cast is a pretend one, the same for every book, until the server says who's in
- * each, and its voices are handed out here.
+ * The server says who's in the book as far as the reader has read (server/src/lib/ai.ts castFor):
+ * nobody they haven't heard from yet, by the names they know them by.
  */
 
-export type Kind = 'M' | 'F' | 'boy' | 'girl' | 'oldM' | 'oldF';
+/** A woman, a man, or neither (anyone's voice will do). */
+export type Kind = AiGender;
 
-export const KINDS: Kind[] = ['F', 'M', 'girl', 'boy', 'oldF', 'oldM'];
-export const KIND_NAME: Record<Kind, string> = { M: 'Man', F: 'Woman', boy: 'Boy', girl: 'Girl', oldM: 'Old man', oldF: 'Old woman' };
-export const KIND_PLURAL: Record<Kind, string> = { M: 'Men', F: 'Women', boy: 'Boys', girl: 'Girls', oldM: 'Old men', oldF: 'Old women' };
-
-/** Whose voices each kind reads with. */
-const SIDE: Record<Kind, 'F' | 'M'> = { F: 'F', girl: 'F', oldF: 'F', M: 'M', boy: 'M', oldM: 'M' };
+export const KINDS: Kind[] = ['F', 'M', 'N'];
+export const KIND_NAME: Record<Kind, string> = { F: 'Woman', M: 'Man', N: 'Someone' };
+export const KIND_PLURAL: Record<Kind, string> = { F: 'Women', M: 'Men', N: 'Others' };
 
 /** A model's voices for people of a kind. */
 export function voicesOf(kind: Kind, engine: Engine): VoiceInfo[] {
   let all = BUILT_IN.normal;
   if (engine === 'kokoro') all = BUILT_IN.immersive;
-  return all.filter((v) => v.gender === SIDE[kind]);
+  if (kind === 'N') return all;
+  return all.filter((v) => v.gender === kind);
 }
 
 export interface Character {
   id: string;
   name: string;
   kind: Kind;
-  role: string;
-  /** How many lines they have, which decides who gets the first pick of voices. */
+  /** How many lines they've said so far, which decides who gets the first pick of voices. */
   lines: number;
+  /** The voice the AI picked for them in each model, by its id there; null until it has. */
+  voice: Record<Engine, string> | null;
 }
 
-/** A pretend cast, for every book in this round. */
-export const SAMPLE_CAST: Character[] = [
-  { id: 'mira', name: 'Mira', kind: 'F', role: 'Leads the story', lines: 412 },
-  { id: 'tobin', name: 'Tobin', kind: 'M', role: 'Her partner', lines: 388 },
-  { id: 'sera', name: 'Sera', kind: 'F', role: 'A rival', lines: 140 },
-  { id: 'garret', name: 'Garret', kind: 'M', role: 'A teacher', lines: 122 },
-  { id: 'pip', name: 'Pip', kind: 'boy', role: 'A street kid', lines: 48 },
-  { id: 'hesk', name: 'Old Hesk', kind: 'oldM', role: 'Keeps the inn', lines: 64 },
-  { id: 'rourke', name: 'Captain Rourke', kind: 'M', role: 'The guard', lines: 40 },
-  { id: 'lulu', name: 'Lulu', kind: 'girl', role: 'Pip’s sister', lines: 27 },
-  { id: 'wyn', name: 'Nan Wyn', kind: 'oldF', role: 'A healer', lines: 31 },
-  { id: 'ines', name: 'Ines', kind: 'F', role: 'A merchant', lines: 22 },
-];
+function charactersOf(r: AiCastResponse | null): Character[] | null {
+  if (!r) return null;
+  return r.people.map((p) => ({ id: String(p.key), name: p.name, kind: p.g, lines: p.lines, voice: p.voice }));
+}
+
+export interface BookCast {
+  /** Who's in the book so far, the most to say first, or null until that's known. */
+  people: Character[] | null;
+  /** Still asking the server. */
+  asking: boolean;
+}
+
+/**
+ * Who's in the book so far: what was kept on this device at once, then the server's answer, asked
+ * again each time it's shown so it keeps up with the reader.
+ */
+export function useBookCast(book: string): BookCast {
+  const [people, setPeople] = useState<Character[] | null>(() => charactersOf(keptCast(book)));
+  const [asking, setAsking] = useState(true);
+  useEffect(() => {
+    let live = true;
+    setAsking(true);
+    void loadCast(book).then((r) => {
+      if (!live) return;
+      if (r) setPeople(charactersOf(r));
+      setAsking(false);
+    });
+    return () => { live = false; };
+  }, [book]);
+  return { people, asking };
+}
 
 interface CastState {
   /** Character voices picked over 1 voice or 2. */
   on: boolean;
   /** Each book's voices picked by hand, by character: the voice's key. */
   picks: Record<string, Record<string, string>>;
-  /** Each book's shuffle, for the voices handed out by themselves. */
+  /** How many times each book's voices were reshuffled; none keeps the AI's picks. */
   seeds: Record<string, number>;
 }
 
-const KEY = 'breader.cast.v1';
-let state: CastState = { on: false, picks: {}, seeds: {}, ...readLocal<Partial<CastState>>(KEY, {}) };
+const KEY = 'breader.cast.v2';
+// v1 kept picks and shuffles for the design round's pretend cast; only whether it was on carries over.
+const before = readLocal<Partial<CastState>>('breader.cast.v1', {});
+let state: CastState = { on: before.on ?? false, picks: {}, seeds: {}, ...readLocal<Partial<CastState>>(KEY, {}) };
 const subs = new Set<() => void>();
 
 function set(next: CastState) {
@@ -89,7 +111,7 @@ export function pickVoice(book: string, character: string, voice: string) {
   set({ ...state, picks: { ...state.picks, [book]: mine } });
 }
 
-/** Everyone's voices handed out again, a different way, the ones picked by hand too. */
+/** Everyone's voices handed out again, a different way, the AI's picks and the ones picked by hand too. */
 export function reshuffle(book: string) {
   const seed = (state.seeds[book] ?? 0) + 1;
   const picks = { ...state.picks };
@@ -105,28 +127,36 @@ export interface Cast {
 }
 
 /**
- * Who reads whom in a book, in a model: picked by hand, or handed out by line count, so the people
- * with most to say get the first voices. Two share a voice only once the women's or the men's run out.
+ * Who reads whom in a book, in a model: picked by hand, or the AI's pick, or, once reshuffled,
+ * handed out by line count, so the people with most to say get the first voices. Two share a voice
+ * only once the women's or the men's run out.
  */
-export function castOf(book: string, engine: Engine, s: CastState = state): Cast[] {
+export function castOf(book: string, people: Character[], engine: Engine, s: CastState = state): Cast[] {
   const seed = s.seeds[book] ?? 0;
   const picks = s.picks[book] ?? {};
-  const byLines = [...SAMPLE_CAST].sort((a, b) => b.lines - a.lines);
-  const handed = { F: 0, M: 0 };
-  const out = new Map<string, Cast>();
-  for (const c of byLines) {
+  const handed: Record<Kind, number> = { F: 0, M: 0, N: 0 };
+  const out: Cast[] = [];
+  for (const c of people) {
     const fit = voicesOf(c.kind, engine);
     const own = fit.find((v) => v.key === picks[c.id]);
     if (own) {
-      out.set(c.id, { c, v: own, picked: true });
+      out.push({ c, v: own, picked: true });
       continue;
     }
-    const side = SIDE[c.kind];
-    const at = (handed[side] + seed) % fit.length;
-    handed[side] += 1;
-    out.set(c.id, { c, v: fit[at], picked: false });
+    let ai: VoiceInfo | undefined;
+    if (c.voice) {
+      const key = `${engine}:${c.voice[engine]}`;
+      ai = fit.find((v) => v.key === key);
+    }
+    if (seed === 0 && ai) {
+      out.push({ c, v: ai, picked: false });
+      continue;
+    }
+    const at = (handed[c.kind] + seed) % fit.length;
+    handed[c.kind] += 1;
+    out.push({ c, v: fit[at], picked: false });
   }
-  return SAMPLE_CAST.map((c) => out.get(c.id)!);
+  return out;
 }
 
 /** A voice's sample, one part of it. */
@@ -137,18 +167,18 @@ export function hearVoice(voice: VoiceInfo, part: SamplePart = 'greeting') {
 
 /**
  * Who's speaking, pretended: the cast taking turns, a few seconds each, while the voice reads. A
- * real one comes from the marks, line by line.
+ * real one comes from the marks, line by line. `people`: the most to say first.
  */
-export function useSpeaking(playing: boolean): Character {
+export function useSpeaking(people: Character[], playing: boolean): Character | null {
   const [turn, setTurn] = useState(0);
   useEffect(() => {
     if (!playing) return;
     const t = window.setInterval(() => setTurn((n) => n + 1), 3500);
     return () => window.clearInterval(t);
   }, [playing]);
+  if (!people.length) return null;
   // Most turns go to the people with most to say.
   const order = [0, 1, 0, 2, 1, 4, 0, 3, 1, 5, 7, 0, 6, 1, 8, 9];
-  const i = order[turn % order.length] % SAMPLE_CAST.length;
-  const byLines = [...SAMPLE_CAST].sort((a, b) => b.lines - a.lines);
-  return byLines[i];
+  const i = order[turn % order.length] % people.length;
+  return people[i];
 }

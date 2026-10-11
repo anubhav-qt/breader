@@ -1,10 +1,10 @@
-import { AI_KINDS, type AiAt, type AiEntry, type AiFile, type AiGender, type AiMusicResponse, type AiVoicesResponse, type RevisitEntry, type RevisitResponse } from '@breader/shared';
+import { AI_KINDS, GENERIC_SPEAKERS, type AiAt, type AiCastMember, type AiCastResponse, type AiEntry, type AiFile, type AiGender, type AiMusicResponse, type AiVoicesResponse, type RevisitEntry, type RevisitResponse } from '@breader/shared';
 
 /*
  * The spoiler line. An AI read the whole book (shared/src/ai.ts); a reader has read up to their
  * mark. These cut the notes there, so nothing past it ever leaves the server: who's come in by
- * then, what the book calls them by then, what's known and what's happened by then. Pure, so the
- * tests can check every edge without a database.
+ * then, what the book calls them by then, what's known and what's happened by then, and who's
+ * spoken by then. Pure, so the tests can check every edge without a database.
  */
 
 /** Paragraph a is at or before paragraph b. */
@@ -125,4 +125,53 @@ export function voicesFor(f: Pick<AiFile, 'made' | 'sections' | 'voices'>): AiVo
   const tidy = narration.filter((n, i) => i === 0 || n[2] !== narration[i - 1][2]);
   const spans = v.spans.flatMap(([s, b, start, end, g]): AiVoicesResponse['spans'] => (g === 'N' ? [] : [[s, b, start, end, g]]));
   return { made: f.made, sections: f.sections, narration: tidy, spans };
+}
+
+/**
+ * Who reads whom, for a reader at p: everyone but the generic speakers who has said a line by
+ * then, or whose voice the narration has taken, the most to say first. It needs only the marks,
+ * so a book marked before the marker picked voices has its cast too, without them. Each goes by the name the
+ * book has given them by then, from their Revisit entry where they have one (the first name it
+ * gives them, should they speak before it), and sounds as the reader believes they do. Nobody
+ * further on, and no line from further on counted.
+ */
+export function castFor(f: { made: string; voices: Voices; people: AiEntry[] }, p: AiAt | null): AiCastResponse {
+  const v = f.voices;
+  const said = new Map<number, number>();
+  const met = new Map<number, AiAt>();
+  const meet = (who: number, where: AiAt) => {
+    const was = met.get(who);
+    if (!was || before(where, was) < 0) met.set(who, where);
+  };
+  for (const [s, b, , , , who] of v.spans) {
+    if (p && !le([s, b], p)) continue;
+    said.set(who, (said.get(who) ?? 0) + 1);
+    meet(who, [s, b]);
+  }
+  for (const [s, b, who, pov] of v.narration) {
+    if (p && !le([s, b], p)) continue;
+    if (who >= 0) meet(who, [s, b]);
+    if (pov >= 0) meet(pov, [s, b]);
+  }
+
+  const notes = new Map(f.people.map((e) => [e.id, e]));
+  const people: AiCastMember[] = [];
+  for (const key of met.keys()) {
+    const c = v.cast[key];
+    // A crowd, someone unnamed: read in her voice or his.
+    if (!c || GENERIC_SPEAKERS.includes(c.id)) continue;
+    let name = c.name;
+    const entry = notes.get(c.id);
+    if (entry) {
+      // Before the notes name them, the name they first give them.
+      const named = latest(entry.names, p) ?? upTo(entry.names, null)[0];
+      name = named[2];
+    }
+    let g = c.g;
+    const change = latest(c.changes ?? [], p);
+    if (change) g = change[2];
+    people.push({ key, name, g, lines: said.get(key) ?? 0, voice: c.voice ?? null });
+  }
+  people.sort((a, b) => b.lines - a.lines || before(met.get(a.key)!, met.get(b.key)!));
+  return { made: f.made, upTo: p, people };
 }

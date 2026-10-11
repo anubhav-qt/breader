@@ -3,7 +3,8 @@ import type { AiFile } from '@breader/shared';
 /**
  * A small book's notes, as ai/tools/pack.ts would write them: three chapters of ten paragraphs.
  * A girl who gets her name in chapter 2, a stranger who turns out to be her brother at 1:8, a
- * woman who only comes in at the end, and a narration that changes hands.
+ * woman who only comes in at the end, and a narration that changes hands. The marker picked each
+ * speaker's voices.
  */
 export function aiFile(sha256 = 'a'.repeat(64)): AiFile {
   return {
@@ -44,9 +45,9 @@ export function aiFile(sha256 = 'a'.repeat(64)): AiFile {
     },
     voices: {
       cast: [
-        { id: 'anna', name: 'Anna', g: 'F', changes: [[2, 7, 'F']] },
-        { id: 'stranger', name: 'the stranger', g: 'N', changes: [[1, 8, 'M']] },
-        { id: 'tomas', name: 'Tomas', g: 'M' },
+        { id: 'anna', name: 'Anna', g: 'F', changes: [[2, 7, 'F']], voice: { piper: 'kristin', kokoro: 'af_heart' } },
+        { id: 'stranger', name: 'the stranger', g: 'N', changes: [[1, 8, 'M']], voice: { piper: 'norman', kokoro: 'am_michael' } },
+        { id: 'tomas', name: 'Tomas', g: 'M', voice: { piper: 'alan', kokoro: 'bm_george' } },
       ],
       narration: [[0, 0, -1, 0], [1, 0, -1, 1], [2, 0, -1, -1], [2, 5, 2, 2]],
       spans: [[0, 2, 0, 10, 'F', 0, 0], [0, 3, 5, 9, 'N', 1, 0], [1, 9, 0, 4, 'M', 1, 1]],

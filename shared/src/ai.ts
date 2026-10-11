@@ -90,6 +90,9 @@ export const AiFile = z.strictObject({
 });
 export type AiFile = z.infer<typeof AiFile>;
 
+/** The cast entries every book starts with for lines by nobody in particular (ai/tools/fetch.ts GENERIC): they never get a voice of their own. */
+export const GENERIC_SPEAKERS = ['unknown', 'unknown-man', 'unknown-woman', 'crowd', 'author'];
+
 /** Dashes that don't belong in Revisit notes: em, en, and a hyphen standing in for one. */
 const DASHES = /[\u2014\u2013]| - /;
 
@@ -270,6 +273,31 @@ export interface AiVoicesResponse {
   narration: Array<[number, number, 'F' | 'M' | null]>;
   /** Every line spoken by a woman or a man: [section, block, start, end, 'F' | 'M']. */
   spans: Array<[number, number, number, number, 'F' | 'M']>;
+}
+
+/** Someone in a book with a voice of their own, as far as the reader has read. */
+export interface AiCastMember {
+  /** Tells them apart; says nothing about them. */
+  key: number;
+  /** What the book calls them by now. */
+  name: string;
+  /** How they sound by now: a woman, a man, or neither. */
+  g: AiGender;
+  /** How many lines they've said by now. */
+  lines: number;
+  /**
+   * Their voice in each model, by its id there (shared/src/voices.ts), picked by the AI, or null
+   * in a book marked before it picked voices, until the marker gives them some.
+   */
+  voice: { piper: string; kokoro: string } | null;
+}
+
+/** Who reads whom: everyone the reader has heard from by their mark, the most to say first. */
+export interface AiCastResponse {
+  made: string;
+  /** The paragraph it goes up to, or null when the reader has read the book through. */
+  upTo: AiAt | null;
+  people: AiCastMember[];
 }
 
 /**

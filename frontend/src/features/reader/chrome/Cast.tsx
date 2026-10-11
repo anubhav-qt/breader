@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../../lib/springs';
 import type { CastDesign } from '../../design/round';
 import type { Engine, SamplePart, VoiceInfo } from '../voice/catalog';
-import { castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, useCast, useSpeaking, voicesOf, type Cast, type Character } from '../voice/cast';
+import { castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, useBookCast, useCast, useSpeaking, voicesOf, type Cast, type Character } from '../voice/cast';
 import { stopSample } from '../voice/speaker';
 import { PLAY, STOP } from './icons';
 import { DotIcon, Typed } from './parts';
@@ -21,6 +21,12 @@ import './cast.css';
  * 1 voice and 2 are drawn as Auto draws the cast, so the three read alike: a line saying who reads,
  * a face each, and another go. Below them, the model's thirty voices as faces too (VoiceFaces).
  */
+
+/** "1 person", "3 people". */
+function many(n: number, one: string, more: string) {
+  if (n === 1) return `1 ${one}`;
+  return `${n} ${more}`;
+}
 
 /** A name's initials: its first word's and its last's, or its first two letters. */
 function initials(name: string) {
@@ -62,18 +68,36 @@ function HearButton({ playing, name, onClick }: { playing: boolean; name: string
   );
 }
 
-/** Character voices, from the model picked. `children`: the model toggle. */
+/** Character voices, from the model picked: who's spoken up to where the reader is. `children`: the model toggle. */
 export function CastSection({ book, design, playing, engine, children }: { book: string; design: CastDesign; playing: boolean; engine: Engine; children: ReactNode }) {
   const state = useCast();
-  const cast = castOf(book, engine, state);
+  const { people, asking } = useBookCast(book);
+  let body: ReactNode;
+  if (!people && asking) {
+    body = <p className="cs-say">Looking up who’s spoken so far…</p>;
+  } else if (!people) {
+    body = <p className="cs-say">Can’t reach Breader to see who’s in the book. Try again once you’re online.</p>;
+  } else if (!people.length) {
+    body = <p className="cs-say"><b>Nobody’s spoken yet.</b> Each person shows up here with their voice once they’ve said a line.</p>;
+  } else {
+    const cast = castOf(book, people, engine, state);
+    // The AI's picks, unless reshuffled, or the book was marked before it picked voices.
+    const shuffled = (state.seeds[book] ?? 0) > 0;
+    const byAi = !shuffled && people.every((c) => c.voice !== null);
+    body = (
+      <>
+        {design === 'A' && <Auto book={book} cast={cast} byAi={byAi} />}
+        {design === 'B' && <List book={book} cast={cast} engine={engine} />}
+        {design === 'C' && <Board book={book} cast={cast} engine={engine} />}
+        {design === 'D' && <Speaking cast={cast} playing={playing} />}
+      </>
+    );
+  }
   return (
     <div className={`cs cs-${design}`}>
-      {design === 'A' && <Auto book={book} cast={cast} />}
-      {design === 'B' && <List book={book} cast={cast} engine={engine} />}
-      {design === 'C' && <Board book={book} cast={cast} engine={engine} />}
-      {design === 'D' && <Speaking cast={cast} playing={playing} />}
+      {body}
       {children}
-      <p className="p-note cs-sample">A pretend cast, the same for every book, until the server says who’s in each. Anyone else reads with her voice or his.</p>
+      <p className="p-note cs-sample">Only the people who’ve spoken up to where you are. For now everyone still reads in her voice or his.</p>
     </div>
   );
 }
@@ -95,7 +119,7 @@ function Faces({ say, again, onAgain, children }: { say: ReactNode; again: strin
 /** One face: who it reads, and in whose voice; a tap to hear it. */
 function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode; name: string; voice: string; on: boolean; label: string; onClick: () => void }) {
   return (
-    <button type="button" className={`cs-face-b${on ? ' is-on' : ''}`} onClick={onClick} aria-label={label}>
+    <button type="button" className={`cs-face-b${on ? ' is-on' : ''}`} onClick={onClick} aria-label={label} title={label}>
       {face}
       <span className="cs-face-n">{name}</span>
       <span className="cs-face-v">{voice}</span>
@@ -103,19 +127,21 @@ function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode
   );
 }
 
-/** A: handed out by themselves, to be heard and shuffled. */
-function Auto({ book, cast }: { book: string; cast: Cast[] }) {
+/** A: the AI's picks, or handed out, to be heard and shuffled. */
+function Auto({ book, cast, byAi }: { book: string; cast: Cast[]; byAi: boolean }) {
   const { on, hear } = useHear();
   const voices = new Set(cast.map((x) => x.v.key)).size;
+  let how = 'Handed out by how much each one says.';
+  if (byAi) how = 'Each one picked by the AI that read the book.';
   const say = (
     <>
-      <b>{cast.length} people, {voices} voices.</b> Handed out by how much each one says. Tap a face to hear them.
+      <b>{many(cast.length, 'person', 'people')}, {many(voices, 'voice', 'voices')}.</b> {how} Tap a face to hear them.
     </>
   );
   return (
     <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book)}>
       {cast.map((x) => (
-        <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name.split(' ').pop()!} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
+        <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
       ))}
     </Faces>
   );
@@ -201,7 +227,7 @@ function List({ book, cast, engine }: { book: string; cast: Cast[]; engine: Engi
           <Face c={x.c} size="s" />
           <span className="cs-who">
             <b>{x.c.name}</b>
-            <span>{KIND_NAME[x.c.kind]} · {x.c.role}</span>
+            <span>{KIND_NAME[x.c.kind]} · {many(x.c.lines, 'line', 'lines')}</span>
           </span>
           <label className="cs-pick">
             <span className="sr-only">{`${x.c.name}’s voice`}</span>
@@ -274,8 +300,8 @@ function Chooser({ book, who, voices, on, hear }: { book: string; who: Cast; voi
 
 /** D: who's speaking now, and everyone after, each with their voice. */
 function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
-  const speaker = useSpeaking(playing);
-  const now = cast.find((x) => x.c.id === speaker.id);
+  const speaker = useSpeaking(cast.map((x) => x.c), playing);
+  const now = cast.find((x) => x.c.id === speaker?.id);
   const { on, hear } = useHear();
   return (
     <div className="cs-speaking">
@@ -294,7 +320,7 @@ function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
         {cast.map((x) => (
           <button key={x.c.id} type="button" className={`cs-mini${now?.c.id === x.c.id ? ' is-now' : ''}${on === x.c.id ? ' is-on' : ''}`} onClick={() => hear(x.c.id, x.v)} aria-label={`Hear ${x.c.name}, read by ${x.v.name}`}>
             <Face c={x.c} size="s" />
-            <span>{x.c.name.split(' ').pop()}</span>
+            <span>{x.c.name}</span>
           </button>
         ))}
       </div>
@@ -303,9 +329,10 @@ function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
 }
 
 /** D, on the play row: who's speaking, while the voice reads with character voices. */
-export function SpeakerChip({ playing }: { playing: boolean }) {
-  const now = useSpeaking(playing);
-  if (!playing) return null;
+export function SpeakerChip({ book, playing }: { book: string; playing: boolean }) {
+  const { people } = useBookCast(book);
+  const now = useSpeaking(people ?? [], playing);
+  if (!playing || !now) return null;
   return (
     <span className="cs-speaker" aria-live="polite">
       <Face c={now} size="s" />

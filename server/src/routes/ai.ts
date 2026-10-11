@@ -1,8 +1,8 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { TRACK_ID, trackKey, type AiFile, type AiMusicResponse, type AiStatus, type AiVoicesResponse, type MusicLink, type RevisitResponse } from '@breader/shared';
+import { TRACK_ID, trackKey, type AiCastResponse, type AiEntry, type AiFile, type AiMusicResponse, type AiStatus, type AiVoicesResponse, type MusicLink, type RevisitResponse } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
-import { cutAt, musicFor, revisitFor, voicesFor } from '../lib/ai.ts';
+import { castFor, cutAt, musicFor, revisitFor, voicesFor } from '../lib/ai.ts';
 import { ApiError } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
@@ -10,8 +10,8 @@ import { requireLibrary } from '../lib/library.ts';
 /*
  * What an AI made of a book (ai_notes, loaded by ai/tools/import.ts), for a reader whose library
  * has the book with its AI switch on. The notes are the whole book's, so they never leave whole:
- * Revisit is cut at the reader's mark here, and the voice marks go without names. Its music goes
- * as cues and tracks by number, each track's file through a signed link for a while.
+ * Revisit and the cast are cut at the reader's mark here, and the voice marks go without names.
+ * Its music goes as cues and tracks by number, each track's file through a signed link for a while.
  */
 
 const none = () => new ApiError(404, 'not_found', 'There are no notes for this book.');
@@ -72,6 +72,17 @@ export function aiRoutes(deps: Deps) {
     if (!row) throw none();
     c.header('Cache-Control', 'private, no-store');
     return c.json(voicesFor({ made: new Date(row.made).toISOString(), sections: row.sections, voices: row.voices }) satisfies AiVoicesResponse);
+  });
+
+  r.get('/books/:bookId/cast', rateLimit({ name: 'ai-cast', max: 120, windowMs: 60_000 }), async (c) => {
+    const row = await notes<{ made: Date; voices: AiFile['voices']; people: AiEntry[]; mark: Parameters<typeof cutAt>[0] }>(
+      c.var.library.id,
+      c.req.param('bookId'),
+      sql`n.made, n.data->'voices' AS voices, n.data->'revisit'->'people' AS people, rs.mark`,
+    );
+    if (!row) throw none();
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(castFor({ made: new Date(row.made).toISOString(), voices: row.voices, people: row.people }, cutAt(row.mark)) satisfies AiCastResponse);
   });
 
   r.get('/books/:bookId/music', rateLimit({ name: 'ai-music', max: 60, windowMs: 60_000 }), async (c) => {

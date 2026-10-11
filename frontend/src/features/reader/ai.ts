@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AiStatus, AiVoicesResponse, RevisitResponse } from '@breader/shared/ai';
+import type { AiCastResponse, AiStatus, AiVoicesResponse, RevisitResponse } from '@breader/shared/ai';
 import type { AiMusicResponse } from '@breader/shared/music';
 import { flush, hasKey } from '../../data/sync';
 import { api } from '../../lib/api';
@@ -8,14 +8,15 @@ import { marksOf, type Marks } from './voice/two';
 
 /*
  * What an AI made of the open book, when the reader said yes to it (the book's AI switch):
- * Revisit's notes, 2 voices' marks and the background music (server/src/routes/ai.ts). The server
- * only hands over the notes up to how far the reader has read. Each answer is kept on this device
- * too, for offline.
+ * Revisit's notes, 2 voices' marks, who's in it for character voices and the background music
+ * (server/src/routes/ai.ts). The server only hands over the notes and the cast up to how far the
+ * reader has read. Each answer is kept on this device too, for offline.
  */
 
 const STATUS = 'breader.ai.status.v1';
 const REVISIT = 'breader.ai.revisit.v1';
 const VOICES = 'breader.ai.voices.v1';
+const CAST = 'breader.ai.cast.v1';
 const MUSIC = 'breader.ai.music.v1';
 /** Books whose notes and marks are kept here, the most recently opened ones. */
 const KEEP = 6;
@@ -38,7 +39,7 @@ export function useAiStatus(bookId: string, on: boolean): AiStatus {
   useEffect(() => {
     if (!on || !hasKey()) {
       setStatus(NONE);
-      if (!on) { keep(STATUS, bookId, null); keep(REVISIT, bookId, null); keep(VOICES, bookId, null); keep(MUSIC, bookId, null); }
+      if (!on) { keep(STATUS, bookId, null); keep(REVISIT, bookId, null); keep(VOICES, bookId, null); keep(CAST, bookId, null); keep(MUSIC, bookId, null); }
       return;
     }
     let live = true;
@@ -70,6 +71,21 @@ export async function loadRevisit(bookId: string): Promise<{ notes: RevisitRespo
     throw e;
   }
 }
+
+/** Who's in the book so far, for character voices. Offline, or should the server fail, the ones fetched last time. */
+export async function loadCast(bookId: string): Promise<AiCastResponse | null> {
+  await settle();
+  try {
+    const cast = await api.get<AiCastResponse>(path(bookId, 'cast'));
+    keep(CAST, bookId, cast);
+    return cast;
+  } catch {
+    return kept<AiCastResponse>(CAST, bookId);
+  }
+}
+
+/** The cast fetched last time, if any, to show while asking again. */
+export const keptCast = (bookId: string) => kept<AiCastResponse>(CAST, bookId);
 
 /** 2 voices' marks for the book: kept here once fetched, and fetched again only when they change. */
 export async function loadVoiceMarks(bookId: string, made: string): Promise<AiVoicesResponse | null> {
