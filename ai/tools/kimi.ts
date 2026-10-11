@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { builtInVoice, VOICE_MODELS } from '../../shared/src/voices.ts';
 import type { Rung } from './balancer.ts';
 import { bookDir, cmp, parsePos, partName, posText, readJson, writeJson, type Book, type Gender } from './lib.ts';
 import type { Cast } from './validate.ts';
@@ -145,6 +146,8 @@ export function mergeCast(book: Book, lines: string[], by: string): { added: num
         notes.push(`${had.id} N -> ${gender}`);
         had.gender = gender;
         if (evidence) had.evidence = evidence;
+        // Voices an earlier volume picked while they were neither may not fit now: they're picked again.
+        if (had.voice && VOICE_MODELS.some((model) => builtInVoice(model, had.voice![model])?.gender !== gender)) delete had.voice;
       } else if (had.gender !== gender) {
         notes.push(`${had.id} kept ${had.gender} (the model said ${gender})`);
       }

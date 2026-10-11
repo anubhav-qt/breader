@@ -5,6 +5,7 @@ import type { AiFile } from '../../shared/src/ai.ts';
 import { recordError, recordLive, recordOk } from '../../server/src/jobs/runs.ts';
 import { Balancer, jitter } from './balancer.ts';
 import { castPass } from './cast.ts';
+import { voicesIntoCast, withRandomVoices } from './casting.ts';
 import { prodClient, prodPool } from './env.ts';
 import { castFromFile, fetchBook } from './fetch.ts';
 import { waitingForLimits } from './harness.ts';
@@ -30,8 +31,9 @@ import { store } from './youtube.ts';
  *
  * About once a minute it lists the books. A book with nothing on the server yet gets its voice
  * marks: fetched, researched on the web by the harness (research.ts) when Antigravity is here, its
- * cast read from the book with that research (cast.ts), every part marked, packed and imported, up
- * to MARKING books at once, the books being read first. Only when no book is being marked does
+ * cast read from the book with that research (cast.ts), every part marked, everyone given their
+ * voices (casting.ts), packed and imported, up to MARKING books at once, the books being read first.
+ * A book marked before voices were picked gets them at random instead, first thing each round. Only when no book is being marked does
  * background music start, for books that have none (music.ts), when the harness, yt-dlp and ffmpeg
  * are all here. Only when no book's music is being scored do Revisit notes start, for books that
  * have none. Music and notes both go to books someone is reading first, the most recently read at
@@ -76,12 +78,16 @@ const LIVE_ANYWAY_S = 60;
 
 export type Phase = 'marks' | 'music' | 'notes';
 
-/** What the server has for a book: when it was made, by whom, how many Revisit entries, and whether it has music. */
+/**
+ * What the server has for a book: when it was made, by whom, how many Revisit entries, whether it
+ * has music, and whether everyone in its cast but the generic speakers has voices.
+ */
 export interface OnServer {
   made: string;
   by: string;
   notes: number;
   music?: boolean;
+  voiced?: boolean;
 }
 
 interface Balancers {
@@ -403,6 +409,39 @@ async function putBack(f: AiFile, was: string, what: string) {
   }
 }
 
+/**
+ * Voices at random for everyone without them in the files of books marked before the marker picked
+ * them (casting.ts), or given people since by their notes: into the server's file, ai/out and the
+ * book's cast.json, so a later volume keeps them. A book being worked on waits for the next round.
+ */
+async function voicesForOld(books: QueueBook[], server: Map<string, OnServer>) {
+  const old = books.filter((b) => server.get(b.sha256)?.voiced === false && !running.has(b.sha256));
+  if (!old.length) return;
+  const db = await prodClient('breader-ai-marker');
+  try {
+    for (const b of old) {
+      const row = await fileOnServer(db, b.sha256);
+      if (!row) continue;
+      const { file, given } = withRandomVoices(row);
+      if (!given) continue;
+      // A new time, so the app fetches the file again.
+      const f = { ...file, made: new Date().toISOString() };
+      const c = checkFile(`${f.sha256}.json`, f);
+      if (c.problems.length) {
+        console.log(`${clock()} ${b.title}: its file with voices has problems, so it keeps none. The first: ${c.problems[0]}`);
+        continue;
+      }
+      const ok = await replace(db, f, row.made);
+      if (!ok) continue;
+      writeJson(join(OUT, `${f.sha256}.json`), f);
+      voicesIntoCast(b, f);
+      console.log(`${clock()} ${b.title}: voices at random for ${given} people`);
+    }
+  } finally {
+    await db.end();
+  }
+}
+
 /** Notes for a book with marks on the server, made here or anywhere, into its file on the server. */
 async function notesJob(b: QueueBook, lbs: Balancers) {
   const row = await serverFile(b);
@@ -708,6 +747,8 @@ async function plan() {
   const music = musicQueue(books, server);
   const notes = notesQueue(books, server);
   console.log(`${books.length} books with the AI switch on: ${marks.length} to mark, then ${music.length} to score with music, then ${notes.length} to write notes for.`);
+  const unvoiced = books.filter((b) => server.get(b.sha256)?.voiced === false);
+  if (unvoiced.length) console.log(`${unvoiced.length} books marked before voices were picked get them at random first.`);
   if (marks.length) console.log(`\nTo mark, ${MARKING} at a time, in this order:\n${marks.map((b) => `  ${b.title}`).join('\n')}`);
   if (music.length) console.log(`\nThen music, ${MUSICING} at a time, in this order:\n${music.map((b) => `  ${b.title}`).join('\n')}`);
   if (notes.length) console.log(`\nThen notes, ${NOTING} at a time, in this order:\n${notes.map((b) => `  ${b.title}`).join('\n')}`);
@@ -750,6 +791,8 @@ async function round(lbs: Balancers, pool: pg.Pool) {
   if (can.music) accountHere = await servesGemini();
   seen = { books, server };
   ended.clear();
+  // Voices at random need no model, so they go in before anything starts.
+  await voicesForOld(books, server);
   const byPhase = (p: Phase) => [...running.values()].filter((j) => j.phase === p).length;
 
   const marks = toMark(books, server);

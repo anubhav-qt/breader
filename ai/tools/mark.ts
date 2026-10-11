@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Balancer } from './balancer.ts';
+import { castVoices } from './casting.ts';
 import { castText, context, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, PRIMARY, text } from './kimi.ts';
 import { AI, bookDir, count, inPart, loadBook, partName, posText, writeJson, type Book } from './lib.ts';
 import type { Msg } from './nim.ts';
@@ -262,7 +263,7 @@ async function settle(book: Book, lb: Balancer) {
 
 /**
  * Marks every part of a book not marked yet, remarks the parts a fallback model made, settles the
- * unsure lines and packs it. flags: to (stop after part n), settle (only settle), no-pack.
+ * unsure lines, gives everyone their voices (casting.ts) and packs it. flags: to (stop after part n), settle (only settle), no-pack.
  */
 export async function markBook(key: string, lb: Balancer, top: Balancer, flags: Record<string, string | true>) {
   const book = loadBook(key);
@@ -318,6 +319,8 @@ export async function markBook(key: string, lb: Balancer, top: Balancer, flags: 
   // nearly all (Mushoku Vol. 12: 0 of 18, then 17 of 18). So whatever is left gets a second go.
   stageOf.set(key, 'Settling unsure lines (2 of 2)');
   await settle(book, lb);
+  stageOf.set(key, 'Casting the voices');
+  await castVoices(book, lb);
   if (flags['no-pack']) return;
   stageOf.set(key, 'Saving');
   // Revisit notes come from notes, for the whole book. Other notes that stop partway would show a

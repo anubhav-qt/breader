@@ -188,7 +188,8 @@ The owner's side, run by the owner or by an agent the owner asks to run it, neve
 
 The server's worker runs `marker` for good (`infra/README.md` › The marker), with the NVIDIA key sealed in `ai/nvidia-key.enc` (`npm --prefix ai run seal` makes it). It's the owner's, like `mark-all`, and does steps 1 to 5 for every book whose AI switch is on, with no web research:
 
-- About once a minute it lists the books. A book with nothing on the server yet is marked: fetched, its cast and `research.md` read from the book alone by Kimi K3 (`cast.ts`), every part marked, then packed and imported at once. Up to 4 books at a time, the books being read first. A later volume of a series waits for an earlier one's cast, so everyone keeps their id and voice.
+- About once a minute it lists the books. A book with nothing on the server yet is marked: fetched, its cast and `research.md` read from the book alone by Kimi K3 (`cast.ts`), every part marked, everyone given their voices (`casting.ts`), then packed and imported at once. Up to 4 books at a time, the books being read first. A later volume of a series waits for an earlier one's cast, so everyone keeps their id and voices.
+- A book on the server from before voices were picked gets them at random, first thing each round, and so does anyone its notes added to the cast.
 - When no book is waiting to be marked, it writes Revisit notes for every book that has none: books someone is reading, the most recently read first, then the rest, the oldest added first. A series goes from its earliest volume that needs notes, one volume at a time. The notes go into the book's file on the server, beside its marks. A book marked somewhere else is fetched and checked first: it has to read the same as when it was marked.
 - A new book still comes first: while one is being marked, notes calls wait.
 - A failed call is asked again after a wait that doubles each time, with random jitter, for as long as it takes. A failed book rests 2 minutes, then 4, 8 and so on up to an hour, and carries on where it stopped. How it goes shows on the status page as "AI marker", which also says when NVIDIA refuses the key.
@@ -410,7 +411,8 @@ narrator third pov elena
 ```json
 {
   "people": [
-    { "id": "elena", "name": "Elena Voss", "gender": "F", "role": "Courier; narrates the odd chapters", "evidence": "3:14 “she said”; publisher page" },
+    { "id": "elena", "name": "Elena Voss", "gender": "F", "role": "Courier; narrates the odd chapters", "evidence": "3:14 “she said”; publisher page",
+      "voice": { "piper": "lessac", "kokoro": "af_heart" } },
     { "id": "gate-guard", "name": "A guard at the north gate", "gender": "M", "minor": true, "evidence": "7:22 “he”" },
     { "id": "masked-knight", "name": "The masked knight", "gender": "M", "evidence": "20:4 “he” (as the reader believes)",
       "changes": [{ "at": "40:12", "gender": "F", "why": "Unmasks as a woman; a surprise to the reader." }] }
@@ -420,6 +422,7 @@ narrator third pov elena
 
 - Every non-generic entry needs `evidence`.
 - `minor: true` marks someone who only speaks a line or two, and never gets a Revisit entry.
+- `voice` is who reads them: one of Piper's voices and one of Kokoro's, by their ids in `shared/src/voices.ts`, a woman's for F and a man's for M. `mark` picks them once the marks are settled (`casting.ts`), from how each voice sounds and who it suits, and won't pack a book until everyone but the generic entries has both.
 - Leave the generic entries (`unknown`, `unknown-man`, `unknown-woman`, `crowd`, `author`) in place. You may set `author`'s gender.
 
 ### 7.4 `notes.json`
