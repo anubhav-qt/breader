@@ -60,7 +60,8 @@ export function castFromFile(f: AiFile): Cast {
     const g = generic.get(c.id);
     if (g) return { ...g, gender: c.g };
     const changes = (c.changes ?? []).map(([s, b, gender]) => ({ at: `${s}:${b}`, gender, why: 'As marked.' }));
-    return { id: c.id, name: c.name, gender: c.g, evidence: 'From its marks on the server.', ...(changes.length ? { changes } : {}) };
+    const voice = c.voice ? { voice: c.voice } : {};
+    return { id: c.id, name: c.name, gender: c.g, evidence: 'From its marks on the server.', ...(changes.length ? { changes } : {}), ...voice };
   });
   return { people };
 }

@@ -11,8 +11,8 @@ import { epub, MARKS } from './lantern.ts';
 
 /*
  * What the marker does to a book, end to end, on The Test Lantern (lantern.ts) with NVIDIA
- * played by the test: the cast from the book alone, the marks, the pack, then notes merged into
- * the file the server would have. Everything but R2 and the database.
+ * played by the test: the cast from the book alone, the marks, everyone's voices, the pack, then
+ * notes merged into the file the server would have. Everything but R2 and the database.
  */
 
 const work = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
@@ -20,6 +20,7 @@ process.env.AI_WORK = join(work, 'work');
 process.env.AI_OUT = join(work, 'out');
 const { Balancer } = await import('../balancer.ts');
 const { castPass } = await import('../cast.ts');
+const { withRandomVoices } = await import('../casting.ts');
 const { startBook } = await import('../fetch.ts');
 const { checkFile } = await import('../import.ts');
 const { castByFile, castOf, LADDER, PRIMARY } = await import('../kimi.ts');
@@ -64,6 +65,13 @@ about ferrow 0:1 | A town where it rains.
 about masked-knight 1:1 | A knight who hides behind a mask.
 about ines 1:3 | Marlo’s sister, who rode in as the masked knight.`;
 
+// The first answer gives the masked knight, a man until the reveal, a woman's voice: asked again, just for him.
+const VOICES = `voice elena lessac af_heart
+voice marlo ryan am_michael
+voice masked-knight kristin bm_george
+voice ines alba bf_isabella`;
+const KNIGHT = 'voice masked-knight alan bm_george';
+
 const unexpected: string[] = [];
 answerWith((_model, user) => {
   if (user.includes('# Your task\n\nRead the whole book')) return CAST;
@@ -71,6 +79,8 @@ answerWith((_model, user) => {
   if (user.includes('# Your task: the entries')) return ROSTER;
   if (user.includes('# Your task: part 1')) return PART;
   if (user.includes('# Your task: read them as a reader would')) return 'none';
+  if (user.includes('# What was wrong with the last answer\n\n- masked-knight: piper’s kristin isn’t a man’s voice')) return KNIGHT;
+  if (user.includes('# Who needs voices')) return VOICES;
   unexpected.push(user.slice(-300));
   return 400;
 });
@@ -114,6 +124,8 @@ test('then marked and packed into a file the server takes', async () => {
   assert.deepEqual(checkFile(`${sha256}.json`, f).problems, []);
   assert.equal(f.by, 'Kimi K3 (reasoning high, NVIDIA) parts 1; cast by Kimi K3 (reasoning high, NVIDIA)');
   assert.equal(f.voices.spans.length, 9);
+  const voiced = f.voices.cast.filter((p) => p.voice).map((p) => `${p.id} ${p.voice!.piper} ${p.voice!.kokoro}`);
+  assert.deepEqual(voiced, ['elena lessac af_heart', 'marlo ryan am_michael', 'masked-knight alan bm_george', 'ines alba bf_isabella']);
   assert.deepEqual(f.revisit, { people: [], places: [], terms: [] });
   assert.equal(needs(b, new Map([[sha256, { made: f.made, by: f.by, notes: 0 }]])), 'notes');
 });
@@ -134,6 +146,18 @@ test('then notes, merged into the server’s file with anyone they added to the 
   assert.equal(needs(b, new Map([[sha256, { made: f.made, by: f.by, notes: 4 }]])), null);
 });
 
+test('a book marked before there were voices gets them at random, a woman’s for a woman and a man’s for a man', () => {
+  const row = readJson<AiFile>(outFile);
+  const bare: AiFile = { ...row, voices: { ...row.voices, cast: row.voices.cast.map(({ voice: _, ...p }) => p) } };
+  const { file, given } = withRandomVoices(bare);
+  assert.equal(given, 4);
+  assert.deepEqual(checkFile(`${sha256}.json`, file).problems, []);
+  const voiced = file.voices.cast.filter((p) => p.voice);
+  assert.deepEqual(voiced.map((p) => p.id), ['elena', 'marlo', 'masked-knight', 'ines'], 'the generic speakers get none');
+  assert.equal(new Set(voiced.map((p) => p.voice!.piper)).size, 4, 'no one shares a voice while there are others');
+  assert.equal(withRandomVoices(file).given, 0, 'and anyone with voices keeps them');
+});
+
 test('a book marked somewhere else gets its cast from the server’s file', async () => {
   const row = readJson<AiFile>(outFile);
   const other: AiFile = { ...row, voices: { ...row.voices, cast: row.voices.cast.filter((p) => p.id !== 'marlo') } };
@@ -141,9 +165,10 @@ test('a book marked somewhere else gets its cast from the server’s file', asyn
   matchCast(book, other);
   assert.deepEqual(castOf(book).people.map((p) => p.id), other.voices.cast.map((p) => p.id));
   assert.deepEqual(castOf(book).people.find((p) => p.id === 'masked-knight')?.changes, [{ at: '1:3', gender: 'F', why: 'As marked.' }]);
+  assert.deepEqual(castOf(book).people.find((p) => p.id === 'elena')?.voice, { piper: 'lessac', kokoro: 'af_heart' }, 'with their voices');
 });
 
 test('no call went unanswered, and none came twice', () => {
   assert.deepEqual(unexpected, []);
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 7);
 });

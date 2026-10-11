@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { builtInVoice, VOICE_MODELS } from '../../shared/src/voices.ts';
 import { readMarks, type Marks } from './marks.ts';
 import { blockAt, bookDir, cmp, marksFiles, parsePos, posText, readJson, type Book, type Gender, type Pos } from './lib.ts';
 
@@ -27,6 +28,8 @@ export const CastSchema = z.strictObject({
       minor: z.boolean().optional(),
       generic: z.boolean().optional(),
       changes: z.array(z.strictObject({ at: At, gender: G, why: z.string().min(1) })).optional(),
+      /** Who reads them in each model, by the voice's id there (casting.ts). */
+      voice: z.strictObject({ piper: z.string(), kokoro: z.string() }).optional(),
     }),
   ),
 });
@@ -150,6 +153,13 @@ export function validate(book: Book, final: boolean): Checked {
       if (seen.has(p.id)) errors.push(`cast.json: "${p.id}" is listed twice`);
       seen.add(p.id);
       if (!p.generic && !p.evidence?.trim()) errors.push(`cast.json: "${p.id}" needs evidence for their gender (a paragraph id, or a source)`);
+      if (p.voice) {
+        for (const model of VOICE_MODELS) {
+          const v = builtInVoice(model, p.voice[model]);
+          if (!v) errors.push(`cast.json: "${p.id}" has ${p.voice[model]}, which isn’t one of ${model}’s voices`);
+          else if (p.gender !== 'N' && v.gender !== p.gender) errors.push(`cast.json: "${p.id}" has ${model}’s ${v.name}, who doesn’t sound like a ${p.gender === 'F' ? 'woman' : 'man'}`);
+        }
+      }
       let last: Pos = [0, 0];
       for (const c of p.changes ?? []) {
         const at = pos(c.at);

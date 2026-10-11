@@ -61,6 +61,7 @@ export function packBook(book: Book, by: string) {
         name: p.name,
         g: p.gender,
         ...(p.changes?.length ? { changes: p.changes.map((x) => [...at(x.at), x.gender]) } : {}),
+        ...(p.voice ? { voice: p.voice } : {}),
       })),
       /** [section, block, narrator (cast index, or -1 for a narrator who isn't a character), point of view (cast index or -1)] */
       narration: c.marks.narration.map((n) => [...n.at, n.who === 'third' ? -1 : index.get(n.who)!, n.pov ? index.get(n.pov)! : -1]),

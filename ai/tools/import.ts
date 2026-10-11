@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type pg from 'pg';
 import { AiFile, aiProblems } from '../../shared/src/ai.ts';
+import { GENERIC } from './fetch.ts';
 import { count, OUT } from './lib.ts';
 
 /*
@@ -136,16 +137,20 @@ export async function replace(db: pg.Client, f: AiFile, was: string): Promise<bo
   return r.rowCount === 1;
 }
 
-/** What the server has for these files: when each was made, by whom, how many Revisit entries it has, and whether it has music. */
+/**
+ * What the server has for these files: when each was made, by whom, how many Revisit entries it
+ * has, whether it has music, and whether everyone in its cast but the generic speakers has voices.
+ */
 export async function onServer(db: pg.Client, shas: string[]) {
-  const { rows } = await db.query<{ sha256: string; made: Date; by: string; notes: number; music: boolean }>(
+  const { rows } = await db.query<{ sha256: string; made: Date; by: string; notes: number; music: boolean; voiced: boolean }>(
     `SELECT sha256, made, by,
             jsonb_array_length(data->'revisit'->'people') + jsonb_array_length(data->'revisit'->'places') + jsonb_array_length(data->'revisit'->'terms') AS notes,
-            data ? 'music' AS music
+            data ? 'music' AS music,
+            NOT EXISTS (SELECT 1 FROM jsonb_array_elements(data->'voices'->'cast') c WHERE NOT (c ? 'voice') AND NOT ((c->>'id') = ANY($2))) AS voiced
        FROM ai_notes WHERE sha256 = ANY($1)`,
-    [shas],
+    [shas, GENERIC.map((p) => p.id)],
   );
-  return new Map(rows.map((r) => [r.sha256, { made: new Date(r.made).toISOString(), by: r.by, notes: Number(r.notes), music: r.music }]));
+  return new Map(rows.map((r) => [r.sha256, { made: new Date(r.made).toISOString(), by: r.by, notes: Number(r.notes), music: r.music, voiced: r.voiced }]));
 }
 
 /** One book's whole file as the server has it. */
