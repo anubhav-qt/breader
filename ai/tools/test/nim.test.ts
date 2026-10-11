@@ -4,9 +4,10 @@ import { CallError, chat } from '../nim.ts';
 
 /*
  * A call asks for as long an answer as the model can give. Kimi K3 counts the prompt in its limit
- * too, so a call that asks for all of it is asked again for what the prompt leaves. An answer a
- * judge finds no good is stopped as soon as it shows. NVIDIA is a stand-in fetch here, with Kimi's
- * limit and its own words for it.
+ * too, so a call that asks for all of it is asked again for what the prompt leaves, and NVIDIA caps
+ * max_tokens on its own, so a call over the cap is asked again for the cap. An answer a judge finds
+ * no good is stopped as soon as it shows. NVIDIA is a stand-in fetch here, with Kimi's limit, its
+ * cap and its own words for them.
  */
 
 const LIMIT = 1_048_576;
@@ -23,12 +24,13 @@ function refuse(message: string) {
   return new Response(JSON.stringify(body), { status: 400 });
 }
 
-/** Kimi K3 on NVIDIA, noting each max_tokens it's asked for. */
-function kimi(asked: number[]) {
+/** Kimi K3 on NVIDIA, noting each max_tokens it's asked for, with NVIDIA's cap on max_tokens when there's one. */
+function kimi(asked: number[], cap = Infinity) {
   process.env.NVIDIA_NIM_API_KEY = 'test-key';
   globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     asked.push(body.max_tokens);
+    if (body.max_tokens > cap) return refuse(`Validation: Max tokens must not exceed ${cap}, got ${body.max_tokens}`);
     if (PROMPT + body.max_tokens > LIMIT) {
       return refuse(`This model configuration accepts at most ${LIMIT} combined input and output tokens. However, your request has ${PROMPT} input tokens and asks for ${body.max_tokens} output tokens.`);
     }
@@ -51,13 +53,42 @@ test('a call that fits is asked once', async () => {
   assert.deepEqual(asked, [1000]);
 });
 
-test('any other refusal is not asked again', async () => {
+test('a call over NVIDIA’s cap is asked again for the cap', async () => {
   const asked: number[] = [];
+  kimi(asked, 131_072);
+  const reply = await chat('moonshotai/kimi-k3', ask, { maxTokens: LIMIT });
+  assert.equal(reply.text, 'OK');
+  assert.deepEqual(asked, [LIMIT, 131_072]);
+});
+
+test('a cap that leaves the prompt no room is followed by what the prompt leaves', async () => {
+  const asked: number[] = [];
+  kimi(asked, 1_000_000);
+  const reply = await chat('moonshotai/kimi-k3', ask, { maxTokens: LIMIT });
+  assert.equal(reply.text, 'OK');
+  assert.deepEqual(asked, [LIMIT, 1_000_000, LIMIT - PROMPT]);
+});
+
+/** NVIDIA refusing every call with the same words, noting each max_tokens it's asked for. */
+function refusing(asked: number[], message: (maxTokens: number) => string) {
   process.env.NVIDIA_NIM_API_KEY = 'test-key';
   globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
-    asked.push(JSON.parse(String(init?.body)).max_tokens);
-    return refuse('Validation: Max tokens must not exceed 1048576, got 10000000');
+    const maxTokens = JSON.parse(String(init?.body)).max_tokens;
+    asked.push(maxTokens);
+    return refuse(message(maxTokens));
   }) as typeof fetch;
+}
+
+test('a refusal that allows no less than the call asked for is not asked again', async () => {
+  const asked: number[] = [];
+  refusing(asked, (n) => `Validation: Max tokens must not exceed 1048576, got ${n}`);
+  await assert.rejects(chat('moonshotai/kimi-k3', ask, { maxTokens: 10_000_000 }), (e) => e instanceof CallError && e.kind === 'bad');
+  assert.deepEqual(asked, [10_000_000, 1_048_576]);
+});
+
+test('any other refusal is not asked again', async () => {
+  const asked: number[] = [];
+  refusing(asked, () => 'Validation: messages must not be empty');
   await assert.rejects(chat('moonshotai/kimi-k3', ask, { maxTokens: 10_000_000 }), (e) => e instanceof CallError && e.kind === 'bad');
   assert.deepEqual(asked, [10_000_000]);
 });

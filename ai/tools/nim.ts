@@ -86,11 +86,23 @@ export class CallError extends Error {
  */
 const SHARED_LIMIT = /at most (\d+) combined input and output tokens\. However, your request has (\d+) input tokens/;
 
-/** What an error's prompt leaves of the model's limit, or undefined when the error isn't about that. */
+/**
+ * NVIDIA caps max_tokens itself too, and moves the cap without a word: Kimi K3 took 1,048,576 on
+ * 2026-10-10 and turned it down the next day with "Validation: Max tokens must not exceed 131072,
+ * got 1048576".
+ */
+const CAP = /Max tokens must not exceed (\d+)/i;
+
+/**
+ * The most an error says a call may ask for: what its prompt leaves of the model's limit, or
+ * NVIDIA's cap. Undefined when the error isn't about either.
+ */
 function roomLeft(body: string): number | undefined {
-  const m = body.match(SHARED_LIMIT);
-  if (!m) return undefined;
-  return Number(m[1]) - Number(m[2]);
+  const shared = body.match(SHARED_LIMIT);
+  if (shared) return Number(shared[1]) - Number(shared[2]);
+  const cap = body.match(CAP);
+  if (cap) return Number(cap[1]);
+  return undefined;
 }
 
 export interface Msg {
@@ -144,17 +156,19 @@ function kindOf(status: number): Failure {
 
 /**
  * A call to one of NVIDIA's models, asking for as long an answer as the model can give (kimi.ts,
- * LADDER). A model that counts the prompt against that too is asked again for what the prompt
- * leaves.
+ * LADDER). A call turned down for asking too much, over NVIDIA's cap or over what the prompt
+ * leaves, is asked again for what the refusal allows, until it asks for no less than that.
  */
 export async function chat(model: string, messages: Msg[], o: ChatOptions): Promise<Reply> {
-  try {
-    return await once(model, messages, o);
-  } catch (e) {
-    if (!(e instanceof CallError)) throw e;
-    const room = e.room;
-    if (room === undefined || room <= 0) throw e;
-    return once(model, messages, { ...o, maxTokens: room });
+  for (let ask = o; ;) {
+    try {
+      return await once(model, messages, ask);
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e;
+      const room = e.room;
+      if (room === undefined || room <= 0 || room >= ask.maxTokens) throw e;
+      ask = { ...ask, maxTokens: room };
+    }
   }
 }
 
