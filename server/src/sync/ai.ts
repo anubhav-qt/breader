@@ -21,11 +21,27 @@ export async function settleAi(tx: Tx, libraryId: string, bookId: string, rev: n
      WHERE li.library_id = ${libraryId} AND li.book_id = ${bookId}
   `);
   if (!b) return null;
-  if (b.ai && !b.marked) await tx.execute(sql`INSERT INTO ai_books (sha256) VALUES (${b.sha256}) ON CONFLICT DO NOTHING`);
+  if (b.ai && !b.marked) {
+    await tx.execute(sql`INSERT INTO ai_books (sha256, library_id) VALUES (${b.sha256}, ${libraryId}) ON CONFLICT DO NOTHING`);
+  }
   if (!b.ai && b.marked) {
     await tx.execute(sql`UPDATE library_items SET ai = true, rev = ${rev} WHERE library_id = ${libraryId} AND book_id = ${bookId}`);
   }
   return b.ai || b.marked ? b.sha256 : null;
+}
+
+/**
+ * The books in a library, changed since a revision, whose switch another library said yes to first,
+ * so the reader can be told someone else turned it on. Files said yes to before who did was kept
+ * count as no one's.
+ */
+export async function aiElsewhere(tx: Tx, libraryId: string, from: number): Promise<Set<string>> {
+  const { rows } = await tx.execute<{ book_id: string }>(sql`
+    SELECT li.book_id
+      FROM library_items li JOIN blobs b ON b.id = li.file_id JOIN ai_books a ON a.sha256 = b.sha256
+     WHERE li.library_id = ${libraryId} AND li.rev > ${from} AND a.library_id <> ${libraryId}
+  `);
+  return new Set(rows.map((r) => r.book_id));
 }
 
 /**

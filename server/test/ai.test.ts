@@ -162,6 +162,49 @@ describe('the AI switch', () => {
     expect(await aiOf(later.b, later.a.id)).toBe(true);
   });
 
+  const elsewhere = async (b: Reader, bookId: string, since = 0) =>
+    (await pull(b, since)).books.find((x: { id: string }) => x.id === bookId)?.edit.aiElsewhere as boolean | undefined;
+
+  it('tells every library but the one that turned it on that someone else did', async () => {
+    const bytes = Buffer.from(`a book ${Math.random()}`);
+    const held = await reader(bytes, false);
+    const since = (await pull(held.b)).rev;
+    const one = await reader(bytes);
+    const later = await reader(bytes, false);
+    expect(await elsewhere(one.b, one.a.id)).toBeUndefined();
+    expect(await elsewhere(held.b, held.a.id, since)).toBe(true);
+    expect(await elsewhere(later.b, later.a.id)).toBe(true);
+
+    // Saying yes again doesn't make it theirs.
+    await later.b.post('/v1/sync/push', push('r', { type: 'edit.put', bookId: later.a.id, edit: { ai: true } }));
+    expect(await elsewhere(later.b, later.a.id)).toBe(true);
+    expect(await elsewhere(one.b, one.a.id)).toBeUndefined();
+  });
+
+  it('tells the owner of a shared book and the readers holding copies of it alike', async () => {
+    const owner = await reader(undefined, false);
+    await owner.b.post('/v1/sync/push', push('r', { type: 'book.put', book: { ...owner.a, shared: true } }));
+    const { b: copier } = await registered();
+    const copy = book({ shared: true, fileId: owner.a.fileId, origin: owner.a.id });
+    const res = await copier.post('/v1/sync/push', push('c', { type: 'book.put', book: copy }, { type: 'edit.put', bookId: copy.id, edit: { ai: true } }));
+    expect(res.body.rejected).toEqual([]);
+    expect(await elsewhere(owner.b, owner.a.id)).toBe(true);
+    expect(await elsewhere(copier, copy.id)).toBeUndefined();
+
+    const { b: second } = await registered();
+    const again = book({ shared: true, fileId: owner.a.fileId, origin: owner.a.id });
+    await second.post('/v1/sync/push', push('s', { type: 'book.put', book: again }));
+    expect(await elsewhere(second, again.id)).toBe(true);
+  });
+
+  it('tells no one for a file said yes to before who did was kept', async () => {
+    const bytes = Buffer.from(`a book ${Math.random()}`);
+    await primary.pool.query('INSERT INTO ai_books (sha256) VALUES ($1)', [sha(bytes)]);
+    const later = await reader(bytes, false);
+    expect(await aiOf(later.b, later.a.id)).toBe(true);
+    expect(await elsewhere(later.b, later.a.id)).toBeUndefined();
+  });
+
   it('stays on when someone turns it off', async () => {
     const one = await reader();
     const two = await reader(one.bytes, false);

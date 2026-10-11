@@ -221,6 +221,7 @@ export function editFromWire(e: SyncedBook['edit']): BookEdit | null {
   if (e.seriesIndex != null) out.seriesIndex = e.seriesIndex;
   if (e.genre != null) out.genre = e.genre;
   if (e.ai) out.ai = true;
+  if (e.aiElsewhere) out.aiElsewhere = true;
   return Object.keys(out).length ? out : null;
 }
 
