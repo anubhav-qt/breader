@@ -23,6 +23,8 @@ export interface ShelfItem extends BookRecord {
   favorite: boolean;
   /** Lets an AI read along (BookEdit.ai). */
   ai: boolean;
+  /** Someone else turned that on first (BookEdit.aiElsewhere). */
+  aiElsewhere: boolean;
   /** The genres it was added with, under the reader's own picks (`genre` is what it's filed under). */
   addedGenre?: string;
   /** Set by the reader in the edit popover, which a guess never replaces. */
@@ -645,6 +647,7 @@ export function withReading(
     color: normColor(e.color ?? rec.color, rec.title),
     favorite: !!e.favorite,
     ai: !!e.ai,
+    aiElsewhere: !!e.aiElsewhere,
     opened: !!r,
     coverUrl: covers[rec.id],
     // How far it's really read, not a page jumped ahead to (books/mark.ts).

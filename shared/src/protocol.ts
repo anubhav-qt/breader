@@ -190,7 +190,10 @@ export type PushResponse = z.infer<typeof PushResponse>;
 /* ---- Pull ---- */
 
 export const SyncedBook = Book.extend({
-  edit: Edit,
+  edit: Edit.extend({
+    /** Someone else's library said yes to the AI switch for this book's file first. Pulled, never pushed. */
+    aiElsewhere: z.boolean().optional(),
+  }),
   removedAt: Millis.nullable(),
 });
 export type SyncedBook = z.infer<typeof SyncedBook>;

@@ -127,6 +127,13 @@
       "when": 1791391231273,
       "tag": "0017_ai_books",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791744848677,
+      "tag": "0018_ai_books_library",
+      "breakpoints": true
     }
   ]
 }

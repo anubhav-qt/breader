@@ -1,0 +1,1 @@
+ALTER TABLE "ai_books" ADD COLUMN "library_id" text;

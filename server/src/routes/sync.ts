@@ -8,7 +8,7 @@ import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { log } from '../log.ts';
 import { lapsedIn } from '../lib/shelf.ts';
-import { spreadAi } from '../sync/ai.ts';
+import { aiElsewhere, spreadAi } from '../sync/ai.ts';
 import { applyMutation, type Tx } from '../sync/apply.ts';
 
 const Since = z.coerce.number().int().min(0).default(0);
@@ -95,6 +95,7 @@ export function syncRoutes(deps: Deps) {
         const items = await tx.select().from(libraryItems).where(and(eq(libraryItems.libraryId, libraryId), gt(libraryItems.rev, from)));
         const reads = await tx.select().from(readingStates).where(and(eq(readingStates.libraryId, libraryId), gt(readingStates.rev, from)));
         const lapsed = (await tx.execute<{ id: string }>(lapsedIn(libraryId))).rows.map((r) => r.id);
+        const elsewhere = await aiElsewhere(tx, libraryId, from);
         const [settings] = await tx
           .select({ prefs: librarySettings.prefs })
           .from(librarySettings)
@@ -123,7 +124,16 @@ export function syncRoutes(deps: Deps) {
             ...(i.series ? { series: i.series } : {}),
             ...(i.seriesIndex !== null ? { seriesIndex: i.seriesIndex } : {}),
             ...(i.genre ? { genre: i.genre } : {}),
-            edit: { title: i.editTitle, color: i.editColor, favorite: i.favorite, series: i.editSeries, seriesIndex: i.editSeriesIndex, genre: i.editGenre, ai: i.ai },
+            edit: {
+              title: i.editTitle,
+              color: i.editColor,
+              favorite: i.favorite,
+              series: i.editSeries,
+              seriesIndex: i.editSeriesIndex,
+              genre: i.editGenre,
+              ai: i.ai,
+              ...(elsewhere.has(i.bookId) ? { aiElsewhere: true } : {}),
+            },
             removedAt: ms(i.removedAt),
           })),
           reads: reads.map((s) => ({
