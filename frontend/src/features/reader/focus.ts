@@ -23,7 +23,7 @@ const GAP_MS = 250;
 /** How long the controls stay after the mouse comes to rest. */
 const REST_MS = 2200;
 /** Controls the pointer is resting on stay awake. */
-const HELD = '.i3-head:hover, .i3-foot:hover, .i3-drop:hover';
+const HELD = '.i3-head:hover, .i3-foot:hover, .i3-play:hover, .i3-drop:hover';
 
 /**
  * Whether the controls are awake, and a way to wake them (on opening, or a tap mid-page). `still`

@@ -12,7 +12,12 @@ import { unlockMusic } from '../music';
 import { hung, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
 import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
+import { SheetAi } from '../../ai/AiStatus';
+import type { AiProgress } from '../../ai/progress';
+import { useRound } from '../../design/round';
+import { setCastOn, useCast } from '../voice/cast';
 import { AddVoice } from './AddVoice';
+import { CastSection } from './Cast';
 import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
 import { CloseDots, DotIcon } from './parts';
 
@@ -52,7 +57,7 @@ const SERVER: Record<Mode, string> = {
  * the music look off and a tap on them says why, warmly, with the book's AI switch right there
  * when it's off.
  */
-type Soon = 'two' | 'music';
+type Soon = 'two' | 'music' | 'cast';
 /** What the card says of each: its name, what it will be, why the book is read first, and what turns on. */
 const SOON: Record<Soon, { title: string; promise: string; asked: string; told: string; name: string }> = {
   two: {
@@ -69,10 +74,20 @@ const SOON: Record<Soon, { title: string; promise: string; asked: string; told: 
     told: 'To choose each scene’s music, the whole book is read first.',
     name: 'background music',
   },
+  cast: {
+    title: 'Character voices',
+    promise: 'Soon every person in a book can have a voice of their own: a woman’s, a man’s, a child’s or an old one’s, picked from thirty, so you know who’s talking before the line says.',
+    asked: 'To know who says each line, an AI reads the whole book first and lists who’s in it.',
+    told: 'To know who says each line, the whole book is read first and everyone in it listed.',
+    name: 'character voices',
+  },
 };
-const counts = (ready: boolean) => [
-  { v: 1 as const, label: '1 voice' },
-  { v: 2 as const, label: '2 voices', muted: !ready },
+/** 1 voice, 2 (hers and his), or a voice for each character. */
+type Count = 1 | 2 | 'cast';
+const counts = (ready: boolean, castReady: boolean): Array<{ v: Count; label: string; muted?: boolean }> => [
+  { v: 1, label: '1 voice' },
+  { v: 2, label: '2 voices', muted: !ready },
+  { v: 'cast', label: 'Characters', muted: !castReady },
 ];
 const SIDES = [
   { v: 'F' as const, label: 'Her' },
@@ -102,10 +117,18 @@ interface Props {
   music: 'ready' | 'soon' | 'off';
   /** Turns the book's AI switch on or off. */
   onAi?: (on: boolean) => void;
+  /** How far the AI has got with this book (features/ai/progress.ts). */
+  ai: AiProgress;
+  bookId: string;
+  /** Who's in the book is known, and who says each line: character voices can be had. */
+  castReady: boolean;
 }
 
-export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi }: Props) {
+export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi, ai, bookId, castReady }: Props) {
   const prefs = useVoicePrefs();
+  const round = useRound();
+  const cast = useCast();
+  const characters = castReady && cast.on;
   const listed = useListedVoices();
   const load = useLoadState();
   const mode = prefs.mode;
@@ -147,10 +170,21 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     if (paired) pickSide(voices, v);
     else setVoicePrefs({ voice: { ...prefs.voice, [voices]: v.key } });
   };
-  const setCount = (n: 1 | 2) => {
+  // Character voices read with 2 voices for now, hers and his for anyone without one of their own.
+  const setCount = (n: Count) => {
+    if (n === 'cast') {
+      if (!castReady) { setWaiting('cast'); return; }
+      setCastOn(true);
+      if (two === 'ready') setVoicePrefs({ count: { ...prefs.count, [mode]: 2 } });
+      return;
+    }
     if (n === 2 && two !== 'ready') { setWaiting('two'); return; }
+    setCastOn(false);
     setVoicePrefs({ count: { ...prefs.count, [mode]: n } });
   };
+  let count: Count = 1;
+  if (two === 'ready') count = prefs.count[mode];
+  if (characters) count = 'cast';
   const setMode = (m: Mode) => setVoicePrefs({ mode: m });
 
   const toggleHear = (v: VoiceInfo) => {
@@ -184,6 +218,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   if (music !== 'ready') musicLocked = () => setWaiting('music');
   let soonOff = two === 'off';
   if (waiting === 'music') soonOff = music === 'off';
+  if (waiting === 'cast') soonOff = ai.stage === 'off';
 
   if (!onStart || !onStop) {
     return (
@@ -236,6 +271,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   return (
     <div className="pnl vs" ref={onRoot}>
       <div className="pnl-h">Read aloud</div>
+      <SheetAi p={ai} onAi={onAi} />
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
       {speech.allowed && (
         <div className="ctl tgrow">
@@ -247,7 +283,8 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
       <Music onLocked={musicLocked} />
-      <Segmented label="Voices" value={two === 'ready' ? prefs.count[mode] : 1} onChange={setCount} options={counts(two === 'ready')} />
+      <Segmented label="Voices" value={count} onChange={setCount} options={counts(two === 'ready', castReady)} />
+      {characters && <CastSection book={bookId} design={round.cast} playing={playing} />}
       {paired && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />
       <div className="vs-lists" role={paired ? 'group' : 'radiogroup'} aria-label={paired ? 'Her voice and his' : 'Voice'}>

@@ -1,5 +1,6 @@
 import type { RefObject } from 'react';
 import type { RevisitResponse } from '@breader/shared/ai';
+import type { AiProgress } from '../../ai/progress';
 import type { LoadedBook, TocItem } from '../../../books/types';
 import type { Chapter } from '../chapters';
 import type { TalkView } from './Comments';
@@ -12,11 +13,14 @@ import type { MangaControls } from '../Panels';
 import type { ReaderSettings } from '../settings';
 
 /** `revisit` is the drop up from the bottom line; `recap` the window it opens (chrome/Revisit.tsx). */
-export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap' | 'comments' | 'keys';
+/** `ai`: how far the AI has got with the book, from the spark or the meter up top (design round, features/ai). */
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap' | 'comments' | 'keys' | 'ai';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
   book: LoadedBook;
+  /** The book's id in the library, for what's kept per book. */
+  bookId: string;
   /** The reader's own name for the book, if they renamed it. */
   title?: string;
   loc: Loc | null;
@@ -68,6 +72,8 @@ export interface ChromeProps {
     choosing: boolean;
     begun: boolean;
     choose: () => void;
+    /** Stops the light where it is, as a tap on the page does. */
+    pause: () => void;
     cancel: () => void;
     fromTop: () => void;
     carryOn: () => void;
@@ -96,6 +102,10 @@ export interface ChromeProps {
   music: 'ready' | 'soon' | 'off';
   /** Turns the book's AI switch on or off from the reader, where 2 voices and the music ask for it. */
   letAi?: (on: boolean) => void;
+  /** How far the AI has got with this book (features/ai/progress.ts), asked again while it's open. */
+  aiProgress: AiProgress;
+  /** The voice or the light, moved on or back from the play row: by seconds, or a sentence at a time. */
+  transport: { skip: (seconds: number) => void; step: (dir: -1 | 1) => void };
   /**
    * Comments on the book (comments.ts), for the speech bubble a PDF has in place of the tail:
    * `opens` says whether a chapter's thread is open to them yet, `at` is the thread the drop opens

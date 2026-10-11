@@ -18,6 +18,18 @@ export const GAP = 80;
 /** The lines of controls above and below the text (instrument.css), which cover a scrolled page's edges. */
 export const BAR = 76;
 
+/**
+ * The room under the page: the bottom line, and the play row over it where there is one. The reader
+ * says it as --foot (Reader.tsx); without it, it's the bar.
+ */
+export function footOf(el: Element | null | undefined): number {
+  const rd = el?.closest('.rd');
+  if (!rd) return BAR;
+  const v = parseFloat(getComputedStyle(rd).getPropertyValue('--foot'));
+  if (Number.isFinite(v)) return v;
+  return BAR;
+}
+
 export interface Loc {
   section: number;
   block: number;
@@ -522,7 +534,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       // What can be seen between the lines of controls, less two lines to read on from, so none
       // go by unseen under them.
       const lines = s.size * s.lh * 2;
-      glide(v, dir * Math.max(lines, v.clientHeight - (head ? BAR : 0) - BAR - lines));
+      glide(v, dir * Math.max(lines, v.clientHeight - (head ? BAR : 0) - footOf(v) - lines));
       return;
     }
     const np = pageRef.current + dir;
@@ -568,7 +580,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     }
     // Not under the lines of controls, which cover the first and last few lines of a scrolled page.
     const v = viewRef.current!.getBoundingClientRect();
-    if (r.top >= v.top + (head ? BAR : 0) - 1 && r.bottom <= v.bottom - BAR - 8) return 'here';
+    if (r.top >= v.top + (head ? BAR : 0) - 1 && r.bottom <= v.bottom - footOf(viewRef.current) - 8) return 'here';
     return r.top > v.top && r.top < v.bottom + v.height ? 'next' : 'away';
   };
 
@@ -581,7 +593,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     }
     const v = viewRef.current!.getBoundingClientRect();
     const top = v.top + (head ? BAR : 0);
-    const bottom = v.bottom - BAR;
+    const bottom = v.bottom - footOf(viewRef.current);
     if (Math.min(r.bottom, bottom) - Math.max(r.top, top) >= Math.min(r.height, bottom - top) * 0.6) return 'here';
     return r.top > v.top && r.top < v.bottom + v.height ? 'next' : 'away';
   };
@@ -598,7 +610,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       const r = el.getBoundingClientRect();
       const box = viewRef.current!.getBoundingClientRect();
       const top = box.top + (head ? BAR : 0);
-      const by = r.top - top - Math.max(0, (box.bottom - BAR - top - r.height) / 2);
+      const by = r.top - top - Math.max(0, (box.bottom - footOf(viewRef.current) - top - r.height) / 2);
       if (Math.abs(by) > 24) steer(by);
     }
     return place !== 'away';
@@ -702,6 +714,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   useLayoutEffect(() => {
     if (!looked) return;
     let frame = 0;
+    const foot = footOf(viewRef.current);
     const draw = () => {
       frame = requestAnimationFrame(draw);
       const el = pics.current[looked.pic]?.el;
@@ -711,7 +724,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       const box = rootRef.current!.getBoundingClientRect();
       const v = viewRef.current!.getBoundingClientRect();
       const x = Math.min(r.right, v.right) - 10 - ring.offsetWidth;
-      const y = Math.min(r.bottom, v.bottom - (pagesMode ? 4 : BAR)) - 10 - ring.offsetHeight;
+      const y = Math.min(r.bottom, v.bottom - (pagesMode ? 4 : foot)) - 10 - ring.offsetHeight;
       ring.style.translate = `${x - box.left}px ${y - box.top}px`;
       ring.style.setProperty('--left', lookLeft().toFixed(4));
     };

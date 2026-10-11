@@ -1,0 +1,146 @@
+/* The AI's progress (AiStatus.tsx), in the library's colours or, inside the reader, the page's. */
+.ai, .ai-status, .ai-spark, .ai-tiles, .ai-meter, .ai-steps, .ai-note {
+  --ai-fg: var(--ink);
+  --ai-mu: var(--ink-2);
+  --ai-line: var(--line);
+  --ai-fill: var(--fill);
+  --ai-bg: var(--paper);
+  --ai-mark: var(--bc, var(--accent));
+}
+.rd :is(.ai, .ai-status, .ai-spark, .ai-tiles, .ai-meter, .ai-steps, .ai-note) {
+  --ai-fg: var(--r-fg);
+  --ai-mu: var(--r-mu);
+  --ai-line: var(--r-line);
+  --ai-fill: var(--r-fill);
+  --ai-bg: var(--r-bg);
+  --ai-mark: var(--book-mark);
+}
+
+.ai { display: grid; gap: 8px; }
+.ai-head { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.ai-label { flex: 1; min-width: 0; font: var(--ui-w) 11.5px/1.2 var(--ui); color: var(--ai-mu); }
+.add-dialog .ai-label, .bulk .ai-label { font-size: 12.5px; }
+.ai-why { margin: 0; font: var(--ui-w) 11px/1.35 var(--ui); color: var(--ai-mu); opacity: 0.85; }
+.ai-sub { font: var(--ui-w) 11px/1.3 var(--ui); color: var(--ai-mu); }
+.ai-status { display: grid; gap: 8px; }
+.ai-offer { margin: 0; font: var(--ui-w) 12px/1.4 var(--ui); color: var(--ai-fg); }
+.ai .i3-dots-icon, .ai-status .i3-dots-icon { height: 0.8em; fill: currentColor; flex: none; }
+
+/* Where it is, with the spark. */
+.ai-stage { display: flex; align-items: center; gap: 7px; font: var(--ui-w-strong) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ai-fg); }
+.ai-stage.is-done { color: var(--ai-mark); }
+
+/* C: the spark. Two drawings in one place, swapped in steps while it reads, so it beats. */
+.ai-spark { position: relative; display: inline-grid; flex: none; color: var(--ai-mu); font-size: 13px; line-height: 1; }
+.ai-spark > span { grid-area: 1 / 1; display: grid; place-items: center; }
+.ai-spark-b { opacity: 0; }
+.ai-spark.is-big { font-size: 17px; }
+.ai-spark.is-off { opacity: 0.55; }
+.ai-spark:is(.is-working, .is-queued) { color: var(--ai-mark); }
+.ai-spark.is-working .ai-spark-a { animation: ai-beat-a 1.4s steps(1, end) infinite; }
+.ai-spark.is-working .ai-spark-b { animation: ai-beat-b 1.4s steps(1, end) infinite; }
+.ai-spark.is-queued .ai-spark-a { animation: ai-wait 2.4s steps(2, jump-none) infinite; }
+.ai-spark.is-done { color: var(--ai-mark); }
+@keyframes ai-beat-a { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
+@keyframes ai-beat-b { 0%, 60% { opacity: 0; } 61%, 100% { opacity: 1; } }
+@keyframes ai-wait { 50% { opacity: 0.35; } }
+
+/* A: four tiles. Waiting ones are dashed, the one being made blinks, ready ones light up. */
+.ai-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ai-tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 6px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--ai-line);
+  color: var(--ai-fg);
+}
+.ai-tile.is-off, .ai-tile.is-waiting { box-shadow: none; background-image: linear-gradient(90deg, var(--ai-line) 50%, transparent 0), linear-gradient(90deg, var(--ai-line) 50%, transparent 0), linear-gradient(0deg, var(--ai-line) 50%, transparent 0), linear-gradient(0deg, var(--ai-line) 50%, transparent 0); background-size: 6px 1px, 6px 1px, 1px 6px, 1px 6px; background-position: 0 0, 0 100%, 0 0, 100% 0; background-repeat: repeat-x, repeat-x, repeat-y, repeat-y; }
+.ai-tile.is-ready { background: color-mix(in srgb, var(--ai-mark) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ai-mark) 55%, transparent); }
+.ai-tile-i { grid-row: 1 / 3; align-self: start; padding-top: 1px; font-size: 14px; color: var(--ai-mu); }
+.ai-tile.is-ready .ai-tile-i, .ai-tile.is-making .ai-tile-i { color: var(--ai-mark); }
+.ai-tile.is-making .ai-tile-i { animation: ai-wait 1s steps(2, jump-none) infinite; }
+.ai-tile-t { display: grid; gap: 4px; min-width: 0; }
+.ai-tile-t b { font: var(--ui-w-strong) 11.5px/1.1 var(--ui); }
+.ai-tile-a { font: var(--ui-w) 10.5px/1.25 var(--ui); color: var(--ai-mu); }
+.ai-tile-s { grid-column: 2; display: flex; align-items: center; gap: 5px; font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ai-mu); }
+.ai-tile.is-ready .ai-tile-s { color: var(--ai-mark); }
+.ai-tile-s .i3-dots-icon { height: 0.9em; }
+.ai-tiles.is-compact { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.ai-tiles.is-compact .ai-tile { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; padding: 8px 4px; row-gap: 6px; }
+.ai-tiles.is-compact .ai-tile-i { grid-row: auto; font-size: 15px; }
+.ai-tiles.is-compact .ai-tile-s { grid-column: auto; }
+.ai-tiles.is-compact .ai-tile-t b { font-size: 10px; }
+
+/* B: the meter, a row of square dots like the book's own progress, split by pass. */
+.ai-meter { display: grid; gap: 6px; }
+.ai-meter-dots { display: flex; align-items: center; }
+.ai-meter-dots i { flex: 1; max-width: 7px; aspect-ratio: 1; margin-right: 2px; border-radius: 1px; background: var(--ai-line); }
+.ai-meter-dots i.is-split { margin-left: 4px; }
+.ai-meter-dots i.is-read { background: var(--ai-mark); }
+.ai-meter-dots i.is-now { background: var(--ai-fg); animation: ai-wait 0.9s steps(2, jump-none) infinite; }
+.ai-meter-names { display: grid; column-gap: 8px; font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ai-mu); }
+.ai-meter-names .is-ready { color: var(--ai-mark); }
+.ai-meter-names .is-making { color: var(--ai-fg); }
+
+/* C: the features as a short list beside the spark. */
+.ai-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ai-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 5px 0; font: var(--ui-w) 11.5px/1 var(--ui); color: var(--ai-fg); }
+.ai-row > .i3-dots-icon { font-size: 13px; color: var(--ai-mu); }
+.ai-row em { font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ai-mu); }
+.ai-row.is-ready > .i3-dots-icon, .ai-row.is-ready em { color: var(--ai-mark); }
+.ai-row.is-making > .i3-dots-icon { color: var(--ai-mark); animation: ai-wait 1s steps(2, jump-none) infinite; }
+
+/* D: the passes as steps. */
+.ai-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.ai-step { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding-bottom: 10px; }
+.ai-step:not(:last-child)::after { content: ""; position: absolute; left: 9.5px; top: 22px; bottom: 2px; border-left: 1px dashed var(--ai-line); }
+.ai-step.is-ready:not(:last-child)::after { border-left-style: solid; border-color: var(--ai-mark); }
+.ai-step-n { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 6px; font: var(--ui-w-strong) 10.5px/1 var(--ui); color: var(--ai-mu); box-shadow: inset 0 0 0 1px var(--ai-line); }
+.ai-step.is-ready .ai-step-n { background: var(--ai-mark); color: var(--ai-bg); box-shadow: none; font-size: 9px; }
+.ai-step.is-making .ai-step-n { color: var(--ai-fg); box-shadow: inset 0 0 0 1.5px var(--ai-fg); animation: ai-wait 1s steps(2, jump-none) infinite; }
+.ai-step-t { display: grid; gap: 5px; padding-top: 4px; min-width: 0; }
+.ai-step-t b { font: var(--ui-w-strong) 11.5px/1.1 var(--ui); color: var(--ai-fg); }
+.ai-step.is-waiting .ai-step-t b { color: var(--ai-mu); }
+.ai-step-now { font: var(--ui-w) 10.5px/1.25 var(--ui); color: var(--ai-fg); }
+.ai-step-u { display: flex; flex-wrap: wrap; gap: 4px; }
+.ai-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 999px; font: var(--ui-w) 10px/1 var(--ui); color: var(--ai-mu); box-shadow: inset 0 0 0 1px var(--ai-line); }
+.ai-chip .i3-dots-icon { height: 0.95em; }
+.ai-chip.is-ready { color: var(--ai-mark); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ai-mark) 60%, transparent); }
+.ai-chip.is-making { color: var(--ai-fg); }
+
+/* E: a note, typed in. */
+.ai-note { margin: 0; font: var(--ui-w) 12.5px/1.45 var(--ui); color: var(--ai-fg); text-wrap: pretty; }
+.ai-note .typed { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-spark *, .ai-tile-i, .ai-meter-dots i, .ai-row > .i3-dots-icon, .ai-step-n { animation: none !important; }
+  .ai-spark-b { opacity: 0 !important; }
+  .ai-spark-a { opacity: 1 !important; }
+}
+
+/* In the reader: up top, the spark (C) or a small meter (B), and the drop it opens. */
+.i3-ai { color: var(--r-fg); }
+.i3-ai .ai-spark { font-size: 13px; }
+.i3-ai.is-B { padding: 9px 8px; }
+.ai-mini { display: flex; align-items: center; gap: 1.5px; height: 13px; }
+.ai-mini i { width: 3px; height: 7px; border-radius: 0.5px; background: var(--r-line); }
+.ai-mini i.is-read { background: var(--book-mark); }
+.ai-mini i.is-now { background: var(--r-fg); animation: ai-wait 0.9s steps(2, jump-none) infinite; }
+.ai-mini.is-queued i:first-child { background: var(--r-mu); animation: ai-wait 2.4s steps(2, jump-none) infinite; }
+/* Touch screens show the head quietly; this one keeps its colour, as play did. */
+.rd .i3-head .i3-ai { opacity: 1; transform: none; }
+.i3-drop.is-ai { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(360px, calc(100% - 24px)); }
+.ai-pnl .ai-status { margin-top: 4px; }
+.ai-pnl-note { margin: 12px 0 0; }
+.ai-sheet { margin: 0 0 14px; padding: 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--r-line); }
+.ai-sheet .ai-label { color: var(--r-fg); }
+/* What the AI just made, or where it is, said over the bottom line. */
+.rd-chrome > .i3-hint.is-ai { display: flex; align-items: center; gap: 7px; }
+.i3-hint.is-ai .ai-spark { font-size: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-mini i { animation: none !important; }
+}

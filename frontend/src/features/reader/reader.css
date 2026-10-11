@@ -175,7 +175,7 @@ label.clbl { display: block; }
 .fv.is-pages .fv-view {
   position: absolute;
   top: 76px;
-  bottom: 76px;
+  bottom: var(--foot, 76px);
   left: 50%;
   width: calc(var(--vw) + 2 * var(--hang));
   margin-left: calc(var(--vw) / -2 - var(--hang));
@@ -234,7 +234,7 @@ label.clbl { display: block; }
 .fv-zone {
   position: absolute;
   top: 76px;
-  bottom: 76px;
+  bottom: var(--foot, 76px);
   width: calc(50% - var(--vw) / 2 + var(--vw) * 0.2);
   display: flex;
   align-items: center;

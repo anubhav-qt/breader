@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { AI_ELSEWHERE, AI_LABEL, AI_ON, AI_WHY } from '../../books/ai';
+import { AI_LABEL, AI_ON, AI_WHY } from '../../books/ai';
 import type { BookEdit } from '../../books/types';
 import { BOOK_COLORS, colorVars } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
@@ -12,6 +12,7 @@ import { SeriesField, type SeriesValue } from './SeriesField';
 import { genreIds, joinGenres } from '@breader/shared/genres';
 import { GenreField } from './GenreField';
 import { Download } from './Download';
+import { BookAiSwitch } from '../ai/AiStatus';
 
 interface Props {
   book: ShelfItem;
@@ -245,16 +246,9 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
         </div>
       )}
       {/* A manga's pages are pictures: nothing for an AI to read along. */}
+      {/* Once on, on for good: it can't be turned off. Then it says how far the AI has got. */}
       {book.format !== 'CBZ' && (
-        <>
-          <div className="ep-share">
-            <span className="ep-label" id="ep-ai">{AI_LABEL}</span>
-            {/* Once on, on for good: it can't be turned off. */}
-            <button type="button" className="switch" role="switch" aria-checked={!!book.ai} aria-labelledby="ep-ai" aria-describedby="ep-ai-why" disabled={!!book.ai} onClick={() => onChange({ ai: true })} />
-          </div>
-          {book.aiElsewhere && <p className="ep-note">{AI_ELSEWHERE}</p>}
-          <p className="ep-note" id="ep-ai-why">{book.ai ? AI_ON : AI_WHY}</p>
-        </>
+        <BookAiSwitch bookId={book.id} color={book.color} on={!!book.ai} label={AI_LABEL} why={book.ai ? AI_ON : AI_WHY} onTurnOn={() => onChange({ ai: true })} />
       )}
       {/* A manga read through the laptop: the whole of it, to read offline. */}
       {book.source === 'remote' && <Download book={book} />}

@@ -6,6 +6,7 @@ import { BulkBar, type BulkAction } from './components/BulkBar';
 import { Header, type Tab } from './components/Header';
 import { IconAddBook, IconLock, IconPeople, IconPlus, IconStar, IconTrash } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
+import { DesignBar } from './features/design/DesignBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
@@ -1302,6 +1303,7 @@ export default function App() {
           onReset={() => void lib.reset()}
         />
       )}
+      {devTools && <DesignBar />}
     </MotionConfig>
   );
 }

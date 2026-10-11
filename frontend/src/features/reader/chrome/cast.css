@@ -1,0 +1,134 @@
+/* Character voices in the voice sheet (chrome/Cast.tsx). Each kind of voice has a colour: women and
+   men in her and his colours from 2 voices, children lighter, the old greyer. */
+
+.rd {
+  --cs-F: var(--her-mark);
+  --cs-M: var(--his-mark);
+  --cs-girl: color-mix(in oklab, var(--her-mark) 62%, var(--r-bg));
+  --cs-boy: color-mix(in oklab, var(--his-mark) 62%, var(--r-bg));
+  --cs-oldF: color-mix(in oklab, var(--her-mark) 45%, var(--r-mu));
+  --cs-oldM: color-mix(in oklab, var(--his-mark) 45%, var(--r-mu));
+}
+
+.cs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 2px 0 14px; }
+.cs-speaking, .cs-auto, .cs-board { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.cs-sample { margin: 0; font-size: 11.5px; color: var(--r-mu); }
+.cs-say { margin: 0; font: var(--ui-w) 12px/1.45 var(--ui); color: var(--r-fg); }
+.cs-say b { font-weight: inherit; color: var(--book-mark); }
+
+/* A face: initials in a rounded square of the kind's colour. */
+.cs-face {
+  --k: var(--r-mu);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  font: var(--ui-w-strong) 12px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--k);
+  background: color-mix(in srgb, var(--k) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 45%, transparent);
+}
+.cs-face.is-F { --k: var(--cs-F); }
+.cs-face.is-M { --k: var(--cs-M); }
+.cs-face.is-girl { --k: var(--cs-girl); }
+.cs-face.is-boy { --k: var(--cs-boy); }
+.cs-face.is-oldF { --k: var(--cs-oldF); }
+.cs-face.is-oldM { --k: var(--cs-oldM); }
+.cs-face.is-s { width: 28px; height: 28px; border-radius: 7px; font-size: 10.5px; }
+.cs-face.is-m { width: 42px; height: 42px; }
+.cs-face.is-l { width: 56px; height: 56px; border-radius: 12px; font-size: 17px; }
+
+/* A: faces in a grid, each saying whose voice it has. */
+.cs-faces { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.cs-face-b { display: grid; justify-items: center; gap: 5px; padding: 8px 2px 7px; border-radius: 10px; transition: background-color 140ms ease; }
+.cs-face-b:hover { background: var(--r-fill); }
+.cs-face-b.is-on { background: var(--r-fill); }
+.cs-face-b.is-on .cs-face { color: var(--r-bg); background: var(--k); }
+.cs-face-n { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 10.5px/1 var(--ui); color: var(--r-fg); }
+.cs-face-v { font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.cs-shuffle { justify-self: start; }
+
+/* B: a list, each with their voice. */
+.cs-list { display: grid; gap: 1px; }
+.cs-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 3px 0 6px; border-radius: 9px; transition: background-color 140ms ease; }
+.cs-row:hover { background: var(--r-fill); }
+.cs-who { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.cs-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 19px/1 var(--read); color: var(--r-fg); }
+.cs-who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 10px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.cs-pick { position: relative; display: flex; align-items: center; }
+.cs-pick select {
+  appearance: none;
+  height: 30px;
+  padding: 0 22px 0 9px;
+  border-radius: 8px;
+  font: var(--ui-w) 11px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-fg);
+  background: var(--r-fill);
+  border: 0;
+  cursor: pointer;
+}
+.cs-pick .i3-caret { position: absolute; right: 8px; opacity: 1; pointer-events: none; color: var(--r-mu); }
+
+/* C: kinds, each a row of tiles; a tap opens that kind's voices. */
+.cs-board { gap: 12px; }
+.cs-group { display: grid; gap: 6px; }
+.cs-group-h { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px; }
+.cs-group-h span { font-size: 10px; color: var(--r-mu); }
+.cs-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.cs-tile { display: flex; align-items: center; gap: 9px; padding: 6px 8px 6px 6px; border-radius: 10px; text-align: left; box-shadow: inset 0 0 0 1px var(--r-line); transition: background-color 140ms ease, box-shadow 140ms ease; }
+.cs-tile:hover { background: var(--r-fill); }
+.cs-tile.is-open { background: var(--r-fill); box-shadow: inset 0 0 0 1px var(--r-fg); }
+.cs-tile-t { min-width: 0; display: grid; gap: 4px; }
+.cs-tile-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 17px/1 var(--read); color: var(--r-fg); }
+.cs-tile-t span { font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.cs-choose { overflow: hidden; }
+.cs-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 4px; }
+.cs-chip { display: inline-flex; align-items: center; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--r-line); }
+.cs-chip > button:first-child { height: 30px; padding: 0 4px 0 10px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-fg); }
+.cs-chip-hear { width: 28px; height: 30px; display: grid; place-items: center; font-size: 10px; color: var(--r-mu); }
+.cs-chip.is-on { background: var(--r-fg); box-shadow: none; }
+.cs-chip.is-on > button { color: var(--r-bg); }
+
+/* D: who's speaking, big, and everyone in a strip below. */
+.cs-now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--k) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 35%, transparent);
+  transition: background-color 300ms ease, box-shadow 300ms ease;
+}
+.cs-now-t { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.cs-now-w { font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--k); }
+.cs-now-t b { font: 400 26px/1 var(--read); color: var(--r-fg); }
+.cs-now-t > span:last-child { font: var(--ui-w) 10.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.cs-now-bars { display: flex; align-items: flex-end; gap: 2px; height: 18px; }
+.cs-now-bars i { width: 4px; height: 4px; border-radius: 1px; background: var(--k); }
+.cs-now.is-live .cs-now-bars i { animation: cs-talk 0.9s steps(3, jump-none) infinite; }
+.cs-now.is-live .cs-now-bars i:nth-child(2) { animation-delay: -0.3s; }
+.cs-now.is-live .cs-now-bars i:nth-child(3) { animation-delay: -0.6s; }
+@keyframes cs-talk { 0% { height: 4px; } 50% { height: 18px; } 100% { height: 9px; } }
+.cs-strip { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.cs-mini { flex: none; display: grid; justify-items: center; gap: 4px; width: 52px; padding: 6px 0 5px; border-radius: 9px; font: var(--ui-w) 9.5px/1 var(--ui); color: var(--r-mu); transition: background-color 140ms ease, opacity 200ms ease; }
+.cs-mini span { max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-mini:hover, .cs-mini.is-on { background: var(--r-fill); }
+.cs-mini.is-now { color: var(--r-fg); }
+.cs-mini.is-now .cs-face { color: var(--r-bg); background: var(--k); }
+
+/* D, on the play row. */
+.cs-speaker { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font: var(--ui-w) 11px/1 var(--ui); color: var(--r-fg); white-space: nowrap; }
+.cs-speaker .cs-face { width: 24px; height: 24px; border-radius: 6px; font-size: 9.5px; color: var(--r-bg); background: var(--k); box-shadow: none; }
+@media (max-width: 520px) {
+  .cs-speaker .typed { display: none; }
+  .cs-faces { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-now.is-live .cs-now-bars i { animation: none; height: 10px; }
+}
