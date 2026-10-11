@@ -71,6 +71,10 @@ export interface ChromeProps {
     waiting: boolean;
     choosing: boolean;
     begun: boolean;
+    /** Play reads the words aloud as they light up, rather than lighting them at the pace alone. */
+    voice: boolean;
+    /** Picks the voice or the light for play; whatever is going stops. */
+    by: (voice: boolean) => void;
     choose: () => void;
     /** Stops the light where it is, as a tap on the page does. */
     pause: () => void;

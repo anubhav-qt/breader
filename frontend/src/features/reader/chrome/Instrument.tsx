@@ -191,6 +191,8 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
           transport={transport}
           panel={panel}
           body={body}
+          music={music}
+          letAi={letAi}
           design={round.play}
           toggle={toggle}
           ask={ask}

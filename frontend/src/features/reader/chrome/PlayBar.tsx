@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../../lib/springs';
 import { readLocal, writeLocal } from '../../../lib/store';
 import type { PlayDesign } from '../../design/round';
+import { unlockMusic } from '../music';
 import { setVoicePrefs, useVoicePrefs } from '../voice/prefs';
 import { useLoadState } from '../voice/speaker';
 import { BACK, CROSS, LIGHT, ON, PAUSE, PLAY, UP, VOICES } from './icons';
 import { DotIcon, Typed } from './parts';
 import { HeadTips } from './Tip';
 import type { ChromeProps, PanelName } from './types';
+import { NotYet } from './VoiceSheet';
 import './play.css';
 
 /*
@@ -21,10 +24,12 @@ import './play.css';
  *   D Modes   Read, Listen and Immersive as one switch, with the player beside it
  *   E Peek    a slim strip that opens a tray with all of it
  *
- * While Immersive asks something (where to begin, how fast), the question takes the row.
+ * While Immersive asks something (where to begin, how fast), the question takes the row. In A and
+ * D, picking a way never starts it: play does. Picking Immersive asks, just above the switch,
+ * whether to read or listen, with the music there too.
  */
 
-type Props = Pick<ChromeProps, 'book' | 'narration' | 'immersion' | 'transport' | 'panel' | 'body'> & {
+type Props = Pick<ChromeProps, 'book' | 'narration' | 'immersion' | 'transport' | 'panel' | 'body' | 'music' | 'letAi'> & {
   design: PlayDesign;
   toggle: (p: PanelName) => void;
   /** Immersive's question, asked on the row in place of the player: where to begin, or the pace. */
@@ -40,8 +45,10 @@ type Way = 'read' | 'listen' | 'immersive';
 
 const SEEN_VOICES = 'breader.play.voices-seen.v1';
 const NUDGED = 'breader.play.nudged.v1';
+/** Read or Listen, as last picked, outside Immersive. */
+const WAY = 'breader.play.way.v1';
 
-export function PlayBar({ book, narration, immersion, transport, panel, body, design, toggle, ask, speaker }: Props) {
+export function PlayBar({ book, narration, immersion, transport, panel, body, music, letAi, design, toggle, ask, speaker }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { mode } = useVoicePrefs();
   const canImmerse = book.kind === 'flow';
@@ -107,16 +114,67 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, de
     </button>
   );
 
-  // A and D: how it's read now, and a pick of another.
-  let now: Way = 'read';
-  if (immersion) now = 'immersive';
-  else if (narration?.playing) now = 'listen';
-  const pick = (v: Way) => {
-    if (v === now) return;
-    if (v === 'read') switchTo('normal', null);
-    else if (v === 'listen') switchTo('normal', 'listen');
-    else switchTo('immersive', 'light');
+  // A and D: how it's read now, and a pick of another. Read or Listen is kept as picked, and a voice
+  // started any other way (play in Read, a media key, the voice sheet) makes it Listen.
+  const [chosen, setChosen] = useState<Way>(() => readLocal<Way>(WAY, 'read'));
+  const keepWay = (v: Way) => {
+    setChosen(v);
+    writeLocal(WAY, v);
   };
+  const normalVoice = mode === 'normal' && !!narration?.playing;
+  useEffect(() => {
+    if (normalVoice && chosen !== 'listen') keepWay('listen');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalVoice]);
+  let now: Way = chosen;
+  if (now === 'listen' && !narration) now = 'read';
+  if (immersion) now = 'immersive';
+  else if (normalVoice) now = 'listen';
+
+  // Immersive's question, just above the switch: read or listen, and the music.
+  const [card, setCard] = useState(false);
+  const wrap = useRef<HTMLSpanElement>(null);
+  const asking = !!ask;
+  useEffect(() => {
+    if (panel || asking) setCard(false);
+  }, [panel, asking]);
+  const pick = (v: Way) => {
+    if (v === 'immersive') {
+      if (now === 'immersive') {
+        setCard(!card);
+        return;
+      }
+      switchTo('immersive', null);
+      setCard(true);
+      return;
+    }
+    setCard(false);
+    keepWay(v);
+    if (v === now) return;
+    switchTo('normal', null);
+  };
+  const modes = (
+    <span className="pl-mw" ref={wrap}>
+      <Modes now={now} canListen={!!narration} canImmerse={canImmerse} onPick={pick} />
+      <AnimatePresence>
+        {card && immersion && (
+          <ImmersiveCard
+            key="card"
+            wrap={wrap}
+            voice={immersion.voice}
+            canListen={!!narration}
+            music={music}
+            onAi={letAi}
+            onPick={(voice) => {
+              setCard(false);
+              if (voice !== immersion.voice) immersion.by(voice);
+            }}
+            onClose={() => setCard(false)}
+          />
+        )}
+      </AnimatePresence>
+    </span>
+  );
 
   let row: ReactNode;
   if (ask) {
@@ -124,9 +182,9 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, de
   } else if (design === 'A') {
     row = (
       <>
-        <span className="pl-l"><Modes now={now} canListen={!!narration} canImmerse={canImmerse} onPick={pick} /></span>
+        <span className="pl-l">{modes}</span>
         <Transport {...bits} />
-        <span className="pl-r">{aloud}{voices}</span>
+        <span className="pl-r">{voices}</span>
       </>
     );
   } else if (design === 'B') {
@@ -152,11 +210,10 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, de
   } else if (design === 'D') {
     row = (
       <>
-        <Modes now={now} canListen={!!narration} canImmerse={canImmerse} onPick={pick} />
+        {modes}
         <span className="pl-r">
           {speaker}
           <Transport {...bits} small />
-          {aloud}
           {voices}
         </span>
       </>
@@ -187,7 +244,9 @@ function mainAction(narration: Props['narration'], immersion: Props['immersion']
   if (immersion?.running) return { icon: PAUSE, label: 'Pause the light', word: 'Pause', act: immersion.pause };
   if (immersion) {
     const word = immersion.begun ? 'Continue' : 'Begin';
-    return { icon: PLAY, label: `${word}: light the words at your pace`, word, act: immersion.choose };
+    let label = `${word}: light the words at your pace`;
+    if (immersion.voice) label = `${word}: a voice reads as the words light up`;
+    return { icon: PLAY, label, word, act: immersion.choose };
   }
   if (narration) return { icon: PLAY, label: 'Read aloud from here', word: 'Listen', act: narration.toggle };
   return null;
@@ -368,6 +427,93 @@ function Nudge({ going, onTry }: { going: boolean; onTry: () => void }) {
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+/**
+ * A and D: Immersive's question as it comes on, just above the switch: the words lit at the pace
+ * alone, or a voice reading them, and the book's music on or off. Picking only picks; play starts
+ * it. A tap anywhere else, or Escape, puts it away. Music the book doesn't have yet looks off, and
+ * a tap on it says why, as in the voice sheet.
+ */
+function ImmersiveCard({ wrap, voice, canListen, music, onAi, onPick, onClose }: {
+  wrap: RefObject<HTMLSpanElement | null>;
+  voice: boolean;
+  canListen: boolean;
+  music: Props['music'];
+  onAi: Props['letAi'];
+  onPick: (voice: boolean) => void;
+  onClose: () => void;
+}) {
+  const { music: musicOn } = useVoicePrefs();
+  const [why, setWhy] = useState(false);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    if (why) return;
+    const onDown = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) close.current();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      close.current();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [why, wrap]);
+
+  const ready = music === 'ready';
+  const toggleMusic = () => {
+    if (!ready) {
+      setWhy(true);
+      return;
+    }
+    setVoicePrefs({ music: !musicOn });
+    if (!musicOn) unlockMusic();
+  };
+  const [page, setPage] = useState<HTMLElement | null>(null);
+  const onRoot = useCallback((el: HTMLDivElement | null) => {
+    if (el) setPage(el.closest<HTMLElement>('.rd'));
+  }, []);
+  return (
+    <motion.div
+      ref={onRoot}
+      className="pl-card"
+      role="dialog"
+      aria-label="Immersive"
+      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 6, scale: 0.98, transition: { duration: 0.14 } }}
+      transition={springs.snappy}
+    >
+      <div className="pl-card-ways" role="radiogroup" aria-label="Read or listen">
+        <button type="button" role="radio" aria-checked={!voice} className={voice ? '' : 'is-on'} onClick={() => onPick(false)}>
+          <DotIcon rows={LIGHT} />
+          <b>Read</b>
+          <span>The words light up at your pace</span>
+        </button>
+        {canListen && (
+          <button type="button" role="radio" aria-checked={voice} className={voice ? 'is-on' : ''} onClick={() => onPick(true)}>
+            <DotIcon rows={PLAY} />
+            <b>Listen</b>
+            <span>A voice reads them as they light up</span>
+          </button>
+        )}
+      </div>
+      <div className="pl-card-music">
+        <span id="pl-card-music">Music</span>
+        <button type="button" className={`tg${ready ? '' : ' is-muted'}`} role="switch" aria-checked={ready && musicOn} aria-labelledby="pl-card-music" onClick={toggleMusic} />
+      </div>
+      {page && createPortal(
+        <AnimatePresence>{why && <NotYet what="music" off={music === 'off'} onAi={onAi} onClose={() => setWhy(false)} />}</AnimatePresence>,
+        page,
+      )}
+    </motion.div>
   );
 }
 
