@@ -140,7 +140,7 @@ async function linked(w: Want | undefined, fileId: string | null | undefined): P
 export async function missing(v: VoiceInfo) {
   if (onServer()) return { files: [] as Want[], bytes: 0 };
   const f = filesOf(v);
-  const all = [...engineFiles(v.engine), f.model, f.config, f.pack].filter((w): w is Want => !!w);
+  const all = [...engineFiles(v.engine), f.model, f.config, f.pack, f.mix].filter((w): w is Want => !!w);
   const out: Want[] = [];
   for (const w of all) if (!(await has(w))) out.push(w);
   return { files: out, bytes: weight(out) };
@@ -163,7 +163,7 @@ export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
   }
   const p = (async () => {
     const f = filesOf(v);
-    const wants = [...(r.started ? [] : engineFiles(v.engine)), f.model, f.config, f.pack].filter((w): w is Want => !!w);
+    const wants = [...(r.started ? [] : engineFiles(v.engine)), f.model, f.config, f.pack, f.mix].filter((w): w is Want => !!w);
     const total = wants.reduce((n, w) => n + w.size, 0);
     let loaded = 0;
     setLoad({ key: v.key, loaded: 0, total, error: null, gpu: false });
@@ -183,6 +183,8 @@ export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
         model: await linked(f.model, u?.fileId),
         config: await linked(f.config, u?.configId),
         pack: await linked(f.pack, u?.fileId),
+        mix: f.mix,
+        speaker: f.speaker,
         british: v.british,
       }, onBytes);
       setLoad({ key: null, loaded: total });
@@ -211,7 +213,7 @@ function prepareOnServer(v: VoiceInfo): Promise<void> {
   if (ready) return ready;
   // What the server fetches the first time, as a guess until it says: the heavy voices' model too.
   const f = filesOf(v);
-  const total = [v.engine === 'kokoro' ? hosted('kokoro') : undefined, f.model, f.config, f.pack].reduce((n, w) => n + (w?.size ?? 0), 0);
+  const total = [v.engine === 'kokoro' ? hosted('kokoro') : undefined, f.model, f.config, f.pack, f.mix].reduce((n, w) => n + (w?.size ?? 0), 0);
   const p = (async () => {
     setLoad({ key: v.key, loaded: 0, total, error: null, gpu: false });
     try {

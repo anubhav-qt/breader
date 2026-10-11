@@ -18,8 +18,11 @@ export type { PiperConfig };
 
 export type Request =
   | { type: 'start'; engine: 'piper' | 'kokoro' }
-  /** Loads a voice's files: Piper's model and settings, or a Kokoro pack (and the model, once). */
-  | { type: 'voice'; key: string; model?: Want; config?: Want; pack?: Want; british?: boolean }
+  /**
+   * Loads a voice's files: Piper's model and settings, and its speaker in a model of several; or a
+   * Kokoro pack (and the model, once), and a second one to blend it with half and half.
+   */
+  | { type: 'voice'; key: string; model?: Want; config?: Want; speaker?: number; pack?: Want; mix?: Want; british?: boolean }
   | { type: 'say'; key: string; text: string; speed: number }
   /** Lets go of a voice: one tried out before it was uploaded. */
   | { type: 'forget'; key: string };
@@ -34,7 +37,9 @@ let ort: Ort | null = null;
 let engine: 'piper' | 'kokoro' = 'piper';
 /** Kokoro's one model. */
 let kokoro: InferenceSession | null = null;
-const voices = new Map<string, { session?: InferenceSession; config?: PiperConfig; pack?: Float32Array; british?: boolean }>();
+const voices = new Map<string, { session?: InferenceSession; model?: string; config?: PiperConfig; speaker?: number; pack?: Float32Array; british?: boolean }>();
+/** Piper's models, by file: the speakers of one model share it. */
+const sessions = new Map<string, InferenceSession>();
 
 const post = (r: Reply, transfer: Transferable[] = []) => scope.postMessage(r, transfer);
 
@@ -68,16 +73,43 @@ async function loadVoice(id: number, m: Extract<Request, { type: 'voice' }>) {
   if (voices.has(m.key)) return;
   if (!ort) throw new Error('The voice engine hasn’t started.');
   if (engine === 'kokoro') {
-    const [pack] = await fetchAll(id, [m.pack!]);
-    if (pack.byteLength !== KOKORO_PACK_BYTES) throw new Error('That isn’t a Kokoro voice pack.');
-    voices.set(m.key, { pack: new Float32Array(pack.buffer, pack.byteOffset, pack.byteLength / 4), british: !!m.british });
+    const wants = [m.pack!];
+    if (m.mix) wants.push(m.mix);
+    const packs = await fetchAll(id, wants);
+    for (const b of packs) if (b.byteLength !== KOKORO_PACK_BYTES) throw new Error('That isn’t a Kokoro voice pack.');
+    const pack = new Float32Array(packs[0].buffer, packs[0].byteOffset, packs[0].byteLength / 4);
+    if (!m.mix) {
+      voices.set(m.key, { pack, british: !!m.british });
+      return;
+    }
+    // A blend: the two packs averaged, style by style.
+    const other = new Float32Array(packs[1].buffer, packs[1].byteOffset, packs[1].byteLength / 4);
+    const both = new Float32Array(pack.length);
+    for (let i = 0; i < pack.length; i++) both[i] = (pack[i] + other[i]) / 2;
+    voices.set(m.key, { pack: both, british: !!m.british });
     return;
   }
-  const [model, config] = await fetchAll(id, [m.model!, m.config!]);
+  const model = m.model!.name;
+  let session = sessions.get(model);
+  const [config] = await fetchAll(id, [m.config!]);
   const cfg = JSON.parse(new TextDecoder().decode(config)) as PiperConfig;
   if (!cfg.phoneme_id_map || !cfg.audio?.sample_rate) throw new Error('That isn’t a Piper voice’s .onnx.json.');
-  const session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
-  voices.set(m.key, { session, config: cfg });
+  if (!session) {
+    const [bytes] = await fetchAll(id, [m.model!]);
+    session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
+    sessions.set(model, session);
+  }
+  voices.set(m.key, { session, model, config: cfg, speaker: m.speaker ?? 0 });
+}
+
+/** Lets go of a voice, and of its model once no other speaker of it is held. */
+async function forget(key: string) {
+  const v = voices.get(key);
+  voices.delete(key);
+  if (!v?.session) return;
+  for (const other of voices.values()) if (other.session === v.session) return;
+  sessions.delete(v.model!);
+  await v.session.release();
 }
 
 const int64 = (ids: number[]) => BigInt64Array.from(ids, (n) => BigInt(n));
@@ -102,7 +134,7 @@ async function say(m: Extract<Request, { type: 'say' }>): Promise<{ audio: Float
     input_lengths: new T('int64', int64([ids.length]), [1]),
     scales: new T('float32', new Float32Array(scales), [3]),
   };
-  if (speakers > 1) feeds.sid = new T('int64', int64([0]), [1]);
+  if (speakers > 1) feeds.sid = new T('int64', int64([v.speaker ?? 0]), [1]);
   const out = await v.session!.run(feeds);
   // A copy: the result may sit in memory the engine reuses, which can't be handed to the page.
   return { audio: new Float32Array((out[v.session!.outputNames[0]] as Tensor).data as Float32Array), rate: cfg.audio.sample_rate };
@@ -112,10 +144,8 @@ async function handle(m: Request & { id: number }) {
   try {
     if (m.type === 'start') await start(m.id, m.engine);
     else if (m.type === 'voice') await loadVoice(m.id, m);
-    else if (m.type === 'forget') {
-      await voices.get(m.key)?.session?.release();
-      voices.delete(m.key);
-    } else {
+    else if (m.type === 'forget') await forget(m.key);
+    else {
       const { audio, rate } = await say(m);
       post({ id: m.id, ok: true, audio, rate }, [audio.buffer]);
       return;

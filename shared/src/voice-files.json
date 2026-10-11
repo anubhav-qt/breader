@@ -1,5 +1,5 @@
 {
-  "$comment": "Files reading aloud needs. `from` files are fetched at build time (frontend/scripts/voices.mjs) into frontend/public/, and by the laptop's server for its own voice (server/src/speech/files.ts), split into parts under Cloudflare Pages' 25 MiB limit; `url` files come straight from their CDN. Sizes are unpacked bytes; `transfer` is what a compressed download weighs.",
+  "$comment": "Files reading aloud needs. `from` files are fetched at build time (frontend/scripts/voices.mjs) into frontend/public/, and by the laptop's server for its own voice (server/src/speech/files.ts), split into parts under Cloudflare Pages' 25 MiB limit; `url` files come straight from their CDN. Sizes are unpacked bytes; `transfer` is what a compressed download weighs. `speakers` are Normal voices that are one speaker of a model of several (`id` is its speaker id in it); `mixes` are heavy voices that average two Kokoro packs (`of`), `british` saying which way they read words.",
   "partBytes": 25165824,
   "files": {
     "ort-cpu": {
@@ -109,6 +109,375 @@
       "path": "tts/en_US-ljspeech-medium.141d612c.json",
       "size": 4972,
       "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+    },
+    "piper-john": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/john/medium/en_US-john-medium.onnx",
+      "path": "tts/en_US-john-medium.789c6c87.onnx",
+      "size": 63531379,
+      "sha256": "789c6c875726e627ddee93d51d8727859abe9c091c3d141591f4b83c2072e988"
+    },
+    "piper-john-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/john/medium/en_US-john-medium.onnx.json",
+      "path": "tts/en_US-john-medium.af60f177.json",
+      "size": 4965,
+      "sha256": "af60f177b6b550f3d7a302720c0fb89e7f94a82b5dca464775ef63b1c69ba09a"
+    },
+    "piper-bryce": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/bryce/medium/en_US-bryce-medium.onnx",
+      "path": "tts/en_US-bryce-medium.dc9caa6c.onnx",
+      "size": 63531379,
+      "sha256": "dc9caa6c313199ffb5ac698b6e542fa6cba388aeaf2731e25262e33b9810aef1"
+    },
+    "piper-bryce-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/bryce/medium/en_US-bryce-medium.onnx.json",
+      "path": "tts/en_US-bryce-medium.7ceb1bc4.json",
+      "size": 4966,
+      "sha256": "7ceb1bc4af6d4e41b6d1edbb86c67e91e01eaa71f66db4cd0ae92ac704d415be"
+    },
+    "piper-jenny": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx",
+      "path": "tts/en_GB-jenny_dioco-medium.469c630d.onnx",
+      "size": 63201294,
+      "sha256": "469c630d209e139dd392a66bf4abde4ab86390a0269c1e47b4e5d7ce81526b01"
+    },
+    "piper-jenny-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx.json",
+      "path": "tts/en_GB-jenny_dioco-medium.a9a7a93a.json",
+      "size": 4895,
+      "sha256": "a9a7a93a317c9a3cb6563e37eb057df9ef09c06188a8a4341b0fcb58cba54dd4"
+    },
+    "piper-lessac": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+      "path": "tts/en_US-lessac-medium.5efe09e6.onnx",
+      "size": 63201294,
+      "sha256": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f"
+    },
+    "piper-lessac-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+      "path": "tts/en_US-lessac-medium.efe19c41.json",
+      "size": 4885,
+      "sha256": "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0"
+    },
+    "piper-ryan": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ryan/medium/en_US-ryan-medium.onnx",
+      "path": "tts/en_US-ryan-medium.abf4c274.onnx",
+      "size": 63201294,
+      "sha256": "abf4c274862564ed647ba0d2c47f8ee7c9b717d27bdad9219100eb310db4047a"
+    },
+    "piper-ryan-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json",
+      "path": "tts/en_US-ryan-medium.44034c05.json",
+      "size": 4883,
+      "sha256": "44034c056cb15681b2ad494307c7f3f2e4499d1253c700c711fa0a4607ffe78d"
+    },
+    "piper-amy": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/amy/medium/en_US-amy-medium.onnx",
+      "path": "tts/en_US-amy-medium.b3a6e47b.onnx",
+      "size": 63201294,
+      "sha256": "b3a6e47b57b8c7fbe6a0ce2518161a50f59a9cdd8a50835c02cb02bdd6206c18"
+    },
+    "piper-amy-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+      "path": "tts/en_US-amy-medium.95a23eb4.json",
+      "size": 4882,
+      "sha256": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77"
+    },
+    "piper-alan": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alan/medium/en_GB-alan-medium.onnx",
+      "path": "tts/en_GB-alan-medium.0a309668.onnx",
+      "size": 63201294,
+      "sha256": "0a309668932205e762801f1efc2736cd4b0120329622adf62be09e56339d3330"
+    },
+    "piper-alan-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json",
+      "path": "tts/en_GB-alan-medium.c0f0d124.json",
+      "size": 4888,
+      "sha256": "c0f0d124e5895c00e7c03b35dcc8287f319a6998a365b182deb5c8e752ee8c1e"
+    },
+    "piper-alba": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alba/medium/en_GB-alba-medium.onnx",
+      "path": "tts/en_GB-alba-medium.401369c4.onnx",
+      "size": 63201294,
+      "sha256": "401369c4a81d09fdd86c32c5c864440811dbdcc66466cde2d64f7133a66ad03b"
+    },
+    "piper-alba-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alba/medium/en_GB-alba-medium.onnx.json",
+      "path": "tts/en_GB-alba-medium.aa965a2f.json",
+      "size": 4888,
+      "sha256": "aa965a2f02ecced632c2694e1fc72bbff6d65f265fab567ca945918c73dd89f4"
+    },
+    "piper-hfc_female": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx",
+      "path": "tts/en_US-hfc_female-medium.914c4737.onnx",
+      "size": 63201294,
+      "sha256": "914c473788fc1fa8b63ace1cdcdb44588f4ae523d3ab37df1536616835a140b7"
+    },
+    "piper-hfc_female-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx.json",
+      "path": "tts/en_US-hfc_female-medium.03f1fa06.json",
+      "size": 5033,
+      "sha256": "03f1fa0622b80463283592d97aca9f6e89aec345a5c56b7257723e0093c58b6c"
+    },
+    "piper-hfc_male": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx",
+      "path": "tts/en_US-hfc_male-medium.d11e403a.onnx",
+      "size": 63201294,
+      "sha256": "d11e403a02bdf5a670c877b3dc56e0e1c8cece6fb30289586314dffdc0a78cb0"
+    },
+    "piper-hfc_male-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx.json",
+      "path": "tts/en_US-hfc_male-medium.f6684742.json",
+      "size": 5033,
+      "sha256": "f66847424aed0bf99ecbb5d7cfde47c0a906f426a0daf7c46f305e7d21afd886"
+    },
+    "piper-joe": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/joe/medium/en_US-joe-medium.onnx",
+      "path": "tts/en_US-joe-medium.58afce03.onnx",
+      "size": 63201294,
+      "sha256": "58afce0321b8d9c46d7cdf9c16500cc55a793b4220212dba6b70fb788b3baf06"
+    },
+    "piper-joe-config": {
+      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/joe/medium/en_US-joe-medium.onnx.json",
+      "path": "tts/en_US-joe-medium.3d6d5410.json",
+      "size": 4794,
+      "sha256": "3d6d5410b3795cb1950595247ef8f06190719e6fdbfa3a2356d8ec368e1aad33"
+    },
+    "piper-manyvoice": {
+      "from": "https://huggingface.co/agentvibes/piper-custom-voices/resolve/aca138594af5ccd37d79fde299991576a2aaab5f/16Speakers.onnx",
+      "path": "tts/16Speakers.3cc7b8f5.onnx",
+      "size": 77100103,
+      "sha256": "3cc7b8f55b82146c09265e909beaa539254a882b9a6ac915792cbfc7d41ba235"
+    },
+    "piper-manyvoice-config": {
+      "from": "https://huggingface.co/agentvibes/piper-custom-voices/resolve/aca138594af5ccd37d79fde299991576a2aaab5f/16Speakers.onnx.json",
+      "path": "tts/16Speakers.1dae6569.json",
+      "size": 7528,
+      "sha256": "1dae6569843412ace557acdc2f2136405219ab75219efb3ddf882af2055a4c1c"
+    },
+    "kokoro-af_nicole": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_nicole.bin",
+      "path": "tts/kokoro-af_nicole.cd2191ab.bin",
+      "size": 522240,
+      "sha256": "cd2191ab31b914ed7b318416b0e4440fdf392ddad9106a060819aa600a64f59a"
+    },
+    "kokoro-af_aoede": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_aoede.bin",
+      "path": "tts/kokoro-af_aoede.4a004c33.bin",
+      "size": 522240,
+      "sha256": "4a004c33430762e2461eedb2013fad808ef4ab3121f5300f554476caf58d8361"
+    },
+    "kokoro-af_kore": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_kore.bin",
+      "path": "tts/kokoro-af_kore.9be5221b.bin",
+      "size": 522240,
+      "sha256": "9be5221b6a941c04b561959b8ff0b06e809444dcc4ab7e75a7b23606f691819e"
+    },
+    "kokoro-af_sarah": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_sarah.bin",
+      "path": "tts/kokoro-af_sarah.4409fbc1.bin",
+      "size": 522240,
+      "sha256": "4409fbc125afabacc615d94db5398d847006a737b0247d6892b7a9a0007a2f0a"
+    },
+    "kokoro-am_fenrir": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/am_fenrir.bin",
+      "path": "tts/kokoro-am_fenrir.c27989f7.bin",
+      "size": 522240,
+      "sha256": "c27989f741f7ee34d273a39d8a595cc0837d35f5ced9a29b7cc162614616df43"
+    },
+    "kokoro-am_puck": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/am_puck.bin",
+      "path": "tts/kokoro-am_puck.fcf73c98.bin",
+      "size": 522240,
+      "sha256": "fcf73c989033e9233e0b98713eca600c8c74dcc1614b37009d5450ff4a2274a0"
+    },
+    "kokoro-af_alloy": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_alloy.bin",
+      "path": "tts/kokoro-af_alloy.c4a6b876.bin",
+      "size": 522240,
+      "sha256": "c4a6b876047fd7fb472edf4ebd63cfac7c3b958a7cae7c106e8f038ca6308c45"
+    },
+    "kokoro-af_nova": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_nova.bin",
+      "path": "tts/kokoro-af_nova.18778272.bin",
+      "size": 522240,
+      "sha256": "18778272caa0d0eebaea251c35fd635f038434f9eee5e691d02a174bd328414f"
+    },
+    "kokoro-bf_isabella": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bf_isabella.bin",
+      "path": "tts/kokoro-bf_isabella.3754352c.bin",
+      "size": 522240,
+      "sha256": "3754352c4aaa46d17f27654ab7518d65b62ad6163a0f55a5f4330c2da2c4e94f"
+    },
+    "kokoro-bm_fable": {
+      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bm_fable.bin",
+      "path": "tts/kokoro-bm_fable.f8890831.bin",
+      "size": 522240,
+      "sha256": "f889083196807b4adb15e9204252165f503b8d33d3982e681c52443c49d798f1"
+    }
+  },
+  "speakers": {
+    "kara": {
+      "model": "manyvoice",
+      "id": 1
+    },
+    "maria": {
+      "model": "manyvoice",
+      "id": 3
+    },
+    "mike": {
+      "model": "manyvoice",
+      "id": 4
+    },
+    "mark": {
+      "model": "manyvoice",
+      "id": 5
+    },
+    "michael_s": {
+      "model": "manyvoice",
+      "id": 6
+    },
+    "james": {
+      "model": "manyvoice",
+      "id": 7
+    },
+    "rose": {
+      "model": "manyvoice",
+      "id": 8
+    },
+    "progressing": {
+      "model": "manyvoice",
+      "id": 9
+    },
+    "steve": {
+      "model": "manyvoice",
+      "id": 10
+    },
+    "owlivia": {
+      "model": "manyvoice",
+      "id": 11
+    },
+    "paul": {
+      "model": "manyvoice",
+      "id": 12
+    },
+    "jennifer": {
+      "model": "manyvoice",
+      "id": 13
+    },
+    "emily": {
+      "model": "manyvoice",
+      "id": 14
+    },
+    "martin": {
+      "model": "manyvoice",
+      "id": 15
+    }
+  },
+  "mixes": {
+    "iris": {
+      "of": [
+        "af_heart",
+        "af_nicole"
+      ],
+      "british": false
+    },
+    "clara": {
+      "of": [
+        "af_bella",
+        "af_sarah"
+      ],
+      "british": false
+    },
+    "maya": {
+      "of": [
+        "af_aoede",
+        "af_kore"
+      ],
+      "british": false
+    },
+    "nora": {
+      "of": [
+        "af_nova",
+        "af_alloy"
+      ],
+      "british": false
+    },
+    "lena": {
+      "of": [
+        "af_heart",
+        "af_kore"
+      ],
+      "british": false
+    },
+    "esme": {
+      "of": [
+        "bf_emma",
+        "bf_isabella"
+      ],
+      "british": true
+    },
+    "ada": {
+      "of": [
+        "bf_emma",
+        "af_bella"
+      ],
+      "british": true
+    },
+    "owen": {
+      "of": [
+        "am_fenrir",
+        "am_michael"
+      ],
+      "british": false
+    },
+    "felix": {
+      "of": [
+        "am_fenrir",
+        "am_puck"
+      ],
+      "british": false
+    },
+    "miles": {
+      "of": [
+        "am_michael",
+        "am_puck"
+      ],
+      "british": false
+    },
+    "oscar": {
+      "of": [
+        "am_michael",
+        "bm_fable"
+      ],
+      "british": false
+    },
+    "hugo": {
+      "of": [
+        "bm_fable",
+        "bm_george"
+      ],
+      "british": true
+    },
+    "rhys": {
+      "of": [
+        "bm_george",
+        "am_michael"
+      ],
+      "british": true
+    },
+    "jasper": {
+      "of": [
+        "bm_fable",
+        "am_puck"
+      ],
+      "british": true
+    },
+    "silas": {
+      "of": [
+        "bm_george",
+        "am_fenrir"
+      ],
+      "british": true
     }
   }
 }

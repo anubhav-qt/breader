@@ -1,16 +1,19 @@
 import { useSyncExternalStore } from 'react';
 import type { ListedVoice } from '@breader/shared/protocol';
 import manifest from '@breader/shared/voice-files.json';
+import { VOICES, voicesOf, type BuiltInVoice } from '@breader/shared/voices';
 import { hosted, uploaded, type HostedName, type Want } from './store';
 
 /*
- * The voices that read aloud. Each engine has five built in, hosted with the app, plus any voices
+ * The voices that read aloud. Each engine has thirty built in, hosted with the app, plus any voices
  * readers uploaded (data from GET /v1/voices):
  *
- *   Normal     Piper voices, about 64 MB each, on the CPU. Trained on public-domain or CC-licensed
- *              recordings (rhasspy/piper-voices).
+ *   Normal     Piper voices on the CPU, trained on public-domain or CC-licensed recordings: sixteen
+ *              of rhasspy/piper-voices' own, about 64 MB each, and fourteen speakers of one 77 MB
+ *              model of LibriVox readers (agentvibes/piper-custom-voices), which they share.
  *   Heavy      Kokoro-82M voices (Apache 2.0), one 326 MB model for all of them, on the GPU. It
- *              has to be full precision: the fp16 and q4f16 models only give NaNs on WebGPU.
+ *              has to be full precision: the fp16 and q4f16 models only give NaNs on WebGPU. Fifteen
+ *              are its own, and fifteen are two of those blended half and half, as its users do.
  *
  * Normal mode reads with Normal voices; Immersive with either (prefs.ts).
  */
@@ -30,6 +33,8 @@ export interface VoiceInfo {
   sample?: { parts: Record<SamplePart, string> } | { fileId: string };
   /** Kokoro only: says words the British way. */
   british?: boolean;
+  /** Kokoro only: the two voices it's a blend of, by name. */
+  blend?: [string, string];
   /** A woman's voice or a man's, for 2 voices; neither for an upload not tagged either. */
   gender?: 'F' | 'M';
   /** Uploaded voices. */
@@ -55,24 +60,27 @@ const clip = (key: string) => ({
   parts: Object.fromEntries(SAMPLE_PARTS.map((p) => [p, `/voices/${key.replace(':', '-')}-${p}.m4a`])) as Record<SamplePart, string>,
 });
 
-const piper = (id: string, name: string, accent: string, gender: 'F' | 'M'): VoiceInfo => ({ key: `piper:${id}`, engine: 'piper', name, accent, gender, sample: clip(`piper:${id}`) });
-const kokoro = (id: string, name: string, accent: string, gender: 'F' | 'M'): VoiceInfo => ({ key: `kokoro:${id}`, engine: 'kokoro', name, accent, gender, british: accent === 'UK', sample: clip(`kokoro:${id}`) });
+/** Kokoro blends, by their voice id: the two packs averaged, and how it says words. */
+const mixes = manifest.mixes as Record<string, { of: string[]; british: boolean }>;
+/** Speakers of one Piper model, by their voice id (voice-files.json). */
+const speakers = manifest.speakers as Record<string, { model: string; id: number }>;
 
+function builtIn(v: BuiltInVoice): VoiceInfo {
+  const [engine, id] = v.key.split(':') as [Engine, string];
+  const info: VoiceInfo = { key: v.key, engine, name: v.name, accent: v.accent, gender: v.gender, sample: clip(v.key) };
+  if (engine === 'kokoro') info.british = v.accent === 'UK';
+  const mix = mixes[id];
+  if (mix) {
+    const nameOf = (pack: string) => VOICES.find((x) => x.key === `kokoro:${pack}`)!.name;
+    info.blend = [nameOf(mix.of[0]), nameOf(mix.of[1])];
+  }
+  return info;
+}
+
+/** Thirty of each, in the order shared/src/voices.ts has them. */
 export const BUILT_IN: Record<Mode, VoiceInfo[]> = {
-  normal: [
-    piper('kristin', 'Kristin', 'US', 'F'),
-    piper('norman', 'Norman', 'US', 'M'),
-    piper('cori', 'Cori', 'UK', 'F'),
-    piper('northern', 'Northern', 'UK', 'M'),
-    piper('ljspeech', 'Linda', 'US', 'F'),
-  ],
-  immersive: [
-    kokoro('af_heart', 'Heart', 'US', 'F'),
-    kokoro('am_michael', 'Michael', 'US', 'M'),
-    kokoro('bf_emma', 'Emma', 'UK', 'F'),
-    kokoro('bm_george', 'George', 'UK', 'M'),
-    kokoro('af_bella', 'Bella', 'US', 'F'),
-  ],
+  normal: voicesOf('piper').map(builtIn),
+  immersive: voicesOf('kokoro').map(builtIn),
 };
 
 export const DEFAULT_VOICE: Record<Mode, string> = { normal: 'piper:kristin', immersive: 'kokoro:af_heart' };
@@ -93,8 +101,11 @@ export function fromListed(v: ListedVoice): VoiceInfo {
   };
 }
 
-/** What a voice needs besides its engine: Piper's model and settings, or a Kokoro pack. */
-export function filesOf(v: VoiceInfo): { model?: Want; config?: Want; pack?: Want } {
+/**
+ * What a voice needs besides its engine: Piper's model and settings, and which of the model's
+ * speakers it is when it has several; or a Kokoro pack, and the second one a blend averages it with.
+ */
+export function filesOf(v: VoiceInfo): { model?: Want; config?: Want; speaker?: number; pack?: Want; mix?: Want } {
   const id = v.key.split(':')[1];
   if (v.upload) {
     const u = v.upload;
@@ -102,9 +113,14 @@ export function filesOf(v: VoiceInfo): { model?: Want; config?: Want; pack?: Wan
       ? { pack: uploaded(u.fileId, u.fileSize) }
       : { model: uploaded(u.fileId, u.fileSize), config: uploaded(u.configId!, 5_000) };
   }
-  return v.engine === 'kokoro'
-    ? { pack: hosted(`kokoro-${id}` as HostedName) }
-    : { model: hosted(`piper-${id}` as HostedName), config: hosted(`piper-${id}-config` as HostedName) };
+  if (v.engine === 'kokoro') {
+    const mix = mixes[id];
+    if (mix) return { pack: hosted(`kokoro-${mix.of[0]}` as HostedName), mix: hosted(`kokoro-${mix.of[1]}` as HostedName) };
+    return { pack: hosted(`kokoro-${id}` as HostedName) };
+  }
+  const one = speakers[id];
+  if (one) return { model: hosted(`piper-${one.model}` as HostedName), config: hosted(`piper-${one.model}-config` as HostedName), speaker: one.id };
+  return { model: hosted(`piper-${id}` as HostedName), config: hosted(`piper-${id}-config` as HostedName) };
 }
 
 /** The engine's own files: its runtime, and Kokoro's model. */
