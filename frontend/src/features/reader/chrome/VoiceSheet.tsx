@@ -117,6 +117,8 @@ interface Props {
   music: 'ready' | 'soon' | 'off';
   /** Turns the book's AI switch on or off. */
   onAi?: (on: boolean) => void;
+  /** Someone else turned the switch on first. */
+  aiElsewhere: boolean;
   /** How far the AI has got with this book (features/ai/progress.ts). */
   ai: AiProgress;
   bookId: string;
@@ -124,7 +126,7 @@ interface Props {
   castReady: boolean;
 }
 
-export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi, ai, bookId, castReady }: Props) {
+export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi, aiElsewhere, ai, bookId, castReady }: Props) {
   const prefs = useVoicePrefs();
   const round = useRound();
   const cast = useCast();
@@ -289,7 +291,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   return (
     <div className="pnl vs" ref={onRoot}>
       <div className="pnl-h">Read aloud</div>
-      <SheetAi p={ai} book={bookId} onAi={onAi} />
+      <SheetAi p={ai} book={bookId} elsewhere={aiElsewhere} onAi={onAi} />
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
       {speech.allowed && (
         <div className="ctl tgrow">

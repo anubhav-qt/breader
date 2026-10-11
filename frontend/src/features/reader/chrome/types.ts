@@ -106,6 +106,8 @@ export interface ChromeProps {
   music: 'ready' | 'soon' | 'off';
   /** Turns the book's AI switch on or off from the reader, where 2 voices and the music ask for it. */
   letAi?: (on: boolean) => void;
+  /** Someone else turned that switch on first, said under it. */
+  aiElsewhere: boolean;
   /** How far the AI has got with this book (features/ai/progress.ts), asked again while it's open. */
   aiProgress: AiProgress;
   /** The voice or the light, moved on or back from the play row: by seconds, or a sentence at a time. */

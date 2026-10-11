@@ -53,6 +53,8 @@ interface Props {
   onRemove?: () => void;
   /** The reader lets an AI read the book along with them: Revisit and 2 voices, once it has. */
   ai?: boolean;
+  /** Someone else turned that on first. */
+  aiElsewhere?: boolean;
   /** Flips that, from where 2 voices asks for it. */
   onAi?: (on: boolean) => void;
   /** A manga opened a few chapters at a time, with the chapters after them added as they're neared. */
@@ -65,7 +67,7 @@ const samePos = (a: Position, b: Position | undefined) => !!b && a.section === b
 
 const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
 
-export function Reader({ record, title, color, book, initial, latest, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, onAi, onBook }: Props) {
+export function Reader({ record, title, color, book, initial, latest, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, aiElsewhere = false, onAi, onBook }: Props) {
   const [settings, update] = useReaderSettings();
   // Each manga keeps its own layout and direction, a layout for narrow screens (scrolled, until
   // another's picked) apart from wide ones. Opened, it keeps the one it opened in.
@@ -779,6 +781,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
     two: twoState,
     music: musicState,
     letAi: onAi,
+    aiElsewhere,
     aiProgress,
     transport: {
       skip: (seconds) => playerKeyRef.current({ do: 'seek', seconds }),

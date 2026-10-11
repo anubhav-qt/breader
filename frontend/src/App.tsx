@@ -1195,6 +1195,7 @@ export default function App() {
             onReadTime={(seconds) => lib.addReadTime(shown.id, seconds)}
             onRemove={canRemove(shownRec) ? removeOpen : undefined}
             ai={!!lib.edits[shown.id]?.ai}
+            aiElsewhere={!!lib.edits[shown.id]?.aiElsewhere}
             onAi={(on) => on && void editBook(shown.id, { ai: true })}
             // A series opened a few chapters at a time, with the next few added as it's read on.
             onBook={(grown) => setLoaded((l) => (l && l.id === shown.id ? { id: l.id, book: grown } : l))}
