@@ -9,6 +9,7 @@ import { recordFromBook } from '../../books/record';
 import { newLibraryKey } from '../../lib/key';
 import { springs } from '../../lib/springs';
 import { AI_LABEL, AI_WHY } from '../../books/ai';
+import { AiSwitch } from '../ai/AiStatus';
 import { detectSeries, spellSeries, type FoundSeries, type SeriesName } from '../gallery/series';
 import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
 import { GenreField } from '../gallery/GenreField';
@@ -243,13 +244,7 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
               </AnimatePresence>
               {/* A manga's pages are pictures: nothing for an AI to read along with. */}
               {step.format !== 'CBZ' && (
-                <>
-                  <div className="add-switch">
-                    <span className="add-label" id="add-ai">{AI_LABEL}</span>
-                    <button type="button" className="switch" role="switch" aria-checked={readAlong} aria-labelledby="add-ai" aria-describedby="add-ai-why" onClick={() => setReadAlong(!readAlong)} />
-                  </div>
-                  <p className="add-found add-ai" id="add-ai-why">{AI_WHY}</p>
-                </>
+                <AiSwitch id="add-ai" label={AI_LABEL} why={AI_WHY} on={readAlong} onChange={setReadAlong} />
               )}
               <p className="add-local">Saved in this browser first, then synced, so your key or account opens it anywhere.</p>
               <div className="add-actions">

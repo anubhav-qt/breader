@@ -1,0 +1,33 @@
+/* Development only: the design round's switches, docked at the left edge, dashed like the preview bar. */
+.dz {
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 90;
+  display: grid;
+  gap: 6px;
+  width: 168px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--paper, var(--r-bg));
+  color: var(--ink, var(--r-fg));
+  border: 1px dashed var(--dash, rgba(128, 128, 128, 0.6));
+  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.45);
+  font: var(--ui-w) 11px/1 var(--ui);
+}
+.dz-tab { width: auto; padding: 8px 10px; cursor: pointer; }
+.dz-head { justify-self: start; padding: 2px 4px 4px; color: var(--accent, inherit); }
+.dz-row { display: grid; gap: 5px; }
+.dz-l { color: var(--ink-2, var(--r-mu)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dz-l b { font-weight: var(--ui-w-strong); color: var(--ink, var(--r-fg)); }
+.dz-opts { display: flex; gap: 2px; }
+.dz-opts button { flex: 1; height: 24px; border-radius: 6px; background: rgba(128, 128, 128, 0.12); }
+.dz-opts button:hover { background: rgba(128, 128, 128, 0.24); }
+.dz-opts button[aria-pressed="true"] { background: var(--ink, var(--r-fg)); color: var(--canvas, var(--r-bg)); }
+.dz-opts.is-words { flex-wrap: wrap; }
+.dz-opts.is-words button { flex: 1 1 auto; padding: 0 6px; }
+/* Phones: top right, under the head line, out of the bottom controls. */
+@media (max-width: 720px) {
+  .dz { top: 84px; left: auto; right: 8px; translate: none; }
+}

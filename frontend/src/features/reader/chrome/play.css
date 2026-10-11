@@ -1,0 +1,254 @@
+/* ------------------------------------------------------------------ */
+/* The play row (chrome/PlayBar.tsx), over the bottom line. The page ends above it: --foot is how
+   much of the bottom the controls take, and FlowView reads it too, so it's in plain pixels. */
+
+.rd.has-play { --foot: 132px; }
+.rd.has-play.play-E { --foot: 116px; }
+
+.i3-play {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  translate: -50% 0;
+  z-index: 9;
+  width: min(calc(var(--pw) + 48px), calc(100% - 32px));
+  height: calc(var(--foot) - 76px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  font: var(--ui-w) 12px/1 var(--ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--r-mu);
+  background: var(--r-bg);
+  transition: background-color 250ms linear, opacity 260ms ease;
+}
+/* The dots' chapter label shows over the row. */
+.rd.has-play .i3-foot { z-index: 10; }
+@media (max-width: 639.98px) {
+  .i3-play { width: 100%; padding: 0 16px; gap: 8px; }
+}
+.pl-l { justify-self: start; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pl-r { justify-self: end; display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+/* Asleep with the rest in full screen, and while the voice or the light goes; a question stays. */
+.rd.is-focus:not(.is-awake) .i3-play { opacity: 0; pointer-events: none; }
+.rd.is-focus:not(.is-awake) .i3-play.is-asking { opacity: 1; pointer-events: auto; }
+.i3-play.is-asking { grid-template-columns: minmax(0, 1fr); }
+.pl-ask { justify-self: center; display: flex; align-items: center; min-width: 0; }
+.pl-ask > :is(.i3-pace, .i3-start, .i3-say) { justify-self: center; }
+
+/* What sat just over the bottom line now sits over the row. */
+.rd.has-play .rd-chrome > .i3-hint { bottom: calc(var(--foot) + 8px); }
+.rd.has-play .i3-drop { max-height: calc(100% - 72px - var(--foot)); }
+.rd.has-play .i3-drop.is-up { top: auto; bottom: calc(var(--foot) + 6px); }
+.rd.has-play .i3-drop.is-voice.is-up { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); }
+.rd.has-play .fv-next { padding-bottom: calc(var(--foot) + 20px); }
+.rd.has-play .fv.is-pages .fv-flow :is(img, svg) { max-height: calc(100dvh - 114px - var(--foot)); }
+
+/* Buttons. */
+.pl-icon, .pl-skip {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--r-fg);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.pl-icon.is-open { background: var(--r-fill); }
+.pl-skip { color: var(--r-mu); }
+.pl-skip .i3-dots-icon { height: 0.75em; }
+.pl-deck { justify-self: center; display: flex; align-items: center; gap: 6px; }
+.pl-main {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 14px;
+  background: var(--r-fg);
+  color: var(--r-bg);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 140ms ease, transform var(--dur-snappy) var(--ease-snappy), background-color 200ms ease;
+}
+.pl-main:active { transform: scale(0.94); }
+.i3-play.is-going .pl-main { background: var(--book-mark); }
+.pl-main .i3-dots-icon rect.is-lit { fill: var(--book-mark); }
+.i3-play.is-going .pl-main .i3-dots-icon rect.is-lit { fill: var(--r-bg); }
+.pl-deck.is-small .pl-main { width: 38px; height: 38px; font-size: 12px; }
+.pl-deck.is-small .pl-skip { width: 34px; }
+.pl-skips { display: flex; align-items: center; }
+.pl-voices { position: relative; }
+.pl-voices.has-dot::after { content: ""; position: absolute; top: 9px; right: 8px; width: 5px; height: 5px; border-radius: 1px; background: var(--book-mark); }
+.pl-chip {
+  height: 32px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 9px;
+  font: var(--ui-w) 11px/1 var(--ui);
+  letter-spacing: 0.06em;
+  color: var(--r-fg);
+  box-shadow: inset 0 0 0 1px var(--r-line);
+  transition: background-color 140ms ease;
+}
+.pl-chip .i3-dots-icon { font-size: 10px; }
+
+/* A, and E's tray: Normal or Immersive. D: Read, Listen or Immersive. */
+.pl-seg { display: inline-flex; align-items: center; padding: 3px; gap: 2px; border-radius: 10px; background: var(--r-fill); }
+.pl-seg button {
+  height: 28px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 7px;
+  font: var(--ui-w) 10.5px/1 var(--ui);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--r-mu);
+  transition: color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+.pl-seg button.is-on { color: var(--r-fg); background: var(--r-bg); box-shadow: 0 0 0 1px var(--r-line); }
+.pl-seg button.is-on .i3-dots-icon { color: var(--book-mark); }
+.pl-seg .i3-dots-icon { font-size: 11px; }
+.pl-modes { justify-self: start; }
+.pl-D { grid-template-columns: auto minmax(0, 1fr); }
+
+/* B: two pills. Immersive's own colour is the book's, so it reads as the special one. */
+.pl-split { justify-self: center; display: flex; align-items: center; gap: 8px; }
+.pl-pill {
+  height: 38px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  font: var(--ui-w-strong) 11.5px/1 var(--ui);
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+  color: var(--r-fg);
+  box-shadow: inset 0 0 0 1px var(--r-line);
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform var(--dur-snappy) var(--ease-snappy);
+}
+.pl-pill:active { transform: scale(0.97); }
+.pl-pill .i3-dots-icon { font-size: 11px; }
+.pl-pill.is-on { background: var(--r-fg); color: var(--r-bg); box-shadow: none; }
+.pl-pill.is-light .i3-dots-icon { color: var(--book-mark); }
+.pl-pill.is-light.is-on { background: var(--book-mark); color: var(--r-bg); }
+.pl-pill.is-light.is-on .i3-dots-icon { color: inherit; }
+.pl-pill-wrap { display: flex; align-items: center; }
+.pl-pill-wrap.is-on .pl-pill { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.pl-pill-x {
+  height: 38px;
+  width: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 0 999px 999px 0;
+  font-size: 10px;
+  color: var(--r-bg);
+  background: color-mix(in srgb, var(--book-mark) 80%, var(--r-fg));
+}
+
+/* C: where you are in Immersive, and the note that it's there. */
+.pl-tag { display: inline-flex; align-items: center; gap: 7px; padding: 0 4px 0 10px; height: 30px; border-radius: 9px; font-size: 10.5px; color: var(--r-fg); background: var(--r-fill); white-space: nowrap; }
+.pl-tag > .i3-dots-icon { color: var(--book-mark); font-size: 11px; }
+.pl-tag-x { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; font-size: 9px; color: var(--r-mu); }
+.pl-nudge {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  max-width: min(460px, 100%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 11px;
+  font: var(--ui-w) 11px/1.35 var(--ui);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  color: var(--r-fg);
+  background: var(--r-bg);
+  box-shadow: 0 0 0 1px var(--r-line), 0 18px 40px -24px var(--r-shadow);
+}
+.pl-nudge > .i3-dots-icon { flex: none; color: var(--book-mark); font-size: 12px; }
+.pl-nudge .typed { flex: 1; min-width: 0; white-space: normal; }
+.pl-nudge .i3-begin { height: 30px; }
+.pl-nudge-x { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 8px; font-size: 10px; color: var(--r-mu); }
+@media (max-width: 639.98px) {
+  .pl-nudge { left: 12px; right: 12px; max-width: none; }
+}
+
+/* E: a slim strip, and a tray above it for the rest. */
+.pl-E { grid-template-columns: minmax(0, 1fr); }
+.pl-strip { justify-self: center; display: flex; align-items: center; gap: 4px; }
+.pl-word {
+  height: 30px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 8px;
+  font: var(--ui-w) 11px/1 var(--ui);
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+  color: var(--r-fg);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.pl-word .i3-dots-icon { font-size: 10px; }
+.pl-word.is-on, .pl-word.is-on .i3-dots-icon { color: var(--book-mark); }
+.pl-sep { color: var(--r-line); }
+.pl-E .pl-skip { width: 32px; height: 30px; }
+.pl-up { width: 32px; height: 30px; font-size: 11px; color: var(--r-mu); }
+.pl-up .i3-dots-icon { transition: transform var(--dur-snappy) var(--ease-snappy); }
+.pl-up.is-open .i3-dots-icon { transform: rotate(180deg); }
+.pl-tray {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  translate: -50% 0;
+  width: min(440px, calc(100% - 8px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 14px;
+  background: var(--r-bg);
+  box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
+}
+.pl-tray > .pl-seg { justify-self: start; }
+.pl-tray .pl-seg button { padding: 0 8px; }
+
+@media (hover: hover) {
+  .pl-icon:hover, .pl-skip:hover, .pl-word:hover, .pl-chip:hover, .pl-tag-x:hover, .pl-nudge-x:hover { background: var(--r-fill); color: var(--r-fg); }
+  .pl-main:hover { opacity: 0.86; }
+  .pl-pill:not(.is-on):hover { background: var(--r-fill); }
+  .pl-seg button:not(.is-on):hover { color: var(--r-fg); }
+}
+
+/* Phones: the middle takes what the ends leave; words that don't fit go, the buttons stay. In
+   Immersive the voice is in the voice sheet on the narrowest. */
+@media (max-width: 520px) {
+  .i3-play, .pl-tray { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .pl-D { grid-template-columns: auto minmax(0, 1fr); }
+  .pl-E { grid-template-columns: minmax(0, 1fr); }
+  .pl-deck { gap: 2px; }
+  .pl-skip { width: 32px; }
+  .pl-seg button { padding: 0 7px; font-size: 10px; }
+  .pl-chip { padding: 0 9px; }
+  .pl-chip span { display: none; }
+  .pl-pill { padding: 0 12px; }
+  .pl-D .pl-seg .i3-dots-icon { display: none; }
+  .pl-D .pl-skip { display: none; }
+}
+@media (max-width: 420px) {
+  .pl-chip { display: none; }
+}

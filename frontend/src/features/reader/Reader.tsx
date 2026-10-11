@@ -13,6 +13,8 @@ import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useBarAsk, useWake } from './focus';
 import { useFullscreen, useFullscreenReading } from './fullscreen';
 import { loadRevisit, useAiStatus, useVoiceMarks } from './ai';
+import { useAiProgress } from '../ai/progress';
+import { useRound } from '../design/round';
 import { keepLooking, looking, stopLook } from './look';
 import { PAGE_KEYS, partWay, playerKey, sentenceOn, wordsOn, type Part, type PlayerKey } from './keys';
 import { canNarrate, useNarration, type Paragraph, type Sentence } from './narration';
@@ -93,6 +95,9 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   const aiStatus = useAiStatus(record.id, ai);
   const loadNotes = useCallback(() => loadRevisit(record.id), [record.id]);
   const marks = useVoiceMarks(record.id, aiStatus);
+  // How far the AI has got, asked again while the book's open; pretend, during the design round.
+  const aiProgress = useAiProgress(record.id, ai);
+  const round = useRound();
   // Comments, in the shared book's threads for a copy of one (comments.ts).
   const thread = threadOf(record);
   const talk = useTalk(thread, !closing);
@@ -680,8 +685,23 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     return <ChapterTail key={i} view={talkView} chapters={chapters} i={i} open={opened(i)} last={i === chapters.length - 1} />;
   };
 
+  // 2 voices and the music as the server has them; during the design round, as the pretend AI does.
+  let twoState: ChromeProps['two'] = 'off';
+  let musicState: ChromeProps['music'] = 'off';
+  if (ai) {
+    twoState = 'soon';
+    musicState = 'soon';
+  }
+  if (marks) twoState = 'ready';
+  if (aiStatus.music) musicState = 'ready';
+  if (round.fake !== 'live' && ai) {
+    if (aiProgress.features.two === 'ready') twoState = 'ready';
+    if (aiProgress.features.music === 'ready') musicState = 'ready';
+  }
+  // The play row over the bottom line, wherever there's a voice or a light to play (design round).
+  const hasPlay = (canNarrate && !pictures) || immersive;
   const chromeProps: ChromeProps = {
-    book, title, loc, chapters, current, settings, update,
+    book, bookId: record.id, title, loc, chapters, current, settings, update,
     manga: book.kind === 'manga' ? {
       look: mangaLook,
       pick: (patch) => update((s) => withMangaLook(s, record.id, patch, narrow)),
@@ -705,6 +725,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       choosing,
       begun: resumable,
       choose: () => setAsking(true),
+      pause: pauseLight,
       cancel: () => setAsking(false),
       fromTop,
       carryOn,
@@ -722,9 +743,14 @@ export function Reader({ record, title, color, book, initial, closing = false, o
       awake: () => { openPanel(null); if (asked.stopped && !narration.playing && canNarrate) narration.start(); },
     } : null,
     revisit: aiStatus.revisit ? { read: marker.get()?.progress ?? 0, load: loadNotes } : null,
-    two: marks ? 'ready' : ai ? 'soon' : 'off',
-    music: aiStatus.music ? 'ready' : ai ? 'soon' : 'off',
+    two: twoState,
+    music: musicState,
     letAi: onAi,
+    aiProgress,
+    transport: {
+      skip: (seconds) => playerKeyRef.current({ do: 'seek', seconds }),
+      step: (dir) => playerKeyRef.current({ do: 'step', dir }),
+    },
     talk: { view: talkView, opens: opened, at: talkAt, open: openTalk },
   };
   const tones = settings.twoColors ?? TWO_COLORS;
@@ -737,7 +763,7 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   } as CSSProperties;
 
   return (
-    <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${bar.hidden ? ' is-barless' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}`} style={vars}>
+    <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${bar.hidden ? ' is-barless' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}${hasPlay ? ` has-play play-${round.play}` : ''}`} style={vars}>
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick} onContextMenu={(e) => { if (looking()) e.preventDefault(); }}>
           {book.kind === 'flow' ? (

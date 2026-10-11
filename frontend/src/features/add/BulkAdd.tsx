@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { genreIds, joinGenres } from '@breader/shared/genres';
 import { IconClose } from '../../components/icons';
 import { AI_LABEL, AI_WHY } from '../../books/ai';
+import { AiSwitch } from '../ai/AiStatus';
 import { countOf } from '../../books/category';
 import { coverOf, detectFormat, parseSource, titleFromName } from '../../books/load';
 import { recordFromBook } from '../../books/record';
@@ -235,13 +236,7 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
       <WhoReads shared={shared} many onChange={setShared} />
       {/* Only for books with words: a manga's pages are pictures. */}
       {!onlyManga && (
-        <>
-          <div className="add-switch">
-            <span className="add-label" id="bulk-ai">{AI_LABEL}</span>
-            <button type="button" className="switch" role="switch" aria-checked={readAlong} aria-labelledby="bulk-ai" aria-describedby="bulk-ai-why" onClick={() => setReadAlong(!readAlong)} />
-          </div>
-          <p className="add-found add-ai" id="bulk-ai-why">{AI_WHY}</p>
-        </>
+        <AiSwitch id="bulk-ai" label={AI_LABEL} why={AI_WHY} on={readAlong} onChange={setReadAlong} />
       )}
       <p className="add-local">Saved in this browser first, then synced, so your key or account opens them anywhere.</p>
       <div className="add-actions">

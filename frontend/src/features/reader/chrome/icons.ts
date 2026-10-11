@@ -18,3 +18,10 @@ export const VOICES = ['..x....', '..x.x..', 'x.x.x.x', 'x.x.x.x', 'x.x.x.x', '.
 export const SEARCH = ['.xxx...', 'x...x..', 'x...x..', 'x...x..', '.xxx...', '....xx.', '.....xx'];
 /** Comments: a speech bubble, with someone typing in it. */
 export const TALK = ['xxxxxxx', 'x.....x', 'x.x.x.x', 'x.....x', 'xxxxxxx', '.xx....', '.x.....'];
+/** Back and on, as a player has them: two chevrons each way. */
+export const BACK = ['...x..x', '..x..x.', '.x..x..', 'x..x...', '.x..x..', '..x..x.', '...x..x'];
+export const ON = ['x..x...', '.x..x..', '..x..x.', '...x..x', '..x..x.', '.x..x..', 'x..x...'];
+/** Immersive: a page half dimmed, half lit. */
+export const LIGHT = ['..xxx..', '.x.xxx.', 'x..xxxx', 'x..xxxx', 'x..xxxx', '.x.xxx.', '..xxx..'];
+/** Up, for a row that opens upward. */
+export const UP = ['.......', '...x...', '..xxx..', '.xx.xx.', 'xx...xx', '.......', '.......'];

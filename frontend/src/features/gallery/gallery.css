@@ -545,3 +545,6 @@
 .rm-ask { margin: 0; font-size: 23px; line-height: 1.15; }
 .rm-note { margin: 0; font: var(--ui-w) 12px/1.5 var(--ui); color: var(--ink-2); }
 .rm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+/* Design round, AI C: the spark in a card's corner (features/ai). */
+.tile-ai .ai-spark { font-size: 12px; }
+.cv .tile-ai .ai-spark { font-size: calc(var(--tool) * 0.42); }

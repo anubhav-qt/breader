@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { duration, minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
@@ -7,15 +7,22 @@ import { paceLevel } from '../pacing';
 import { KEY_LIST } from '../keys';
 import { AppearancePanel, ContentsPanel } from '../Panels';
 import { PACE, setVoicePrefs, stepPace, useVoicePrefs } from '../voice/prefs';
-import { level, useLoadState } from '../voice/speaker';
+import { useCast } from '../voice/cast';
+import { level } from '../voice/speaker';
+import { AiHeadButton, AiPanel, Spark } from '../../ai/AiStatus';
+import { useNowReady } from '../../ai/progress';
+import { hintText, readyText } from '../../ai/words';
+import { useRound } from '../../design/round';
 import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
-import { CHECK, CROSS, GROW, MINUS, PAUSE, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
+import { CHECK, CROSS, GROW, MINUS, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
+import { SpeakerChip } from './Cast';
 import { CommentsPanel, TalkButton } from './Comments';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { RevisitMenu, RevisitWindow, type Scope } from './Revisit';
 import { SayAs } from './SayAs';
 import { SearchPanel } from './Search';
+import { PlayBar } from './PlayBar';
 import { HeadTips } from './Tip';
 import { VoiceSheet } from './VoiceSheet';
 import type { ChromeProps, PanelName } from './types';
@@ -31,7 +38,7 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, note, search, sleep, revisit, two, music, letAi, talk }: ChromeProps) {
+export function InstrumentChrome({ book, bookId, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, note, search, sleep, revisit, two, music, letAi, aiProgress, transport, talk }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [foot, setFoot] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
@@ -43,9 +50,10 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
     : chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
   const toggle = (k: PanelName) => openPanel(panel === k ? null : k);
 
-  // Play reads aloud and pauses; the button beside it opens the voices and modes.
-  const load = useLoadState();
-  const loading = !!narration?.playing && load.key !== null;
+  // Play, the voices and Immersive are on the play row over the bottom line (PlayBar.tsx).
+  const round = useRound();
+  const playRow = !!narration || !!immersion;
+  const castReady = aiProgress.features.cast === 'ready';
 
   // Listening, the dot for where you are becomes a level meter: up to seven dots tall, like a Doto
   // letter, with its neighbours a step behind. Without a voice, it beats at each word lit.
@@ -87,7 +95,50 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
   // Revisit, when the book has notes and anything's been read: past the first screen of it.
   const [scope, setScope] = useState<Scope>('chapter');
   const canRevisit = !!revisit && !!loc && (loc.section > 0 || loc.block > 0);
-  const up = panel === 'revisit';
+  // Drops opened from the bottom come up from it: Revisit, and with the play row, the voices and the paragraphs.
+  let up = panel === 'revisit';
+  if (playRow && (panel === 'voice' || panel === 'paras')) up = true;
+  // Immersive's questions take the play row: how fast, where to begin, and that the pace was kept.
+  let ask: ReactNode = null;
+  if (setting) {
+    ask = <PaceSetter onKeep={keep} />;
+  } else if (immersion && choosing) {
+    // Begin, pressed: from the top of the page (or where it paused), or a paragraph by its number.
+    ask = (
+      <div className="i3-start" role="group" aria-label="Where to begin">
+        <button type="button" className="i3-begin" onClick={immersion.begun ? immersion.carryOn : immersion.fromTop}>
+          <DotIcon rows={PLAY} />
+          {immersion.begun ? 'Continue' : 'From the top'}
+        </button>
+        <button type="button" className={`i3-para${panel === 'paras' ? ' is-open' : ''}`} onClick={() => toggle('paras')} aria-label="Pick a paragraph" aria-expanded={panel === 'paras'} aria-haspopup="dialog">
+          ¶ {immersion.nowAt ? pad2(immersion.nowAt) : '--'}
+          <span className="i3-caret" aria-hidden="true">▾</span>
+        </button>
+        <button type="button" className="i3-pace-b" onClick={immersion.cancel} aria-label="Not now">
+          <DotIcon rows={CROSS} />
+        </button>
+      </div>
+    );
+  } else if (kept) {
+    ask = <span className="i3-say" role="status"><Typed text="Kept. Change it in" /><DotIcon rows={VOICES} /></span>;
+  }
+
+  // What the AI has just made, said for a moment; and in the note design, where it is, on opening and as it moves on.
+  const news = useNowReady(aiProgress);
+  const [aiSaid, setAiSaid] = useState<string | null>(null);
+  const stageKey = `${aiProgress.stage}.${aiProgress.phase ?? ''}`;
+  useEffect(() => {
+    if (round.ai !== 'E' || aiProgress.stage === 'off') return;
+    setAiSaid(hintText(aiProgress));
+    const t = window.setTimeout(() => setAiSaid(null), 5000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [round.ai, stageKey]);
+  let aiHint: string | null = null;
+  if (news.length) aiHint = readyText(news);
+  else if (aiSaid) aiHint = aiSaid;
+  const { on: castOn } = useCast();
+
   // Comments: a PDF's or a manga's pages take no tail, so the speech bubble up top has them.
   const here = chapters[current];
   const talkCount = here ? talk.view.talk.threads.get(here.section)?.count ?? 0 : 0;
@@ -101,37 +152,13 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
         <div className="i3-ends">
+          <AiHeadButton p={aiProgress} open={panel === 'ai'} onClick={() => toggle('ai')} />
           {book.kind !== 'flow' && talk.view.talk.state !== 'off' && (
             <TalkButton count={talkCount} lit={talk.opens(current)} open={panel === 'comments'} onClick={() => (panel === 'comments' ? openPanel(null) : talk.open())} />
           )}
           {search && (
             <button type="button" className={`i3-side i3-icon${panel === 'find' ? ' is-open' : ''}`} onClick={() => toggle('find')} aria-label="Search the book" aria-expanded={panel === 'find'} aria-haspopup="dialog" data-tip="Find words in the book">
               <DotIcon rows={SEARCH} />
-            </button>
-          )}
-          {narration && (
-            <button
-              type="button"
-              className={`i3-side i3-listen${narration.playing ? ' is-playing' : ''}`}
-              onClick={narration.toggle}
-              aria-label={narration.playing ? 'Pause reading aloud' : 'Read aloud'}
-              aria-pressed={narration.playing}
-              data-tip={narration.playing ? 'Pause the voice' : immersion ? 'Read aloud, from where you pick' : 'Read aloud from here'}
-            >
-              <DotIcon rows={narration.playing && !loading ? PAUSE : PLAY} lit={loading ? load.loaded / Math.max(1, load.total) : undefined} />
-            </button>
-          )}
-          {(narration || immersion) && (
-            <button
-              type="button"
-              className={`i3-side i3-icon i3-voices${panel === 'voice' ? ' is-open' : ''}`}
-              onClick={() => toggle('voice')}
-              aria-label="Voices and modes"
-              aria-expanded={panel === 'voice'}
-              aria-haspopup="dialog"
-              data-tip="Voices, speed and Immersive"
-            >
-              <DotIcon rows={VOICES} />
             </button>
           )}
           <button type="button" className={`i3-side i3-aa${panel === 'look' ? ' is-open' : ''}`} onClick={() => toggle('look')} aria-label="Appearance" aria-expanded={panel === 'look'} data-tip={book.kind === 'manga' ? 'Layout, direction and theme' : 'Typeface, size, spacing and theme'}>Aa</button>
@@ -141,58 +168,42 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         </div>
       </div>
 
-      <div ref={footRef} className={`i3-foot${foot ? ' is-on' : ''}${setting ? ' is-setting' : ''}${immersion?.waiting ? ' is-waiting' : ''}${choosing ? ' is-choosing' : ''}`} onPointerEnter={() => setFoot(true)} onPointerLeave={() => setFoot(false)}>
-        {setting ? (
-          <PaceSetter onKeep={keep} />
-        ) : immersion && choosing ? (
-          // Begin, pressed: from the top of the page (or where it paused), or a paragraph by its number.
-          <div className="i3-start" role="group" aria-label="Where to begin">
-            <button type="button" className="i3-begin" onClick={immersion.begun ? immersion.carryOn : immersion.fromTop}>
-              <DotIcon rows={PLAY} />
-              {immersion.begun ? 'Continue' : 'From the top'}
+      <div ref={footRef} className={`i3-foot${foot ? ' is-on' : ''}`} onPointerEnter={() => setFoot(true)} onPointerLeave={() => setFoot(false)}>
+        <span className="i3-left">
+          <span className="i3-read"><Digits value={Math.floor(progress * 100)} width={3} /><small>%</small></span>
+          {canRevisit && (
+            <button type="button" className={`i3-rv${panel === 'revisit' || panel === 'recap' ? ' is-open' : ''}`} onClick={() => toggle('revisit')} aria-expanded={panel === 'revisit'} aria-haspopup="dialog">
+              Revisit<span className="i3-caret" aria-hidden="true">▴</span>
             </button>
-            <button type="button" className={`i3-para${panel === 'paras' ? ' is-open' : ''}`} onClick={() => toggle('paras')} aria-label="Pick a paragraph" aria-expanded={panel === 'paras'} aria-haspopup="dialog">
-              ¶ {immersion.nowAt ? pad2(immersion.nowAt) : '--'}
-              <span className="i3-caret" aria-hidden="true">▾</span>
-            </button>
-            <button type="button" className="i3-pace-b" onClick={immersion.cancel} aria-label="Not now">
-              <DotIcon rows={CROSS} />
-            </button>
-          </div>
-        ) : (
-          <>
-            <span className="i3-left">
-              <span className="i3-read"><Digits value={Math.floor(progress * 100)} width={3} /><small>%</small></span>
-              {canRevisit && (
-                <button type="button" className={`i3-rv${panel === 'revisit' || panel === 'recap' ? ' is-open' : ''}`} onClick={() => toggle('revisit')} aria-expanded={panel === 'revisit'} aria-haspopup="dialog">
-                  Revisit<span className="i3-caret" aria-hidden="true">▴</span>
-                </button>
-              )}
-            </span>
-            {immersion?.waiting ? (
-              // Immersive, nothing lit yet: Begin numbers the paragraphs, to pick where.
-              <span className="i3-say">
-                <button type="button" className="i3-begin" onClick={immersion.choose}>
-                  <DotIcon rows={PLAY} />
-                  Begin
-                </button>
-              </span>
-            ) : kept ? (
-              <span className="i3-say" role="status"><Typed text="Kept. Change it in" /><DotIcon rows={VOICES} /></span>
-            ) : (
-              <Dots chapters={chapters} progress={progress} onPick={onPick} />
-            )}
-            <span className="i3-read is-right">
-              {loc && <><Digits value={minutesFor(loc.sectionWordsLeft)} width={2} /><small>min</small></>}
-            </span>
-          </>
-        )}
+          )}
+        </span>
+        <Dots chapters={chapters} progress={progress} onPick={onPick} />
+        <span className="i3-read is-right">
+          {loc && <><Digits value={minutesFor(loc.sectionWordsLeft)} width={2} /><small>min</small></>}
+        </span>
       </div>
+
+      {playRow && (
+        <PlayBar
+          book={book}
+          narration={narration}
+          immersion={immersion}
+          transport={transport}
+          panel={panel}
+          body={body}
+          design={round.play}
+          toggle={toggle}
+          ask={ask}
+          speaker={round.cast === 'D' && castOn ? <SpeakerChip book={bookId} playing={!!narration?.playing} /> : null}
+        />
+      )}
 
       {note && !focus.ask ? (
         <div className="i3-hint" role="status">{note}</div>
-      ) : choosing && !panel && (
+      ) : choosing && !panel ? (
         <div className="i3-hint" role="status"><Typed text={`${tap} a paragraph, or type its number`} /></div>
+      ) : aiHint && !panel && !focus.ask && (
+        <div className="i3-hint is-ai" role="status"><Spark p={aiProgress} /><Typed text={aiHint} /></div>
       )}
 
       {/* The voice bar left on its own asks, for a moment, whether to go too (focus.ts). */}
@@ -223,7 +234,7 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
         {panel && panel !== 'recap' && (
           <Drop
             key={panel}
-            className={`i3-drop is-${panel}`}
+            className={`i3-drop is-${panel}${up ? ' is-up' : ''}`}
             data-panel
             initial={{ clipPath: up ? UP_CLOSED : DROP_CLOSED, y: up ? 6 : -6 }}
             animate={{ clipPath: up ? UP_OPEN : DROP_OPEN, y: 0 }}
@@ -237,13 +248,15 @@ export function InstrumentChrome({ book, title, loc, chapters, current, settings
               ) : panel === 'comments' ? (
                 <CommentsPanel key={talk.at ?? 'here'} view={talk.view} chapters={chapters} current={current} opens={talk.opens} at={talk.at} />
               ) : panel === 'voice' && (narration || immersion) ? (
-                <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} two={two} music={music} onAi={letAi} />
+                <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} two={two} music={music} onAi={letAi} ai={aiProgress} bookId={bookId} castReady={castReady} />
               ) : panel === 'sleep' && sleep ? (
                 <SleepPanel asked={sleep.asked} chapters={chapters} playing={!!narration?.playing} onBack={sleep.back} onAwake={sleep.awake} />
               ) : panel === 'find' && search ? (
                 <SearchPanel book={book} chapters={chapters} read={search.read} onGo={(f) => { openPanel(null); search.go(f); }} />
               ) : panel === 'revisit' && revisit ? (
                 <RevisitMenu chapters={chapters} current={current} read={revisit.read} onPick={(v) => { setScope(v); openPanel('recap'); }} />
+              ) : panel === 'ai' ? (
+                <AiPanel p={aiProgress} />
               ) : panel === 'keys' ? (
                 <KeysPanel />
               ) : panel === 'paras' && immersion ? (
