@@ -17,7 +17,7 @@ import type { AiProgress } from '../../ai/progress';
 import { useRound } from '../../design/round';
 import { setCastOn, useCast } from '../voice/cast';
 import { AddVoice } from './AddVoice';
-import { CastSection } from './Cast';
+import { CastSection, OneVoice, TwoVoices } from './Cast';
 import { CROSS, PAUSE, PLAY, PLUS, STOP } from './icons';
 import { CloseDots, DotIcon } from './parts';
 
@@ -170,6 +170,24 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     if (paired) pickSide(voices, v);
     else setVoicePrefs({ voice: { ...prefs.voice, [voices]: v.key } });
   };
+  // Another go, as the cast has: one of the built-in voices listed, or a pair of them.
+  const builtIn = [...BUILT_IN.normal];
+  if (engines.includes('kokoro')) builtIn.push(...BUILT_IN.immersive);
+  const pool = server ? builtIn.filter(serverHas) : builtIn;
+  const anyOf = (list: VoiceInfo[]) => list[Math.floor(Math.random() * list.length)];
+  const anotherVoice = () => {
+    const others = pool.filter((v) => v.key !== current.key);
+    if (others.length) pick(anyOf(others));
+  };
+  const anotherPair = () => {
+    const hers = pool.filter((v) => sideOf(v) === 'F' && v.key !== pair.F.key);
+    if (!hers.length) return;
+    const her = anyOf(hers);
+    pickSide(voices, her);
+    // His keeps to her kind of voice.
+    const his = pool.filter((v) => sideOf(v) === 'M' && v.engine === her.engine && v.key !== pair.M.key);
+    if (his.length) pickSide(voices, anyOf(his));
+  };
   // Character voices read with 2 voices for now, hers and his for anyone without one of their own.
   const setCount = (n: Count) => {
     if (n === 'cast') {
@@ -271,7 +289,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   return (
     <div className="pnl vs" ref={onRoot}>
       <div className="pnl-h">Read aloud</div>
-      <SheetAi p={ai} onAi={onAi} />
+      <SheetAi p={ai} book={bookId} onAi={onAi} />
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
       {speech.allowed && (
         <div className="ctl tgrow">
@@ -284,6 +302,8 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       {pace}
       <Music onLocked={musicLocked} />
       <Segmented label="Voices" value={count} onChange={setCount} options={counts(two === 'ready', castReady)} />
+      {count === 1 && <OneVoice v={current} hearing={hearing === current.key} onHear={() => toggleHear(current)} onAgain={anotherVoice} />}
+      {count === 2 && <TwoVoices her={pair.F} his={pair.M} hearing={hearing} onHear={toggleHear} onAgain={anotherPair} />}
       {characters && <CastSection book={bookId} design={round.cast} playing={playing} />}
       {paired && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       <Segmented label="Hear them say" value={part} onChange={pickPart} options={PARTS} />

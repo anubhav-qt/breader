@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import type { AiStatus } from '@breader/shared/ai';
 import { hasKey } from '../../data/sync';
 import { api } from '../../lib/api';
+import { readLocal, writeLocal } from '../../lib/store';
 import { roundNow, useRound, type Fake } from '../design/round';
 
 /*
@@ -202,4 +203,90 @@ export function useNowReady(p: AiProgress, ms = 6000): AiFeature[] {
     return () => window.clearTimeout(t);
   }, [news, ms]);
   return news;
+}
+
+/*
+ * A book all read has its meter say so once, in place: a small wave across the dots. At the next
+ * move of the pointer (or a tap) it goes, for good, wherever it shows. The wave runs a moment first,
+ * counted from when it can be seen: not while the reader's bars sleep in full screen.
+ */
+const RETIRED = 'breader.ai.meter-done.v1';
+let retired = readLocal<Record<string, true>>(RETIRED, {});
+const retiredSubs = new Set<() => void>();
+
+function setRetired(next: Record<string, true>) {
+  retired = next;
+  writeLocal(RETIRED, retired);
+  retiredSubs.forEach((f) => f());
+}
+
+function retire(book: string) {
+  if (retired[book]) return;
+  setRetired({ ...retired, [book]: true });
+}
+
+/** Development only: every book's wave again, for the design strip's "ready". */
+export function forgetDone() {
+  setRetired({});
+}
+
+/** How long the wave runs, seen, before a move puts the meter away. */
+const WAVE_MS = 1600;
+/** How far the pointer goes, in pixels, to count as a move. */
+const MOVE_PX = 24;
+
+function seen(el: Element | null): boolean {
+  if (!el || document.hidden) return false;
+  return el.closest('.rd.is-focus:not(.is-awake)') === null;
+}
+
+/** A book's meter: showing how far, waving that it's done, or gone. */
+export function useMeterLife(book: string | undefined, stage: AiProgress['stage'], el: RefObject<Element | null>): 'show' | 'wave' | 'gone' {
+  const all = useSyncExternalStore(
+    (f) => {
+      retiredSubs.add(f);
+      return () => { retiredSubs.delete(f); };
+    },
+    () => retired,
+  );
+  const waving = stage === 'done' && !!book && !all[book];
+  useEffect(() => {
+    if (!waving || !book) return;
+    let since = performance.now();
+    let moved = 0;
+    let last: { x: number; y: number } | null = null;
+    const ready = () => {
+      if (!seen(el.current)) {
+        since = performance.now();
+        return false;
+      }
+      return performance.now() - since >= WAVE_MS;
+    };
+    const onMove = (e: PointerEvent) => {
+      const here = { x: e.clientX, y: e.clientY };
+      const was = last;
+      last = here;
+      if (!ready() || !was) return;
+      moved += Math.hypot(here.x - was.x, here.y - was.y);
+      if (moved >= MOVE_PX) retire(book);
+    };
+    const onDown = () => {
+      if (ready()) retire(book);
+    };
+    // Back from another tab, the wave runs again before a move counts.
+    const onShow = () => {
+      since = performance.now();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerdown', onDown);
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('visibilitychange', onShow);
+    };
+  }, [waving, book, el]);
+  if (stage !== 'done' || !book) return 'show';
+  if (all[book]) return 'gone';
+  return 'wave';
 }

@@ -1,8 +1,8 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../../lib/springs';
 import type { CastDesign } from '../../design/round';
-import type { SamplePart } from '../voice/catalog';
+import type { SamplePart, VoiceInfo } from '../voice/catalog';
 import { castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, useCast, useSpeaking, voicesOf, type Cast, type CastVoice, type Kind } from '../voice/cast';
 import { stopSample } from '../voice/speaker';
 import { PLAY, STOP } from './icons';
@@ -17,6 +17,9 @@ import './cast.css';
  *   B Cast list  everyone in a list, each with their voice to change and hear
  *   C Board      the cast grouped by kind, a tap on one opens the voices of their kind
  *   D Speaking   who's speaking now, big, with the rest below; the play row says who too
+ *
+ * 1 voice and 2 are drawn as Auto draws the cast, so the three read alike: a line saying who reads,
+ * a face each, and another go.
  */
 
 /** A face: the character's initials, in their kind's colour. */
@@ -69,28 +72,91 @@ export function CastSection({ book, design, playing }: { book: string; design: C
   );
 }
 
+/** Auto's shape, for the cast and for 1 voice and 2: who reads, a face each, and another go. */
+function Faces({ say, again, onAgain, children }: { say: ReactNode; again: string; onAgain: () => void; children: ReactNode }) {
+  return (
+    <div className="cs-auto">
+      <p className="cs-say">{say}</p>
+      <div className="cs-faces">{children}</div>
+      <button type="button" className="vs-add cs-shuffle" onClick={onAgain}>
+        <DotIcon rows={SHUFFLE} />
+        <span>{again}</span>
+      </button>
+    </div>
+  );
+}
+
+/** One face: who it reads, and in whose voice; a tap to hear it. */
+function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode; name: string; voice: string; on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button type="button" className={`cs-face-b${on ? ' is-on' : ''}`} onClick={onClick} aria-label={label}>
+      {face}
+      <span className="cs-face-n">{name}</span>
+      <span className="cs-face-v">{voice}</span>
+    </button>
+  );
+}
+
 /** A: handed out by themselves, to be heard and shuffled. */
 function Auto({ book, cast }: { book: string; cast: Cast[] }) {
   const { on, hear } = useHear();
   const kinds = new Set(cast.map((x) => x.c.kind)).size;
+  const voices = new Set(cast.map((x) => x.v.id)).size;
+  const say = (
+    <>
+      <b>{cast.length} people, {voices} voices.</b> Handed out by how much each one says, {kinds} kinds of voice in all. Tap a face to hear them.
+    </>
+  );
   return (
-    <div className="cs-auto">
-      <p className="cs-say">
-        <b>{cast.length} people, {cast.length} voices.</b> Handed out by how much each one says, {kinds} kinds of voice in all. Tap a face to hear them.
-      </p>
-      <div className="cs-faces">
-        {cast.map((x) => (
-          <button key={x.c.id} type="button" className={`cs-face-b${on === x.c.id ? ' is-on' : ''}`} onClick={() => hear(x.c.id, x.v)} aria-label={`Hear ${x.c.name}, read by ${x.v.name}`}>
-            <Face c={x.c} />
-            <span className="cs-face-n">{x.c.name.split(' ').pop()}</span>
-            <span className="cs-face-v">{x.v.name}</span>
-          </button>
-        ))}
-      </div>
-      <button type="button" className="vs-add cs-shuffle" onClick={() => reshuffle(book)}>
-        <DotIcon rows={SHUFFLE} />
-        <span>Reshuffle the voices</span>
-      </button>
+    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book)}>
+      {cast.map((x) => (
+        <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name.split(' ').pop()!} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
+      ))}
+    </Faces>
+  );
+}
+
+/** A face for 1 voice or 2: whose lines it reads, in place of initials. */
+function Who({ kind, text }: { kind: 'all' | 'F' | 'M'; text: string }) {
+  return <span className={`cs-face is-${kind} is-m`} aria-hidden="true">{text}</span>;
+}
+
+/** 1 voice, as Auto draws the cast: one face, everyone's. */
+export function OneVoice({ v, hearing, onHear, onAgain }: { v: VoiceInfo; hearing: boolean; onHear: () => void; onAgain: () => void }) {
+  const say = (
+    <>
+      <b>1 voice for everyone.</b> {v.name} reads it all, the story and every line said. Tap the face to hear it, or pick another voice below.
+    </>
+  );
+  return (
+    <div className="cs">
+      <Faces say={say} again="Another voice" onAgain={onAgain}>
+        <FaceButton face={<Who kind="all" text="All" />} name="Everyone" voice={v.name} on={hearing} label={`Hear ${v.name}, who reads everyone`} onClick={onHear} />
+      </Faces>
+    </div>
+  );
+}
+
+/** 2 voices, as Auto draws the cast: hers and his. */
+export function TwoVoices({ her, his, hearing, onHear, onAgain }: {
+  her: VoiceInfo;
+  his: VoiceInfo;
+  /** The voice being heard, by key. */
+  hearing: string | null;
+  onHear: (v: VoiceInfo) => void;
+  onAgain: () => void;
+}) {
+  const say = (
+    <>
+      <b>2 voices, hers and his.</b> Women’s lines read by {her.name}, men’s by {his.name}, and the story by whoever’s telling it. Tap a face to hear them.
+    </>
+  );
+  return (
+    <div className="cs">
+      <Faces say={say} again="Another pair" onAgain={onAgain}>
+        <FaceButton face={<Who kind="F" text="Her" />} name="Women" voice={her.name} on={hearing === her.key} label={`Hear ${her.name}, who reads the women`} onClick={() => onHear(her)} />
+        <FaceButton face={<Who kind="M" text="His" />} name="Men" voice={his.name} on={hearing === his.key} label={`Hear ${his.name}, who reads the men`} onClick={() => onHear(his)} />
+      </Faces>
     </div>
   );
 }

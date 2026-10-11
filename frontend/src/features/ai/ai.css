@@ -76,7 +76,7 @@
 .ai-tiles.is-compact .ai-tile-t b { font-size: 10px; }
 
 /* B: the meter, a row of square dots like the book's own progress, split by pass. */
-.ai-meter { display: grid; gap: 6px; }
+.ai-meter { --wave: color-mix(in srgb, var(--ai-mark) 45%, var(--ai-fg)); display: grid; gap: 6px; overflow: hidden; padding-top: 3px; margin-top: -3px; }
 .ai-meter-dots { display: flex; align-items: center; }
 .ai-meter-dots i { flex: 1; max-width: 7px; aspect-ratio: 1; margin-right: 2px; border-radius: 1px; background: var(--ai-line); }
 .ai-meter-dots i.is-split { margin-left: 4px; }
@@ -85,6 +85,12 @@
 .ai-meter-names { display: grid; column-gap: 8px; font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ai-mu); }
 .ai-meter-names .is-ready { color: var(--ai-mark); }
 .ai-meter-names .is-making { color: var(--ai-fg); }
+/* All read: a wave runs across the dots, now and again, until the pointer moves and it goes. */
+.ai-meter.is-wave .ai-meter-dots i { animation: ai-wave 2.8s var(--ease-snappy) calc(var(--i) * 32ms) infinite; }
+@keyframes ai-wave {
+  0%, 22%, 100% { transform: none; }
+  8% { transform: translateY(-2px); background: var(--wave); }
+}
 
 /* C: the features as a short list beside the spark. */
 .ai-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
@@ -126,11 +132,13 @@
 .i3-ai { color: var(--r-fg); }
 .i3-ai .ai-spark { font-size: 13px; }
 .i3-ai.is-B { padding: 9px 8px; }
-.ai-mini { display: flex; align-items: center; gap: 1.5px; height: 13px; }
+.ai-mini { --wave: color-mix(in srgb, var(--book-mark) 45%, var(--r-fg)); display: flex; align-items: center; gap: 1.5px; height: 13px; }
 .ai-mini i { width: 3px; height: 7px; border-radius: 0.5px; background: var(--r-line); }
 .ai-mini i.is-read { background: var(--book-mark); }
 .ai-mini i.is-now { background: var(--r-fg); animation: ai-wait 0.9s steps(2, jump-none) infinite; }
 .ai-mini.is-queued i:first-child { background: var(--r-mu); animation: ai-wait 2.4s steps(2, jump-none) infinite; }
+.ai-mini.is-wave i { animation: ai-wave 2.8s var(--ease-snappy) calc(var(--i) * 45ms) infinite; }
+.i3-ai.is-B { overflow: hidden; }
 /* Touch screens show the head quietly; this one keeps its colour, as play did. */
 .rd .i3-head .i3-ai { opacity: 1; transform: none; }
 .i3-drop.is-ai { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(360px, calc(100% - 24px)); }
