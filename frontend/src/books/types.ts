@@ -166,6 +166,8 @@ export interface BookEdit {
   genre?: string;
   /** Lets an AI read along, for Revisit and 2 voices. */
   ai?: boolean;
+  /** Someone else turned the AI switch on for it first, as the server says. Never sent back. */
+  aiElsewhere?: boolean;
 }
 
 export interface ReadState {

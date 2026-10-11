@@ -288,6 +288,12 @@ export const aiNotes = pgTable('ai_notes', {
  */
 export const aiBooks = pgTable('ai_books', {
   sha256: text('sha256').primaryKey(),
+  /**
+   * The library that said yes first, so every other one holding the file can be told someone else
+   * turned it on. Null for files said yes to before it was kept. No foreign key: it stays someone
+   * else's for the rest even once that library is gone.
+   */
+  libraryId: text('library_id'),
   at: at('at').notNull().defaultNow(),
   version: version(),
 });

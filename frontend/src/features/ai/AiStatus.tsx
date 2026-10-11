@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../lib/springs';
 import { CHECK } from '../reader/chrome/icons';
 import { DotIcon, Typed } from '../reader/chrome/parts';
+import { AI_ELSEWHERE } from '../../books/ai';
 import { colorVars } from '../../data/colors';
 import { useRound, type AiDesign } from '../design/round';
 import { FEATURE, FEATURE_ICON, SPARK, SPARK_DIM } from './glyphs';
@@ -222,7 +223,7 @@ function FeatureRow({ f, p }: { f: AiFeature; p: AiProgress }) {
  * The AI switch where a book is added or edited, with what it unlocks drawn by the design picked,
  * and once on, how far it's got. `locked`: on for good, as an edited book's is once said yes to.
  */
-export function AiSwitch({ id, label, why, on, locked = false, p, book, style, compact = false, onChange }: {
+export function AiSwitch({ id, label, note, why, on, locked = false, p, book, style, compact = false, onChange }: {
   id: string;
   /** The book's id, once it's in the library. */
   book?: string;
@@ -230,6 +231,8 @@ export function AiSwitch({ id, label, why, on, locked = false, p, book, style, c
   compact?: boolean;
   style?: CSSProperties;
   label: string;
+  /** A small line right under the switch: someone else turned it on (AI_ELSEWHERE). */
+  note?: string;
   why: string;
   on: boolean;
   locked?: boolean;
@@ -247,6 +250,7 @@ export function AiSwitch({ id, label, why, on, locked = false, p, book, style, c
         <span className="ai-label" id={`${id}-l`}>{label}</span>
         <button type="button" className="switch" role="switch" aria-checked={on} aria-labelledby={`${id}-l`} aria-describedby={`${id}-why`} disabled={locked} onClick={() => onChange(!on)} />
       </div>
+      {note && <p className="ai-else">{note}</p>}
       {offer ? <Offer design={ai} on={on} compact={compact} /> : <Status p={shown} design={ai} book={book} compact={compact} />}
       <p className="ai-why" id={`${id}-why`}>{why}</p>
     </div>
@@ -254,16 +258,17 @@ export function AiSwitch({ id, label, why, on, locked = false, p, book, style, c
 }
 
 /** A book in the library: its switch, on for good once said yes to, and its progress, asked again while it shows. */
-export function BookAiSwitch({ bookId, color, on, label, why, onTurnOn }: {
+export function BookAiSwitch({ bookId, color, on, label, note, why, onTurnOn }: {
   bookId: string;
   color: string;
   on: boolean;
   label: string;
+  note?: string;
   why: string;
   onTurnOn: () => void;
 }) {
   const p = useAiProgress(bookId, on);
-  return <AiSwitch id="ep-ai" label={label} why={why} on={on} locked={on} p={p} book={bookId} style={colorVars(color)} onChange={onTurnOn} />;
+  return <AiSwitch id="ep-ai" label={label} note={note} why={why} on={on} locked={on} p={p} book={bookId} style={colorVars(color)} onChange={onTurnOn} />;
 }
 
 /** What it unlocks, before it's on: the same parts each design shows once it is, all still to come. */
@@ -351,14 +356,25 @@ export function AiPanel({ p, book }: { p: AiProgress; book: string }) {
 }
 
 /** At the top of the voice sheet: what an AI reading along gives this book, and how far it's got. */
-export function SheetAi({ p, book, onAi }: { p: AiProgress; book: string; onAi?: (on: boolean) => void }) {
+export function SheetAi({ p, book, elsewhere = false, onAi }: { p: AiProgress; book: string; elsewhere?: boolean; onAi?: (on: boolean) => void }) {
   const on = p.stage !== 'off';
   if (!on && !onAi) return null;
   let why = 'It never keeps your book or learns from it. Once on, it stays on, for everyone who has this book.';
   if (on) why = 'Each part turns on here by itself as soon as it’s made.';
   return (
     <div className="ai-sheet">
-      <AiSwitch id="vs-ai" label="AI reading along" why={why} on={on} locked={on} p={on ? p : undefined} book={book} compact onChange={(v) => onAi?.(v)} />
+      <AiSwitch
+        id="vs-ai"
+        label="AI reading along"
+        note={elsewhere ? AI_ELSEWHERE : undefined}
+        why={why}
+        on={on}
+        locked={on}
+        p={on ? p : undefined}
+        book={book}
+        compact
+        onChange={(v) => onAi?.(v)}
+      />
     </div>
   );
 }

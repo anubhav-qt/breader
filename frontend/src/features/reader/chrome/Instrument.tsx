@@ -38,7 +38,7 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, bookId, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, note, search, sleep, revisit, two, music, letAi, aiProgress, transport, talk }: ChromeProps) {
+export function InstrumentChrome({ book, bookId, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, note, search, sleep, revisit, two, music, letAi, aiElsewhere, aiProgress, transport, talk }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [foot, setFoot] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
@@ -250,7 +250,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
               ) : panel === 'comments' ? (
                 <CommentsPanel key={talk.at ?? 'here'} view={talk.view} chapters={chapters} current={current} opens={talk.opens} at={talk.at} />
               ) : panel === 'voice' && (narration || immersion) ? (
-                <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} two={two} music={music} onAi={letAi} ai={aiProgress} bookId={bookId} castReady={castReady} />
+                <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} two={two} music={music} onAi={letAi} aiElsewhere={aiElsewhere} ai={aiProgress} bookId={bookId} castReady={castReady} />
               ) : panel === 'sleep' && sleep ? (
                 <SleepPanel asked={sleep.asked} chapters={chapters} playing={!!narration?.playing} onBack={sleep.back} onAwake={sleep.awake} />
               ) : panel === 'find' && search ? (
