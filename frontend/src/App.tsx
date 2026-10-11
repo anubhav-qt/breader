@@ -7,7 +7,7 @@ import { Header, type Tab } from './components/Header';
 import { IconAddBook, IconLock, IconPeople, IconPlus, IconStar, IconTrash } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
-import { categoryOf, countOf, type Category } from './books/category';
+import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
@@ -174,9 +174,13 @@ export default function App() {
   if (route.name === 'library' && tab === 'mine') pickPlace = `${category} mine`;
   if (route.name === 'library' && tab === 'shelf') pickPlace = `${category} shelf ${sharing.showing}`;
   if (picking && picking.place !== pickPlace) setPicking(null);
-  // Each tab's library stays once it's been seen, so switching back finds it as it was.
+  // Each tab's library stays once it's been seen, so switching back finds it as it was, and so does
+  // each shelf's: a tab seen on one shelf is there on the other too once that's been seen, so
+  // switching between books and manga never has a library to make, only one to show.
   const [seen, setSeen] = useState<ReadonlySet<Tab>>(() => new Set([tab]));
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
+  const [visited, setVisited] = useState<ReadonlySet<Category>>(() => new Set([category]));
+  if (!visited.has(category)) setVisited(new Set([...visited, category]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
   const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
   const labels = useLabels();
@@ -332,10 +336,14 @@ export default function App() {
     return { mine: filled.slice(0, mine.length), shelf: filled.slice(mine.length) };
   }, [lib.records, lib.reads, lib.covers, lib.edits, lapsed, sharing.covers, sharedRecords, keptFirsts, keptSeries, showing, previewSets, mangaPreview, preview, hidden]);
   // Each tab shows the chosen shelf's books; series and genres are offered from both.
-  const items = useMemo(() => ({
-    mine: everything.mine.filter((b) => categoryOf(b) === category),
-    shelf: everything.shelf.filter((b) => categoryOf(b) === category),
-  }), [everything, category]);
+  const shelves = useMemo(() => {
+    const of = (c: Category) => ({
+      mine: everything.mine.filter((b) => categoryOf(b) === c),
+      shelf: everything.shelf.filter((b) => categoryOf(b) === c),
+    });
+    return { books: of('books'), manga: of('manga') };
+  }, [everything]);
+  const items = shelves[category];
   const allSeries = useMemo(() => seriesNames([...everything.mine, ...everything.shelf]), [everything]);
   /** Series from MangaDex in this library, by their MangaDex id. */
   const remoteSeries = useMemo(() => {
@@ -1049,8 +1057,8 @@ export default function App() {
   const browseButton = mdOn !== false && (
     <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconPlus /> Browse</button>
   );
-  /** An empty shared library: the reader's own says how to share; someone else's, why it's empty. */
-  const emptyShelf = showing === 'own' ? (
+  /** An empty shared library, of manga or books: the reader's own says how to share; someone else's, why it's empty. */
+  const emptyShelf = (manga: boolean) => showing === 'own' ? (
     <div className="gallery-empty">
       <p>You don’t share any {manga ? 'manga' : 'books'} yet. Switch on <b>Share with your key</b> in {manga ? 'a manga’s' : 'a book’s'} ⋯ menu, or as you add one, and anyone you give your key to can read it here.</p>
       {manga ? browseButton : <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>}
@@ -1062,6 +1070,14 @@ export default function App() {
   ) : (
     <div className="gallery-empty"><p>{others?.state === 'ready' ? `Nothing is shared in ${libraryName(sharing, showing)} yet.` : 'Opening…'}</p></div>
   );
+  // Every library seen, on every shelf seen: all but the one showing are hidden.
+  const galleries: Array<{ c: Category; t: 'mine' | 'shelf' }> = [];
+  for (const c of CATEGORIES) {
+    if (!visited.has(c)) continue;
+    for (const t of ['mine', 'shelf'] as const) {
+      if (seen.has(t)) galleries.push({ c, t });
+    }
+  }
   /** No manga yet: what goes here, and how. */
   const emptyManga = (
     <div className="gallery-empty">
@@ -1109,20 +1125,20 @@ export default function App() {
             onSelect={startPicking}
             bulk={bulkBar}
           />
-          {lib.ready && (['mine', 'shelf'] as const).filter((t) => seen.has(t)).map((t) => (
+          {lib.ready && galleries.map(({ c, t }) => (
             <Gallery
-              key={`${category}-${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}
-              books={t === 'mine' ? items.mine : items.shelf}
+              key={`${c}-${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}
+              books={shelves[c][t]}
               seriesNames={allSeries}
               place={t}
               // Shared libraries are browsed by genre; one's own books, by series.
               view={t === 'shelf' ? 'genre' : 'series'}
-              manga={manga}
+              manga={c === 'manga'}
               coversOnly={coversOnly}
               now={now}
-              id={`library-${t}`}
+              id={`library-${c}-${t}`}
               labelledBy={`tab-${t}`}
-              hidden={t !== tab}
+              hidden={t !== tab || c !== category}
               onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={() => setAdding({ mode: 'file' })}
               onEdit={(id, patch) => void editBook(id, patch)}
@@ -1131,7 +1147,7 @@ export default function App() {
               onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
               onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
               onChapters={chaptersOf}
-              empty={t === 'shelf' ? emptyShelf : manga ? emptyManga : undefined}
+              empty={t === 'shelf' ? emptyShelf(c === 'manga') : c === 'manga' ? emptyManga : undefined}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
                 // Out of their books already: not shared either, it's nowhere, so it goes.
@@ -1139,7 +1155,7 @@ export default function App() {
                 lib.setShared(b.id, shared);
                 say(shared ? `“${b.title}” is shared with your key` : `Stopped sharing “${b.title}”. Anyone well into it keeps their copy.`);
               }}
-              picked={picking && t === tab ? picking.ids : undefined}
+              picked={picking && t === tab && c === category ? picking.ids : undefined}
               onPick={pick}
             />
           ))}

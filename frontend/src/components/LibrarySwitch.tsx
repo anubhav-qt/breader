@@ -49,7 +49,7 @@ export function LibrarySwitch({ category, tab, counts, labels, onTab }: Props) {
           type="button"
           className="lsw-tab"
           aria-selected={tab === t}
-          aria-controls={`library-${t}`}
+          aria-controls={`library-${category}-${t}`}
           tabIndex={focusable === t ? 0 : -1}
           onClick={() => onTab(t)}
         >
