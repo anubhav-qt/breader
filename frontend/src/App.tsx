@@ -815,17 +815,20 @@ export default function App() {
   }, [say]);
 
   /*
-   * Logged in, with no library in this browser: a phone's home-screen app, which starts with the
-   * login Safari had and none of its storage, or a browser that cleared its storage. It opens the
-   * account's library quietly, as logging in would have; offline, it tries again next time.
+   * Logged in: this browser should be on the account's library, and once a start it checks. A
+   * phone's home-screen app starts with the login Safari had and none of its storage; a browser may
+   * have cleared its storage, or still be on a key library it opened before it logged in, so its
+   * places never reach the other devices. It moves to the account's library quietly, as logging in
+   * would have, or asks first if it holds books the account hasn't got; offline, it tries again
+   * next time.
    */
   const rejoined = useRef(false);
-  const { ready: libReady, key: libKey, joinAccount } = lib;
+  const { ready: libReady, joinAccount } = lib;
   useEffect(() => {
-    if (rejoined.current || account.status !== 'in' || !libReady || libKey || login) return;
+    if (rejoined.current || account.status !== 'in' || !libReady || login) return;
     rejoined.current = true;
     void joinAccount().then((res) => { if (res.outcome === 'choose') setLogin({ mode: 'entering' }); }, () => {});
-  }, [account.status, libReady, libKey, joinAccount, login]);
+  }, [account.status, libReady, joinAccount, login]);
 
   const loggedIn = account.status === 'in';
   const onLoggedIn = useCallback((res: AccountResponse) => {
@@ -1169,6 +1172,7 @@ export default function App() {
             book={shown.book}
             // A chapter picked in its sheet: there, whatever place was kept.
             initial={startAt?.id === shown.id ? { ...(lib.reads[shown.id] ?? { progress: 0, line: '', lastOpened: now }), pos: startAt.pos } : lib.reads[shown.id]}
+            latest={lib.reads[shown.id]}
             closing={!!leaving}
             onBack={back}
             onSave={onSave}

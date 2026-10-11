@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
-import type { BookRecord, LoadedBook, ReadMark, ReadState, TocItem } from '../../books/types';
+import type { BookRecord, LoadedBook, Position, ReadMark, ReadState, TocItem } from '../../books/types';
 import { markTracker, screenWords } from '../../books/mark';
 import { remoteOf } from '../../books/remote';
 import { Toast, type ToastMessage } from '../../components/Toast';
@@ -40,6 +40,8 @@ interface Props {
   color: string;
   book: LoadedBook;
   initial?: ReadState;
+  /** The place as kept now: a pull moves it when the book was read on further on another device. */
+  latest?: ReadState;
   /** On its way back into the library; the page no longer responds. */
   closing?: boolean;
   onBack: () => void;
@@ -57,9 +59,11 @@ interface Props {
 
 const noTime = () => {};
 
+const samePos = (a: Position, b: Position | undefined) => !!b && a.section === b.section && a.block === b.block && a.offset === b.offset;
+
 const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
 
-export function Reader({ record, title, color, book, initial, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, onAi, onBook }: Props) {
+export function Reader({ record, title, color, book, initial, latest, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, onAi, onBook }: Props) {
   const [settings, update] = useReaderSettings();
   // Each manga keeps its own layout and direction, a layout for narrow screens (scrolled, until
   // another's picked) apart from wide ones. Opened, it keeps the one it opened in.
@@ -474,6 +478,11 @@ export function Reader({ record, title, color, book, initial, closing = false, o
   /** Opened well past the mark: the way back to it, offered until taken, closed, or not needed. */
   const [away, setAway] = useState<ReadMark | null>(null);
   const here = useRef<Loc | null>(null);
+  // When the place last saved was read. Opening at the place kept isn't reading there anew, so it
+  // keeps its time until the reader moves on, and can't overrule a place read later on another
+  // device that's still on its way here. A chapter picked to open at is read there now.
+  const savedAt = useRef(latest?.lastOpened ?? 0);
+  const picked = useRef(!!initial?.pos && !samePos(initial.pos, latest?.pos));
   const onLocation = useCallback((l: Loc) => {
     setLoc(l);
     here.current = l;
@@ -484,12 +493,29 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     const pos = { section: l.section, block: l.block, offset: l.offset };
     const before = marker.get();
     const mark = marker.step({ pos, progress: l.progress, line: l.line, screen: l.screen });
-    onSave({ pos, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current, mark });
+    let lastOpened = Date.now();
+    if (first && savedAt.current && !picked.current) lastOpened = savedAt.current;
+    picked.current = false;
+    savedAt.current = lastOpened;
+    onSave({ pos, progress: l.progress, line: l.line, lastOpened, words: book.words, wordsRead: wordsRead.current, mark });
     const screen = screenWords(l.screen);
     const ahead = (l.progress - mark.progress) * book.words;
     if (first && before && ahead > Math.max(500, screen * 2)) setAway(before);
     else if (ahead <= screen) setAway(null);
   }, [onSave, book.words, marker]);
+  // Read on further on another device while the book was open here: it goes there too, unless
+  // it's being read aloud or lit up here. Words read and the mark only go forward either way.
+  useEffect(() => {
+    if (!latest || latest.lastOpened <= savedAt.current) return;
+    savedAt.current = latest.lastOpened;
+    wordsRead.current = Math.max(wordsRead.current, latest.wordsRead ?? 0);
+    marker.follow(latest.mark);
+    if (narration.playing || pacing.running || !latest.pos) return;
+    const p = latest.pos;
+    // Where it lands is where it opens again, not pages read.
+    lastAt.current = null;
+    view.current?.listen.reach({ section: p.section, block: p.block, start: p.offset, end: p.offset, text: '' }, 0);
+  }, [latest, marker, narration.playing, pacing.running]);
   const goBack = useCallback(() => {
     if (away) view.current?.listen.reach({ section: away.pos.section, block: away.pos.block, start: away.pos.offset, end: away.pos.offset, text: '' }, 0);
     setAway(null);
@@ -500,7 +526,8 @@ export function Reader({ record, title, color, book, initial, closing = false, o
     if (l) {
       const pos = { section: l.section, block: l.block, offset: l.offset };
       const mark = marker.set({ pos, progress: l.progress, line: l.line });
-      onSave({ pos, progress: l.progress, line: l.line, lastOpened: Date.now(), words: book.words, wordsRead: wordsRead.current, mark });
+      savedAt.current = Date.now();
+      onSave({ pos, progress: l.progress, line: l.line, lastOpened: savedAt.current, words: book.words, wordsRead: wordsRead.current, mark });
     }
     setAway(null);
   }, [marker, onSave, book.words]);

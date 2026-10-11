@@ -152,6 +152,7 @@ describe('voices', () => {
     await b.post('/v1/sync/push', push('g', { type: 'voice.put', voice: { ...voice, gender: 'N' } }));
     expect(await gender()).toBe('N');
     const bad = await b.post('/v1/sync/push', push('g', { type: 'voice.put', voice: { ...voice, gender: 'X' } }));
-    expect(bad.status).toBe(400);
+    expect(bad.body.rejected[0].code).toBe('bad_change');
+    expect(await gender()).toBe('N');
   });
 });

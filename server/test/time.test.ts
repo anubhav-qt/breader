@@ -24,8 +24,8 @@ describe('reading time', () => {
   it('refuses a malformed day or more than a day’s seconds', async () => {
     const { b } = await registered();
     const bad = await b.post('/v1/sync/push', push('c', { type: 'time.put', bookId: 'x1', day: '27-09-2026', device: 'phone', seconds: 5 }));
-    expect(bad.status).toBe(400);
+    expect(bad.body.rejected[0].code).toBe('bad_change');
     const long = await b.post('/v1/sync/push', push('c', { type: 'time.put', bookId: 'x1', day: '2026-09-27', device: 'phone', seconds: 90_000 }));
-    expect(long.status).toBe(400);
+    expect(long.body.rejected[0].code).toBe('bad_change');
   });
 });

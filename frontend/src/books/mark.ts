@@ -43,6 +43,11 @@ export function markTracker(start: ReadMark | undefined, words: number) {
 
   return {
     get: () => mark,
+    /** The mark from another device: the later one is kept, and the next place is where the book opens. */
+    follow(other: ReadMark | undefined) {
+      mark = laterMark(mark, other);
+      last = null;
+    },
     /** The reader says they've read up to here: the mark comes here, back or on, and reading on carries it. */
     set(p: Omit<Place, 'screen'>, t = Date.now()): ReadMark {
       mark = { pos: p.pos, progress: p.progress, line: p.line, ...(mark?.n ? { n: mark.n } : {}) };

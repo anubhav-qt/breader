@@ -1,7 +1,7 @@
 import { and, eq, gt } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { PushRequest, type PullResponse, type PushResponse, type ReadMark } from '@breader/shared';
+import { Mutation, PushRequest, SYNC, type PullResponse, type PushResponse, type ReadMark } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { libraries, libraryItems, librarySettings, readingStates, syncClients, syncMeta } from '../db/schema.ts';
 import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
@@ -12,6 +12,16 @@ import { spreadAi } from '../sync/ai.ts';
 import { applyMutation, type Tx } from '../sync/apply.ts';
 
 const Since = z.coerce.number().int().min(0).default(0);
+
+/**
+ * A push as it arrives. Each change is checked on its own as it's applied, so one the server can't
+ * read is rejected alone, instead of turning back the whole batch on every retry, which would stop
+ * that browser syncing for good.
+ */
+const PushBatch = z.object({
+  clientId: PushRequest.shape.clientId,
+  mutations: z.array(z.looseObject({ id: z.number().int().positive() })).min(1).max(SYNC.maxMutations),
+});
 const ms = (d: Date | null) => (d ? d.getTime() : null);
 
 /** Errors that will happen again on every retry: reject the change instead of failing the push. */
@@ -34,7 +44,7 @@ export function syncRoutes(deps: Deps) {
    * Mutation ids already applied for this client are ignored, which makes retries harmless.
    */
   r.post('/sync/push', async (c) => {
-    const body = parse(PushRequest, await readJson(c));
+    const body = parse(PushBatch, await readJson(c));
     const libraryId = c.var.library.id;
     // Files whose AI switch is on in this push, to turn on in the other libraries holding them.
     const ai = new Set<string>();
@@ -52,7 +62,16 @@ export function syncRoutes(deps: Deps) {
 
       const rev = lib.rev + 1;
       const rejected: PushResponse['rejected'] = [];
-      for (const m of fresh) {
+      for (const raw of fresh) {
+        const checked = Mutation.safeParse(raw);
+        if (!checked.success) {
+          const first = checked.error.issues[0];
+          const where = first?.path.length ? ` (${first.path.join('.')})` : '';
+          log.warn({ type: raw.type, issue: first?.message, path: first?.path.join('.') }, 'mutation unreadable');
+          rejected.push({ id: raw.id, code: 'bad_change', message: `${first?.message ?? 'The server couldn’t read this change.'}${where}` });
+          continue;
+        }
+        const m = checked.data;
         try {
           // A savepoint per change, so one bad change doesn't undo the rest of the batch.
           const mine = new Set<string>();

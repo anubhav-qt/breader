@@ -17,7 +17,7 @@ import { allCountsLocked } from './readTime';
  *
  *   push   3 s after a change (at most 20 s while changes keep coming), when the tab is hidden,
  *          and when the connection returns
- *   pull   on start, on focus, after every push, and every 2 minutes while open
+ *   pull   on start, on focus, after every push (one that failed too), and every 2 minutes while open
  *
  * Every tab of this browser shares one outbox, kept in IndexedDB and only changed under the data
  * lock, and only one tab syncs at a time (lib/tabs.ts).
@@ -420,6 +420,10 @@ async function pushAll() {
       cur.outbox = cur.outbox.filter((m) => m.id > res.lastMutationId);
       for (const r of res.rejected) {
         const m = batch.find((x) => x.id === r.id);
+        if (m?.type === 'book.put' && r.code !== 'file_missing') {
+          host!.notice(`“${m.book.title}” stays in this browser only: the server couldn’t take it.`);
+          continue;
+        }
         // The server no longer has the file this book points at: store it again, and meanwhile
         // send the book without it.
         if (r.code !== 'file_missing' || !m || (m.type !== 'book.put' && m.type !== 'book.files')) continue;
@@ -550,12 +554,20 @@ export function flush(): Promise<void> {
         try {
           await withData(queueSnapshotLocked);
           if (!(await read()).registered) await register();
-          await pushAll();
-          if ((await read()).uploads.length) {
-            await uploadAll();
+          let stuck: unknown = null;
+          try {
             await pushAll();
+            if ((await read()).uploads.length) {
+              await uploadAll();
+              await pushAll();
+            }
+          } catch (e) {
+            if (e instanceof Resend || e instanceof OfflineError) throw e;
+            // This browser's changes can't go just now: what other devices did still comes in.
+            stuck = e;
           }
           await pullNow();
+          if (stuck) throw stuck;
           break;
         } catch (e) {
           // A resend starts over from the snapshot, once or twice at most.
@@ -659,9 +671,10 @@ export async function enterAccount(claim?: boolean): Promise<AccountResponse> {
     if (!(await saved())) throw new Error('Breader couldn’t save the books in this browser first. Try again when you’re online.');
     const key = host!.snapshot().key;
     const res = await api.post<AccountResponse>('/v1/session/account', { key: key ?? undefined, claim }, 30_000);
-    // Adopted and same: this browser already holds the account's library. Unless its session is all
-    // it has: a phone's home-screen app starts with the login Safari had, and none of its storage.
-    const held = res.outcome === 'same' && (await read()).libraryId === res.library?.id;
+    // This browser already holds the account's library: adopted, or the one it's on, its session
+    // perhaps lost. Unless its session is all it has: a phone's home-screen app starts with the
+    // login Safari had, and none of its storage.
+    const held = (await read()).libraryId === res.library?.id;
     if (res.outcome === 'choose' || res.outcome === 'adopted' || held) return { res };
     return { res, pull: await swapLocked(res.library!.id, res.key ?? null) };
   });
