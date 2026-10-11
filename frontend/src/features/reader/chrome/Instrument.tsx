@@ -196,7 +196,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
           design={round.play}
           toggle={toggle}
           ask={ask}
-          speaker={round.cast === 'D' && castOn ? <SpeakerChip book={bookId} playing={!!narration?.playing} /> : null}
+          speaker={round.cast === 'D' && castOn ? <SpeakerChip playing={!!narration?.playing} /> : null}
         />
       )}
 

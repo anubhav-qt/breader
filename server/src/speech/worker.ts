@@ -42,7 +42,7 @@ ort.env.wasm.numThreads = (workerData as { threads: number }).threads;
 ort.env.logLevel = 'error';
 
 type Voice =
-  | { engine: 'piper'; session: ort.InferenceSession; config: PiperConfig }
+  | { engine: 'piper'; session: ort.InferenceSession; config: PiperConfig; speaker: number }
   | { engine: 'kokoro'; pack: Float32Array; british: boolean };
 
 const voices = new Map<string, Voice>();
@@ -51,15 +51,25 @@ let kokoro: ort.InferenceSession | null = null;
 
 const session = async (file: string) => ort.InferenceSession.create(await readFile(file), { executionProviders: ['wasm'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
 
+async function pack(file: string) {
+  const b = await readFile(file);
+  if (b.byteLength !== KOKORO_PACK_BYTES) throw new Error('That isn’t a Kokoro voice pack.');
+  return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+}
+
 async function open(files: VoiceFiles): Promise<Voice> {
   if (files.engine === 'kokoro') {
     kokoro ??= await session(files.model);
-    const b = await readFile(files.pack);
-    if (b.byteLength !== KOKORO_PACK_BYTES) throw new Error('That isn’t a Kokoro voice pack.');
-    return { engine: 'kokoro', pack: new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)), british: files.british };
+    const one = await pack(files.pack);
+    if (!files.mix) return { engine: 'kokoro', pack: one, british: files.british };
+    // A blend: the two packs averaged, style by style.
+    const other = await pack(files.mix);
+    const both = new Float32Array(one.length);
+    for (let i = 0; i < one.length; i++) both[i] = (one[i] + other[i]) / 2;
+    return { engine: 'kokoro', pack: both, british: files.british };
   }
   const [model, config] = await Promise.all([session(files.model), readFile(files.config, 'utf8')]);
-  return { engine: 'piper', session: model, config: JSON.parse(config) as PiperConfig };
+  return { engine: 'piper', session: model, config: JSON.parse(config) as PiperConfig, speaker: files.speaker ?? 0 };
 }
 
 async function load(key: string, files: VoiceFiles) {
@@ -102,7 +112,7 @@ async function sound(v: Voice, text: string, speed: number): Promise<{ audio: Fl
     input_lengths: new ort.Tensor('int64', int64([ids.length]), [1]),
     scales: new ort.Tensor('float32', new Float32Array(scales), [3]),
   };
-  if (speakers > 1) feeds.sid = new ort.Tensor('int64', int64([0]), [1]);
+  if (speakers > 1) feeds.sid = new ort.Tensor('int64', int64([v.speaker]), [1]);
   const out = await v.session.run(feeds);
   return { audio: (out[v.session.outputNames[0]] as ort.Tensor).data as Float32Array, rate: v.config.audio.sample_rate };
 }

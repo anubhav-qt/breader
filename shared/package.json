@@ -16,6 +16,7 @@
     "./protocol": "./src/protocol.ts",
     "./report": "./src/report.ts",
     "./speech": "./src/speech.ts",
+    "./voices": "./src/voices.ts",
     "./voice-files.json": "./src/voice-files.json"
   },
   "scripts": {
