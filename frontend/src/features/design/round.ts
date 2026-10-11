@@ -44,7 +44,8 @@ function pick<T extends string>(v: unknown, allowed: readonly T[], fallback: T):
 }
 
 function load(): Round {
-  if (!dev) return DEFAULT;
+  // Outside development nothing is pretend: the AI's progress is what the server says.
+  if (!dev) return { ...DEFAULT, fake: 'live' };
   let saved: Partial<Round> = {};
   try {
     saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Round>;
