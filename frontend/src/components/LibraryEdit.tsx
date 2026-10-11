@@ -1,22 +1,20 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { IconCaret } from './icons';
+import { IconPencil } from './icons';
 import './library-switch.css';
 
 interface Props {
-  /** The library showing: the reader's own, or a shared one. */
-  name: string;
   /** What its dropdown is, for its tooltip. */
   label: string;
   /**
    * Its dropdown: the reader's own library, to rename (features/shared/OwnLibraryMenu.tsx), or
-   * the list of shared libraries (features/shared/LibraryMenu.tsx).
+   * the list of shared libraries, to pick, rename or add one (features/shared/LibraryMenu.tsx).
    */
   menu: (close: () => void) => ReactNode;
 }
 
-/** The library showing, named in the middle of the header, with its dropdown. */
-export function LibraryTitle({ name, label, menu }: Props) {
+/** The pencil beside the switch between libraries, with the dropdown of the library showing. */
+export function LibraryEdit({ label, menu }: Props) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
 
@@ -34,17 +32,17 @@ export function LibraryTitle({ name, label, menu }: Props) {
   }, [open]);
 
   return (
-    <div className="lt" ref={wrap}>
+    <div className="le" ref={wrap}>
       <button
         type="button"
-        className={`lt-btn${open ? ' is-open' : ''}`}
+        className={`btn btn-ghost hdr-icon le-btn${open ? ' is-open' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={label}
         title={label}
         onClick={() => setOpen(!open)}
       >
-        <span className="lt-name">{name}</span>
-        <IconCaret />
+        <IconPencil />
       </button>
       <AnimatePresence>{open && menu(() => setOpen(false))}</AnimatePresence>
     </div>
