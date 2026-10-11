@@ -53,7 +53,7 @@ export const PACE = { min: 80, max: 600, step: 20, start: 200 };
 /** About how many words a minute a voice says at 1×. */
 const SPOKEN = 170;
 /** Background music's loudness, in tenths. Well under the voice, to start with. */
-export const MUSIC_VOLUME = { min: 0, max: 1, step: 0.1, start: 0.3 };
+export const MUSIC_VOLUME = { min: 0, max: 1, step: 0.1, start: 0.1 };
 
 /** About how many words a minute the voice says, for the keys' seconds. */
 export const spokenWpm = (p: VoicePrefs) => rateOf(p) * SPOKEN;
