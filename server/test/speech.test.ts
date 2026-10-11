@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { VOICES as BUILT_IN } from '@breader/shared/voices';
 import { describe, expect, it, vi } from 'vitest';
 import { makeApp } from '../src/app.ts';
 import { users } from '../src/db/schema.ts';
@@ -100,10 +101,7 @@ describe('the server voice', () => {
 });
 
 describe('the server’s voices', () => {
-  it('are the app’s five Normal voices and its five heavy ones, and no uploads', () => {
-    expect(VOICES).toEqual([
-      'piper:kristin', 'piper:norman', 'piper:cori', 'piper:northern', 'piper:ljspeech',
-      'kokoro:af_heart', 'kokoro:am_michael', 'kokoro:bf_emma', 'kokoro:bm_george', 'kokoro:af_bella',
-    ]);
+  it('are the app’s thirty Piper voices and its thirty Kokoro ones, and no uploads', () => {
+    expect([...VOICES].sort()).toEqual(BUILT_IN.map((v) => v.key).sort());
   });
 });
