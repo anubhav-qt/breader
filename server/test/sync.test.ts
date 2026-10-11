@@ -148,7 +148,25 @@ describe('sync', () => {
     ]);
     // Anything else after the colon isn't a language.
     const odd = await b.post('/v1/sync/push', push('c2', { type: 'book.put', book: book({ source: 'remote', url: `${series}:../x` }) }));
-    expect(odd.status).toBe(400);
+    expect(odd.body.rejected.map((x: { code: string }) => x.code)).toEqual(['bad_change']);
+  });
+
+  it('syncs a series read from one copy with others filling in its missing chapters', async () => {
+    const { b } = await registered();
+    const url = 'mangadex:a1c7c817-4e59-43b7-9365-09675a149a6f#9bd4c3a7-4bd4-4aa6-b2f5-0a8b7e0d0c6e|sw:42#Asura%20Scans%20%26%20Friends|sw:7';
+    const long = `sw:42#${'%E3%81%82'.repeat(100)}`;
+    const r = await b.post(
+      '/v1/sync/push',
+      push(
+        'c',
+        { type: 'book.put', book: book({ id: 'md-also', format: 'CBZ', source: 'remote', url }) },
+        { type: 'book.put', book: book({ id: 'sw-long', format: 'CBZ', source: 'remote', url: long }) },
+        { type: 'book.put', book: book({ source: 'remote', url: `${url}|` }) },
+      ),
+    );
+    expect(r.body.rejected.map((x: { code: string }) => x.code)).toEqual(['bad_change']);
+    const books = (await b.get('/v1/sync/pull?since=0')).body.books;
+    expect(books.map((x: { id: string; url: string }) => [x.id, x.url]).sort()).toEqual([['md-also', url], ['sw-long', long]]);
   });
 
   it('syncs a series on Breader’s Suwayomi server by its id there', async () => {
@@ -165,7 +183,8 @@ describe('sync', () => {
     const urls = (await b.get('/v1/sync/pull?since=0')).body.books.map((x: { url: string }) => x.url);
     expect(urls).toEqual(['sw:42']);
     for (const url of ['suwayomi:42', 'sw:0', 'sw:abc', 'sw:12345678901', 'sw:', 'kg:0RVCY8NST343X']) {
-      expect((await b.post('/v1/sync/push', push('c3', { type: 'book.put', book: book({ source: 'remote', url }) }))).status, url).toBe(400);
+      const bad = await b.post('/v1/sync/push', push('c3', { type: 'book.put', book: book({ source: 'remote', url }) }));
+      expect(bad.body.rejected.map((x: { code: string }) => x.code), url).toEqual(['bad_change']);
     }
   });
 
@@ -180,9 +199,32 @@ describe('sync', () => {
 
   it('validates the push body', async () => {
     const { b } = await registered();
-    const r = await b.post('/v1/sync/push', { clientId: 'c-valid', mutations: [{ id: 1, type: 'book.put', book: { id: 'x' } }] });
-    expect(r.status).toBe(400);
-    expect(r.body.code).toBe('bad_request');
+    for (const body of [{ mutations: [{ id: 1, type: 'settings.put', prefs: {} }] }, { clientId: 'c-valid', mutations: [] }, { clientId: 'c-valid', mutations: [{ type: 'settings.put', prefs: {} }] }]) {
+      const r = await b.post('/v1/sync/push', body);
+      expect(r.status).toBe(400);
+      expect(r.body.code).toBe('bad_request');
+    }
+  });
+
+  it('rejects a change it can’t read on its own, and takes the rest of the batch', async () => {
+    const { b } = await registered();
+    const a = book({ title: 'Kept' });
+    const r = await b.post('/v1/sync/push', {
+      clientId: 'client-mixed',
+      mutations: [
+        { id: 1, type: 'book.put', book: { id: 'x' } },
+        { id: 2, type: 'book.put', book: a },
+        { id: 3, type: 'read.put', bookId: a.id, read: { progress: Number.NaN, line: '', lastOpened: 1 } },
+        { id: 4, type: 'no.such.thing' },
+        { id: 5, type: 'read.put', bookId: a.id, read: { progress: 0.4, line: 'Here.', lastOpened: Date.now() - 1000 } },
+      ],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.lastMutationId).toBe(5);
+    expect(r.body.rejected.map((x: { id: number; code: string }) => [x.id, x.code])).toEqual([[1, 'bad_change'], [3, 'bad_change'], [4, 'bad_change']]);
+    const p = (await b.get('/v1/sync/pull?since=0')).body;
+    expect(p.books.map((x: { title: string }) => x.title)).toEqual(['Kept']);
+    expect(p.reads[0].read.progress).toBe(0.4);
   });
 
   it('serialises concurrent pushes so revs never repeat', async () => {

@@ -291,6 +291,8 @@ const host: SyncHost = {
     stored = next;
     tell('library');
     show();
+    // After the pull is saved, as a change of its own.
+    window.setTimeout(foldCopies, 0);
   },
   async replaceLocked(pull, key) {
     const before = await loadStored();
@@ -462,6 +464,39 @@ async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
   }
   await change((d) => ({ records: [copy, ...d.records] }), [{ type: 'book.put', book: toWire(copy) }]);
   return copy;
+}
+
+const isOpen = (id: string) => window.location.hash === `#/read/${encodeURIComponent(id)}`;
+
+/**
+ * Copies of one shared book made on two devices before either had heard of the other's: each kept
+ * its own place. The first made stays, with the later place, the words read and the mark of both,
+ * and its card edits over the other's; the other goes. Every device picks the same one.
+ */
+function foldCopies() {
+  const firsts = new Map<string, BookRecord>();
+  const order = [...view.records].sort((a, b) => a.addedAt - b.addedAt || (a.id < b.id ? -1 : 1));
+  for (const r of order) {
+    if (!r.origin) continue;
+    const keep = firsts.get(r.origin);
+    if (!keep) {
+      firsts.set(r.origin, r);
+      continue;
+    }
+    // Either open in the reader here: they fold at a pull after it closes.
+    if (isOpen(keep.id) || isOpen(r.id)) continue;
+    const mine = view.reads[keep.id];
+    const theirs = view.reads[r.id];
+    if (theirs) {
+      let later = theirs;
+      if (mine && mine.lastOpened >= theirs.lastOpened) later = mine;
+      const mark = laterMark(mine?.mark, theirs.mark);
+      saveRead(keep.id, { ...later, wordsRead: Math.max(mine?.wordsRead ?? 0, theirs.wordsRead ?? 0), ...(mark ? { mark } : {}) });
+    }
+    const edit = view.edits[r.id];
+    if (edit) editBook(keep.id, { ...edit, ...view.edits[keep.id] });
+    void removeBook(r.id);
+  }
 }
 
 /** Deletes a book from this browser and returns everything needed to put it back. */

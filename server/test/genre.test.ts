@@ -35,10 +35,10 @@ describe('genre', () => {
   it('turns away a genre that isn’t an id', async () => {
     const { b } = await registered();
     const res = await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book({ genre: 'Science Fiction!' }) }));
-    expect(res.status).toBe(400);
+    expect(res.body.rejected[0].code).toBe('bad_change');
     for (const genre of ['fantasy,', ',fantasy', 'fantasy, romance', 'fantasy,,romance']) {
       const edit = await b.post('/v1/sync/push', push('c', { type: 'edit.put', bookId: 'x', edit: { genre } }));
-      expect(edit.status, genre).toBe(400);
+      expect(edit.body.rejected[0].code, genre).toBe('bad_change');
     }
   });
 

@@ -19,12 +19,18 @@ export const Format = z.enum(['EPUB', 'PDF', 'TXT', 'MD', 'Text', 'CBZ']);
 export const Source = z.enum(['file', 'sample', 'remote']);
 
 /**
- * A remote book's url: a MangaDex series by its id, with the language its chapters are read in
- * after a colon when it isn't English (mangadex:<id>:pt-br), or a series on Breader's Suwayomi
+ * One copy of a remote book: a MangaDex series by its id, with the language its chapters are read
+ * in after a colon when it isn't English (mangadex:<id>:pt-br), or a series on Breader's Suwayomi
  * server by its id there (sw:42, as SourceId in manga.ts). Either may end with the group whose
  * uploads it's read in, after a #, as encodeURIComponent writes it (sw:42#Official).
  */
-export const REMOTE_URL = /^(mangadex:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[a-z]{2,3}(-[a-z]{2,3})?)?|sw:[1-9]\d{0,9})(#[\w%.~!*'()-]{1,300})?$/;
+const REMOTE_COPY = String.raw`(mangadex:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[a-z]{2,3}(-[a-z]{2,3})?)?|sw:[1-9]\d{0,9})(#[\w%.~!*'()-]{1,1000})?`;
+
+/**
+ * A remote book's url: its copy, then up to seven more after a | each, for the chapters it hasn't
+ * got (books/remote.ts withAlso).
+ */
+export const REMOTE_URL = new RegExp(`^${REMOTE_COPY}(\\|${REMOTE_COPY}){0,7}$`);
 
 export const Position = z.object({
   section: z.number().int().nonnegative(),
