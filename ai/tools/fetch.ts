@@ -61,7 +61,8 @@ export function castFromFile(f: AiFile): Cast {
     if (g) return { ...g, gender: c.g };
     const changes = (c.changes ?? []).map(([s, b, gender]) => ({ at: `${s}:${b}`, gender, why: 'As marked.' }));
     const voice = c.voice ? { voice: c.voice } : {};
-    return { id: c.id, name: c.name, gender: c.g, evidence: 'From its marks on the server.', ...(changes.length ? { changes } : {}), ...voice };
+    const names = (c.names ?? []).map(([s, b, name]) => ({ at: `${s}:${b}`, name }));
+    return { id: c.id, name: c.name, gender: c.g, evidence: 'From its marks on the server.', ...(changes.length ? { changes } : {}), ...(names.length ? { names } : {}), ...voice };
   });
   return { people };
 }
@@ -153,7 +154,13 @@ export async function startBook(b: QueueBook, bytes: Uint8Array): Promise<{ book
   let seeded = '';
   if (!existsSync(join(dir, 'cast.json'))) {
     const earlier = seriesCast(b);
-    const carried = earlier ? earlier.people : [];
+    // Where another volume named them is that volume's; here they start with the name they have.
+    const carried: Cast['people'] = [];
+    for (const p of earlier?.people ?? []) {
+      const copy = { ...p };
+      delete copy.names;
+      carried.push(copy);
+    }
     writeJson(join(dir, 'cast.json'), { people: [...GENERIC, ...carried] });
     if (earlier) seeded = `cast.json starts with ${carried.length} people from ${earlier.from.title}. Check each one still fits this book.`;
   }

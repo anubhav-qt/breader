@@ -71,6 +71,11 @@ export const AiFile = z.strictObject({
     cast: z.array(z.strictObject({
       id: z.string().min(1),
       name: z.string(),
+      /**
+       * The name the book uses for them from each point on, as the marker pinned them: the first
+       * where they first appear, then each one the book reveals. Books marked before have none.
+       */
+      names: z.array(z.tuple([N, N, z.string().min(1)])).optional(),
       g: AiGender,
       /** How they sound from a reveal on. */
       changes: z.array(z.tuple([N, N, AiGender])).optional(),
@@ -273,6 +278,16 @@ export interface AiVoicesResponse {
   narration: Array<[number, number, 'F' | 'M' | null]>;
   /** Every line spoken by a woman or a man: [section, block, start, end, 'F' | 'M']. */
   spans: Array<[number, number, number, number, 'F' | 'M']>;
+  /*
+   * For character voices, keys and never names (AiCastResponse names the ones the reader has met).
+   * Missing from marks fetched before there were character voices.
+   */
+  /** Who says each line in `spans`, by the same index: their key, or -1 for someone generic. */
+  who?: number[];
+  /** From each paragraph on, who tells the story in the first person: their key, or -1 for nobody. */
+  tellers?: Array<[number, number, number]>;
+  /** The voices the AI picked: [key, Piper's voice id, Kokoro's]. */
+  picks?: Array<[number, string, string]>;
 }
 
 /** Someone in a book with a voice of their own, as far as the reader has read. */

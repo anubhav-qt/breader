@@ -10,11 +10,11 @@ import { refreshVoices } from '../voice/list';
 import { unlockMusic } from '../music';
 import { hung, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
-import { missing, playSample, stopSample, useLoadState } from '../voice/speaker';
+import { missingAll, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { SheetAi } from '../../ai/AiStatus';
 import type { AiProgress } from '../../ai/progress';
 import { useRound } from '../../design/round';
-import { setCastOn, useCast } from '../voice/cast';
+import { castVoices, setCastOn, useCast } from '../voice/cast';
 import { CastSection, OneVoice, TwoVoices, VoiceFaces } from './Cast';
 import { PAUSE, PLAY } from './icons';
 import { CloseDots, DotIcon } from './parts';
@@ -157,13 +157,16 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   // Whether Immersive can run here, asked before it offers a download.
   useEffect(() => { if (mode === 'immersive') void checkGpu(); }, [mode]);
   useEffect(() => stopSample, []);
-  // What the picked voice still has to download; again once a download ends.
+  // What the picked voices still have to download, character voices' too; again once a download ends.
   useEffect(() => {
     let on = true;
-    void Promise.all((paired ? [pair.F, pair.M] : [current]).map(missing)).then((ms) => { if (on) setBytes(ms.reduce((n, m) => n + m.bytes, 0)); });
+    let want = [current];
+    if (paired) want = [pair.F, pair.M];
+    if (paired && characters) want = [...want, ...castVoices(bookId, pair.F.engine, new Map()).values()];
+    void missingAll(want).then((n) => { if (on) setBytes(n); });
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current.key, paired, pair.F.key, pair.M.key, load.key, server]);
+  }, [current.key, paired, pair.F.key, pair.M.key, load.key, server, characters, cast]);
 
   // The model the voices come from: the voice reading's, or hers in 2 voices. The server has its own.
   let model: Engine = current.engine;
@@ -203,7 +206,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     const his = grid.filter((v) => sideOf(v) === 'M' && v.key !== pair.M.key);
     if (his.length) pickSide(voices, anyOf(his));
   };
-  // Character voices read with 2 voices for now, hers and his for anyone without one of their own.
+  // Character voices read as 2 voices does, with each line in its speaker's own voice: hers and his for anyone without one.
   const setCount = (n: Count) => {
     if (n === 'cast') {
       if (!castReady) { setWaiting('cast'); return; }

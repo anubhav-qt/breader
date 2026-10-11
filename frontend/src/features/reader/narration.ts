@@ -8,7 +8,8 @@ import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePref
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { useSpeech } from './voice/server';
-import { failed, hold, letGoKeys, missing, play, prepare, release, retry, setLoudness, synth, unlock, type Clip, type Playing } from './voice/speaker';
+import { castNow, castVoices, useCast } from './voice/cast';
+import { failed, hold, letGoKeys, missingAll, play, prepare, release, retry, setLoudness, synth, unlock, type Clip, type Playing } from './voice/speaker';
 import { inTwo, type Marks, type Two } from './voice/two';
 
 /*
@@ -34,6 +35,8 @@ export interface Sentence {
   text: string;
   /** 2 voices: hers or his (voice/two.ts). */
   g?: Two;
+  /** Character voices: who it's by, their key, or -1 for nobody with a voice of their own (voice/two.ts). */
+  who?: number;
   /**
    * A picture, the chapter's how-manyth, with nothing to say: Immersive stops on it (look.ts).
    * `block` is the one it's in or follows, and `start` and `end` are 0.
@@ -211,9 +214,9 @@ const holds = (r: Sentence) => (s: Sentence) => s.section === r.section && (r.pi
  * download to agree to, or something gone wrong. `about` names the book for the lock screen.
  * `sleep` watches for a reader who fell asleep to it (sleep.ts). `here` is where a press from
  * outside the page carries on from (Immersive's light). `two` is the book's 2 voices marks, when
- * it has them (voice/two.ts).
+ * it has them (voice/two.ts), and `book` its id, for its character voices (voice/cast.ts).
  */
-export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }, sleep?: RefObject<SleepWatch>, here?: () => Sentence | undefined, two: Marks | null = null) {
+export function useNarration(view: RefObject<ViewHandle | null>, active: boolean, loc: Loc | null, openSheet: () => void, about: { title: string; author?: string }, sleep?: RefObject<SleepWatch>, here?: () => Sentence | undefined, two: Marks | null = null, book = '') {
   const [playing, setPlaying] = useState(false);
   const playingRef = useRef(playing);
   playingRef.current = playing;
@@ -271,12 +274,15 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
      * 2 voices, when the book has marks and the reader picked it: sentences are cut where lines
      * start and end (voice/two.ts). `shape` says how the list is cut, so a change re-cuts it.
      * A chapter parsed differently from the text the marks were made from reads in one voice.
+     * Character voices cut the same way, and read each piece by someone in their own voice.
      */
     let pairFailed = false;
     const shapeNow = () => {
       const p = voicePrefs();
       const m = marks.current;
-      return m && !pairFailed && p.count[p.mode] === 2 ? `2:${p.noPov}:${m.made}` : '1';
+      if (!m || pairFailed || p.count[p.mode] !== 2) return '1';
+      if (castNow().on) return `cast:${p.noPov}:${m.made}`;
+      return `2:${p.noPov}:${m.made}`;
     };
     let shape = shapeNow();
     const same = new Map<number, boolean>();
@@ -288,7 +294,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         const print = await listen()?.print?.(sec);
         same.set(sec, !!print && print === m.prints[sec]);
       }
-      return inTwo(raw, m, voicePrefs().noPov, (sec) => same.get(sec) ?? false);
+      return inTwo(raw, m, voicePrefs().noPov, (sec) => same.get(sec) ?? false, shape.startsWith('cast'));
     };
 
     const fresh = async () => {
@@ -308,7 +314,27 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     /** Where they read: on the server, or here. */
     let where = '';
     const keys = () => voices.map((v) => v.key);
-    const voiceOf = (s: Sentence) => (voices.length > 1 && s.g === 'M' ? voices[1] : voices[0]);
+    /** Character voices, by the speaker's key, as the voice sheet hands them out (voice/cast.ts). */
+    let cast = new Map<number, VoiceInfo>();
+    let castKeys = '';
+    const voiceOf = (s: Sentence) => {
+      if (s.who !== undefined && s.who >= 0) {
+        const own = cast.get(s.who);
+        if (own) return own;
+      }
+      if (voices.length > 1 && s.g === 'M') return voices[1];
+      return voices[0];
+    };
+    /**
+     * Character voices kept loaded beside hers and his, the last used first: only a couple on this
+     * device's processor, where each Piper voice is a model of its own and a phone's memory runs out.
+     */
+    let recent: string[] = [];
+    const keepFor = (v: VoiceInfo) => {
+      recent = [v.key, ...recent.filter((k) => k !== v.key)];
+      if (v.engine === 'piper' && !onServer()) recent = recent.slice(0, 2);
+      return [...keys(), ...recent];
+    };
     let rate = 1;
     /** Sound for sentences made ahead, by where they start, until they're said. */
     let clips = new Map<string, Promise<Clip>>();
@@ -316,7 +342,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       const k = keyOf(s);
       let c = clips.get(k);
       if (!c) {
-        c = synth(voiceOf(s), respell(s.text).said, rate, keys());
+        const v = voiceOf(s);
+        c = synth(v, respell(s.text).said, rate, keepFor(v));
         c.catch(() => {});
         clips.set(k, c);
       }
@@ -394,8 +421,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
           where = wantWhere;
           const first = !voices.length;
           voices = [];
-          let bytes = 0;
-          for (const v of want) bytes += (await missing(v)).bytes;
+          const bytes = await missingAll(want);
           if (!first && bytes > 0 && askFirst()) { openSheet(); break; }
           try {
             for (const v of want) await prepare(v, want.map((w) => w.key));
@@ -413,6 +439,15 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
             failed('2 voices couldn’t start on this device just now, so this reads in one voice.');
           }
         }
+      }
+      // Character voices as the sheet has them now: a pick or a reshuffle makes what's ahead again.
+      let castNext = new Map<number, VoiceInfo>();
+      if (shape.startsWith('cast') && marks.current && voices.length) castNext = castVoices(book, voices[0].engine, marks.current.picks);
+      const castNextKeys = [...castNext].map(([k, v]) => `${k}=${v.key}`).join(',');
+      if (castNextKeys !== castKeys) {
+        cast = castNext;
+        castKeys = castNextKeys;
+        clips = new Map();
       }
       const l = listen();
       if (!l) break;
@@ -596,8 +631,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     unlock();
     unlockMusic();
     if (p.mode === 'immersive') await checkGpu();
-    let bytes = 0;
-    for (const v of marks.current && p.count[p.mode] === 2 ? both(p.mode) : [voiceFor(p.mode)]) bytes += (await missing(v)).bytes;
+    let want = [voiceFor(p.mode)];
+    if (marks.current && p.count[p.mode] === 2) want = both(p.mode);
+    // Character voices: those of everyone met so far too. Anyone further on downloads when they first speak.
+    if (marks.current && p.count[p.mode] === 2 && castNow().on) want = [...want, ...castVoices(book, want[0].engine, new Map()).values()];
+    const bytes = await missingAll(want);
     if (bytes > 0 && !agreed && askFirst()) { openSheet(); return false; }
     actions.current.start(from);
     return true;
@@ -646,10 +684,13 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   // 2 voices: on or off, the pair, and who reads with no point of view, as the loop sees them.
   const twoOn = !!two && prefs.count[prefs.mode] === 2;
   const pair = twoOn ? both(prefs.mode).map((v) => v.key).join('|') : '';
+  // Character voices: on or off, and the book's picks and reshuffles.
+  const castState = useCast();
+  const castSig = `${castState.on}:${castState.seeds[book] ?? 0}:${JSON.stringify(castState.picks[book] ?? {})}`;
   useEffect(() => {
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made, server]);
+  }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made, server, castSig]);
   // Louder, softer or muted: the sentence being said changes too.
   useEffect(() => { setLoudness(prefs.volume, prefs.muted); }, [prefs.volume, prefs.muted]);
   // Paused, the lit sentence goes out with a change of mode, which lights its own way.

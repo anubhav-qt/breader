@@ -107,7 +107,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   // Comments, in the shared book's threads for a copy of one (comments.ts).
   const thread = threadOf(record);
   const talk = useTalk(thread, !closing);
-  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current(), marks);
+  const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current(), marks, record.id);
   saying.current = narration.current;
   const { asked, done: sleptDone } = slept;
   useEffect(() => { if (asked) openPanel('sleep'); }, [asked, openPanel]);

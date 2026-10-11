@@ -422,6 +422,7 @@ narrator third pov elena
 
 - Every non-generic entry needs `evidence`.
 - `minor: true` marks someone who only speaks a line or two, and never gets a Revisit entry.
+- `names` (optional) pins the name the book uses for them from each paragraph on, like a Revisit entry's: `[{ "at": "20:4", "name": "the masked knight" }, { "at": "40:12", "name": "Rhaegar" }]`. The app's character voices show listeners only the name they've reached, so pin the first one where they first appear and each new one where the book reveals it. `mark` asks for these as `name <id> <at> | <name>` lines.
 - `voice` is who reads them: one of Piper's voices and one of Kokoro's, by their ids in `shared/src/voices.ts`, a woman's for F and a man's for M. `mark` picks them once the marks are settled (`casting.ts`), from how each voice sounds and who it suits, and won't pack a book until everyone but the generic entries has both.
 - Leave the generic entries (`unknown`, `unknown-man`, `unknown-woman`, `crowd`, `author`) in place. You may set `author`'s gender.
 

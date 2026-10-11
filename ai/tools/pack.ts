@@ -59,6 +59,7 @@ export function packBook(book: Book, by: string) {
       cast: cast.people.map((p) => ({
         id: p.id,
         name: p.name,
+        ...(p.names?.length ? { names: p.names.map((n) => [...at(n.at), n.name]) } : {}),
         g: p.gender,
         ...(p.changes?.length ? { changes: p.changes.map((x) => [...at(x.at), x.gender]) } : {}),
         ...(p.voice ? { voice: p.voice } : {}),

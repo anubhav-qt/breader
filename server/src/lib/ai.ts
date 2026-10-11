@@ -103,8 +103,9 @@ export function musicFor(f: { made: string; sections: string[]; music: NonNullab
 /**
  * The voice marks with nothing to tell: per paragraph, whose voice the narration takes (the
  * narrator's own in the first person, whose eyes we're behind in the third, null where it's
- * nobody's or nobody's a woman or a man), and the lines a woman or a man speaks. Everything
- * else (names, who says what, lines by neither) stays here; those are read as narration.
+ * nobody's or nobody's a woman or a man), and the lines a woman or a man speaks. For character
+ * voices, who says each line and who tells the story, by key, and the voices picked for them.
+ * Names and lines by neither stay here; those are read as narration.
  */
 export function voicesFor(f: Pick<AiFile, 'made' | 'sections' | 'voices'>): AiVoicesResponse {
   const v = f.voices;
@@ -124,16 +125,37 @@ export function voicesFor(f: Pick<AiFile, 'made' | 'sections' | 'voices'>): AiVo
   // A later change at the same paragraph can make two in a row the same again.
   const tidy = narration.filter((n, i) => i === 0 || n[2] !== narration[i - 1][2]);
   const spans = v.spans.flatMap(([s, b, start, end, g]): AiVoicesResponse['spans'] => (g === 'N' ? [] : [[s, b, start, end, g]]));
-  return { made: f.made, sections: f.sections, narration: tidy, spans };
+
+  // Character voices: who says each line, who tells the story, and the voices picked, by key.
+  const keyOf = (i: number) => {
+    const c = v.cast[i];
+    if (i < 0 || !c || GENERIC_SPEAKERS.includes(c.id)) return -1;
+    return i;
+  };
+  const who: number[] = [];
+  for (const [, , , , g, i] of v.spans) {
+    if (g !== 'N') who.push(keyOf(i));
+  }
+  const tellers: Array<[number, number, number]> = [];
+  for (const [s, b, teller] of narr) {
+    const k = keyOf(teller);
+    const prev = tellers.at(-1);
+    if (!prev || prev[2] !== k) tellers.push([s, b, k]);
+  }
+  const picks: Array<[number, string, string]> = [];
+  for (const [i, c] of v.cast.entries()) {
+    if (c.voice && keyOf(i) >= 0) picks.push([i, c.voice.piper, c.voice.kokoro]);
+  }
+  return { made: f.made, sections: f.sections, narration: tidy, spans, who, tellers, picks };
 }
 
 /**
  * Who reads whom, for a reader at p: everyone but the generic speakers who has said a line by
  * then, or whose voice the narration has taken, the most to say first. It needs only the marks,
- * so a book marked before the marker picked voices has its cast too, without them. Each goes by the name the
- * book has given them by then, from their Revisit entry where they have one (the first name it
- * gives them, should they speak before it), and sounds as the reader believes they do. Nobody
- * further on, and no line from further on counted.
+ * so a book marked before the marker picked voices has its cast too, without them. Each goes by
+ * the name the book has given them by then, from their Revisit entry or the marker's pinned names
+ * (the first one, should they speak before it), and sounds as the reader believes they do.
+ * Nobody further on, and no line from further on counted.
  */
 export function castFor(f: { made: string; voices: Voices; people: AiEntry[] }, p: AiAt | null): AiCastResponse {
   const v = f.voices;
@@ -160,11 +182,14 @@ export function castFor(f: { made: string; voices: Voices; people: AiEntry[] }, 
     const c = v.cast[key];
     // A crowd, someone unnamed: read in her voice or his.
     if (!c || GENERIC_SPEAKERS.includes(c.id)) continue;
-    let name = c.name;
+    // Their Revisit entry's names, or else the ones the marker pinned, or else the cast's name.
+    let names = c.names ?? [];
     const entry = notes.get(c.id);
-    if (entry) {
-      // Before the notes name them, the name they first give them.
-      const named = latest(entry.names, p) ?? upTo(entry.names, null)[0];
+    if (entry) names = entry.names;
+    let name = c.name;
+    if (names.length) {
+      // Before the book names them, the name it first gives them.
+      const named = latest(names, p) ?? upTo(names, null)[0];
       name = named[2];
     }
     let g = c.g;

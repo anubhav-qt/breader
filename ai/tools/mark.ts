@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join } from 'node:path';
 import { Balancer } from './balancer.ts';
 import { castVoices } from './casting.ts';
-import { castText, context, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, PRIMARY, text } from './kimi.ts';
+import { castText, context, isCastLine, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, PRIMARY, text } from './kimi.ts';
 import { AI, bookDir, count, inPart, loadBook, partName, posText, writeJson, type Book } from './lib.ts';
 import type { Msg } from './nim.ts';
 import { packBook } from './pack.ts';
@@ -34,6 +34,9 @@ Answer with the marks file for the part and nothing else: no commentary, no code
 cast gate-guard M | A guard at the north gate | Guards the north gate | 7:22 "he"
 That is the id, the voice (M, F or N), then name | role | evidence, where evidence is the paragraph where the book shows their gender, or where you know it from. Put minor after the voice for someone with only a line or two. Use the cast's id whenever the person is in it already. If a reveal changes how someone sounds, add a line at the reveal's paragraph:
 change masked-knight 40:12 F | Unmasks as a woman
+The app shows listeners each person's name, but only the name the book has given them by where they are, so pin names where the book gives them. For each person who first appears in this part, and each time the book first calls someone by a new name here (a name for someone known only by description, a surname, a title, a true identity), add a line at that paragraph with the name as the book has it there:
+name gate-guard 7:20 | the guard
+name masked-knight 40:12 | Rhaegar
 You can't write research.md, so where the rules say to write why you're unsure, just add the ?.
 
 # Rules
@@ -77,14 +80,14 @@ export const marksFile = (book: Book, n: number) => join(bookDir(book.key), 'mar
 /** What markBook is doing for each book, by key, once its parts are marked: for the marker's live view. */
 export const stageOf = new Map<string, string>();
 
-/** An answer split into the marks file and the cast lines. */
+/** An answer split into the marks file and the cast, change and name lines. */
 function split(answer: string) {
   const marks: string[] = [];
   const cast: string[] = [];
   for (const raw of answer.split(/\r?\n/)) {
     const t = raw.trim().replace(/^[-*]\s+(?=\d|narrator|rest)/, '');
     if (!t || /^```/.test(t)) continue;
-    if (/^(cast|change)\s/.test(t)) cast.push(t);
+    if (isCastLine(t)) cast.push(t);
     else marks.push(t);
   }
   return { marks: `${marks.join('\n')}\n`, cast };
@@ -181,7 +184,7 @@ async function fixParts(book: Book, ns: number[], lb: Balancer) {
       const t = raw.trim();
       const h = t.match(/^=+\s*part\s+(\d+)\s*=+$/i);
       if (h) { at = Number(h[1]); byPart.set(at, []); }
-      else if (/^(cast|change)\s/.test(t)) castLines.push(t);
+      else if (isCastLine(t)) castLines.push(t);
       else if (at !== null) byPart.get(at)!.push(raw);
     }
     const before = new Map(bad.map((n) => [n, errorsFor(book, n).length]));
@@ -236,7 +239,7 @@ async function settle(book: Book, lb: Balancer) {
   let settled = 0;
   for (const raw of reply.text.split(/\r?\n/)) {
     const t = raw.trim();
-    if (/^(cast|change)\s/.test(t)) { castLines.push(t); continue; }
+    if (isCastLine(t)) { castLines.push(t); continue; }
     const m = t.match(/^U(\d+)[:.]?\s+(.+)$/);
     const item = m && items[Number(m[1]) - 1];
     if (!item) continue;

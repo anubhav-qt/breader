@@ -3,9 +3,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../../lib/springs';
 import type { CastDesign } from '../../design/round';
 import type { Engine, SamplePart, VoiceInfo } from '../voice/catalog';
-import { castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, useBookCast, useCast, useSpeaking, voicesOf, type Cast, type Character } from '../voice/cast';
+import { aiPicks, castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, useBookCast, useCast, useSpeaking, voicesOf, type Cast, type Character } from '../voice/cast';
 import { stopSample } from '../voice/speaker';
-import { PLAY, STOP } from './icons';
+import { BACK, PLAY, STOP } from './icons';
 import { DotIcon, Typed } from './parts';
 import './cast.css';
 
@@ -83,10 +83,11 @@ export function CastSection({ book, design, playing, engine, children }: { book:
     const cast = castOf(book, people, engine, state);
     // The AI's picks, unless reshuffled, or the book was marked before it picked voices.
     const shuffled = (state.seeds[book] ?? 0) > 0;
+    const voiced = people.some((c) => c.voice !== null);
     const byAi = !shuffled && people.every((c) => c.voice !== null);
     body = (
       <>
-        {design === 'A' && <Auto book={book} cast={cast} byAi={byAi} />}
+        {design === 'A' && <Auto book={book} cast={cast} byAi={byAi} canGoBack={shuffled && voiced} />}
         {design === 'B' && <List book={book} cast={cast} engine={engine} />}
         {design === 'C' && <Board book={book} cast={cast} engine={engine} />}
         {design === 'D' && <Speaking cast={cast} playing={playing} />}
@@ -97,13 +98,13 @@ export function CastSection({ book, design, playing, engine, children }: { book:
     <div className={`cs cs-${design}`}>
       {body}
       {children}
-      <p className="p-note cs-sample">Only the people who’ve spoken up to where you are. For now everyone still reads in her voice or his.</p>
+      <p className="p-note cs-sample">Only the people who’ve spoken up to where you are. Anyone else reads in her voice or his.</p>
     </div>
   );
 }
 
-/** Auto's shape, for the cast and for 1 voice and 2: who reads, a face each, and another go. */
-function Faces({ say, again, onAgain, children }: { say: ReactNode; again: string; onAgain: () => void; children: ReactNode }) {
+/** Auto's shape, for the cast and for 1 voice and 2: who reads, a face each, and another go, or a way `back`. */
+function Faces({ say, again, onAgain, back, children }: { say: ReactNode; again: string; onAgain: () => void; back?: { label: string; run: () => void }; children: ReactNode }) {
   return (
     <div className="cs-auto">
       <p className="cs-say">{say}</p>
@@ -112,6 +113,12 @@ function Faces({ say, again, onAgain, children }: { say: ReactNode; again: strin
         <DotIcon rows={SHUFFLE} />
         <span>{again}</span>
       </button>
+      {back && (
+        <button type="button" className="vs-add cs-shuffle" onClick={back.run}>
+          <DotIcon rows={BACK} />
+          <span>{back.label}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -127,8 +134,8 @@ function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode
   );
 }
 
-/** A: the AI's picks, or handed out, to be heard and shuffled. */
-function Auto({ book, cast, byAi }: { book: string; cast: Cast[]; byAi: boolean }) {
+/** A: the AI's picks, or handed out, to be heard and shuffled, and back to the AI's picks once shuffled. */
+function Auto({ book, cast, byAi, canGoBack }: { book: string; cast: Cast[]; byAi: boolean; canGoBack: boolean }) {
   const { on, hear } = useHear();
   const voices = new Set(cast.map((x) => x.v.key)).size;
   let how = 'Handed out by how much each one says.';
@@ -139,7 +146,7 @@ function Auto({ book, cast, byAi }: { book: string; cast: Cast[]; byAi: boolean 
     </>
   );
   return (
-    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book)}>
+    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book) } : undefined}>
       {cast.map((x) => (
         <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
       ))}

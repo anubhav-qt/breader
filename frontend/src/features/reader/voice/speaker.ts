@@ -146,6 +146,15 @@ export async function missing(v: VoiceInfo) {
   return { files: out, bytes: weight(out) };
 }
 
+/** What these voices still have to download together, in bytes: a file they share counted once. */
+export async function missingAll(vs: VoiceInfo[]) {
+  const files = new Map<string, Want>();
+  for (const v of vs) {
+    for (const w of (await missing(v)).files) files.set(w.name, w);
+  }
+  return weight([...files.values()]);
+}
+
 /**
  * Starts the voice's engine and loads the voice, showing progress while files arrive. Other
  * voices go, but those in `keep`: 2 voices keeps its other one.

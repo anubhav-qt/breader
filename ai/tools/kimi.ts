@@ -123,9 +123,10 @@ export function castText(book: Book): string {
 const ID = '[a-z0-9]+(?:-[a-z0-9]+)*';
 const CAST = new RegExp(`^cast\\s+(${ID})\\s+([MFN])(\\s+minor)?\\s*(?:\\|(.*))?$`);
 const CHANGE = new RegExp(`^change\\s+(${ID})\\s+(\\d+:\\d+)\\s+([MFN])\\s*(?:\\|(.*))?$`);
-export const isCastLine = (t: string) => /^(cast|change)\s/.test(t);
+const NAME = new RegExp(`^name\\s+(${ID})\\s+(\\d+:\\d+)\\s*\\|\\s*(.+)$`);
+export const isCastLine = (t: string) => /^(cast|change|name)\s/.test(t);
 
-/** A model's cast and change lines, into cast.json. Returns what it did, for the log. */
+/** A model's cast, change and name lines, into cast.json. Returns what it did, for the log. */
 export function mergeCast(book: Book, lines: string[], by: string): { added: number; notes: string[] } {
   const file = join(bookDir(book.key), 'cast.json');
   const cast = castOf(book);
@@ -158,6 +159,12 @@ export function mergeCast(book: Book, lines: string[], by: string): { added: num
       if (!p || p.changes?.some((c) => c.at === m![2])) continue;
       p.changes = [...(p.changes ?? []), { at: m[2], gender: m[3] as Gender, why: m[4]?.trim() || `A reveal, by ${by}.` }].sort((a, b) => cmp(parsePos(a.at)!, parsePos(b.at)!));
       notes.push(`${p.id} changes to ${m[3]} at ${posText(at)}`);
+    } else if ((m = line.match(NAME))) {
+      // The name the book uses from there on, so the app never shows one it hasn't told yet.
+      const p = byId.get(m[1]);
+      const name = m[3].trim();
+      if (!p || p.generic || p.names?.some((n) => n.at === m![2] || n.name === name)) continue;
+      p.names = [...(p.names ?? []), { at: m[2], name }].sort((a, b) => cmp(parsePos(a.at)!, parsePos(b.at)!));
     }
   }
   if (lines.length) writeJson(file, cast);

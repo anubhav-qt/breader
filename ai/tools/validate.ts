@@ -28,6 +28,8 @@ export const CastSchema = z.strictObject({
       minor: z.boolean().optional(),
       generic: z.boolean().optional(),
       changes: z.array(z.strictObject({ at: At, gender: G, why: z.string().min(1) })).optional(),
+      /** The name the book uses from each paragraph on: where they first appear, then each reveal (a surname, a title, a true identity). */
+      names: z.array(z.strictObject({ at: At, name: z.string().min(1) })).optional(),
       /** Who reads them in each model, by the voice's id there (casting.ts). */
       voice: z.strictObject({ piper: z.string(), kokoro: z.string() }).optional(),
     }),

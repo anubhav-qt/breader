@@ -106,6 +106,9 @@ export function useCast(): CastState {
 
 export const setCastOn = (on: boolean) => set({ ...state, on });
 
+/** The picks as they are now, for the voice reading. */
+export const castNow = () => state;
+
 export function pickVoice(book: string, character: string, voice: string) {
   const mine = { ...(state.picks[book] ?? {}), [character]: voice };
   set({ ...state, picks: { ...state.picks, [book]: mine } });
@@ -117,6 +120,15 @@ export function reshuffle(book: string) {
   const picks = { ...state.picks };
   delete picks[book];
   set({ ...state, picks, seeds: { ...state.seeds, [book]: seed } });
+}
+
+/** Back to the AI's picks: no reshuffles, and nothing picked by hand. */
+export function aiPicks(book: string) {
+  const picks = { ...state.picks };
+  delete picks[book];
+  const seeds = { ...state.seeds };
+  delete seeds[book];
+  set({ ...state, picks, seeds });
 }
 
 export interface Cast {
@@ -156,6 +168,23 @@ export function castOf(book: string, people: Character[], engine: Engine, s: Cas
     handed[c.kind] += 1;
     out.push({ c, v: fit[at], picked: false });
   }
+  return out;
+}
+
+/**
+ * Each speaker's voice for reading the book aloud, by their key: as the voice sheet hands them out
+ * (castOf) for the people met so far, and the AI's pick (`picks`, from the voice marks) for anyone
+ * further on. Anyone missing reads in her voice or his.
+ */
+export function castVoices(book: string, engine: Engine, picks: Map<number, Record<Engine, string>>): Map<number, VoiceInfo> {
+  const out = new Map<number, VoiceInfo>();
+  const all = voicesOf('N', engine);
+  for (const [key, voice] of picks) {
+    const v = all.find((x) => x.key === `${engine}:${voice[engine]}`);
+    if (v) out.set(key, v);
+  }
+  const people = charactersOf(keptCast(book)) ?? [];
+  for (const x of castOf(book, people, engine)) out.set(Number(x.c.id), x.v);
   return out;
 }
 
