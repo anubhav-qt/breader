@@ -751,6 +751,12 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       waiting: !going && !asking,
       choosing,
       begun: resumable,
+      voice: byVoice,
+      by: (v: boolean) => {
+        if (narration.playing) narration.stop();
+        if (pacing.running) pauseLight();
+        setByVoice(v);
+      },
       choose: () => setAsking(true),
       pause: pauseLight,
       cancel: () => setAsking(false),

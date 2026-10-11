@@ -57,7 +57,7 @@ const SERVER: Record<Mode, string> = {
  * the music look off and a tap on them says why, warmly, with the book's AI switch right there
  * when it's off.
  */
-type Soon = 'two' | 'music' | 'cast';
+export type Soon = 'two' | 'music' | 'cast';
 /** What the card says of each: its name, what it will be, why the book is read first, and what turns on. */
 const SOON: Record<Soon, { title: string; promise: string; asked: string; told: string; name: string }> = {
   two: {
@@ -361,7 +361,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
  * Why 2 voices or the music can't be had yet: a small card in the middle, over the sheet. `off`:
  * the book's AI switch is, and the card has it, to turn on there and then.
  */
-function NotYet({ what, off, onAi, onClose }: { what: Soon; off: boolean; onAi?: (on: boolean) => void; onClose: () => void }) {
+export function NotYet({ what, off, onAi, onClose }: { what: Soon; off: boolean; onAi?: (on: boolean) => void; onClose: () => void }) {
   const say = SOON[what];
   // Asked while the switch was off: it stays on the card, on or off, until the card closes.
   const [asked] = useState(off && !!onAi);
