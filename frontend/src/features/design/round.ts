@@ -34,7 +34,8 @@ export interface Round {
 }
 
 const KEY = 'breader.design-round.v1';
-const DEFAULT: Round = { ai: 'A', play: 'A', cast: 'A', fake: 'working' };
+/** The picks: the dot meter, the deck, and character voices handed out by themselves. */
+const DEFAULT: Round = { ai: 'B', play: 'A', cast: 'A', fake: 'working' };
 const dev = import.meta.env.DEV;
 
 function pick<T extends string>(v: unknown, allowed: readonly T[], fallback: T): T {

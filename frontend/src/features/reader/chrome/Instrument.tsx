@@ -152,7 +152,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
         <div className="i3-ends">
-          <AiHeadButton p={aiProgress} open={panel === 'ai'} onClick={() => toggle('ai')} />
+          <AiHeadButton p={aiProgress} book={bookId} open={panel === 'ai'} onClick={() => toggle('ai')} />
           {book.kind !== 'flow' && talk.view.talk.state !== 'off' && (
             <TalkButton count={talkCount} lit={talk.opens(current)} open={panel === 'comments'} onClick={() => (panel === 'comments' ? openPanel(null) : talk.open())} />
           )}
@@ -256,7 +256,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
               ) : panel === 'revisit' && revisit ? (
                 <RevisitMenu chapters={chapters} current={current} read={revisit.read} onPick={(v) => { setScope(v); openPanel('recap'); }} />
               ) : panel === 'ai' ? (
-                <AiPanel p={aiProgress} />
+                <AiPanel p={aiProgress} book={bookId} />
               ) : panel === 'keys' ? (
                 <KeysPanel />
               ) : panel === 'paras' && immersion ? (

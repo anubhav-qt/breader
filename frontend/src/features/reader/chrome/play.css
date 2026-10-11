@@ -62,26 +62,9 @@
 .pl-skip { color: var(--r-mu); }
 .pl-skip .i3-dots-icon { height: 0.75em; }
 .pl-deck { justify-self: center; display: flex; align-items: center; gap: 6px; }
-.pl-main {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  font-size: 14px;
-  background: var(--r-fg);
-  color: var(--r-bg);
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  transition: opacity 140ms ease, transform var(--dur-snappy) var(--ease-snappy), background-color 200ms ease;
-}
-.pl-main:active { transform: scale(0.94); }
-.i3-play.is-going .pl-main { background: var(--book-mark); }
+/* Play is a button like the others; while a voice loads, its dots fill in the book's colour. */
+.pl-main { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .pl-main .i3-dots-icon rect.is-lit { fill: var(--book-mark); }
-.i3-play.is-going .pl-main .i3-dots-icon rect.is-lit { fill: var(--r-bg); }
-.pl-deck.is-small .pl-main { width: 38px; height: 38px; font-size: 12px; }
 .pl-deck.is-small .pl-skip { width: 34px; }
 .pl-skips { display: flex; align-items: center; }
 .pl-voices { position: relative; }
@@ -101,7 +84,7 @@
 }
 .pl-chip .i3-dots-icon { font-size: 10px; }
 
-/* A, and E's tray: Normal or Immersive. D: Read, Listen or Immersive. */
+/* A and D: Read, Listen or Immersive. E's tray: Normal or Immersive. */
 .pl-seg { display: inline-flex; align-items: center; padding: 3px; gap: 2px; border-radius: 10px; background: var(--r-fill); }
 .pl-seg button {
   height: 28px;
@@ -121,6 +104,8 @@
 .pl-seg .i3-dots-icon { font-size: 11px; }
 .pl-modes { justify-self: start; }
 .pl-D { grid-template-columns: auto minmax(0, 1fr); }
+/* A: the deck in the middle while the switch fits beside it, moved over when it doesn't. */
+.pl-A { grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr); }
 
 /* B: two pills. Immersive's own colour is the book's, so it reads as the special one. */
 .pl-split { justify-self: center; display: flex; align-items: center; gap: 8px; }
@@ -229,7 +214,6 @@
 
 @media (hover: hover) {
   .pl-icon:hover, .pl-skip:hover, .pl-word:hover, .pl-chip:hover, .pl-tag-x:hover, .pl-nudge-x:hover { background: var(--r-fill); color: var(--r-fg); }
-  .pl-main:hover { opacity: 0.86; }
   .pl-pill:not(.is-on):hover { background: var(--r-fill); }
   .pl-seg button:not(.is-on):hover { color: var(--r-fg); }
 }
@@ -246,9 +230,11 @@
   .pl-chip { padding: 0 9px; }
   .pl-chip span { display: none; }
   .pl-pill { padding: 0 12px; }
-  .pl-D .pl-seg .i3-dots-icon { display: none; }
+  :is(.pl-A, .pl-D) .pl-seg .i3-dots-icon { display: none; }
   .pl-D .pl-skip { display: none; }
 }
 @media (max-width: 420px) {
   .pl-chip { display: none; }
+  .pl-A { gap: 4px; }
+  .pl-A .pl-skip { width: 28px; }
 }

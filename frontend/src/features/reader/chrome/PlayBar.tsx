@@ -15,7 +15,7 @@ import './play.css';
  * The play row, over the bottom line: play and pause, back and on a sentence, the voices, and
  * Immersive in sight rather than in the voice sheet. Each design of this round (design/round.ts):
  *
- *   A Deck    the mode on the left, back, play and on in the middle, the voices on the right
+ *   A Deck    Read, Listen or Immersive on the left, back, play and on in the middle, the voices on the right
  *   B Split   two pills, Listen and Immersive, each starting its own way of reading
  *   C Nudge   one play button; a note, once, says Immersive is there, and the voices wear a dot
  *   D Modes   Read, Listen and Immersive as one switch, with the player beside it
@@ -35,6 +35,8 @@ type Props = Pick<ChromeProps, 'book' | 'narration' | 'immersion' | 'transport' 
 
 /** What Listen and Immersive start, once the mode they need has come in. */
 type Want = 'listen' | 'light' | null;
+/** How the book is read: just the page, a voice reading it, or the words lighting up. */
+type Way = 'read' | 'listen' | 'immersive';
 
 const SEEN_VOICES = 'breader.play.voices-seen.v1';
 const NUDGED = 'breader.play.nudged.v1';
@@ -105,13 +107,24 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, de
     </button>
   );
 
+  // A and D: how it's read now, and a pick of another.
+  let now: Way = 'read';
+  if (immersion) now = 'immersive';
+  else if (narration?.playing) now = 'listen';
+  const pick = (v: Way) => {
+    if (v === now) return;
+    if (v === 'read') switchTo('normal', null);
+    else if (v === 'listen') switchTo('normal', 'listen');
+    else switchTo('immersive', 'light');
+  };
+
   let row: ReactNode;
   if (ask) {
     row = <div className="pl-ask">{ask}</div>;
   } else if (design === 'A') {
     row = (
       <>
-        <span className="pl-l">{canImmerse && <ModeSwitch mode={mode} onPick={(m) => switchTo(m, null)} />}</span>
+        <span className="pl-l"><Modes now={now} canListen={!!narration} canImmerse={canImmerse} onPick={pick} /></span>
         <Transport {...bits} />
         <span className="pl-r">{aloud}{voices}</span>
       </>
@@ -137,18 +150,9 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, de
       </>
     );
   } else if (design === 'D') {
-    let now: 'read' | 'listen' | 'immersive' = 'read';
-    if (immersion) now = 'immersive';
-    else if (narration?.playing) now = 'listen';
-    const pick = (v: 'read' | 'listen' | 'immersive') => {
-      if (v === now) return;
-      if (v === 'read') switchTo('normal', null);
-      else if (v === 'listen') switchTo('normal', 'listen');
-      else switchTo('immersive', 'light');
-    };
     row = (
       <>
-        <Modes now={now} canImmerse={canImmerse} onPick={pick} />
+        <Modes now={now} canListen={!!narration} canImmerse={canImmerse} onPick={pick} />
         <span className="pl-r">
           {speaker}
           <Transport {...bits} small />
@@ -205,7 +209,7 @@ function Transport({ main, loading, lit, transport, small = false }: Bits & { sm
   return (
     <span className={`pl-deck${small ? ' is-small' : ''}`}>
       <Skip dir={-1} transport={transport} />
-      <button type="button" className="pl-main" onClick={main.act} aria-label={main.label} data-tip={main.label}>
+      <button type="button" className="pl-icon pl-main" onClick={main.act} aria-label={main.label} data-tip={main.label}>
         <DotIcon rows={icon} lit={loading ? lit : undefined} />
       </button>
       <Skip dir={1} transport={transport} />
@@ -247,7 +251,7 @@ function VoicesButton({ open, dot, onClick }: { open: boolean; dot: boolean; onC
   );
 }
 
-/** A: Normal or Immersive, as a small switch. */
+/** E's tray: Normal or Immersive, as a small switch. */
 function ModeSwitch({ mode, onPick }: { mode: 'normal' | 'immersive'; onPick: (m: 'normal' | 'immersive') => void }) {
   return (
     <span className="pl-seg" role="radiogroup" aria-label="Mode">
@@ -367,17 +371,17 @@ function Nudge({ going, onTry }: { going: boolean; onTry: () => void }) {
   );
 }
 
-/** D: how to read this, as one switch. */
-function Modes({ now, canImmerse, onPick }: {
-  now: 'read' | 'listen' | 'immersive';
+/** A and D: how to read this, as one switch. Only Read, where nothing else can be had. */
+function Modes({ now, canListen, canImmerse, onPick }: {
+  now: Way;
+  canListen: boolean;
   canImmerse: boolean;
-  onPick: (v: 'read' | 'listen' | 'immersive') => void;
+  onPick: (v: Way) => void;
 }) {
-  const options: Array<{ v: 'read' | 'listen' | 'immersive'; label: string; tip: string }> = [
-    { v: 'read', label: 'Read', tip: 'Just the page' },
-    { v: 'listen', label: 'Listen', tip: 'The voice reads the page as it is' },
-  ];
+  const options: Array<{ v: Way; label: string; tip: string }> = [{ v: 'read', label: 'Read', tip: 'Just the page' }];
+  if (canListen) options.push({ v: 'listen', label: 'Listen', tip: 'The voice reads the page as it is' });
   if (canImmerse) options.push({ v: 'immersive', label: 'Immersive', tip: 'The page dims, and the words light up as you read' });
+  if (options.length < 2) return null;
   return (
     <span className="pl-seg pl-modes" role="radiogroup" aria-label="How to read">
       {options.map((o) => (

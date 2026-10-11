@@ -36,11 +36,12 @@
 .cs-face.is-boy { --k: var(--cs-boy); }
 .cs-face.is-oldF { --k: var(--cs-oldF); }
 .cs-face.is-oldM { --k: var(--cs-oldM); }
+.cs-face.is-all { --k: var(--book-mark); }
 .cs-face.is-s { width: 28px; height: 28px; border-radius: 7px; font-size: 10.5px; }
 .cs-face.is-m { width: 42px; height: 42px; }
 .cs-face.is-l { width: 56px; height: 56px; border-radius: 12px; font-size: 17px; }
 
-/* A: faces in a grid, each saying whose voice it has. */
+/* A, and 1 voice and 2: faces in a grid, each saying whose voice it has. */
 .cs-faces { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .cs-face-b { display: grid; justify-items: center; gap: 5px; padding: 8px 2px 7px; border-radius: 10px; transition: background-color 140ms ease; }
 .cs-face-b:hover { background: var(--r-fill); }

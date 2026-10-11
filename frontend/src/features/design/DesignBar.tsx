@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { forgetDone } from '../ai/progress';
 import { AI_DESIGNS, CAST_DESIGNS, FAKES, NAMES, PLAY_DESIGNS, setRound, useRound, type Round } from './round';
 import './design-bar.css';
 
@@ -35,6 +36,12 @@ export function DesignBar() {
     }
   };
 
+  // Ready, picked again, has every book's meter wave that it's done once more.
+  const pickFake = (f: Round['fake']) => {
+    if (f === 'ready') forgetDone();
+    setRound({ fake: f });
+  };
+
   if (!open) {
     return (
       <button type="button" className="dz dz-tab" onClick={toggle} title="Show the design switches">
@@ -55,7 +62,7 @@ export function DesignBar() {
         <span className="dz-l">ai state</span>
         <span className="dz-opts is-words">
           {FAKES.map((f) => (
-            <button key={f} type="button" aria-pressed={r.fake === f} onClick={() => setRound({ fake: f })} title={f === 'live' ? 'What the server really says' : 'Pretend every book with its switch on is here'}>
+            <button key={f} type="button" aria-pressed={r.fake === f} onClick={() => pickFake(f)} title={f === 'live' ? 'What the server really says' : 'Pretend every book with its switch on is here'}>
               {FAKE_NAMES[f]}
             </button>
           ))}
