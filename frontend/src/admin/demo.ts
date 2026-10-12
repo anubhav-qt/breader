@@ -267,7 +267,6 @@ export function demoAdmin(scene: Scene): Admin {
     if (key === 'redo') {
       const again = w.parts.filter((p) => p === 'backup').length;
       if (!again) {
-        w.skipped.push('redo');
         next(w);
         return;
       }

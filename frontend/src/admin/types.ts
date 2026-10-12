@@ -85,7 +85,7 @@ export interface Working {
   upload?: boolean;
   /** The step it's on, by its key in STEPS. */
   step: string;
-  /** Steps it doesn't take this time, by key: research when it's off, a redo with nothing to redo. */
+  /** Steps it doesn't take this time, by key: research, while it's off. */
   skipped: string[];
   /** When it started the book, and the step it's on. */
   since: string;

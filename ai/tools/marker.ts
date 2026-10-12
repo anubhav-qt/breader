@@ -124,10 +124,9 @@ interface Job {
   parts?: number[];
   /** What its calls are doing (jobs.ts). */
   ctx: JobCtx;
-  /** The step it's on, by the admin page's key, since when, and every step it's been on. */
+  /** The step it's on, by the admin page's key, and since when. */
   step: string;
   stepSince: number;
-  seen: Set<string>;
   /** Cut off from the admin page: stopped, or to do its step again. */
   cut?: 'stop' | 'redo';
 }
@@ -603,7 +602,7 @@ async function uploadJob(b: QueueBook) {
  * how it went. A book the admin page stopped, or sent back to do its step again, hasn't failed.
  */
 function start(b: QueueBook, phase: Phase, work: () => Promise<void>, pool: pg.Pool) {
-  const job: Job = { b, phase, since: Date.now(), ctx: newJob(b.key, b.title, phase), step: '', stepSince: Date.now(), seen: new Set() };
+  const job: Job = { b, phase, since: Date.now(), ctx: newJob(b.key, b.title, phase), step: '', stepSince: Date.now() };
   running.set(b.sha256, job);
   hold();
   const t0 = Date.now();
@@ -811,7 +810,7 @@ export interface Working {
   /** Music uploaded from the admin page, going in. */
   upload?: boolean;
   step: string;
-  /** Steps it doesn't take: ones it found done already, or research while it's off. */
+  /** Steps it doesn't take: research, while it's off. */
   skipped: string[];
   since: string;
   stepSince: string;
@@ -831,12 +830,9 @@ function workingOf(j: Job): Working {
     j.step = step;
     j.stepSince = Date.now();
   }
-  j.seen.add(step);
-  let keys = STEP_KEYS[j.phase];
-  if (upload) keys = UPLOAD_KEYS;
-  const at = keys.indexOf(step);
-  const skipped = keys.filter((k, i) => i < at && !j.seen.has(k));
-  if (at < keys.indexOf('research') && !researchOn()) skipped.push('research');
+  // Every step before this one is done, short ones too, however long ago: only research is ever left out.
+  const skipped: string[] = [];
+  if (!upload && !researchOn()) skipped.push('research');
   const w: Working = {
     id: j.b.sha256,
     title: j.b.title,
