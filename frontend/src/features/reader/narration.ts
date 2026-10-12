@@ -320,7 +320,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     const voiceOf = (s: Sentence) => {
       if (s.who !== undefined && s.who >= 0) {
         const own = cast.get(s.who);
-        if (own) return own;
+        // Theirs while it's a voice for how they sound here: past a reveal that changes that, hers or his.
+        if (own && own.gender === s.g) return own;
       }
       if (voices.length > 1 && s.g === 'M') return voices[1];
       return voices[0];
