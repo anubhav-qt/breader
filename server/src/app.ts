@@ -36,7 +36,7 @@ export function makeApp(deps: Deps) {
       origin: (origin) => (allowed.includes(origin) ? origin : null),
       credentials: true,
       allowMethods: ['GET', 'POST', 'DELETE'],
-      allowHeaders: ['content-type'],
+      allowHeaders: ['content-type', 'authorization'],
       // The server voice's sound says how long it is (routes/speech.ts).
       exposeHeaders: ['x-samples', 'x-rate'],
       maxAge: 600,

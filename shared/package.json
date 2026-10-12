@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./accounts": "./src/accounts.ts",
+    "./admin": "./src/admin.ts",
     "./ai": "./src/ai.ts",
     "./comments": "./src/comments.ts",
     "./genres": "./src/genres.ts",

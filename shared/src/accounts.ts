@@ -39,6 +39,8 @@ export interface AiAccount {
   problem: string | null;
   /** Its limits, or null when they couldn't be read. */
   usage: UsageWindow[] | null;
+  /** The proxy uses the highest of a kind first (fill-first): 0 unless one was put first. */
+  priority: number;
 }
 
 /** A request for the proxy's api-call: $TOKEN$ in a header becomes the account's token. */

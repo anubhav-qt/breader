@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { repairVersions } from '../src/db/restored.ts';
 import { restoreDrill, type PgTools } from '../src/jobs/drill.ts';
 import { repairStorage } from '../src/jobs/repair.ts';
+import { addCommand, asJob, readAdminState, takeCommands } from '../src/lib/admin.ts';
 import { clientIp } from '../src/lib/http.ts';
 import { musicImportKey } from '@breader/shared';
 import { aiFile } from './ai-fixture.ts';
@@ -82,12 +83,14 @@ describe('client address', () => {
 });
 
 describe('status page', () => {
-  it('needs the admin token', async () => {
+  it('needs the admin token, and sends the page itself to the app', async () => {
     expect((await app.request('/admin/status')).status).toBe(401);
     expect((await app.request('/admin/status', { headers: { authorization: 'Bearer nope' } })).status).toBe(401);
+    expect((await app.request('/admin/stream')).status).toBe(401);
+    expect((await app.request('/admin/settings', { method: 'POST', body: '{}' })).status).toBe(401);
     const page = await app.request('/admin');
-    expect(page.status).toBe(200);
-    expect(page.headers.get('content-security-policy')).toContain("script-src 'nonce-");
+    expect(page.status).toBe(302);
+    expect(page.headers.get('location')).toBe('http://localhost:5173/admin');
   });
 
   it('shows the servers, the databases, the files and the jobs', async () => {
@@ -101,6 +104,113 @@ describe('status page', () => {
     expect(s.libraries.total).toBeGreaterThan(0);
     expect(s.jobs.map((j: { name: string }) => j.name)).toContain('clean-up');
     expect(s.request).toMatchObject({ ip: '203.0.113.5', from: 'x-forwarded-for' });
+  });
+});
+
+describe('admin controls', () => {
+  const admin = { authorization: `Bearer ${env.ADMIN_TOKEN}`, 'content-type': 'application/json' };
+  const post = (path: string, body: unknown) => app.request(path, { method: 'POST', headers: admin, body: JSON.stringify(body) });
+  const id = 'a'.repeat(64);
+  const commands = async () => (await q('SELECT kind, args FROM admin_commands WHERE done_at IS NULL ORDER BY id')).rows;
+  const fresh = async () => {
+    await q('DELETE FROM admin_state');
+    await q('DELETE FROM admin_commands');
+  };
+
+  it('pushes everything down the stream the moment it starts', async () => {
+    await q(`INSERT INTO job_runs (name, last_ok_at, detail) VALUES ('ai-marker', now(), $1) ON CONFLICT (name) DO UPDATE SET detail = EXCLUDED.detail`, [
+      JSON.stringify({ at: new Date().toISOString(), books: 2, finished: 0, working: [], queue: [{ id, title: 'One', task: 'marks' }, { id: 'b'.repeat(64), title: 'Two', task: 'marks' }] }),
+    ]);
+    const res = await app.request('/admin/stream', { headers: { authorization: admin.authorization } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let text = '';
+    while (!text.includes('\n\n')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += value;
+    }
+    await reader.cancel();
+    expect(text).toMatch(/^event: snapshot\n/);
+    const s = JSON.parse(text.split('\ndata: ')[1].split('\n\n')[0]);
+    expect(s.request.from).toBe('x-forwarded-for');
+    expect(s.status.jobs.map((j: { name: string }) => j.name)).toContain('ai-marker');
+    expect(s.marker.settings.atOnce.marks).toBeGreaterThan(0);
+    expect(s.marker.queue.map((x: { title: string }) => x.title)).toEqual(['One', 'Two']);
+  });
+
+  it('changes the marker’s settings, and only the ones it knows, in range', async () => {
+    await fresh();
+    const r = await post('/admin/settings', { paused: true, atOnce: { marks: 6, music: 1, notes: 2 } });
+    expect(r.status).toBe(200);
+    const s = await readAdminState(primary.pool);
+    expect(s.marker.paused).toBe(true);
+    expect(s.marker.atOnce.marks).toBe(6);
+    expect(s.marker.first).toBe('kimi-k3');
+    expect((await post('/admin/settings', { atOnce: { marks: 99, music: 1, notes: 1 } })).status).toBe(400);
+    expect((await post('/admin/settings', { color: 'red' })).status).toBe(400);
+    await post('/admin/settings', { paused: false });
+    expect((await readAdminState(primary.pool)).marker).toMatchObject({ paused: false, atOnce: { marks: 6 } });
+  });
+
+  it('puts a book next, keeps it back, lets it go, and asks the marker to retry, stop or redo it', async () => {
+    await fresh();
+    await post('/admin/queue', { action: 'next', id, task: 'notes' });
+    expect((await readAdminState(primary.pool)).next).toEqual([`${id}:notes`]);
+    await post('/admin/queue', { action: 'hold', id, task: 'notes', held: true });
+    expect((await readAdminState(primary.pool)).held).toEqual([`${id}:notes`]);
+    await post('/admin/queue', { action: 'hold', id, task: 'notes', held: false });
+    expect((await readAdminState(primary.pool)).held).toEqual([]);
+    await post('/admin/queue', { action: 'stop', id, task: 'marks' });
+    expect((await readAdminState(primary.pool)).held).toEqual([`${id}:marks`]);
+    await post('/admin/queue', { action: 'retry', id, task: 'marks' });
+    expect((await readAdminState(primary.pool)).held).toEqual([]);
+    await post('/admin/queue', { action: 'redo', id, task: 'music' });
+    expect(await commands()).toEqual([
+      { kind: 'stop', args: { id, task: 'marks' } },
+      { kind: 'retry', args: { id, task: 'marks' } },
+      { kind: 'redo', args: { id, task: 'music' } },
+    ]);
+    expect((await post('/admin/queue', { action: 'next', id: 'not-a-book', task: 'notes' })).status).toBe(400);
+  });
+
+  it('runs a job now, and switches it off and on', async () => {
+    await fresh();
+    expect((await post('/admin/jobs/backup/run', {})).status).toBe(202);
+    expect(await commands()).toEqual([{ kind: 'run:backup', args: { name: 'backup' } }]);
+    await post('/admin/jobs/clean-up/on', { on: false });
+    expect((await readAdminState(primary.pool)).jobsOff).toEqual(['clean-up']);
+    await post('/admin/jobs/clean-up/on', { on: true });
+    expect((await readAdminState(primary.pool)).jobsOff).toEqual([]);
+    expect((await post('/admin/jobs/rm-rf/run', {})).status).toBe(400);
+  });
+
+  it('hands each command to one taker, and lets old ones go', async () => {
+    await fresh();
+    await addCommand(primary.pool, 'run:backup');
+    await addCommand(primary.pool, 'stop', { id });
+    await q(`INSERT INTO admin_commands (kind, args, at) VALUES ('run:backup', '{}', now() - interval '1 hour')`);
+    const taken = await takeCommands(primary.pool, ['run:backup']);
+    expect(taken.map((c) => c.kind)).toEqual(['run:backup']);
+    expect(await takeCommands(primary.pool, ['run:backup'])).toEqual([]);
+    expect((await takeCommands(primary.pool, ['stop']))[0].args).toEqual({ id });
+  });
+
+  it('skips a job switched off, unless it’s asked for now, and says when one is running', async () => {
+    await fresh();
+    await post('/admin/jobs/storage-check/on', { on: false });
+    let ran = 0;
+    expect(await asJob(primary.pool, 'storage-check', async () => { ran++; })).toBeNull();
+    expect(ran).toBe(0);
+    await asJob(primary.pool, 'storage-check', async () => {
+      ran++;
+      const row = (await q(`SELECT running_since FROM job_runs WHERE name = 'storage-check'`)).rows[0];
+      expect(row.running_since).not.toBeNull();
+    }, { evenIfOff: true });
+    expect(ran).toBe(1);
+    expect((await q(`SELECT running_since FROM job_runs WHERE name = 'storage-check'`)).rows[0].running_since).toBeNull();
+    await fresh();
   });
 });
 

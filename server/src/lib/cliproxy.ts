@@ -87,6 +87,8 @@ interface Credential {
   project_id?: string;
   /** Codex's account id is in its sign-in's claims. */
   id_token?: { chatgpt_account_id?: string };
+  /** Fill-first uses the highest of a kind first. */
+  priority?: number;
 }
 
 interface Called {
@@ -125,7 +127,21 @@ export async function listAccounts(p: Cliproxy): Promise<AiAccount[]> {
     name: c.email || c.label || c.name,
     problem: problemOf(c),
     usage: await usageOf(p, c),
+    priority: typeof c.priority === 'number' ? c.priority : 0,
   })));
+}
+
+/** Puts an account before the others of its kind: one priority above the highest of them. */
+export async function putFirst(p: Cliproxy, id: string) {
+  const listing = await call<{ files?: Credential[] }>(p, 'GET', '/credentials');
+  const all = listing.files ?? [];
+  const me = all.find((c) => c.name === id);
+  if (!me) throw new ApiError(404, 'no_account', 'That account isn’t connected any more.');
+  let top = 0;
+  for (const c of all) {
+    if (c.provider === me.provider && c.name !== id) top = Math.max(top, c.priority ?? 0);
+  }
+  await call(p, 'PATCH', '/credentials/fields', { name: id, priority: top + 1 });
 }
 
 /** Starts a sign-in: the provider's page to open, and the sign-in's state, which the rest of it goes by. */

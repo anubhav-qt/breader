@@ -32,13 +32,14 @@ export async function sha256File(path: string): Promise<string> {
  * Nightly after 03:00 (TZ): pg_dump of the laptop's copy, encrypted with age to BACKUP_RECIPIENT,
  * kept on the laptop for 14 days and uploaded to the R2 backup bucket. Supabase's free plan keeps no backups of its own.
  * Restore: age -d -i key.txt breader-DATE.dump.age | pg_restore --clean -d <url>
+ * `force`, from the admin page's Run now: at any hour, in place of today's if there is one.
  */
-export async function backupIfDue(env: Env, storage: Storage, now = new Date()): Promise<Backup | null> {
+export async function backupIfDue(env: Env, storage: Storage, now = new Date(), force = false): Promise<Backup | null> {
   if (!env.BACKUP_RECIPIENT || !env.MIRROR_URL) return null;
-  if (now.getHours() < 3) return null;
+  if (!force && now.getHours() < 3) return null;
   const name = `breader-${now.toLocaleDateString('en-CA')}.dump.age`;
   const path = join(env.BACKUP_DIR, name);
-  if (await stat(path).catch(() => null)) return null;
+  if (!force && (await stat(path).catch(() => null))) return null;
 
   await mkdir(env.BACKUP_DIR, { recursive: true });
   const dump = spawn('pg_dump', ['--format=custom', '--no-owner', '--dbname', env.MIRROR_URL], { stdio: ['ignore', 'pipe', 'pipe'] });

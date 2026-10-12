@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cliproxyFor, cliproxyKeys, finishSignIn, listAccounts } from '../src/lib/cliproxy.ts';
+import { cliproxyFor, cliproxyKeys, finishSignIn, listAccounts, putFirst } from '../src/lib/cliproxy.ts';
 
 /*
  * The AI accounts' proxy as the API sees it (lib/cliproxy.ts): its keys, where it's found, a
- * sign-in finished only with its own address, and the accounts read from a fake proxy.
+ * sign-in finished only with its own address, and the accounts read from a fake proxy and put
+ * first.
  */
 
 const TOKEN = 'an-admin-token-for-the-tests';
@@ -91,11 +92,28 @@ describe('the accounts', () => {
     });
     const accounts = await listAccounts(proxy);
     expect(accounts).toEqual([
-      { id: 'antigravity-a.json', kind: 'antigravity', name: 'a@example.com', problem: null, usage: [{ label: '5 hours', usedPercent: 60, resetsAt: '2026-10-10T15:00:00Z' }] },
-      { id: 'claude-b.json', kind: 'claude', name: 'Work', problem: 'Turned off', usage: null },
+      { id: 'antigravity-a.json', kind: 'antigravity', name: 'a@example.com', problem: null, priority: 0, usage: [{ label: '5 hours', usedPercent: 60, resetsAt: '2026-10-10T15:00:00Z' }] },
+      { id: 'claude-b.json', kind: 'claude', name: 'Work', problem: 'Turned off', priority: 0, usage: null },
     ]);
     const asked = sent.find((s) => s.url.endsWith('/requests/api-call'));
     expect(asked?.body).toMatchObject({ auth_index: '1', method: 'POST', data: '{"project":"p-1"}' });
+  });
+
+  it('go first by a priority above every other account of their kind', async () => {
+    const sent = fakeProxy({
+      '/v8/management/credentials': {
+        files: [
+          { name: 'antigravity-a.json', provider: 'antigravity', priority: 3 },
+          { name: 'antigravity-b.json', provider: 'antigravity' },
+          { name: 'claude-c.json', provider: 'claude', priority: 9 },
+        ],
+      },
+      '/v8/management/credentials/fields': { status: 'ok' },
+    });
+    await putFirst(proxy, 'antigravity-b.json');
+    const patched = sent.find((s) => s.method === 'PATCH');
+    expect(patched?.body).toEqual({ name: 'antigravity-b.json', priority: 4 });
+    await expect(putFirst(proxy, 'gone.json')).rejects.toMatchObject({ status: 404 });
   });
 
   it('say so when the proxy isn’t answering', async () => {

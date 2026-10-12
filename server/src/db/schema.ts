@@ -434,7 +434,32 @@ export const jobRuns = pgTable('job_runs', {
   lastErrorAt: at('last_error_at'),
   /** What the last good run did, e.g. how many files it removed. The AI marker's says what it's doing now. */
   detail: jsonb('detail'),
+  /** Since when it's running, while it is. */
+  runningSince: at('running_since'),
 });
+
+/** What the admin page changes: one row, id 1 (shared/src/admin.ts, AdminState). */
+export const adminState = pgTable('admin_state', {
+  id: integer('id').primaryKey(),
+  data: jsonb('data').notNull(),
+  updatedAt: at('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * What the admin page asks to be done once, for the process that does it to take: a job run now
+ * by the worker, a book tried again, stopped or a step done again by the AI marker.
+ */
+export const adminCommands = pgTable(
+  'admin_commands',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    at: at('at').notNull().defaultNow(),
+    kind: text('kind').notNull(),
+    args: jsonb('args').notNull(),
+    doneAt: at('done_at'),
+  },
+  (t) => [index('admin_commands_open_idx').on(t.kind).where(sql`${t.doneAt} IS NULL`)],
+);
 
 /** Every write to a fed table, in the order the worker must read them: (txid, id). */
 export const changeLog = pgTable(

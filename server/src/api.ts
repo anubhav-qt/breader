@@ -5,6 +5,7 @@ import { connectMirror, connectPrimary } from './db/client.ts';
 import { loadEnv } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
+import { asJob, runKind, takeCommands } from './lib/admin.ts';
 import { connectRedis, type Redis } from './lib/cache.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
@@ -53,13 +54,16 @@ if (manga) {
 // ago: the laptop may have been off at that hour.
 const prefetching = new AbortController();
 let prefetchAt: NodeJS.Timeout | undefined;
+let commands: NodeJS.Timeout | undefined;
 if (manga) {
   let running = false;
-  const run = async () => {
+  // `now`: asked for from the admin page, which runs it even while it's switched off there.
+  const run = async (now = false) => {
     if (running) return;
     running = true;
     try {
-      const r = await prefetch(manga, prefetching.signal);
+      const r = await asJob(primary.pool, 'manga-prefetch', () => prefetch(manga, prefetching.signal), { evenIfOff: now });
+      if (!r) return;
       log.info(r, 'prefetched Browse’s first screens');
       if (!prefetching.signal.aborted) await recordOk(primary.pool, 'manga-prefetch', r);
     } catch (err) {
@@ -78,6 +82,13 @@ if (manga) {
     void due(primary.pool, 'manga-prefetch', 1).then((yes) => { if (yes) void run(); }, (err) => log.warn({ err }, 'manga prefetch check failed'));
   }, 5 * 60_000);
   prefetching.signal.addEventListener('abort', () => clearTimeout(soon));
+  // Run now, from the admin page.
+  commands = setInterval(() => {
+    void takeCommands(primary.pool, [runKind('manga-prefetch')]).then(
+      (cs) => { if (cs.length) void run(true); },
+      (err) => log.warn({ err }, 'admin commands check failed'),
+    );
+  }, 5_000);
 }
 
 const stop = () => {
@@ -85,6 +96,7 @@ const stop = () => {
   clearInterval(chores);
   clearInterval(warming);
   clearTimeout(prefetchAt);
+  clearInterval(commands);
   prefetching.abort();
   void speech?.close();
   void redis?.close();

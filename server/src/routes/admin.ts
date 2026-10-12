@@ -1,59 +1,48 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type pg from 'pg';
+import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { ACCOUNT_KINDS, LIMITS, MusicImport, musicImportKey, musicImportProblems } from '@breader/shared';
+import { ACCOUNT_KINDS, MarkerPatch, MusicImport, QueueAction, musicImportKey, musicImportProblems, queueKey } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
-import { cancelSignIn, cliproxyFor, finishSignIn, listAccounts, removeAccount, signInStatus, startSignIn, type Cliproxy } from '../lib/cliproxy.ts';
+import { ADMIN_JOBS, addCommand, changeAdminState, runKind } from '../lib/admin.ts';
+import { adminHub, inUseOrder } from '../lib/admin-live.ts';
+import { cancelSignIn, cliproxyFor, finishSignIn, listAccounts, putFirst, removeAccount, signInStatus, startSignIn, type Cliproxy } from '../lib/cliproxy.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
-import { adminPage } from './admin-page.ts';
 
 const ConnectRequest = z.object({ kind: z.enum(ACCOUNT_KINDS) });
 const State = z.string().min(1).max(200);
 const FinishRequest = z.object({ state: State, redirectUrl: z.string().min(1).max(4000) });
 const CancelRequest = z.object({ state: State });
-
-const within = <T>(p: Promise<T>, ms: number) =>
-  Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
-
-/** First row of a query, or null when the database doesn't answer in time. */
-async function one<T extends pg.QueryResultRow>(pool: pg.Pool, sql: string, params: unknown[] = []): Promise<T | null> {
-  try {
-    return (await within(pool.query<T>(sql, params), 3000)).rows[0] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function all<T extends pg.QueryResultRow>(pool: pg.Pool, sql: string): Promise<T[]> {
-  try {
-    return (await within(pool.query<T>(sql), 3000)).rows;
-  } catch {
-    return [];
-  }
-}
+const JobName = z.string().refine((n) => ADMIN_JOBS.includes(n), 'No such job.');
+const JobOn = z.object({ on: z.boolean() });
+/** How many books asked to go next are remembered, the latest first. */
+const NEXT_KEPT = 200;
+/** A comment down the stream this often, so nothing between here and the page takes it for idle. */
+const PING_MS = 20_000;
 
 /*
- * The status page (backend design §12): which server answers, how current the laptop's copy is,
- * how full Supabase and R2 are, and how the worker's jobs went. Both servers serve it, at
- * api.…/admin and fb.…/admin, behind ADMIN_TOKEN. Without the token set, neither path exists.
- * Accounts with an admin role replace the token in Phase 2.
+ * The admin page (frontend/src/admin), served with the app at /admin, talks to this on whichever
+ * server answers, behind ADMIN_TOKEN. Without the token set, none of it exists. Accounts with an
+ * admin role replace the token in Phase 2.
  *
- * On the laptop it also connects the AI accounts the marker's research and music run on
- * (lib/cliproxy.ts): Antigravity, Claude Code and Codex, each with its limits.
- *
- * And it takes a book's music scored somewhere else (shared/src/ai.ts, MusicImport): checked
- * against the book's file here, then left in the file store for the AI marker, which stores its
- * tracks and puts it into the file (ai/tools/marker.ts).
+ * - /admin/stream pushes everything the page shows, each time it changes (lib/admin-live.ts).
+ * - The marker's settings, its queue (next, kept back, tried again, stopped, a step done again)
+ *   and the worker's jobs (run now, on or off) go into admin_state and admin_commands
+ *   (lib/admin.ts), for the worker and the marker to take up within a few seconds.
+ * - On the laptop it also connects the AI accounts the marker's research and music run on
+ *   (lib/cliproxy.ts): Antigravity, Claude Code and Codex, each with its limits, and which goes first.
+ * - And it takes a book's music scored somewhere else (shared/src/ai.ts, MusicImport): checked
+ *   against the book's file here, then left in the file store for the AI marker, which stores its
+ *   tracks and puts it into the file (ai/tools/marker.ts).
  */
 export function adminRoutes(deps: Deps) {
-  const { env, pool, mirror, storage } = deps;
+  const { env, pool, storage } = deps;
   const r = new Hono<AppEnv>();
   if (!env.ADMIN_TOKEN) return r;
   const token = Buffer.from(env.ADMIN_TOKEN);
-  const started = Date.now();
+  const hub = adminHub(deps);
 
   const checkToken = (c: Context<AppEnv>) => {
     const given = Buffer.from((c.req.header('authorization') ?? '').replace(/^Bearer\s+/i, ''));
@@ -63,81 +52,97 @@ export function adminRoutes(deps: Deps) {
     c.header('Cache-Control', 'no-store');
   };
 
+  /** Who asked, as this server sees them. */
+  const requestOf = (c: Context<AppEnv>) => ({
+    ip: c.var.ip,
+    from: env.CLIENT_IP_HEADER,
+    headers: Object.fromEntries(
+      ['cf-connecting-ip', 'x-forwarded-for', 'x-real-ip', 'true-client-ip'].flatMap((h) => {
+        const v = c.req.header(h);
+        return v ? [[h, v]] : [];
+      }),
+    ),
+  });
+
+  // The page itself is the app's.
   r.get('/admin', (c) => {
-    const nonce = randomBytes(16).toString('base64');
-    c.header('Cache-Control', 'no-store');
-    c.header('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
-    c.header('Referrer-Policy', 'no-referrer');
-    return c.html(adminPage(nonce));
+    const app = env.APP_URL ?? env.ALLOWED_ORIGINS[0];
+    if (!app) throw new ApiError(404, 'not_found', 'No such endpoint.');
+    return c.redirect(`${app.replace(/\/+$/, '')}/admin`, 302);
   });
 
   r.get('/admin/status', rateLimit({ name: 'admin', max: 30, windowMs: 60_000 }), async (c) => {
     checkToken(c);
+    const s = await hub.read();
+    return c.json({ ...s.status, request: requestOf(c), marker: s.marker });
+  });
 
-    const [db, feed, libraries, books, files, jobs, meta] = await Promise.all([
-      one<{ bytes: number }>(pool, 'SELECT pg_database_size(current_database())::bigint AS bytes'),
-      one<{ rows: number; unread: number; oldest_unread: number | null; ack: number | null }>(
-        pool,
-        `SELECT (SELECT count(*)::int FROM change_log) AS rows,
-                (SELECT count(*)::int FROM change_log c WHERE (c.txid, c.id) > (f.ack_txid, f.ack_id)) AS unread,
-                (SELECT extract(epoch FROM now() - min(c.at))::int FROM change_log c WHERE (c.txid, c.id) > (f.ack_txid, f.ack_id)) AS oldest_unread,
-                extract(epoch FROM now() - f.ack_at)::int AS ack
-         FROM feed_state f WHERE f.id = 1`,
-      ),
-      one<{ total: number; key_only: number; active_week: number; expiring: number; retired: number }>(
-        pool,
-        `SELECT count(*)::int AS total,
-                count(*) FILTER (WHERE owner_account_id IS NULL)::int AS key_only,
-                count(*) FILTER (WHERE last_active_at > now() - interval '7 days')::int AS active_week,
-                count(*) FILTER (WHERE owner_account_id IS NULL AND retired_at IS NULL
-                                 AND last_active_at < now() - make_interval(days => $1))::int AS expiring,
-                count(*) FILTER (WHERE retired_at IS NOT NULL)::int AS retired
-         FROM libraries`,
-        [LIMITS.key.idleDays - 30],
-      ),
-      one<{ books: number; removed: number }>(
-        pool,
-        'SELECT count(*) FILTER (WHERE removed_at IS NULL)::int AS books, count(*) FILTER (WHERE removed_at IS NOT NULL)::int AS removed FROM library_items',
-      ),
-      all<{ status: string; files: number; bytes: number; unused: number }>(
-        pool,
-        `SELECT status, count(*)::int AS files, coalesce(sum(size), 0)::bigint AS bytes,
-                count(*) FILTER (WHERE unused_since IS NOT NULL)::int AS unused
-         FROM blobs GROUP BY status ORDER BY status`,
-      ),
-      all<{ name: string; last_ok_at: Date | null; last_error: string | null; last_error_at: Date | null; detail: unknown }>(
-        pool,
-        'SELECT name, last_ok_at, last_error, last_error_at, detail FROM job_runs ORDER BY name',
-      ),
-      one<{ timeline: string }>(pool, 'SELECT timeline FROM sync_meta WHERE id = 1'),
-    ]);
-    const copy = mirror
-      ? await one<{ lag: number; loaded_at: Date | null }>(
-          mirror.pool,
-          'SELECT extract(epoch FROM now() - updated_at)::int AS lag, loaded_at FROM mirror_state WHERE id = 1',
-        )
-      : null;
-
-    return c.json({
-      server: { role: env.ROLE, release: env.RELEASE, uptimeSeconds: Math.round((Date.now() - started) / 1000), sentry: !!env.SENTRY_DSN },
-      request: {
-        ip: c.var.ip,
-        from: env.CLIENT_IP_HEADER,
-        headers: Object.fromEntries(
-          ['cf-connecting-ip', 'x-forwarded-for', 'x-real-ip', 'true-client-ip'].flatMap((h) => {
-            const v = c.req.header(h);
-            return v ? [[h, v]] : [];
-          }),
-        ),
-      },
-      supabase: db && { up: true, bytes: db.bytes, freeBytes: 500 * 1024 * 1024, timeline: meta?.timeline ?? null },
-      feed,
-      copy: mirror ? copy ?? { down: true } : null,
-      libraries,
-      books,
-      files: { byStatus: files, freeBytes: 10 * 1024 * 1024 * 1024 },
-      jobs,
+  r.get('/admin/stream', rateLimit({ name: 'admin-stream', max: 30, windowMs: 60_000 }), (c) => {
+    checkToken(c);
+    const request = requestOf(c);
+    return streamSSE(c, async (s) => {
+      let sent = Promise.resolve();
+      const stop = hub.watch((json) => {
+        const data = `{"request":${JSON.stringify(request)},${json.slice(1)}`;
+        sent = sent.then(() => s.writeSSE({ event: 'snapshot', data })).catch(() => {});
+      });
+      const ping = setInterval(() => {
+        sent = sent.then(async () => { await s.write(': ping\n\n'); }).catch(() => {});
+      }, PING_MS);
+      await new Promise<void>((done) => s.onAbort(() => done()));
+      clearInterval(ping);
+      stop();
     });
+  });
+
+  const control = rateLimit({ name: 'admin-control', max: 120, windowMs: 60_000 });
+
+  r.post('/admin/settings', control, async (c) => {
+    checkToken(c);
+    const patch = parse(MarkerPatch, await readJson(c));
+    const s = await changeAdminState(pool, (st) => ({ ...st, marker: { ...st.marker, ...patch } }));
+    return c.json({ settings: s.marker });
+  });
+
+  r.post('/admin/queue', control, async (c) => {
+    checkToken(c);
+    const a = parse(QueueAction, await readJson(c));
+    const key = queueKey(a.id, a.task);
+    const without = (list: string[]) => list.filter((k) => k !== key);
+    if (a.action === 'next') {
+      await changeAdminState(pool, (st) => ({ ...st, held: without(st.held), next: [key, ...without(st.next)].slice(0, NEXT_KEPT) }));
+    } else if (a.action === 'hold') {
+      const held = a.held ?? true;
+      await changeAdminState(pool, (st) => ({ ...st, held: held ? [key, ...without(st.held)] : without(st.held) }));
+    } else if (a.action === 'retry') {
+      await changeAdminState(pool, (st) => ({ ...st, held: without(st.held) }));
+      await addCommand(pool, 'retry', { id: a.id, task: a.task });
+    } else if (a.action === 'stop') {
+      // Back to the queue, kept back until it's let go.
+      await changeAdminState(pool, (st) => ({ ...st, held: [key, ...without(st.held)] }));
+      await addCommand(pool, 'stop', { id: a.id, task: a.task });
+    } else {
+      await addCommand(pool, 'redo', { id: a.id, task: a.task });
+    }
+    return c.json({ ok: true });
+  });
+
+  r.post('/admin/jobs/:name/run', control, async (c) => {
+    checkToken(c);
+    const name = parse(JobName, c.req.param('name'));
+    await addCommand(pool, runKind(name), { name });
+    return c.json({ ok: true }, 202);
+  });
+
+  r.post('/admin/jobs/:name/on', control, async (c) => {
+    checkToken(c);
+    const name = parse(JobName, c.req.param('name'));
+    const { on } = parse(JobOn, await readJson(c));
+    await changeAdminState(pool, (st) => {
+      const rest = st.jobsOff.filter((n) => n !== name);
+      return { ...st, jobsOff: on ? rest : [...rest, name] };
+    });
+    return c.json({ ok: true });
   });
 
   r.post(
@@ -179,7 +184,7 @@ export function adminRoutes(deps: Deps) {
 
   r.get('/admin/accounts', accounts, async (c) => {
     const p = proxy(c);
-    return c.json({ accounts: await listAccounts(p) });
+    return c.json({ accounts: inUseOrder(await listAccounts(p)) });
   });
 
   r.post('/admin/accounts/connect', accounts, async (c) => {
@@ -195,10 +200,20 @@ export function adminRoutes(deps: Deps) {
     return c.json({ ok: true });
   });
 
+  r.post('/admin/accounts/:id/first', accounts, async (c) => {
+    const p = proxy(c);
+    const id = parse(z.string().min(1).max(300), c.req.param('id'));
+    await putFirst(p, id);
+    hub.refreshAccounts();
+    return c.json({ ok: true });
+  });
+
   r.get('/admin/accounts/status', accounts, async (c) => {
     const p = proxy(c);
     const state = parse(State, c.req.query('state'));
-    return c.json(await signInStatus(p, state));
+    const status = await signInStatus(p, state);
+    if (status.status === 'ok') hub.refreshAccounts();
+    return c.json(status);
   });
 
   r.post('/admin/accounts/cancel', accounts, async (c) => {
@@ -212,6 +227,7 @@ export function adminRoutes(deps: Deps) {
     const p = proxy(c);
     const id = parse(z.string().min(1).max(300), c.req.param('id'));
     await removeAccount(p, id);
+    hub.refreshAccounts();
     return c.json({ ok: true });
   });
 
