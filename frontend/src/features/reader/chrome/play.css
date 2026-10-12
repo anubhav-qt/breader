@@ -65,6 +65,9 @@
 /* Play is a button like the others; while a voice loads, its dots fill in the book's colour. */
 .pl-main { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .pl-main .i3-dots-icon rect.is-lit { fill: var(--book-mark); }
+/* Each dot two whole pixels (0.8em = 14px over 7 rows), so pause's two bars sit on the pixels alike
+   and look the same: at a fraction of a pixel one comes out crisp and the other blurred. */
+.pl-main .i3-dots-icon { font-size: 17.5px; }
 .pl-deck.is-small .pl-skip { width: 34px; }
 .pl-skips { display: flex; align-items: center; }
 .pl-voices { position: relative; }

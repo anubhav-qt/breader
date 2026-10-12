@@ -519,6 +519,8 @@
   color: var(--r-bg);
   transition: opacity 140ms ease, transform var(--dur-snappy) var(--ease-snappy);
 }
+/* Two whole pixels a dot, as play's (play.css), so pause's bars look alike. */
+.vs-go .i3-dots-icon { font-size: 17.5px; }
 .vs-go:hover { opacity: 0.86; }
 .vs-go:active { transform: scale(0.98); }
 .vs-prog { display: flex; align-items: center; gap: 12px; }
