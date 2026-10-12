@@ -2,7 +2,7 @@ import type { AiAccount } from '@breader/shared/accounts';
 import { STEPS, type Admin, type Job, type Marker, type MarkerSettings, type PartState, type Snapshot, type Status, type Task, type Waiting, type Working } from './types';
 
 /*
- * The design round's server, in the page: the marker working through its books, step by step and
+ * A pretend server, in the page (admin/?demo): the marker working through its books, step by step and
  * part by part, pushed to the page as it goes, the way the real one will push it (a stream from
  * the server, not a look every few seconds). Every button does what it says, here.
  *
@@ -179,6 +179,7 @@ function accountsFor(scene: Scene): AiAccount[] {
     kind: 'antigravity',
     name: 'first.reader@gmail.com',
     problem: null,
+    priority: 0,
     usage: [
       { label: '5 hours', usedPercent: 38, resetsAt: at(2 * 3600 + 40 * 60) },
       { label: 'Week', usedPercent: 61, resetsAt: at(3 * 86400) },
@@ -189,6 +190,7 @@ function accountsFor(scene: Scene): AiAccount[] {
     kind: 'antigravity',
     name: 'second.reader@gmail.com',
     problem: null,
+    priority: 0,
     usage: [
       { label: '5 hours', usedPercent: 4, resetsAt: at(4 * 3600) },
       { label: 'Week', usedPercent: 22, resetsAt: at(5 * 86400) },
@@ -199,6 +201,7 @@ function accountsFor(scene: Scene): AiAccount[] {
     kind: 'claude',
     name: 'studio@anchor.example',
     problem: null,
+    priority: 0,
     usage: [
       { label: '5 hours', usedPercent: 12, resetsAt: at(3 * 3600) },
       { label: 'Week', usedPercent: 47, resetsAt: at(2 * 86400) },
@@ -389,9 +392,10 @@ export function demoAdmin(scene: Scene): Admin {
   };
 
   return {
-    watch(on) {
+    watch(on, link) {
       watchers.add(on);
       on(snapshot());
+      link?.('live');
       if (!timer) timer = window.setInterval(tick, TICK_MS);
       return () => {
         watchers.delete(on);
@@ -477,6 +481,7 @@ export function demoAdmin(scene: Scene): Admin {
         kind,
         name: 'new.reader@gmail.com',
         problem: null,
+        priority: 0,
         usage: [
           { label: '5 hours', usedPercent: 0, resetsAt: null },
           { label: 'Week', usedPercent: 0, resetsAt: null },

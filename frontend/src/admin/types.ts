@@ -1,12 +1,9 @@
 import type { AiAccount } from '@breader/shared/accounts';
 
 /*
- * What the admin page shows: the server's /admin/status (server/src/routes/admin.ts), the AI
- * marker's own report (ai/tools/marker.ts, Live) and the AI accounts (shared/src/accounts.ts).
- *
- * This is the design round's shape. The server sends less today: a working book's step, parts and
- * percent but not its steps one by one, its parts' states, its model or its log, and none of the
- * settings. Those are what the design asks the marker to say, once it's agreed on.
+ * What the admin page shows, as /admin/stream pushes it (server/src/routes/admin.ts): the server's
+ * status, the AI marker's own report with the page's settings (ai/tools/marker.ts, Live) and the
+ * AI accounts (shared/src/accounts.ts).
  */
 
 export type Task = 'marks' | 'music' | 'notes';
@@ -38,6 +35,7 @@ export const STEPS: Record<Task, Step[]> = {
   ],
   music: [
     { key: 'fetch', name: 'Fetching the book', about: 'Takes the book’s file from the file store and splits it into its parts.' },
+    { key: 'research', name: 'Researching it on the web', about: 'Gemini, on an Antigravity account, looks up the book and its series, for the score to follow.' },
     { key: 'gather', name: 'Gathering the soundtrack', about: 'Gemini picks the series’ soundtrack once, from its first volume, and finds each track on YouTube.' },
     { key: 'plan', name: 'Planning the score', about: 'Decides where the music changes through the book: the moods, and which track carries each.' },
     { key: 'score', name: 'Scoring, part by part', about: 'Each part gets its cues: where a track starts, fades, or goes quiet.', parts: true },
@@ -46,6 +44,8 @@ export const STEPS: Record<Task, Step[]> = {
     { key: 'save', name: 'Saving', about: 'Puts the score into the book’s file on the server.' },
   ],
   notes: [
+    { key: 'fetch', name: 'Fetching the book', about: 'Takes the book’s file from the server and the book from the file store, and checks they read the same.' },
+    { key: 'research', name: 'Researching it on the web', about: 'Gemini, on an Antigravity account, looks up the book and its series, for the notes to lean on.' },
     { key: 'roster', name: 'Listing who’s who', about: 'Starts from the earlier volumes’ notes: everyone, and what’s already known about them.' },
     { key: 'write', name: 'Writing notes, part by part', about: 'Kimi K3 writes Revisit’s notes for each part, knowing only what the reader has read by then.', parts: true },
     { key: 'check', name: 'Checking the notes', about: 'Looks for anything said before the book says it, and for names that drift, and fixes them.' },
@@ -53,6 +53,19 @@ export const STEPS: Record<Task, Step[]> = {
     { key: 'save', name: 'Saving', about: 'Puts the notes on the server, where Revisit reads them.' },
   ],
 };
+
+/** Music scored somewhere else and uploaded here, going into its book. */
+export const UPLOAD_STEPS: Step[] = [
+  { key: 'read', name: 'Reading the uploaded music', about: 'Takes the upload from the file store and checks it fits the book’s file.' },
+  { key: 'store', name: 'Keeping its tracks', about: 'Downloads the tracks the score plays and keeps them in the file store.' },
+  { key: 'save', name: 'Saving', about: 'Puts the score into the book’s file on the server.' },
+];
+
+/** The steps a working book goes through. */
+export function stepsFor(w: { task: Task; upload?: boolean }): Step[] {
+  if (w.upload) return UPLOAD_STEPS;
+  return STEPS[w.task];
+}
 
 /** A part of a book being worked on: done, being done, done by the backup model, or still to do. */
 export type PartState = 'done' | 'now' | 'backup' | 'wait';
@@ -68,6 +81,8 @@ export interface Working {
   id: string;
   title: string;
   task: Task;
+  /** Music uploaded from here, going in: UPLOAD_STEPS. */
+  upload?: boolean;
   /** The step it's on, by its key in STEPS. */
   step: string;
   /** Steps it doesn't take this time, by key: research when it's off, a redo with nothing to redo. */
@@ -156,10 +171,16 @@ export interface Snapshot {
   accounts: AiAccount[] | null;
 }
 
+/** How the page is hearing from the server: live, getting there, or turned away for its token. */
+export type Link = 'live' | 'connecting' | 'denied';
+
 /** What the page can ask of the server. */
 export interface Admin {
-  /** Calls `on` with everything now, and again each time anything changes. Gives back a way to stop. */
-  watch: (on: (s: Snapshot) => void) => () => void;
+  /**
+   * Calls `on` with everything now, and again each time anything changes, `link` as the stream
+   * comes and goes, and `error` when a button's request fails. Gives back a way to stop.
+   */
+  watch: (on: (s: Snapshot) => void, link?: (l: Link) => void, error?: (message: string) => void) => () => void;
   settings: (patch: Partial<MarkerSettings>) => void;
   /** A waiting book: next in line, kept back or let go, or tried again now. */
   next: (id: string, task: Task) => void;

@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Logo } from '../components/Logo';
 import { springs } from '../lib/springs';
 import { demoAdmin, type Scene } from './demo';
+import { liveAdmin, savedToken, saveToken } from './live';
 import { MarkerCard } from './Marker';
 import { ago, mb, span, until, useClock } from './format';
 import { Label, Percent } from './parts';
 import { Accounts, Music, Workers } from './Side';
-import { TASK_NAMES, type Admin, type Snapshot } from './types';
+import { TASK_NAMES, type Admin, type Link, type Snapshot } from './types';
 import '../components/header.css';
 import '../components/preview-bar.css';
 import './admin.css';
@@ -15,9 +16,10 @@ import './admin.css';
 /*
  * The admin page, in Breader's own look: what needs doing first, each with the button that does
  * it; the numbers at a glance, their details a tap away; then the AI marker, the accounts, the
- * workers and the music upload. Everything arrives as it happens, pushed by the server.
+ * workers and the music upload. Everything arrives as it happens, pushed by the server (live.ts),
+ * behind the admin token.
  *
- * Design round: it runs on demoAdmin (demo.ts), with a preview bar to switch scenes and themes.
+ * With ?demo it runs on demoAdmin (demo.ts) instead, with a preview bar to switch scenes and themes.
  */
 
 type Theme = 'auto' | 'light' | 'dark';
@@ -41,44 +43,98 @@ function writeParam(name: string, value: string, fallback: string) {
   history.replaceState(null, '', url);
 }
 
-/** Everything the server last pushed, kept current for as long as the page is open. */
-function useSnapshot(admin: Admin) {
-  const [snap, setSnap] = useState<Snapshot | null>(null);
-  useEffect(() => admin.watch(setSnap), [admin]);
-  return snap;
-}
+const DEMO = new URLSearchParams(location.search).has('demo');
 
 export function AdminPage() {
-  const [scene, setScene] = useState<Scene>(() => readParam('scene', ['well', 'trouble', 'quiet'] as const, 'well'));
-  const [theme, setTheme] = useState<Theme>(() => readParam('theme', ['auto', 'light', 'dark'] as const, 'auto'));
-  const [round, setRound] = useState(0);
-  // A new demo for each scene, and for each reset.
-  const admin = useMemo(() => demoAdmin(scene), [scene, round]); // eslint-disable-line react-hooks/exhaustive-deps
-  const snap = useSnapshot(admin);
-  useClock();
+  if (DEMO) return <DemoPage />;
+  return <LivePage />;
+}
 
-  useEffect(() => writeParam('scene', scene, 'well'), [scene]);
+/** The real thing: the admin token, then the board on the server's stream. */
+function LivePage() {
+  const [token, setToken] = useState<string | null>(savedToken);
+  const [said, setSaid] = useState<string | null>(null);
+  const admin = useMemo(() => {
+    if (!token) return null;
+    return liveAdmin(token);
+  }, [token]);
+  if (!admin) {
+    const open = (t: string) => {
+      saveToken(t);
+      setSaid(null);
+      setToken(t);
+    };
+    return <Gate said={said} onToken={open} />;
+  }
+  const denied = () => {
+    saveToken(null);
+    setToken(null);
+    setSaid('That isn’t the admin token.');
+  };
+  return <Board admin={admin} onDenied={denied} />;
+}
+
+function Gate({ said, onToken }: { said: string | null; onToken: (token: string) => void }) {
+  const [value, setValue] = useState('');
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (value.trim()) onToken(value.trim());
+  };
+  return (
+    <div className="ad">
+      <Header link={null} />
+      <main className="ad-main">
+        <form className="ad-gate" onSubmit={submit}>
+          <div className="ad-paste">
+            <input type="password" autoComplete="current-password" placeholder="Admin token" aria-label="Admin token" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+            <button type="submit" className="btn btn-primary ad-small" disabled={!value.trim()}>Open</button>
+          </div>
+          {said && <p className="ad-bad">{said}</p>}
+        </form>
+      </main>
+    </div>
+  );
+}
+
+function Header({ link }: { link: Link | null }) {
+  return (
+    <header className="hdr ad-hdr">
+      <div className="hdr-start">
+        <Logo />
+        <span className="ad-title">Admin</span>
+      </div>
+      {link && (
+        <div className="hdr-actions">
+          <span className={`ad-live${link === 'live' ? ' is-on' : ''}`} title="Changes arrive as they happen">
+            <i aria-hidden="true" />
+            {link === 'live' ? 'Live' : 'Connecting'}
+          </span>
+        </div>
+      )}
+    </header>
+  );
+}
+
+/** Everything the server pushes, kept current for as long as the page is open. */
+function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => void; children?: ReactNode }) {
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [link, setLink] = useState<Link>('connecting');
+  const [error, setError] = useState<{ text: string } | null>(null);
+  useEffect(() => admin.watch(setSnap, setLink, (text) => setError({ text })), [admin]);
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'auto') delete root.dataset.theme;
-    else root.dataset.theme = theme;
-    writeParam('theme', theme, 'auto');
-  }, [theme]);
+    if (link === 'denied') onDenied?.();
+  }, [link, onDenied]);
+  useEffect(() => {
+    if (!error) return;
+    const t = window.setTimeout(() => setError(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [error]);
+  useClock();
 
   return (
     <div className="ad">
-      <header className="hdr ad-hdr">
-        <div className="hdr-start">
-          <Logo />
-          <span className="ad-title">Admin</span>
-        </div>
-        <div className="hdr-actions">
-          <span className={`ad-live${snap ? ' is-on' : ''}`} title="Changes arrive as they happen">
-            <i aria-hidden="true" />
-            {snap ? 'Live' : 'Connecting'}
-          </span>
-        </div>
-      </header>
+      <Header link={link} />
+      {error && <p className="ad-bad ad-err" role="alert">{error.text}</p>}
       {snap && (
         <main className="ad-main">
           {/* Each at its own width: what needs you and the marker wide, the rest narrow, side by side where they fit. */}
@@ -100,6 +156,29 @@ export function AdminPage() {
           </div>
         </main>
       )}
+      {children}
+    </div>
+  );
+}
+
+/** The design's demo, on a pretend server. */
+function DemoPage() {
+  const [scene, setScene] = useState<Scene>(() => readParam('scene', ['well', 'trouble', 'quiet'] as const, 'well'));
+  const [theme, setTheme] = useState<Theme>(() => readParam('theme', ['auto', 'light', 'dark'] as const, 'auto'));
+  const [round, setRound] = useState(0);
+  // A new demo for each scene, and for each reset.
+  const admin = useMemo(() => demoAdmin(scene), [scene, round]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => writeParam('scene', scene, 'well'), [scene]);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'auto') delete root.dataset.theme;
+    else root.dataset.theme = theme;
+    writeParam('theme', theme, 'auto');
+  }, [theme]);
+
+  return (
+    <Board admin={admin}>
       <div className="pv" role="group" aria-label="Preview controls">
         <span className="pv-tag">preview</span>
         {SCENES.map((s) => (
@@ -112,7 +191,7 @@ export function AdminPage() {
         <span className="pv-sep" />
         <button type="button" onClick={() => setRound(round + 1)}>reset</button>
       </div>
-    </div>
+    </Board>
   );
 }
 

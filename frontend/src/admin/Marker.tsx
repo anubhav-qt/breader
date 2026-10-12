@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../lib/springs';
-import { ago, span, toneOf, until } from './format';
+import { ago, modelName, span, toneOf, until } from './format';
 import { Dots, Label, Monogram, PartDots, Percent, Seg, Stepper, Switch } from './parts';
-import { STEPS, TASK_NAMES, type Admin, type Marker, type MarkerSettings, type Task, type Waiting, type Working } from './types';
+import { stepsFor, TASK_NAMES, type Admin, type Marker, type MarkerSettings, type Task, type Waiting, type Working } from './types';
 
 /*
  * The AI marker: how far through the library it is, each book it's on, step by step, with what
@@ -15,7 +15,7 @@ const keyOf = (x: { id: string; task: Task }) => `${x.id}:${x.task}`;
 
 /** How far a book is through its task, out of 100: its steps done, and the parts of the one it's on. */
 function percentOf(w: Working) {
-  const steps = STEPS[w.task].filter((s) => !w.skipped.includes(s.key));
+  const steps = stepsFor(w).filter((s) => !w.skipped.includes(s.key));
   const at = steps.findIndex((s) => s.key === w.step);
   let part = 0;
   if (w.parts.length) {
@@ -100,7 +100,7 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
       {!shown.length && <p className="ad-none">Nothing.</p>}
       <ol className="ad-queue">
         {shown.map((q) => (
-          <QueueRow key={keyOf(q)} q={q} first={m.queue[0] === q} off={!m.settings.tasks[q.task]} admin={admin} />
+          <QueueRow key={keyOf(q)} q={q} first={m.queue.find((x) => x.task === q.task) === q} off={!m.settings.tasks[q.task]} admin={admin} />
         ))}
       </ol>
     </section>
@@ -109,8 +109,9 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
 
 /** A book being worked on: one line, and opened, every step of its task. */
 function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: boolean; open: boolean; onOpen: () => void; admin: Admin }) {
-  const steps = STEPS[w.task].filter((s) => !w.skipped.includes(s.key));
-  const at = steps.findIndex((s) => s.key === w.step);
+  const all = stepsFor(w);
+  const steps = all.filter((s) => !w.skipped.includes(s.key));
+  const at = Math.max(0, steps.findIndex((s) => s.key === w.step));
   const step = steps[at];
   const tone = toneOf(w.title);
   const percent = percentOf(w);
@@ -136,7 +137,7 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
           <motion.div key="more" className="ad-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
             <div className="ad-work-b">
               <ol className="ad-steps">
-                {STEPS[w.task].map((s) => {
+                {all.map((s) => {
                   const skipped = w.skipped.includes(s.key);
                   const i = steps.findIndex((x) => x.key === s.key);
                   let state = 'next';
@@ -153,7 +154,7 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
                           <div className="ad-now">
                             <p className="ad-meta">
                               {paused ? 'Paused' : span((Date.now() - new Date(w.stepSince).getTime()) / 1000)}
-                              {w.model && ` · ${w.model}`}
+                              {w.model && ` · ${modelName(w.model)}`}
                               {w.account && ` · ${w.account}`}
                               {w.calls > 0 && !paused && ` · ${w.calls} in flight`}
                             </p>

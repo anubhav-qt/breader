@@ -16,6 +16,8 @@ const BASES = {
 export type ApiBase = keyof typeof BASES;
 /** An address on the laptop, for a picture to load straight from it. */
 export const laptopUrl = (path: string) => BASES.primary + path;
+/** Where each copy of the server is, for the admin page, which talks to them itself (admin/live.ts). */
+export const baseUrl = (base: ApiBase) => BASES[base];
 
 const TIMEOUT = 4000;
 const PROBE_EVERY = 60_000;

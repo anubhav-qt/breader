@@ -54,6 +54,8 @@ export default defineConfig({
   worker: { format: 'es', plugins: () => [ortWasm()] },
   // Served as they are: pre-bundling moves files that find their wasm relative to themselves.
   optimizeDeps: { exclude: ['onnxruntime-web', 'phonemizer'] },
+  // Two pages: the app, and the admin page Cloudflare Pages serves at /admin (src/admin).
+  build: { rollupOptions: { input: { main: 'index.html', admin: 'admin.html' } } },
   // Error reports name the commit they came from; Cloudflare Pages provides it at build time.
   define: { 'import.meta.env.VITE_RELEASE': JSON.stringify(process.env.CF_PAGES_COMMIT_SHA ?? 'dev') },
   // Bind to IPv4 so both http://localhost:5173 and http://127.0.0.1:5173 work in every browser.

@@ -188,6 +188,11 @@ h2.ad-bad { font: 700 32px/0.9 var(--read); }
 .ad-paste input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--tile-border); background: var(--canvas); font: var(--ui-w) 12px/1 var(--ui); }
 .ad-paste input:disabled { opacity: 0.5; }
 
+/* The admin token, before anything else; and what a button's request ran into. */
+.ad-gate { width: min(360px, 100%); margin: 16vh auto 0; display: grid; gap: 10px; }
+.ad-gate .ad-paste input { height: 38px; font-size: 14px; }
+.ad-err { width: min(var(--ad-board), calc(100% - 2 * var(--ad-pad))); margin: 0 auto 12px; }
+
 /* Workers: a square each, filled while fine, red when failing, beating while it runs, hollow when off. */
 .ad-jobs { list-style: none; margin: 0; padding: 0; }
 .ad-job { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }

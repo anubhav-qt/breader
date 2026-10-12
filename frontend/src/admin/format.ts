@@ -43,6 +43,16 @@ export function useClock() {
   }, []);
 }
 
+const MODEL_NAMES: Record<string, string> = { 'kimi-k3': 'Kimi K3', 'nemotron-3-ultra': 'Nemotron 3 Ultra' };
+
+/** A model as people say it: Kimi K3, Gemini 3.1 Pro. */
+export function modelName(id: string) {
+  const known = MODEL_NAMES[id];
+  if (known) return known;
+  const words = id.split(/[-_ ]+/).filter(Boolean);
+  return words.map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+}
+
 /** A book's colour, as its cover would have it. */
 export const toneOf = (title: string) => `var(--bc-${colorKeyFor(title)})`;
 
