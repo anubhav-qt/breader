@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../../lib/springs';
 import type { CastDesign } from '../../design/round';
 import type { Engine, SamplePart, VoiceInfo } from '../voice/catalog';
-import { aiPicks, castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, useBookCast, useCast, useSpeaking, voicesOf, type Cast, type Character } from '../voice/cast';
+import { aiPicks, castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, reshuffled, useBookCast, useCast, useSpeaking, voicesOf, type Cast, type Character } from '../voice/cast';
 import { stopSample } from '../voice/speaker';
 import { BACK, PLAY, STOP } from './icons';
 import { DotIcon, Typed } from './parts';
@@ -87,7 +87,7 @@ export function CastSection({ book, design, playing, engine, children }: { book:
     const byAi = !shuffled && people.every((c) => c.voice !== null);
     body = (
       <>
-        {design === 'A' && <Auto book={book} cast={cast} byAi={byAi} canGoBack={shuffled && voiced} />}
+        {design === 'A' && <Auto book={book} cast={cast} byAi={byAi} canGoBack={reshuffled(book, state) && voiced} />}
         {design === 'B' && <List book={book} cast={cast} engine={engine} />}
         {design === 'C' && <Board book={book} cast={cast} engine={engine} />}
         {design === 'D' && <Speaking cast={cast} playing={playing} />}
@@ -134,7 +134,7 @@ function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode
   );
 }
 
-/** A: the AI's picks, or handed out, to be heard and shuffled, and back to the AI's picks once shuffled. */
+/** A: the AI's picks, or handed out, to be heard and shuffled, and back to the AI's picks once the series is shuffled. */
 function Auto({ book, cast, byAi, canGoBack }: { book: string; cast: Cast[]; byAi: boolean; canGoBack: boolean }) {
   const { on, hear } = useHear();
   const voices = new Set(cast.map((x) => x.v.key)).size;
@@ -147,7 +147,7 @@ function Auto({ book, cast, byAi, canGoBack }: { book: string; cast: Cast[]; byA
     </>
   );
   return (
-    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book, people)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book, people) } : undefined}>
+    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book, people)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book) } : undefined}>
       {cast.map((x) => (
         <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
       ))}

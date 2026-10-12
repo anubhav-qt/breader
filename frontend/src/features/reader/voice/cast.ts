@@ -154,15 +154,14 @@ export function pickVoice(book: string, character: string, voice: string) {
 }
 
 /**
- * Voices handed out again, a different way, to the people here, the AI's picks and the ones picked
- * by hand too: by line count, so the people with most to say get the first voices, and kept for
- * them in every book of the series.
+ * The whole series' voices handed out again, a different way, the AI's picks and the ones picked
+ * by hand too: the people here by line count, so the ones with most to say get the first voices,
+ * kept for them in every book of the series, and everyone else back to the AI's picks.
  */
 export function reshuffle(book: string, people: Character[]) {
   const scope = scopeOf(book);
   const seed = (state.seeds[scope] ?? 0) + 1;
-  const picks = { ...(state.picks[scope] ?? {}) };
-  const dealt = { ...(state.dealt[scope] ?? {}) };
+  const dealt: Record<string, Record<Engine, string>> = {};
   const handed: Record<Kind, number> = { F: 0, M: 0, N: 0 };
   for (const c of people) {
     const piper = voicesOf(c.kind, 'piper');
@@ -170,21 +169,25 @@ export function reshuffle(book: string, people: Character[]) {
     const at = handed[c.kind] + seed;
     handed[c.kind] += 1;
     dealt[c.id] = { piper: piper[at % piper.length].key, kokoro: kokoro[at % kokoro.length].key };
-    delete picks[c.id];
   }
-  set({ ...state, picks: { ...state.picks, [scope]: picks }, dealt: { ...state.dealt, [scope]: dealt }, seeds: { ...state.seeds, [scope]: seed } });
+  set({ ...state, picks: { ...state.picks, [scope]: {} }, dealt: { ...state.dealt, [scope]: dealt }, seeds: { ...state.seeds, [scope]: seed } });
 }
 
-/** Back to the AI's picks for the people here, in every book of the series: no reshuffles, and nothing picked by hand. */
-export function aiPicks(book: string, people: Character[]) {
+/** Whether the book's series was reshuffled since it last went back to the AI's picks. */
+export function reshuffled(book: string, s: CastState = state) {
+  const dealt = s.dealt[scopeOf(book, s)];
+  if (!dealt) return false;
+  return Object.keys(dealt).length > 0;
+}
+
+/** Back to the AI's picks in every book of the series: no reshuffles, and nothing picked by hand. */
+export function aiPicks(book: string) {
   const scope = scopeOf(book);
-  const picks = { ...(state.picks[scope] ?? {}) };
-  const dealt = { ...(state.dealt[scope] ?? {}) };
-  for (const c of people) {
-    delete picks[c.id];
-    delete dealt[c.id];
-  }
-  set({ ...state, picks: { ...state.picks, [scope]: picks }, dealt: { ...state.dealt, [scope]: dealt } });
+  const picks = { ...state.picks };
+  delete picks[scope];
+  const dealt = { ...state.dealt };
+  delete dealt[scope];
+  set({ ...state, picks, dealt });
 }
 
 export interface Cast {
