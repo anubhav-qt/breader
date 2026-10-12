@@ -13,8 +13,9 @@ import type { OnServer } from '../marker.ts';
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { bookDir, writeJson } = await import('../lib.ts');
-const { byWithNotes, failures, needs, notesOrder, progressOf, queueOf, toMark, toNote } = await import('../marker.ts');
+const { byWithNotes, failures, needs, notesOrder, partStates, progressOf, queueOf, stepKey, toMark, toNote } = await import('../marker.ts');
 const { stageOf } = await import('../mark.ts');
+const { newJob } = await import('../jobs.ts');
 
 let made = 0;
 function book(title: string, more: Partial<QueueBook> = {}): QueueBook {
@@ -135,6 +136,26 @@ test('the live view: how far a book’s notes have got', () => {
   assert.deepEqual(progressOf(b.key, 'notes', parts), { step: 'Reading them through as a reader would', parts: 4, of: 4, percent: 85 });
 });
 
+test('the admin page: each step by its key, and each part as it stands', () => {
+  assert.equal(stepKey('marks', 'Fixing what the check found (round 2)', false), 'check');
+  assert.equal(stepKey('marks', 'Marking again the 3 parts the backup model did', false), 'redo');
+  assert.equal(stepKey('marks', 'Settling unsure lines (1 of 2)', false), 'settle');
+  assert.equal(stepKey('music', 'Gathering the soundtrack', false), 'gather');
+  assert.equal(stepKey('music', 'Getting ready', false), 'fetch');
+  assert.equal(stepKey('music', 'Keeping its tracks in the file store, 2 of 5', true), 'store');
+  assert.equal(stepKey('notes', 'Reading them through as a reader would', false), 'review');
+  const b = book('Dots');
+  const dir = bookDir(b.key);
+  mkdirSync(join(dir, 'marks'), { recursive: true });
+  writeFileSync(join(dir, 'marks', '0001.txt'), '');
+  writeFileSync(join(dir, 'marks', '0002.txt'), '');
+  const by = (model: string) => ({ model, rounds: 1, secs: 1, at: '' });
+  writeJson(join(dir, 'marked-by.json'), { 1: by('kimi-k3'), 2: by('nemotron-3-ultra') });
+  const ctx = newJob(b.key, b.title, 'marks');
+  ctx.parts.set(3, 1);
+  assert.deepEqual(partStates({ b, phase: 'marks', ctx }, [1, 2, 3, 4]), ['done', 'backup', 'now', 'wait']);
+});
+
 test('the live view: the queue, marks first, then notes, with how the failed ones went', () => {
   const fresh = book('Fresh');
   const halfway = book('Halfway', { started: true, lastRead: '2026-10-08T00:00:00.000Z' });
@@ -142,8 +163,8 @@ test('the live view: the queue, marks first, then notes, with how the failed one
   const server = new Map([[halfway.sha256, marked()], [done.sha256, marked(9)]]);
   failures.set(halfway.sha256, { count: 2, next: Date.parse('2026-10-08T12:00:00.000Z'), why: 'NVIDIA was busy' });
   assert.deepEqual(queueOf([done, halfway, fresh], server), [
-    { title: 'Fresh', task: 'marks' },
-    { title: 'Halfway', task: 'notes', failed: { times: 2, next: '2026-10-08T12:00:00.000Z', why: 'NVIDIA was busy' } },
+    { id: fresh.sha256, title: 'Fresh', task: 'marks' },
+    { id: halfway.sha256, title: 'Halfway', task: 'notes', failed: { times: 2, next: '2026-10-08T12:00:00.000Z', why: 'NVIDIA was busy' } },
   ]);
   failures.clear();
 });

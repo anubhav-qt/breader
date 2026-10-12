@@ -1,20 +1,25 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { format } from 'node:util';
 import type pg from 'pg';
+import { MARKER_TASKS, nextFirst, queueKey, type AdminState } from '../../shared/src/admin.ts';
 import type { AiFile } from '../../shared/src/ai.ts';
+import type { Command } from '../../server/src/lib/admin.ts';
 import { recordError, recordLive, recordOk } from '../../server/src/jobs/runs.ts';
 import { Balancer, jitter } from './balancer.ts';
 import { castPass } from './cast.ts';
 import { addSeriesVoices, seriesVoices, voicesIntoCast, type Voices } from './casting.ts';
+import { control, controlLoop, readControl } from './control.ts';
 import { prodClient, prodPool } from './env.ts';
 import { castFromFile, fetchBook } from './fetch.ts';
 import { waitingForLimits } from './harness.ts';
 import { castsOnServer, checkFile, fileOnServer, live, loadOne, onServer, replace, upsert, wanted } from './import.ts';
-import { castByFile, castOf, fitBy, LADDER, mins, notesBy, notesLedger, PRIMARY } from './kimi.ts';
+import { current, newJob, note, pauses, paused, runIn, stopIfStopped, whilePaused, type JobCtx, type LogLine } from './jobs.ts';
+import { castByFile, castOf, fitBy, LADDER, marksLedger, mins, notesBy, notesLedger, notesLedgerFile, PRIMARY, setFirst } from './kimi.ts';
 import { bookDir, isFetched, loadBook, marksFiles, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
 import { listBooks } from './library.ts';
 import { markBook, stageOf } from './mark.ts';
-import { GATHERING, musicBy, musicLedger, musicStage, noDownloads, noMusic, saveSoundtrack, scoreBook } from './music.ts';
+import { GATHERING, musicBy, musicLedger, musicLedgerFile, musicStage, noDownloads, noMusic, saveSoundtrack, scoreBook } from './music.ts';
 import { nvidiaKey } from './nim.ts';
 import { writeNotes } from './notes.ts';
 import { revisitOf } from './pack.ts';
@@ -32,7 +37,7 @@ import { store } from './youtube.ts';
  * About once a minute it lists the books. A book with nothing on the server yet gets its voice
  * marks: fetched, researched on the web by the harness (research.ts) when Antigravity is here, its
  * cast read from the book with that research (cast.ts), every part marked, everyone given their
- * voices (casting.ts), packed and imported, up to MARKING books at once, the books being read first.
+ * voices (casting.ts), packed and imported, up to 4 books at once (or what the admin page says), the books being read first.
  * A book marked before voices were picked gets them at random instead, first thing each round. Only when no book is being marked does
  * background music start, for books that have none (music.ts), when the harness, yt-dlp and ffmpeg
  * are all here. Only when no book's music is being scored do Revisit notes start, for books that
@@ -54,19 +59,21 @@ import { store } from './youtube.ts';
  *
  * A call that fails is asked again by the balancer, after a wait that doubles each time, with
  * jitter, for as long as it takes. A book that fails waits 2 minutes, then 4, 8 and so on up to an
- * hour, with jitter, and carries on where it stopped. How it goes is in job_runs as "ai-marker",
+ * hour (or what the admin page says), with jitter, and carries on where it stopped. How it goes is in job_runs as "ai-marker",
  * for the admin page, along with what it's on right now: each book, its task, its step and how
  * many of its parts are done, and the queue (liveLoop). Nothing it prints has a book's text in it.
+ *
+ * The admin page has its say (control.ts): it pauses the marker or one task, changes how many books
+ * go at once, which model goes first and whether there's research, keeps books back or asks for
+ * them next, and stops a book or has it do its step again. Each book's work runs as a job (jobs.ts),
+ * so the page sees the step it's on, its parts, the model and account its calls are on, and what it
+ * printed, every second while the page is open.
  */
 
-/** How often it looks for work, and how many books it marks, scores and writes notes for, at once. */
+/** How often it looks for work. How many books it marks, scores and writes notes for at once is the admin page's (control.ts). */
 const POLL_S = 60;
-const MARKING = 4;
-const MUSICING = 2;
-const NOTING = 2;
-/** A book that failed waits this long, doubling each time it fails again, up to the cap. */
+/** A book that failed waits this long, doubling each time it fails again, up to the admin page's longest wait. */
 const RETRY_FIRST_S = 120;
-const RETRY_CAP_S = 3600;
 /** A volume that has failed this many times in a row stops holding up the volumes after it. */
 const STUCK = 5;
 /** Its name in job_runs, and how often it says it's alive there when there's nothing new. */
@@ -75,6 +82,11 @@ const ALIVE_S = 3600;
 /** How often the status page's live view is brought up to date, and how often it's written anyway. */
 const LIVE_S = 10;
 const LIVE_ANYWAY_S = 60;
+/** While the admin page is open (it says so every 20 s), the live view goes every second. */
+const WATCHED_LIVE_S = 1;
+const WATCHED_FOR_S = 45;
+/** How many lines of a book's log the page gets. */
+const LOG_SHOWN = 20;
 
 export type Phase = 'marks' | 'music' | 'notes';
 
@@ -110,6 +122,14 @@ interface Job {
   phase: Phase;
   since: number;
   parts?: number[];
+  /** What its calls are doing (jobs.ts). */
+  ctx: JobCtx;
+  /** The step it's on, by the admin page's key, since when, and every step it's been on. */
+  step: string;
+  stepSince: number;
+  seen: Set<string>;
+  /** Cut off from the admin page: stopped, or to do its step again. */
+  cut?: 'stop' | 'redo';
 }
 
 /**
@@ -134,6 +154,11 @@ let accountHere = false;
 const uploading = new Map<string, { done: number; of: number }>();
 /** The last look at the books and the server. */
 let seen: { books: QueueBook[]; server: Map<string, OnServer> } | null = null;
+/** Until when the admin page is open, as it last said. */
+let watchedUntil = 0;
+/** Set when the admin page wants a round now, rather than at the next look. */
+let woken = false;
+let wakeUp: (() => void) | null = null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const clock = () => new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -209,11 +234,28 @@ export function toMark(books: QueueBook[], server: Map<string, OnServer>): Queue
   const out: QueueBook[] = [];
   for (const b of books) {
     if (needs(b, server) !== 'marks' || running.has(b.sha256) || resting(b, 'marks')) continue;
-    const castFirst = books.filter((o) => earlier(o, b) && needs(o, server) === 'marks' && !existsSync(castByFile(o)) && !stuck(o, 'marks'));
-    if (castFirst.length) continue;
+    if (castFirst(b, books, server)) continue;
     out.push(b);
   }
   return out;
+}
+
+/** The earlier volume whose cast a book's marks wait for, or null. */
+function castFirst(b: QueueBook, books: QueueBook[], server: Map<string, OnServer>): QueueBook | null {
+  const first = books.find((o) => earlier(o, b) && needs(o, server) === 'marks' && !existsSync(castByFile(o)) && !stuck(o, 'marks'));
+  return first ?? null;
+}
+
+/** Of the books that need a phase, the earliest volume of b's series that goes before it, or null. */
+function seriesBefore(b: QueueBook, want: QueueBook[], phase: Phase): QueueBook | null {
+  const before = want.filter((o) => earlier(o, b) && !stuck(o, phase)).sort((x, y) => x.seriesIndex! - y.seriesIndex!);
+  return before[0] ?? null;
+}
+
+/** A volume as the admin page names it: Vol. 3, or its title when it has no number. */
+function volumeOf(b: QueueBook): string {
+  if (b.seriesIndex == null) return b.title;
+  return `Vol. ${b.seriesIndex}`;
 }
 
 /** Being read first, the most recently read at the top, then the rest, the oldest added first. */
@@ -232,8 +274,7 @@ function seriesFirst(want: QueueBook[], phase: Phase): QueueBook[] {
   const inOrder = want.slice().sort(notesOrder);
   const out: QueueBook[] = [];
   for (const b of inOrder) {
-    const before = inOrder.filter((o) => earlier(o, b) && !stuck(o, phase)).sort((x, y) => x.seriesIndex! - y.seriesIndex!);
-    const first = before[0] ?? b;
+    const first = seriesBefore(b, inOrder, phase) ?? b;
     if (running.has(first.sha256) || resting(first, phase) || out.includes(first)) continue;
     out.push(first);
   }
@@ -277,8 +318,9 @@ async function importFile(sha256: string) {
   }
 }
 
-/** Whether NVIDIA is busy with marks: a book being marked that isn't being researched on the web. */
+/** Whether NVIDIA is busy with marks: a book being marked that isn't being researched on the web, while marks aren't paused. */
 function marking(): boolean {
+  if (paused('marks')) return false;
   return [...running.values()].some((j) => j.phase === 'marks' && !researching.has(j.b.key));
 }
 
@@ -294,7 +336,7 @@ function hold() {
  * up for good.
  */
 async function research(b: QueueBook, phase: Phase) {
-  if (!can.research || researched(b)) return;
+  if (!researchOn() || researched(b)) return;
   researching.add(b.key);
   hold();
   try {
@@ -308,13 +350,20 @@ async function research(b: QueueBook, phase: Phase) {
   }
 }
 
+/** Whether there's research from the web: the harness is here, and the admin page has it on. */
+function researchOn(): boolean {
+  return can.research && control.marker.research;
+}
+
 async function markJob(b: QueueBook, lbs: Balancers) {
   if (!isFetched(b.key)) await fetchBook(b);
   const book = loadBook(b.key);
   await research(b, 'marks');
+  stopIfStopped();
   if (!existsSync(castByFile(book))) await castPass(book, lbs.lb);
   try {
     await markBook(b.key, lbs.lb, lbs.top, {});
+    stopIfStopped();
     await importFile(b.sha256);
   } finally {
     stageOf.delete(b.key);
@@ -495,8 +544,10 @@ async function notesJob(b: QueueBook, lbs: Balancers) {
   const row = await serverFile(b);
   const book = await sameBook(b, row, 'notes');
   await research(b, 'notes');
+  stopIfStopped();
   matchCast(book, row);
   await writeNotes(b.key, lbs.notes, lbs.review, { 'no-pack': true });
+  stopIfStopped();
   await putBack(withNotes(row, book), row.made, 'notes');
 }
 
@@ -505,8 +556,10 @@ async function musicJob(b: QueueBook, lbs: Balancers) {
   const row = await serverFile(b);
   const book = await sameBook(b, row, 'music');
   await research(b, 'music');
+  stopIfStopped();
   try {
     const score = await scoreBook(b, book, lbs.music);
+    stopIfStopped();
     await putBack(withMusic(row, score, musicBy(book)), row.made, 'music');
   } finally {
     musicStage.delete(b.key);
@@ -530,10 +583,12 @@ async function uploadJob(b: QueueBook) {
     saveSoundtrack({ ...upload.soundtrack, name: seriesName(b) });
     progress.of = upload.score.tracks.length;
     for (const t of upload.score.tracks) {
+      await whilePaused();
       musicStage.set(b.key, `Keeping its tracks in the file store, ${progress.done + 1} of ${progress.of}`);
       await store(t.id);
       progress.done++;
     }
+    stopIfStopped();
     musicStage.set(b.key, 'Saving');
     await putBack(withMusic(row, upload.score, upload.by), row.made, 'music');
     await dropUpload(b.sha256);
@@ -543,26 +598,46 @@ async function uploadJob(b: QueueBook) {
   }
 }
 
-/** Starts a book's work without waiting for it. When it ends, job_runs hears how it went. */
+/**
+ * Starts a book's work without waiting for it, as its job (jobs.ts). When it ends, job_runs hears
+ * how it went. A book the admin page stopped, or sent back to do its step again, hasn't failed.
+ */
 function start(b: QueueBook, phase: Phase, work: () => Promise<void>, pool: pg.Pool) {
-  running.set(b.sha256, { b, phase, since: Date.now() });
+  const job: Job = { b, phase, since: Date.now(), ctx: newJob(b.key, b.title, phase), step: '', stepSince: Date.now(), seen: new Set() };
+  running.set(b.sha256, job);
   hold();
-  console.log(`${clock()} ${b.title}: ${phase} start`);
   const t0 = Date.now();
-  work()
+  const run = async () => {
+    console.log(`${clock()} ${b.title}: ${phase} start`);
+    await work();
+  };
+  runIn(job.ctx, run)
     .then(async () => {
       failuresOf(phase).delete(b.sha256);
       running.delete(b.sha256);
       ended.add(b.sha256);
       console.log(`${clock()} ${b.title}: ${phase} done, in ${mins((Date.now() - t0) / 1000)}`);
+      wake();
       await recordOk(pool, JOB, liveNow()).catch(() => {});
     })
     .catch(async (e: unknown) => {
+      if (job.cut === 'stop') {
+        console.log(`${clock()} ${b.title}: ${phase} stopped from the admin page`);
+        return;
+      }
+      if (job.cut === 'redo') {
+        undoStep(b, phase, job.step);
+        failuresOf(phase).delete(b.sha256);
+        console.log(`${clock()} ${b.title}: ${phase} does its step again, from the admin page`);
+        wake();
+        return;
+      }
       const why = message(e);
       const list = failuresOf(phase);
       const f = list.get(b.sha256) ?? { count: 0, next: 0 };
       f.count++;
-      const secs = jitter(Math.min(RETRY_CAP_S, RETRY_FIRST_S * 2 ** (f.count - 1)));
+      const cap = control.marker.retryCapMinutes * 60;
+      const secs = jitter(Math.min(cap, RETRY_FIRST_S * 2 ** (f.count - 1)));
       f.next = Date.now() + secs * 1000;
       f.why = why.slice(0, 300);
       list.set(b.sha256, f);
@@ -653,17 +728,212 @@ export function progressOf(key: string, phase: Phase, parts: number[] | null): P
   return { step, parts: done, of: parts.length, percent };
 }
 
-/** A book in the queue, with how its last tries went when they failed. */
-export interface Waiting {
+/** Each task's steps, by the admin page's keys (frontend/src/admin/types.ts, STEPS), in order. */
+const STEP_KEYS: Record<Phase, string[]> = {
+  marks: ['fetch', 'research', 'cast', 'mark', 'check', 'redo', 'settle', 'voices', 'save'],
+  music: ['fetch', 'research', 'gather', 'plan', 'score', 'check', 'store', 'save'],
+  notes: ['fetch', 'research', 'roster', 'write', 'check', 'review', 'save'],
+};
+/** Music uploaded from the admin page goes through steps of its own. */
+const UPLOAD_KEYS = ['read', 'store', 'save'];
+/** The steps done part by part, whose parts the page shows one by one. */
+const PART_STEPS = new Set(['mark', 'redo', 'score', 'write']);
+
+/** The admin page's key for the step progressOf says a book is on. */
+export function stepKey(phase: Phase, step: string, upload: boolean): string {
+  if (upload) {
+    if (step.startsWith('Keeping')) return 'store';
+    if (step === 'Saving') return 'save';
+    return 'read';
+  }
+  if (step === 'Fetching the book') return 'fetch';
+  if (step === 'Researching it on the web') return 'research';
+  if (step === 'Saving') return 'save';
+  if (phase === 'marks') {
+    if (step.startsWith('Reading the cast')) return 'cast';
+    if (step.startsWith('Marking who speaks')) return 'mark';
+    if (step.startsWith('Marking again')) return 'redo';
+    if (step.startsWith('Settling')) return 'settle';
+    if (step.startsWith('Casting')) return 'voices';
+    return 'check';
+  }
+  if (phase === 'music') {
+    if (step === GATHERING) return 'gather';
+    if (step.startsWith('Planning')) return 'plan';
+    if (step.startsWith('Scoring')) return 'score';
+    if (step.startsWith('Fixing')) return 'check';
+    if (step.startsWith('Keeping')) return 'store';
+    // Getting ready: its file from the server, and the book.
+    return 'fetch';
+  }
+  if (step.startsWith('Listing')) return 'roster';
+  if (step.startsWith('Writing')) return 'write';
+  if (step.startsWith('Checking')) return 'check';
+  return 'review';
+}
+
+/** A book's part as the admin page shows it: done, being done, done by the backup model, or still to do. */
+export type PartState = 'done' | 'now' | 'backup' | 'wait';
+
+/** Which of a book's parts are done, from what's on disk: for its marks, the model each was done by. */
+function doneParts(key: string, phase: Phase): Map<number, string> {
+  const out = new Map<number, string>();
+  if (phase === 'marks') {
+    const led = marksLedger({ key } as Book);
+    for (const n of marksFiles(key)) out.set(n, led[n]?.model ?? '');
+    return out;
+  }
+  let parts: Record<number, unknown> = notesLedger({ key }).parts;
+  if (phase === 'music') parts = musicLedger({ key }).parts;
+  for (const n of Object.keys(parts)) out.set(Number(n), '');
+  return out;
+}
+
+/** Every part of a book on a step done part by part, in order. */
+export function partStates(j: { b: { key: string }; phase: Phase; ctx: JobCtx }, parts: number[]): PartState[] {
+  const done = doneParts(j.b.key, j.phase);
+  const primaries = new Set(PRIMARY.map((r) => r.name));
+  return parts.map((n) => {
+    if (j.ctx.parts.has(n)) return 'now';
+    const model = done.get(n);
+    if (model === undefined) return 'wait';
+    if (j.phase === 'marks' && model && !primaries.has(model)) return 'backup';
+    return 'done';
+  });
+}
+
+/** A book being worked on, as the admin page shows it, step by step. */
+export interface Working {
+  /** The book file's SHA-256. */
+  id: string;
   title: string;
   task: Phase;
+  /** Music uploaded from the admin page, going in. */
+  upload?: boolean;
+  step: string;
+  /** Steps it doesn't take: ones it found done already, or research while it's off. */
+  skipped: string[];
+  since: string;
+  stepSince: string;
+  parts: PartState[];
+  model: string | null;
+  account: string | null;
+  calls: number;
+  /** What it printed, newest first. */
+  log: LogLine[];
+}
+
+function workingOf(j: Job): Working {
+  const upload = uploading.has(j.b.key);
+  const parts = partsOf(j);
+  const step = stepKey(j.phase, progressOf(j.b.key, j.phase, parts).step, upload);
+  if (step !== j.step) {
+    j.step = step;
+    j.stepSince = Date.now();
+  }
+  j.seen.add(step);
+  let keys = STEP_KEYS[j.phase];
+  if (upload) keys = UPLOAD_KEYS;
+  const at = keys.indexOf(step);
+  const skipped = keys.filter((k, i) => i < at && !j.seen.has(k));
+  if (at < keys.indexOf('research') && !researchOn()) skipped.push('research');
+  const w: Working = {
+    id: j.b.sha256,
+    title: j.b.title,
+    task: j.phase,
+    step,
+    skipped,
+    since: new Date(j.since).toISOString(),
+    stepSince: new Date(j.stepSince).toISOString(),
+    parts: [],
+    model: j.ctx.model,
+    account: j.ctx.account,
+    calls: j.ctx.calls,
+    log: j.ctx.log.slice(-LOG_SHOWN).reverse(),
+  };
+  if (upload) w.upload = true;
+  if (parts && PART_STEPS.has(step)) w.parts = partStates(j, parts);
+  return w;
+}
+
+/**
+ * Clears what a book's step made, so it does it again from its start (the admin page's Redo step).
+ * A step that keeps nothing of its own, or keeps it with its series (research, the soundtrack),
+ * just starts again, carrying on its chat.
+ */
+function undoStep(b: QueueBook, phase: Phase, step: string) {
+  const dir = bookDir(b.key);
+  const gone = (...names: string[]) => {
+    for (const name of names) rmSync(join(dir, name), { recursive: true, force: true });
+  };
+  if (step === 'research') gone('research-by.json', 'web.md');
+  if (phase === 'marks') {
+    if (step === 'cast') gone('cast-by.json', 'cast.json');
+    if (step === 'mark') gone('marks', 'marked-by.json', 'failed');
+    return;
+  }
+  if (phase === 'music') {
+    if (uploading.has(b.key)) return;
+    const led = musicLedger({ key: b.key });
+    if (step === 'gather') gone('music/tracks.json');
+    if (step === 'plan') {
+      gone('music/plan.txt');
+      delete led.plan;
+    }
+    if (step === 'score') {
+      gone(...partFiles(join(dir, 'music')).map((f) => `music/${f}`));
+      led.parts = {};
+    }
+    if (step === 'check') delete led.fixed;
+    if (step === 'store') delete led.stored;
+    if (existsSync(musicLedgerFile({ key: b.key }))) writeJson(musicLedgerFile({ key: b.key }), led);
+    return;
+  }
+  const led = notesLedger({ key: b.key });
+  if (step === 'roster') {
+    gone('notes/roster.txt');
+    delete led.roster;
+  }
+  if (step === 'write') {
+    gone(...partFiles(join(dir, 'notes')).map((f) => `notes/${f}`));
+    led.parts = {};
+  }
+  if (step === 'check') delete led.fixed;
+  if (step === 'review') delete led.reviewed;
+  if (existsSync(notesLedgerFile({ key: b.key }))) writeJson(notesLedgerFile({ key: b.key }), led);
+}
+
+/** A folder's part files (0001.txt and so on). */
+function partFiles(folder: string): string[] {
+  if (!existsSync(folder)) return [];
+  return readdirSync(folder).filter((f) => /^\d{4}\.txt$/.test(f));
+}
+
+/** A book in the queue: why it waits, when it's for more than its turn, and how its last tries went when they failed. */
+export interface Waiting {
+  id: string;
+  title: string;
+  task: Phase;
+  waitsFor?: string;
   failed?: { times: number; next: string; why: string };
 }
 
-function waiting(b: QueueBook, task: Phase): Waiting {
+function waiting(b: QueueBook, task: Phase, waitsFor: string | null): Waiting {
+  const w: Waiting = { id: b.sha256, title: b.title, task };
+  if (waitsFor) w.waitsFor = waitsFor;
   const f = failuresOf(task).get(b.sha256);
-  if (!f) return { title: b.title, task };
-  return { title: b.title, task, failed: { times: f.count, next: new Date(f.next).toISOString(), why: f.why ?? '' } };
+  if (f) w.failed = { times: f.count, next: new Date(f.next).toISOString(), why: f.why ?? '' };
+  return w;
+}
+
+/** Why a book's music or notes wait, past their turn: an earlier volume, the marks, the music, or an account. */
+function laterWaitsFor(b: QueueBook, want: QueueBook[], phase: Phase): string | null {
+  const before = seriesBefore(b, want, phase);
+  if (before) return volumeOf(before);
+  if (marking()) return 'marks';
+  if (phase === 'music' && !accountHere) return 'an Antigravity account';
+  if (phase === 'notes' && [...running.values()].some(scoring)) return 'music';
+  return null;
 }
 
 /** Every book waiting, in the order it goes: all the marks, then the music, then the notes. */
@@ -671,15 +941,21 @@ export function queueOf(books: QueueBook[], server: Map<string, OnServer>): Wait
   const out: Waiting[] = [];
   for (const b of books) {
     if (running.has(b.sha256) || ended.has(b.sha256)) continue;
-    if (needs(b, server) === 'marks') out.push(waiting(b, 'marks'));
+    if (needs(b, server) !== 'marks') continue;
+    const first = castFirst(b, books, server);
+    let why: string | null = null;
+    if (first) why = volumeOf(first);
+    out.push(waiting(b, 'marks', why));
   }
-  for (const b of musicQueue(books, server)) {
+  const music = musicQueue(books, server);
+  for (const b of music) {
     if (running.has(b.sha256) || ended.has(b.sha256)) continue;
-    out.push(waiting(b, 'music'));
+    out.push(waiting(b, 'music', laterWaitsFor(b, music, 'music')));
   }
-  for (const b of notesQueue(books, server)) {
+  const notes = notesQueue(books, server);
+  for (const b of notes) {
     if (running.has(b.sha256) || ended.has(b.sha256)) continue;
-    out.push(waiting(b, 'notes'));
+    out.push(waiting(b, 'notes', laterWaitsFor(b, notes, 'notes')));
   }
   return out;
 }
@@ -689,7 +965,7 @@ export interface Live {
   at: string;
   books: number;
   finished: number;
-  working: Array<Progress & { title: string; task: Phase; since: string }>;
+  working: Working[];
   queue: Waiting[];
   /** While every Antigravity account is out of Gemini, until when: research and soundtracks wait for it. */
   limitedUntil?: string;
@@ -700,12 +976,7 @@ export interface Live {
 function liveNow(): Live {
   const books = seen?.books ?? [];
   const server = seen?.server ?? new Map<string, OnServer>();
-  const working = [...running.values()].map((j) => ({
-    title: j.b.title,
-    task: j.phase,
-    since: new Date(j.since).toISOString(),
-    ...progressOf(j.b.key, j.phase, partsOf(j)),
-  }));
+  const working = [...running.values()].map(workingOf);
   const live: Live = {
     at: new Date().toISOString(),
     books: books.length,
@@ -719,7 +990,7 @@ function liveNow(): Live {
   return live;
 }
 
-/** Keeps the status page's live view current: whenever something changes, and every minute anyway. */
+/** Keeps the status page's live view current: whenever something changes, and every minute anyway. Every second while the admin page is open. */
 async function liveLoop(pool: pg.Pool) {
   let last = '';
   let wrote = 0;
@@ -737,8 +1008,79 @@ async function liveLoop(pool: pg.Pool) {
     } catch {
       /* tried again in a moment */
     }
-    await sleep(LIVE_S * 1000);
+    let secs = LIVE_S;
+    if (Date.now() < watchedUntil) secs = WATCHED_LIVE_S;
+    await sleep(secs * 1000);
   }
+}
+
+/** Waits `ms`, or less when wake() is called meanwhile. */
+function rest(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (woken) {
+      woken = false;
+      resolve();
+      return;
+    }
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      wakeUp = null;
+      woken = false;
+      resolve();
+    }
+    wakeUp = done;
+  });
+}
+
+/** A round as soon as the one going ends, or now when it's resting. */
+function wake() {
+  woken = true;
+  if (wakeUp) wakeUp();
+}
+
+/** The admin page's settings, taken in: pauses, the first model, and a round to start what they let start. */
+function applySettings(s: AdminState) {
+  pauses.all = s.marker.paused;
+  pauses.groups.clear();
+  for (const t of MARKER_TASKS) {
+    if (!s.marker.tasks[t]) pauses.groups.add(t);
+  }
+  setFirst(s.marker.first);
+  hold();
+  wake();
+}
+
+/** What the admin page asks once: a failed book tried now, a book stopped, or its step done again. */
+function asked(c: Command) {
+  if (c.kind === 'watching') {
+    watchedUntil = Date.now() + WATCHED_FOR_S * 1000;
+    return;
+  }
+  const id = String(c.args.id ?? '');
+  const task = c.args.task as Phase;
+  if (c.kind === 'retry') {
+    const f = failuresOf(task).get(id);
+    if (f) f.next = 0;
+    wake();
+    return;
+  }
+  const j = running.get(id);
+  if (!j || j.phase !== task) return;
+  if (c.kind === 'stop') j.cut = 'stop';
+  else if (c.kind === 'redo') j.cut = 'redo';
+  else return;
+  j.ctx.controller.abort();
+}
+
+/** What the marker prints, into the log of the book it's about too, when it's printed inside one's job. */
+function logIntoJobs() {
+  const print = console.log.bind(console);
+  console.log = (...args: unknown[]) => {
+    print(...args);
+    const job = current();
+    if (job) note(job, format(...args));
+  };
 }
 
 /** What the server holds now, with ai/out kept the same when `sync`. */
@@ -797,9 +1139,10 @@ async function plan() {
   console.log(`${books.length} books with the AI switch on: ${marks.length} to mark, then ${music.length} to score with music, then ${notes.length} to write notes for.`);
   const unvoiced = books.filter((b) => server.get(b.sha256)?.voiced === false);
   if (unvoiced.length) console.log(`${unvoiced.length} books marked before voices were picked get them at random first.`);
-  if (marks.length) console.log(`\nTo mark, ${MARKING} at a time, in this order:\n${marks.map((b) => `  ${b.title}`).join('\n')}`);
-  if (music.length) console.log(`\nThen music, ${MUSICING} at a time, in this order:\n${music.map((b) => `  ${b.title}`).join('\n')}`);
-  if (notes.length) console.log(`\nThen notes, ${NOTING} at a time, in this order:\n${notes.map((b) => `  ${b.title}`).join('\n')}`);
+  const at = control.marker.atOnce;
+  if (marks.length) console.log(`\nTo mark, ${at.marks} at a time, in this order:\n${marks.map((b) => `  ${b.title}`).join('\n')}`);
+  if (music.length) console.log(`\nThen music, ${at.music} at a time, in this order:\n${music.map((b) => `  ${b.title}`).join('\n')}`);
+  if (notes.length) console.log(`\nThen notes, ${at.notes} at a time, in this order:\n${notes.map((b) => `  ${b.title}`).join('\n')}`);
   const first = notes[0];
   if (!first) return;
   if (!isFetched(first.key)) await fetchBook(first);
@@ -828,44 +1171,67 @@ async function startUploads(books: QueueBook[], pool: pg.Pool) {
   }
   for (const sha256 of waiting) {
     const b = books.find((o) => o.sha256 === sha256);
-    if (!b || running.has(sha256) || resting(b, 'music')) continue;
+    if (!b || running.has(sha256) || resting(b, 'music') || held(b, 'music')) continue;
     start(b, 'music', () => uploadJob(b), pool);
   }
 }
 
-/** One look at the books, starting whatever can start. */
+/** Kept back from a task on the admin page. */
+function held(b: QueueBook, phase: Phase): boolean {
+  return control.held.includes(queueKey(b.sha256, phase));
+}
+
+/** Of these books, the ones not kept back, the ones the admin page asked for next first. */
+function ready(books: QueueBook[], phase: Phase): QueueBook[] {
+  const free = books.filter((b) => !held(b, phase));
+  return nextFirst(free, (b) => queueKey(b.sha256, phase), control.next);
+}
+
+/**
+ * One look at the books, starting whatever can start: nothing while the admin page has the marker
+ * paused, no task it switched off, and as many books at once as it says.
+ */
 async function round(lbs: Balancers, pool: pg.Pool) {
   const { books, server } = await look(true);
   if (can.music) accountHere = await servesGemini();
   seen = { books, server };
   ended.clear();
+  const m = control.marker;
+  if (m.paused) return;
   // Voices the same through a series, or at random, need no model, so they go in before anything starts.
   await voicesForOld(books, server);
-  const byPhase = (p: Phase) => [...running.values()].filter((j) => j.phase === p).length;
+  const free = (p: Phase) => {
+    const now = [...running.values()].filter((j) => j.phase === p).length;
+    return Math.max(0, m.atOnce[p] - now);
+  };
 
-  const marks = toMark(books, server);
-  for (const b of marks.slice(0, Math.max(0, MARKING - byPhase('marks')))) {
-    start(b, 'marks', () => markJob(b, lbs), pool);
+  if (m.tasks.marks) {
+    for (const b of ready(toMark(books, server), 'marks').slice(0, free('marks'))) {
+      start(b, 'marks', () => markJob(b, lbs), pool);
+    }
   }
   // Uploaded music needs no model, so it goes in while books are being marked too.
-  if (can.uploads) await startUploads(books, pool);
+  if (can.uploads && m.tasks.music) await startUploads(books, pool);
   // Music only while no book is being marked, past its research, and an Antigravity account is connected.
   if (marking()) return;
-  if (accountHere) {
-    for (const b of toMusic(books, server).slice(0, Math.max(0, MUSICING - byPhase('music')))) {
+  if (accountHere && m.tasks.music) {
+    for (const b of ready(toMusic(books, server), 'music').slice(0, free('music'))) {
       start(b, 'music', () => musicJob(b, lbs), pool);
     }
   }
   // Notes only while no book's music is being scored, past its research and soundtrack.
   if ([...running.values()].some(scoring)) return;
-  for (const b of toNote(books, server).slice(0, Math.max(0, NOTING - byPhase('notes')))) {
-    start(b, 'notes', () => notesJob(b, lbs), pool);
+  if (m.tasks.notes) {
+    for (const b of ready(toNote(books, server), 'notes').slice(0, free('notes'))) {
+      start(b, 'notes', () => notesJob(b, lbs), pool);
+    }
   }
 }
 
-/** Whether a job is a book's music using NVIDIA: not being researched, not gathering its series' soundtrack, and not uploaded. */
+/** Whether a job is a book's music using NVIDIA: not paused, not being researched, not gathering its series' soundtrack, and not uploaded. */
 function scoring(j: Job): boolean {
   if (j.phase !== 'music') return false;
+  if (paused('music')) return false;
   if (researching.has(j.b.key)) return false;
   if (uploading.has(j.b.key)) return false;
   return musicStage.get(j.b.key) !== GATHERING;
@@ -925,8 +1291,13 @@ export async function runMarker(dry: boolean) {
   const pool = prodPool('breader-ai-marker');
   let refused = '';
   let alive = 0;
-  console.log(`${clock()} The marker is running: a look about every ${POLL_S} s, up to ${MARKING} books marked, ${MUSICING} scored and ${NOTING} given notes at once.`);
+  logIntoJobs();
+  applySettings(await readControl(pool));
+  woken = false;
+  const at = control.marker.atOnce;
+  console.log(`${clock()} The marker is running: a look about every ${POLL_S} s, up to ${at.marks} books marked, ${at.music} scored and ${at.notes} given notes at once.`);
   void liveLoop(pool);
+  void controlLoop(pool, applySettings, asked);
   for (;;) {
     try {
       await round(lbs, pool);
@@ -946,6 +1317,6 @@ export async function runMarker(dry: boolean) {
       await recordError(pool, JOB, new Error(`NVIDIA refuses the key for ${now}. Put a new one in ai/.env and seal it again: npm --prefix ai run seal.`)).catch(() => {});
     }
     refused = now;
-    await sleep(jitter(POLL_S) * 1000);
+    await rest(jitter(POLL_S) * 1000);
   }
 }

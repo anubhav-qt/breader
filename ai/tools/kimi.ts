@@ -23,6 +23,25 @@ export const LADDER: Rung[] = [
 ];
 export const TOP = LADDER[0];
 export const PRIMARY = LADDER.filter((r) => r.primary);
+
+/** The admin page's names for the models it can put first, and theirs here. */
+const FIRST: Record<string, string> = { 'kimi-k3': 'kimi-k3', 'nemotron': 'nemotron-3-ultra' };
+
+/**
+ * Puts a model first, as the admin page asks (the marker's "First model"): it marks and writes,
+ * and the other only steps in while it's down. LADDER and PRIMARY change in place, so every
+ * balancer already made follows them from its next call.
+ */
+export function setFirst(first: string) {
+  const name = FIRST[first] ?? first;
+  const i = LADDER.findIndex((r) => r.name === name);
+  if (i < 0) return;
+  if (i === 0 && LADDER[0].primary) return;
+  const [r] = LADDER.splice(i, 1);
+  LADDER.unshift(r);
+  LADDER.forEach((rung, k) => { rung.primary = k === 0; });
+  PRIMARY.splice(0, PRIMARY.length, ...LADDER.filter((rung) => rung.primary));
+}
 const LONG: Record<string, string> = { 'kimi-k3': 'Kimi K3 (reasoning high, NVIDIA)', 'deepseek-v4.1-flash': 'DeepSeek V4.1 Flash (thinking, NVIDIA)' };
 /** A model's long name for the pack's "by". */
 export const longName = (model: string) => LONG[model] ?? model;

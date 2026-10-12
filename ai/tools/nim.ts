@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { Stopped } from './jobs.ts';
 import { AI } from './lib.ts';
 import { unseal } from './seal.ts';
 
@@ -144,6 +145,8 @@ export interface ChatOptions {
   firstS?: number;
   /** Longest silence once the answer has started. */
   idleS?: number;
+  /** Cuts the call off: the admin page stopped its book (jobs.ts). */
+  signal?: AbortSignal;
 }
 
 function kindOf(status: number): Failure {
@@ -181,7 +184,10 @@ async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Rep
     clearTimeout(timer);
     timer = setTimeout(() => { why = what; ctl.abort(); }, s * 1000);
   };
+  if (o.signal?.aborted) throw new Stopped();
   arm(o.firstS ?? 600, 'no first token');
+  const cut = () => ctl.abort();
+  o.signal?.addEventListener('abort', cut, { once: true });
 
   let text = '';
   let judgedAt = 0;
@@ -253,11 +259,13 @@ async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Rep
       }
     }
   } catch (e) {
+    if (o.signal?.aborted) throw new Stopped();
     if (e instanceof CallError) throw e;
     if (why) throw new CallError('slow', why);
     throw new CallError('slow', `network: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160));
   } finally {
     clearTimeout(timer);
+    o.signal?.removeEventListener('abort', cut);
   }
 
   text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();

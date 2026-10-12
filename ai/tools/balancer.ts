@@ -2,6 +2,7 @@ import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SHRINKS } from './kimi.ts';
 import { chat, CallError, type Failure, type Judge, type Msg, type Reply } from './nim.ts';
+import { callOut, current, partOf, whilePaused } from './jobs.ts';
 import { WORK } from './lib.ts';
 
 /*
@@ -31,6 +32,8 @@ import { WORK } from './lib.ts';
  *   call the same model with the same key.
  * - A `low` Balancer's calls wait while Balancer.holdLow is on. The marker turns it on while a book
  *   is being marked, so a new book's marks go before anyone's notes.
+ * - Inside one of the marker's jobs (jobs.ts), a call waits while the admin page has it paused, gives
+ *   up when the book is stopped, and counts as the book's while it's out.
  *
  * Every call is logged to ai/work/_calls.jsonl (timings and token counts, never text), which is
  * how the numbers above get checked.
@@ -110,9 +113,6 @@ export class Balancer {
   /** While on, a `low` Balancer's calls wait before asking. Calls already out finish. */
   static holdLow = false;
 
-  /** The top rungs: the primary ones at the start of the ladder, or just the first. */
-  private top: Rung[];
-
   constructor(
     public ladder: Rung[],
     private opts: Options = { waitForTopS: 300, strikesToFall: 3, maxTries: 12 },
@@ -120,8 +120,12 @@ export class Balancer {
     for (const r of ladder) {
       if (!STATES.has(r.model)) STATES.set(r.model, { name: r.name, inFlight: 0, coolUntil: 0, strikes: 0, gone: false });
     }
-    const lead = ladder.findIndex((r) => !r.primary);
-    this.top = ladder.slice(0, lead < 0 ? ladder.length : Math.max(1, lead));
+  }
+
+  /** The top rungs: the primary ones at the start of the ladder, or just the first. As it is now: the admin page can put another model first (kimi.ts, setFirst). */
+  private get top(): Rung[] {
+    const lead = this.ladder.findIndex((r) => !r.primary);
+    return this.ladder.slice(0, lead < 0 ? this.ladder.length : Math.max(1, lead));
   }
 
   /** The models refusing the key, by name, until one of them answers again. */
@@ -171,6 +175,7 @@ export class Balancer {
   /** Waits for a model free for this call, and first, for a low call, until holdLow is off. */
   private async next(skip: Map<string, string>): Promise<Rung> {
     for (;;) {
+      await whilePaused();
       if (this.opts.low && Balancer.holdLow) {
         await sleep(jitter(10_000));
         continue;
@@ -219,10 +224,11 @@ export class Balancer {
       const s = STATES.get(r.model)!;
       const level = levels.get(r.model) ?? 0;
       s.inFlight++;
+      const back = callOut(r.name, 'NVIDIA', partOf(label));
       const at = new Date().toISOString();
       let pause = 0;
       try {
-        const reply = await chat(r.model, sized(level), { maxTokens: r.maxTokens, extra: r.extra, judge });
+        const reply = await chat(r.model, sized(level), { maxTokens: r.maxTokens, extra: r.extra, judge, signal: current()?.controller.signal });
         s.strikes = 0;
         s.coolUntil = 0;
         s.gone = false;
@@ -260,6 +266,7 @@ export class Balancer {
         if (tries >= this.opts.maxTries) throw new Error(`No answer after ${tries} tries; the last: ${r.name} ${e.message}`);
       } finally {
         s.inFlight--;
+        back();
       }
       if (pause) await sleep(pause);
     }

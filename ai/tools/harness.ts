@@ -4,6 +4,7 @@ import type { Static, TSchema } from 'typebox';
 import { runAgentLoopContinue, type AgentLoopConfig, type AgentMessage, type AgentTool, type StreamFn } from '../pi/pi-agent/src/index.ts';
 import { estimateContextTokens, estimateMessageTokens, streamSimple, toToolDeclaration, Type, type AssistantMessage, type Message, type Model, type UserMessage } from '../pi/pi-ai/src/index.ts';
 import { backoffS, jitter, log } from './balancer.ts';
+import { callOut, current, stopIfStopped, whilePaused } from './jobs.ts';
 import { WORK } from './lib.ts';
 import { geminiModels, geminiOpensAt, noHarness, proxy, THINKING } from './proxy.ts';
 
@@ -460,6 +461,8 @@ export async function runAgent(task: Task, given?: Brain): Promise<string> {
 
   const skip = new Map<string, string>();
   let startedAt = 0;
+  // The call out, counted as the marker's book's while it is (jobs.ts).
+  let back: (() => void) | null = null;
   const config: AgentLoopConfig = {
     model: using.models[0],
     reasoning: THINKING,
@@ -469,8 +472,11 @@ export async function runAgent(task: Task, given?: Brain): Promise<string> {
     toolExecution: 'sequential',
     convertToLlm: (all) => all,
     prepareRequest: async () => {
+      await whilePaused();
       const model = await choose(using.models, skip);
       startedAt = Date.now();
+      back?.();
+      back = callOut(model.id, 'Antigravity', null);
       return { model };
     },
     // One turn at a time: the run keeps it, and looks at the chat's size, before the next.
@@ -503,13 +509,22 @@ export async function runAgent(task: Task, given?: Brain): Promise<string> {
   /** One call, and the tool calls in its answer run: the answer and their results. A failed call is waited out and made again. */
   async function turn(messages: AgentMessage[]): Promise<AgentMessage[]> {
     for (;;) {
-      const fresh = await runAgentLoopContinue({ messages: [...messages], tools }, config, noEvents, undefined, using.stream);
+      let fresh: AgentMessage[];
+      try {
+        fresh = await runAgentLoopContinue({ messages: [...messages], tools }, config, noEvents, current()?.controller.signal, using.stream);
+      } finally {
+        back?.();
+        back = null;
+      }
       const answer = answerIn(fresh);
       if (answer && answer.stopReason === 'error') {
         await afterFailure(answer);
         continue;
       }
-      if (answer && answer.stopReason === 'aborted') throw new Error('The run was stopped.');
+      if (answer && answer.stopReason === 'aborted') {
+        stopIfStopped();
+        throw new Error('The run was stopped.');
+      }
       return fresh;
     }
   }
