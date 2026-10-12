@@ -319,7 +319,8 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
           {models}
         </CastSection>
       )}
-      {paired && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
+      {/* Whose voice reads a story told by no one: 2 voices only. */}
+      {paired && !characters && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       {mode === 'normal' && <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />}
       <div className="vs-foot">
         {loading ? (
