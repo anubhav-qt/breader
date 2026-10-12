@@ -413,7 +413,7 @@ async function putBack(f: AiFile, was: string, what: string) {
 const voicesSeen = new Map<string, string>();
 
 /** The books by series, each in volume order; a book in none is a series of its own. */
-function bySeries(books: QueueBook[]): Map<string, QueueBook[]> {
+export function bySeries(books: QueueBook[]): Map<string, QueueBook[]> {
   const out = new Map<string, QueueBook[]>();
   for (const b of books) {
     let key = `book:${b.sha256}`;
@@ -452,7 +452,7 @@ async function voicesForOld(books: QueueBook[], server: Map<string, OnServer>) {
 }
 
 /** One series' voices made the same through it, volume by volume. True when nothing was left for later. */
-async function voicesThrough(db: pg.Client, list: QueueBook[]): Promise<boolean> {
+export async function voicesThrough(db: pg.Client, list: QueueBook[]): Promise<boolean> {
   const casts = await castsOnServer(db, list.map((b) => b.sha256));
   const earlier = new Map<string, Voices>();
   let done = true;

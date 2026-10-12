@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import type pg from 'pg';
 import type { AiFile } from '../../../shared/src/ai.ts';
 import type { QueueBook } from '../lib.ts';
 import { answerWith, calls } from './nvidia.ts';
@@ -26,7 +27,7 @@ const { checkFile } = await import('../import.ts');
 const { castByFile, castOf, LADDER, PRIMARY } = await import('../kimi.ts');
 const { bookDir, OUT, readJson } = await import('../lib.ts');
 const { markBook } = await import('../mark.ts');
-const { matchCast, needs, withNotes } = await import('../marker.ts');
+const { bySeries, matchCast, needs, voicesThrough, withNotes } = await import('../marker.ts');
 const { writeNotes } = await import('../notes.ts');
 
 const CAST = `## The book
@@ -179,6 +180,54 @@ test('the next volume reads everyone in the voices they have in the one before, 
   assert.deepEqual(voiceProblems({ gender: 'F' }, marlo.voice!), []);
   assert.ok(cast.find((p) => p.id === 'tobin')?.voice, 'someone new gets voices at random');
   assert.equal(seriesVoices(cast, earlier).changed, 0, 'and once they match, nothing changes');
+});
+
+/** The server's ai_notes, as much as the voices need: each book's cast, its whole file, and putting one back. */
+function fakeServer(files: Map<string, AiFile>): pg.Client {
+  const query = async (sql: string, args: unknown[]) => {
+    if (sql.includes("data->'voices'->'cast' AS cast")) {
+      const shas = (args[0] as string[]).filter((s) => files.has(s));
+      return { rows: shas.map((s) => ({ sha256: s, cast: files.get(s)!.voices.cast })) };
+    }
+    if (sql.startsWith('SELECT data FROM ai_notes')) {
+      const f = files.get(args[0] as string);
+      return { rows: f ? [{ data: f }] : [] };
+    }
+    if (sql.startsWith('UPDATE ai_notes')) {
+      const [sha, data, , , was] = args as [string, string, string, string, string];
+      if (files.get(sha)?.made !== was) return { rowCount: 0 };
+      files.set(sha, JSON.parse(data) as AiFile);
+      return { rowCount: 1 };
+    }
+    throw new Error(`Not a query the voices make: ${sql}`);
+  };
+  return { query } as unknown as pg.Client;
+}
+
+test('the marker reads everyone through a series in their first volume’s voices, on the server too', async () => {
+  const one = readJson<AiFile>(outFile);
+  // Volume 2: Elena with voices of her own at random.
+  const two: AiFile = {
+    ...one,
+    sha256: 'f'.repeat(64),
+    voices: { ...one.voices, cast: one.voices.cast.map((p) => (p.id === 'elena' ? { ...p, voice: { piper: 'kristin', kokoro: 'af_bella' } } : p)) },
+  };
+  const files = new Map([[one.sha256, one], [two.sha256, two]]);
+  const vol = (f: AiFile, i: number): QueueBook => ({ ...b, sha256: f.sha256, key: `lantern-${i}`, title: `Lantern ${i}`, series: 'The Lantern', seriesIndex: i });
+
+  const series = bySeries([vol(two, 2), { ...b, sha256: 'e'.repeat(64), title: 'On its own' }, vol(one, 1)]);
+  assert.deepEqual([...series.values()].map((list) => list.map((x) => x.title)), [['Lantern 1', 'Lantern 2'], ['On its own']], 'each series in volume order, and a book in none on its own');
+
+  assert.equal(await voicesThrough(fakeServer(files), series.get('series:the lantern')!), true);
+  const after = files.get(two.sha256)!;
+  assert.deepEqual(after.voices.cast.find((p) => p.id === 'elena')?.voice, { piper: 'lessac', kokoro: 'af_heart' });
+  assert.notEqual(after.made, two.made, 'a new time, so the app fetches the file again');
+  assert.equal(files.get(one.sha256), one, 'the first volume stays as it was');
+  assert.deepEqual(readJson<AiFile>(join(OUT, `${two.sha256}.json`)), after, 'and ai/out has it too');
+
+  const again = new Map(files);
+  assert.equal(await voicesThrough(fakeServer(again), series.get('series:the lantern')!), true);
+  assert.equal(again.get(two.sha256), after, 'once they match, nothing is put back');
 });
 
 test('a book marked somewhere else gets its cast from the server’s file', async () => {
