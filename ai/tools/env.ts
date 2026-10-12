@@ -87,6 +87,10 @@ function settings(name: string) {
     // Supabase's pooler presents a certificate for its own domain; the connection is still encrypted.
     ssl: env.PRIMARY_SSL === 'require' ? { rejectUnauthorized: false } : undefined,
     connectionTimeoutMillis: 15_000,
+    // A connection the network dropped mid-query gives up instead of waiting for good: a whole
+    // book's file is the most a query sends.
+    keepAlive: true,
+    query_timeout: 120_000,
     application_name: name,
   };
   return { key, config };
@@ -109,9 +113,14 @@ export async function prodClient(name: string): Promise<pg.Client> {
   return client;
 }
 
-/** A pool of one connection, for the marker's lines in job_runs (server/src/jobs/runs.ts takes a pool). */
+/**
+ * A pool of one connection, for the marker's lines in job_runs (server/src/jobs/runs.ts takes a
+ * pool) and the admin page's settings and commands: small queries, given up on after 30 s, so one
+ * the network lost doesn't hold up every one after it. The connection goes with it, and the next
+ * query opens another.
+ */
 export function prodPool(name: string): pg.Pool {
-  const pool = new pg.Pool({ ...settings(name).config, max: 1, idleTimeoutMillis: 60_000 });
+  const pool = new pg.Pool({ ...settings(name).config, query_timeout: 30_000, max: 1, idleTimeoutMillis: 60_000 });
   // An idle connection that drops is opened again by the next query.
   pool.on('error', () => {});
   return pool;
