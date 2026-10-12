@@ -170,21 +170,24 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   /*
    * Where Immersive begins. Begin numbers the paragraphs, and the reader picks: the top of the page,
    * a paragraph by its number, or a tap on one. After the first start, every pause offers the same
-   * again, with Continue in place of the top. Play picks the voice for all of it, until Immersive is
-   * switched off; before that, it's the light.
+   * again, with Continue in place of the top. It starts with a voice reading, and the music on,
+   * each time it's switched on: Read, in its card, is the light at the reader's own pace.
    */
   const [asking, setAsking] = useState(false);
   const [begun, setBegun] = useState(false);
-  const [byVoice, setByVoice] = useState(false);
+  const [byVoice, setByVoice] = useState(canNarrate);
   const going = pacing.running || narration.playing;
   /** The voice waiting on a word's card (SayAs): not a pause that asks where to carry on. */
   const hushed = useRef(false);
   const wasGoing = useRef(false);
   useEffect(() => {
+    if (immersive) setVoicePrefs({ music: true });
+  }, [immersive]);
+  useEffect(() => {
     if (!immersive) {
       setAsking(false);
       setBegun(false);
-      setByVoice(false);
+      setByVoice(canNarrate);
     } else if (going) {
       hushed.current = false;
       setBegun(true);
