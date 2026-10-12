@@ -14,42 +14,42 @@ export function Accounts({ list, admin }: { list: AiAccount[]; admin: Admin }) {
   const [removing, setRemoving] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   return (
-    <section className="ad-card ad-accounts" aria-labelledby="ad-acc-h">
+    <section className="adm-card adm-accounts" aria-labelledby="adm-acc-h">
       <Label>AI accounts</Label>
-      <h2 id="ad-acc-h" className="ad-mid">{list.length} connected</h2>
-      <div className="ad-accs">
+      <h2 id="adm-acc-h" className="adm-mid">{list.length} connected</h2>
+      <div className="adm-accs">
         {list.map((a, i) => {
           const firstOfKind = list.findIndex((x) => x.kind === a.kind) === i;
           return (
-            <div key={a.id} className={`ad-acc${a.problem ? ' is-bad' : ''}`}>
-              <div className="ad-acc-h">
-                <span className="ad-chip">{kindName(a.kind)}</span>
+            <div key={a.id} className={`adm-acc${a.problem ? ' is-bad' : ''}`}>
+              <div className="adm-acc-h">
+                <span className="adm-chip">{kindName(a.kind)}</span>
                 <b>{a.name}</b>
               </div>
-              {a.problem && <p className="ad-bad">{a.problem}</p>}
+              {a.problem && <p className="adm-bad">{a.problem}</p>}
               {a.usage && a.usage.map((u) => {
                 const full = u.usedPercent >= 100;
                 let left = `${Math.round(u.usedPercent)}% used`;
                 if (u.resetsAt && u.usedPercent > 0) left += `, full again ${until(u.resetsAt)}`;
                 return (
-                  <div key={u.label} className="ad-limit">
-                    <span className="ad-limit-l">{u.label}</span>
+                  <div key={u.label} className="adm-limit">
+                    <span className="adm-limit-l">{u.label}</span>
                     <Percent value={u.usedPercent} bad={full} label={`${a.name}, ${u.label}`} />
-                    <span className={full ? 'ad-bad' : 'ad-dim'}>{left}</span>
+                    <span className={full ? 'adm-bad' : 'adm-dim'}>{left}</span>
                   </div>
                 );
               })}
-              {!a.usage && !a.problem && <p className="ad-dim">Its limits couldn’t be read.</p>}
+              {!a.usage && !a.problem && <p className="adm-dim">Its limits couldn’t be read.</p>}
               {removing === a.id ? (
-                <div className="ad-acts is-ask">
+                <div className="adm-acts is-ask">
                   <span>Remove?</span>
-                  <button type="button" className="btn btn-danger ad-small" onClick={() => { setRemoving(null); void admin.removeAccount(a.id); }}>Remove</button>
-                  <button type="button" className="btn btn-ghost ad-small" onClick={() => setRemoving(null)}>Keep</button>
+                  <button type="button" className="btn btn-danger adm-small" onClick={() => { setRemoving(null); void admin.removeAccount(a.id); }}>Remove</button>
+                  <button type="button" className="btn btn-ghost adm-small" onClick={() => setRemoving(null)}>Keep</button>
                 </div>
               ) : (
-                <div className="ad-acts">
-                  {!firstOfKind && <button type="button" className="btn btn-quiet ad-small" onClick={() => admin.useFirst(a.id)}>Use first</button>}
-                  <button type="button" className="btn btn-ghost ad-small" onClick={() => setRemoving(a.id)}>Remove</button>
+                <div className="adm-acts">
+                  {!firstOfKind && <button type="button" className="btn btn-quiet adm-small" onClick={() => admin.useFirst(a.id)}>Use first</button>}
+                  <button type="button" className="btn btn-ghost adm-small" onClick={() => setRemoving(a.id)}>Remove</button>
                 </div>
               )}
             </div>
@@ -58,12 +58,12 @@ export function Accounts({ list, admin }: { list: AiAccount[]; admin: Admin }) {
       </div>
       <AnimatePresence initial={false} mode="wait">
         {connecting ? (
-          <motion.div key="connect" className="ad-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
+          <motion.div key="connect" className="adm-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
             <Connect admin={admin} onDone={() => setConnecting(false)} />
           </motion.div>
         ) : (
           <motion.div key="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <button type="button" className="btn btn-primary ad-wide" onClick={() => setConnecting(true)}>+ Connect</button>
+            <button type="button" className="btn btn-primary adm-wide" onClick={() => setConnecting(true)}>+ Connect</button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -98,22 +98,22 @@ function Connect({ admin, onDone }: { admin: Admin; onDone: () => void }) {
   };
 
   return (
-    <div className="ad-connect">
+    <div className="adm-connect">
       <Seg label="Which account" value={kind} onChange={(k) => { setKind(k); setSignIn(null); setSaid(null); }} options={(Object.keys(KIND_NAMES) as AccountKind[]).map((k) => ({ v: k, label: KIND_NAMES[k] }))} />
-      <ol className="ad-howto">
+      <ol className="adm-howto">
         <li className={signIn ? 'is-done' : undefined}>
-          <button type="button" className="btn btn-quiet ad-small" onClick={() => void open()}>Sign in</button>
+          <button type="button" className="btn btn-quiet adm-small" onClick={() => void open()}>Sign in</button>
         </li>
         <li>
           <span>Paste the localhost address it ends on</span>
-          <div className="ad-paste">
+          <div className="adm-paste">
             <input type="url" placeholder="http://localhost:…" value={address} disabled={!signIn || busy} onChange={(e) => setAddress(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void finish(); }} aria-label="The address the sign-in ended on" />
-            <button type="button" className="btn btn-primary ad-small" disabled={!signIn || !address.trim() || busy} onClick={() => void finish()}>Connect</button>
+            <button type="button" className="btn btn-primary adm-small" disabled={!signIn || !address.trim() || busy} onClick={() => void finish()}>Connect</button>
           </div>
         </li>
       </ol>
-      {said && <p className={said.bad ? 'ad-bad' : 'ad-dim'}>{said.text}</p>}
-      <button type="button" className="btn btn-ghost ad-small" onClick={onDone}>Cancel</button>
+      {said && <p className={said.bad ? 'adm-bad' : 'adm-dim'}>{said.text}</p>}
+      <button type="button" className="btn btn-ghost adm-small" onClick={onDone}>Cancel</button>
     </div>
   );
 }
@@ -138,10 +138,10 @@ export function Workers({ jobs, admin }: { jobs: Job[]; admin: Admin }) {
   if (bad === 1) title = '1 failing';
   if (bad > 1) title = `${bad} failing`;
   return (
-    <section className="ad-card ad-workers" aria-labelledby="ad-jobs-h">
+    <section className="adm-card adm-workers" aria-labelledby="adm-jobs-h">
       <Label>Workers</Label>
-      <h2 id="ad-jobs-h" className={`ad-mid${bad ? ' ad-bad' : ''}`}>{title}</h2>
-      <ul className="ad-jobs">
+      <h2 id="adm-jobs-h" className={`adm-mid${bad ? ' adm-bad' : ''}`}>{title}</h2>
+      <ul className="adm-jobs">
         {shown.map((j) => {
           const about = JOBS[j.name] ?? { name: j.name, about: '' };
           let state = 'ok';
@@ -152,16 +152,16 @@ export function Workers({ jobs, admin }: { jobs: Job[]; admin: Admin }) {
           if (j.running) when = 'Running…';
           if (j.off) when = 'Off';
           return (
-            <li key={j.name} className={`ad-job is-${state}`}>
+            <li key={j.name} className={`adm-job is-${state}`}>
               <i aria-hidden="true" />
-              <div className="ad-job-t" title={about.about}>
+              <div className="adm-job-t" title={about.about}>
                 <b>{about.name}</b>
-                <p className={state === 'bad' ? 'ad-bad' : 'ad-dim'}>
+                <p className={state === 'bad' ? 'adm-bad' : 'adm-dim'}>
                   {state === 'bad' ? `Failed ${ago(j.last_error_at)}: ${j.last_error}` : when}
                 </p>
               </div>
-              <div className="ad-job-acts">
-                <button type="button" className="btn btn-quiet ad-small" disabled={j.running || j.off} onClick={() => admin.runJob(j.name)}>
+              <div className="adm-job-acts">
+                <button type="button" className="btn btn-quiet adm-small" disabled={j.running || j.off} onClick={() => admin.runJob(j.name)}>
                   {j.running ? 'Running' : 'Run now'}
                 </button>
                 <Switch on={!j.off} label={`${about.name} on`} onChange={(on) => admin.jobOn(j.name, on)} />
@@ -197,19 +197,19 @@ export function Music({ admin }: { admin: Admin }) {
   };
 
   return (
-    <section className="ad-card ad-music" aria-labelledby="ad-music-h">
+    <section className="adm-card adm-music" aria-labelledby="adm-music-h">
       <Label>Upload music</Label>
       <div
-        className={`ad-drop${over ? ' is-over' : ''}`}
+        className={`adm-drop${over ? ' is-over' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
       >
-        <h2 id="ad-music-h" className="ad-mid">Drop its .json here</h2>
-        <button type="button" className="btn btn-quiet ad-small" onClick={() => pick.current?.click()}>Pick file</button>
+        <h2 id="adm-music-h" className="adm-mid">Drop its .json here</h2>
+        <button type="button" className="btn btn-quiet adm-small" onClick={() => pick.current?.click()}>Pick file</button>
         <input ref={pick} type="file" accept=".json,application/json" hidden onChange={(e) => { void send(e.target.files?.[0]); e.target.value = ''; }} />
       </div>
-      {said && <p className={said.bad ? 'ad-bad' : 'ad-dim'}>{said.text}</p>}
+      {said && <p className={said.bad ? 'adm-bad' : 'adm-dim'}>{said.text}</p>}
     </section>
   );
 }

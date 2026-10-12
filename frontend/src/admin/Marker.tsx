@@ -41,19 +41,19 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
   if (filter !== 'all') shown = m.queue.filter((q) => q.task === filter);
 
   return (
-    <section className="ad-card ad-marker" aria-labelledby="ad-marker-h">
-      <div className="ad-card-h">
-        <div className="ad-card-t">
+    <section className="adm-card adm-marker" aria-labelledby="adm-marker-h">
+      <div className="adm-card-h">
+        <div className="adm-card-t">
           <Label>AI marker</Label>
-          <h2 id="ad-marker-h" className="ad-big">{m.finished} of {m.books} books done</h2>
-          <p className="ad-sub">{m.working.length} working · {m.queue.length} waiting</p>
+          <h2 id="adm-marker-h" className="adm-big">{m.finished} of {m.books} books done</h2>
+          <p className="adm-sub">{m.working.length} working · {m.queue.length} waiting</p>
         </div>
-        <div className="ad-card-acts">
-          <span className={`ad-run${paused ? ' is-paused' : ''}`}>
+        <div className="adm-card-acts">
+          <span className={`adm-run${paused ? ' is-paused' : ''}`}>
             <span>{paused ? 'Paused' : 'Running'}</span>
             <Switch on={!paused} label="The marker runs" onChange={(on) => admin.settings({ paused: !on })} />
           </span>
-          <button type="button" className={`btn btn-quiet ad-small${setting ? ' is-on' : ''}`} aria-expanded={setting} onClick={() => setSetting(!setting)}>
+          <button type="button" className={`btn btn-quiet adm-small${setting ? ' is-on' : ''}`} aria-expanded={setting} onClick={() => setSetting(!setting)}>
             Settings
           </button>
         </div>
@@ -62,15 +62,15 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
 
       <AnimatePresence initial={false}>
         {setting && (
-          <motion.div key="settings" className="ad-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
+          <motion.div key="settings" className="adm-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
             <Settings s={m.settings} onChange={admin.settings} />
           </motion.div>
         )}
       </AnimatePresence>
 
-      <Label side={<span className="ad-count">{m.working.length}</span>}>Working on</Label>
-      {!m.working.length && <p className="ad-none">Nothing.</p>}
-      <div className="ad-books">
+      <Label side={<span className="adm-count">{m.working.length}</span>}>Working on</Label>
+      {!m.working.length && <p className="adm-none">Nothing.</p>}
+      <div className="adm-books">
         {m.working.map((w) => (
           <WorkingBook
             key={keyOf(w)}
@@ -83,7 +83,7 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
         ))}
       </div>
 
-      <Label side={<span className="ad-count">{m.queue.length}</span>}>Waiting</Label>
+      <Label side={<span className="adm-count">{m.queue.length}</span>}>Waiting</Label>
       {m.queue.length > 0 && (
         <Seg
           label="Show"
@@ -97,8 +97,8 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
           ]}
         />
       )}
-      {!shown.length && <p className="ad-none">Nothing.</p>}
-      <ol className="ad-queue">
+      {!shown.length && <p className="adm-none">Nothing.</p>}
+      <ol className="adm-queue">
         {shown.map((q) => (
           <QueueRow key={keyOf(q)} q={q} first={m.queue.find((x) => x.task === q.task) === q} off={!m.settings.tasks[q.task]} admin={admin} />
         ))}
@@ -122,21 +122,21 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
   }
 
   return (
-    <article className={`ad-work${open ? ' is-open' : ''}${paused ? ' is-paused' : ''}`}>
-      <button type="button" className="ad-work-h" aria-expanded={open} onClick={onOpen}>
+    <article className={`adm-work${open ? ' is-open' : ''}${paused ? ' is-paused' : ''}`}>
+      <button type="button" className="adm-work-h" aria-expanded={open} onClick={onOpen}>
         <Monogram title={w.title} />
-        <span className="ad-work-t">
+        <span className="adm-work-t">
           <b>{w.title}</b>
           <span>{TASK_NAMES[w.task]} · {where}</span>
           <Percent value={percent} tone={tone} label={`${w.title}: ${percent}%`} />
         </span>
-        <span className="ad-pct">{percent}%</span>
+        <span className="adm-pct">{percent}%</span>
       </button>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div key="more" className="ad-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
-            <div className="ad-work-b">
-              <ol className="ad-steps">
+          <motion.div key="more" className="adm-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
+            <div className="adm-work-b">
+              <ol className="adm-steps">
                 {all.map((s) => {
                   const skipped = w.skipped.includes(s.key);
                   const i = steps.findIndex((x) => x.key === s.key);
@@ -149,10 +149,10 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
                       <i aria-hidden="true" />
                       <div>
                         <b>{s.name}</b>
-                        {state === 'skip' && <span className="ad-dim"> · skipped</span>}
+                        {state === 'skip' && <span className="adm-dim"> · skipped</span>}
                         {state === 'now' && (
-                          <div className="ad-now">
-                            <p className="ad-meta">
+                          <div className="adm-now">
+                            <p className="adm-meta">
                               {paused ? 'Paused' : span((Date.now() - new Date(w.stepSince).getTime()) / 1000)}
                               {w.model && ` · ${modelName(w.model)}`}
                               {w.account && ` · ${w.account}`}
@@ -161,7 +161,7 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
                             {w.parts.length > 0 && (
                               <>
                                 <PartDots parts={w.parts} tone={tone} />
-                                <p className="ad-key">
+                                <p className="adm-key">
                                   <span><i className="is-done" />done</span>
                                   <span><i className="is-now" />now</span>
                                   {w.task === 'marks' && <span><i className="is-backup" />backup model</span>}
@@ -176,8 +176,8 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
                   );
                 })}
               </ol>
-              <div className="ad-log">
-                <Label side={<span className="ad-dim">{ago(w.since)}</span>}>Log</Label>
+              <div className="adm-log">
+                <Label side={<span className="adm-dim">{ago(w.since)}</span>}>Log</Label>
                 <ol>
                   {w.log.slice(0, 8).map((l, i) => (
                     <li key={`${l.at}.${i}`} className={l.bad ? 'is-bad' : undefined}>
@@ -187,9 +187,9 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
                   ))}
                 </ol>
               </div>
-              <div className="ad-acts">
-                <button type="button" className="btn btn-quiet ad-small" onClick={() => admin.redoStep(w.id, w.task)}>Redo step</button>
-                <button type="button" className="btn btn-ghost ad-small" onClick={() => admin.stop(w.id, w.task)}>Stop</button>
+              <div className="adm-acts">
+                <button type="button" className="btn btn-quiet adm-small" onClick={() => admin.redoStep(w.id, w.task)}>Redo step</button>
+                <button type="button" className="btn btn-ghost adm-small" onClick={() => admin.stop(w.id, w.task)}>Stop</button>
               </div>
             </div>
           </motion.div>
@@ -206,22 +206,22 @@ function QueueRow({ q, first, off, admin }: { q: Waiting; first: boolean; off: b
   else if (off) why = 'Switched off';
   else if (q.waitsFor) why = `Waits for ${q.waitsFor}`;
   return (
-    <li className={`ad-q${q.held ? ' is-held' : ''}`}>
+    <li className={`adm-q${q.held ? ' is-held' : ''}`}>
       <Monogram title={q.title} size="s" />
-      <div className="ad-q-t">
+      <div className="adm-q-t">
         <b>{q.title}</b>
-        <span className="ad-chip">{TASK_NAMES[q.task]}</span>
-        {why && <p className="ad-dim">{why}</p>}
+        <span className="adm-chip">{TASK_NAMES[q.task]}</span>
+        {why && <p className="adm-dim">{why}</p>}
         {q.failed && (
-          <p className="ad-bad ad-one" title={q.failed.why}>
+          <p className="adm-bad adm-one" title={q.failed.why}>
             Failed ×{q.failed.times} · again {until(q.failed.next)} · {q.failed.why}
           </p>
         )}
       </div>
-      <div className="ad-q-acts">
-        {q.failed && <button type="button" className="btn btn-primary ad-small" onClick={() => admin.retry(q.id, q.task)}>Try now</button>}
-        {!first && !q.failed && <button type="button" className="btn btn-quiet ad-small" onClick={() => admin.next(q.id, q.task)}>Do next</button>}
-        <button type="button" className="btn btn-ghost ad-small" onClick={() => admin.hold(q.id, q.task, !q.held)}>
+      <div className="adm-q-acts">
+        {q.failed && <button type="button" className="btn btn-primary adm-small" onClick={() => admin.retry(q.id, q.task)}>Try now</button>}
+        {!first && !q.failed && <button type="button" className="btn btn-quiet adm-small" onClick={() => admin.next(q.id, q.task)}>Do next</button>}
+        <button type="button" className="btn btn-ghost adm-small" onClick={() => admin.hold(q.id, q.task, !q.held)}>
           {q.held ? 'Let go' : 'Keep back'}
         </button>
       </div>
@@ -235,28 +235,28 @@ const RETRY_CAPS = [15, 60, 360];
 function Settings({ s, onChange }: { s: MarkerSettings; onChange: (patch: Partial<MarkerSettings>) => void }) {
   const tasks: Task[] = ['marks', 'music', 'notes'];
   return (
-    <div className="ad-set">
-      <div className="ad-set-row is-head">
+    <div className="adm-set">
+      <div className="adm-set-row is-head">
         <span />
-        <span className="ad-dim">On</span>
-        <span className="ad-dim">At once</span>
+        <span className="adm-dim">On</span>
+        <span className="adm-dim">At once</span>
       </div>
       {tasks.map((t) => (
-        <div key={t} className="ad-set-row">
+        <div key={t} className="adm-set-row">
           <span>{TASK_NAMES[t]}</span>
           <Switch on={s.tasks[t]} label={`${TASK_NAMES[t]} on`} onChange={(on) => onChange({ tasks: { ...s.tasks, [t]: on } })} />
           <Stepper value={s.atOnce[t]} min={1} max={8} label={`${TASK_NAMES[t]}: books at once`} onChange={(n) => onChange({ atOnce: { ...s.atOnce, [t]: n } })} />
         </div>
       ))}
-      <div className="ad-set-line">
+      <div className="adm-set-line">
         <b>First model</b>
         <Seg label="First model" value={s.first} onChange={(v) => onChange({ first: v })} options={[{ v: 'kimi-k3', label: 'Kimi K3' }, { v: 'nemotron', label: 'Nemotron' }]} />
       </div>
-      <div className="ad-set-line">
+      <div className="adm-set-line">
         <b>Web research</b>
         <Switch on={s.research} label="Research on the web first" onChange={(on) => onChange({ research: on })} />
       </div>
-      <div className="ad-set-line">
+      <div className="adm-set-line">
         <b>Longest retry wait</b>
         <Seg
           label="Longest wait"

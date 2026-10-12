@@ -81,15 +81,15 @@ function Gate({ said, onToken }: { said: string | null; onToken: (token: string)
     if (value.trim()) onToken(value.trim());
   };
   return (
-    <div className="ad">
+    <div className="adm">
       <Header link={null} />
-      <main className="ad-main">
-        <form className="ad-gate" onSubmit={submit}>
-          <div className="ad-paste">
+      <main className="adm-main">
+        <form className="adm-gate" onSubmit={submit}>
+          <div className="adm-paste">
             <input type="password" autoComplete="current-password" placeholder="Admin token" aria-label="Admin token" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
-            <button type="submit" className="btn btn-primary ad-small" disabled={!value.trim()}>Open</button>
+            <button type="submit" className="btn btn-primary adm-small" disabled={!value.trim()}>Open</button>
           </div>
-          {said && <p className="ad-bad">{said}</p>}
+          {said && <p className="adm-bad">{said}</p>}
         </form>
       </main>
     </div>
@@ -98,14 +98,14 @@ function Gate({ said, onToken }: { said: string | null; onToken: (token: string)
 
 function Header({ link }: { link: Link | null }) {
   return (
-    <header className="hdr ad-hdr">
+    <header className="hdr adm-hdr">
       <div className="hdr-start">
         <Logo />
-        <span className="ad-title">Admin</span>
+        <span className="adm-title">Admin</span>
       </div>
       {link && (
         <div className="hdr-actions">
-          <span className={`ad-live${link === 'live' ? ' is-on' : ''}`} title="Changes arrive as they happen">
+          <span className={`adm-live${link === 'live' ? ' is-on' : ''}`} title="Changes arrive as they happen">
             <i aria-hidden="true" />
             {link === 'live' ? 'Live' : 'Connecting'}
           </span>
@@ -132,23 +132,23 @@ function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => v
   useClock();
 
   return (
-    <div className="ad">
+    <div className="adm">
       <Header link={link} />
-      {error && <p className="ad-bad ad-err" role="alert">{error.text}</p>}
+      {error && <p className="adm-bad adm-err" role="alert">{error.text}</p>}
       {snap && (
-        <main className="ad-main">
+        <main className="adm-main">
           {/* Each at its own width: what needs you and the marker wide, the rest narrow, side by side where they fit. */}
-          <div className="ad-board">
-            <div className="ad-col is-wide">
+          <div className="adm-board">
+            <div className="adm-col is-wide">
               <Needs snap={snap} admin={admin} />
               {snap.marker && <MarkerCard m={snap.marker} admin={admin} />}
             </div>
-            <div className="ad-side">
-              <div className="ad-col">
+            <div className="adm-side">
+              <div className="adm-col">
                 <Glance snap={snap} />
                 {snap.accounts && <Accounts list={snap.accounts} admin={admin} />}
               </div>
-              <div className="ad-col">
+              <div className="adm-col">
                 <Workers jobs={snap.status.jobs} admin={admin} />
                 <Music admin={admin} />
               </div>
@@ -218,15 +218,15 @@ function needsOf(s: Snapshot, admin: Admin): Need[] {
   if (m) {
     const quiet = (Date.now() - new Date(m.at).getTime()) / 1000;
     if (quiet > 180) out.push({ key: 'quiet', text: `AI marker silent for ${span(quiet)}` });
-    if (m.limitedUntil) out.push({ key: 'gemini', text: `Gemini is out on every Antigravity account, back ${until(m.limitedUntil)}`, act: { label: 'Connect another', run: jumpTo('ad-acc-h') } });
-    if (m.musicWaitsForAccount) out.push({ key: 'music', text: 'Music needs an Antigravity account', act: { label: 'Connect', run: jumpTo('ad-acc-h') } });
+    if (m.limitedUntil) out.push({ key: 'gemini', text: `Gemini is out on every Antigravity account, back ${until(m.limitedUntil)}`, act: { label: 'Connect another', run: jumpTo('adm-acc-h') } });
+    if (m.musicWaitsForAccount) out.push({ key: 'music', text: 'Music needs an Antigravity account', act: { label: 'Connect', run: jumpTo('adm-acc-h') } });
     for (const q of m.queue) {
       if (!q.failed) continue;
       out.push({ key: `q-${q.id}-${q.task}`, text: `${q.title}: ${TASK_NAMES[q.task].toLowerCase()} failed ×${q.failed.times}`, act: { label: 'Try now', run: () => admin.retry(q.id, q.task) } });
     }
   }
   for (const a of s.accounts ?? []) {
-    if (a.problem) out.push({ key: `acc-${a.id}`, text: `${a.name}: ${a.problem}`, act: { label: 'Go to it', run: jumpTo('ad-acc-h') } });
+    if (a.problem) out.push({ key: `acc-${a.id}`, text: `${a.name}: ${a.problem}`, act: { label: 'Go to it', run: jumpTo('adm-acc-h') } });
   }
   if (st.supabase && st.supabase.bytes > 0.8 * st.supabase.freeBytes) out.push({ key: 'db-full', text: `Database ${Math.round((100 * st.supabase.bytes) / st.supabase.freeBytes)}% full` });
   if (st.feed && (st.feed.ack === null || st.feed.ack > 600)) out.push({ key: 'feed', text: `ThinkPad stopped reading changes ${st.feed.ack === null ? 'ever ago' : `${span(st.feed.ack)} ago`} · ${st.feed.unread} waiting` });
@@ -247,16 +247,16 @@ function Needs({ snap, admin }: { snap: Snapshot; admin: Admin }) {
   if (needs.length === 1) title = '1 thing needs you.';
   if (needs.length > 1) title = `${needs.length} things need you.`;
   return (
-    <section className="ad-needs" aria-labelledby="ad-needs-h">
-      <h1 id="ad-needs-h" className={`ad-head${needs.length ? ' is-bad' : ''}`}>{title}</h1>
+    <section className="adm-needs" aria-labelledby="adm-needs-h">
+      <h1 id="adm-needs-h" className={`adm-head${needs.length ? ' is-bad' : ''}`}>{title}</h1>
       {needs.length > 0 && (
-        <ul className="ad-need-list">
+        <ul className="adm-need-list">
           <AnimatePresence initial={false}>
             {needs.map((n) => (
               <motion.li key={n.key} layout initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }} transition={springs.snappy}>
                 <i aria-hidden="true" />
                 <span>{n.text}</span>
-                {n.act && <button type="button" className="btn btn-quiet ad-small" onClick={n.act.run}>{n.act.label}</button>}
+                {n.act && <button type="button" className="btn btn-quiet adm-small" onClick={n.act.run}>{n.act.label}</button>}
               </motion.li>
             ))}
           </AnimatePresence>
@@ -304,20 +304,20 @@ function Glance({ snap }: { snap: Snapshot }) {
   ];
 
   return (
-    <section className="ad-glance-w" aria-label="At a glance">
-      <div className="ad-glance">
+    <section className="adm-glance-w" aria-label="At a glance">
+      <div className="adm-glance">
         {tiles.map((t) => (
-          <button key={t.area} type="button" className={`ad-tile${open === t.area ? ' is-open' : ''}${t.bad ? ' is-bad' : ''}`} aria-expanded={open === t.area} onClick={() => setOpen(open === t.area ? null : t.area)}>
+          <button key={t.area} type="button" className={`adm-tile${open === t.area ? ' is-open' : ''}${t.bad ? ' is-bad' : ''}`} aria-expanded={open === t.area} onClick={() => setOpen(open === t.area ? null : t.area)}>
             <Label>{t.label}</Label>
             <b>{t.big}</b>
-            <span className="ad-tile-s">{t.sub}</span>
+            <span className="adm-tile-s">{t.sub}</span>
           </button>
         ))}
       </div>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div key={open} className="ad-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
-            <dl className="ad-details">
+          <motion.div key={open} className="adm-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
+            <dl className="adm-details">
               {detailsOf(open, snap).map(([k, v]) => (
                 <div key={k}>
                   <dt>{k}</dt>
