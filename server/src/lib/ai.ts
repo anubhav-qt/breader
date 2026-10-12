@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { AI_KINDS, GENERIC_SPEAKERS, type AiAt, type AiCastMember, type AiCastResponse, type AiEntry, type AiFile, type AiGender, type AiMusicResponse, type AiVoicesResponse, type RevisitEntry, type RevisitResponse } from '@breader/shared';
 
 /*
@@ -23,6 +24,14 @@ export function cutAt(mark: { pos?: { section: number; block: number }; progress
 }
 
 type Pinned = [number, number, string];
+
+/**
+ * Someone's id in every book of a series. The marker keeps their cast id from one volume to the
+ * next, but that can be the name the book reveals later, so the app gets a hash of it instead.
+ */
+export function seriesId(castId: string) {
+  return createHash('sha256').update(castId).digest('base64url').slice(0, 12);
+}
 
 function upTo<T extends readonly [number, number, ...unknown[]]>(list: T[], p: AiAt | null): T[] {
   return (p ? list.filter((x) => le(x, p)) : list.slice()).sort(before);
@@ -126,7 +135,7 @@ export function voicesFor(f: Pick<AiFile, 'made' | 'sections' | 'voices'>): AiVo
   const tidy = narration.filter((n, i) => i === 0 || n[2] !== narration[i - 1][2]);
   const spans = v.spans.flatMap(([s, b, start, end, g]): AiVoicesResponse['spans'] => (g === 'N' ? [] : [[s, b, start, end, g]]));
 
-  // Character voices: who says each line, who tells the story, and the voices picked, by key.
+  // Character voices: who says each line, who tells the story, the voices picked and everyone's id across the series, by key.
   const keyOf = (i: number) => {
     const c = v.cast[i];
     if (i < 0 || !c || GENERIC_SPEAKERS.includes(c.id)) return -1;
@@ -143,10 +152,13 @@ export function voicesFor(f: Pick<AiFile, 'made' | 'sections' | 'voices'>): AiVo
     if (!prev || prev[2] !== k) tellers.push([s, b, k]);
   }
   const picks: Array<[number, string, string]> = [];
+  const ids: Array<[number, string]> = [];
   for (const [i, c] of v.cast.entries()) {
-    if (c.voice && keyOf(i) >= 0) picks.push([i, c.voice.piper, c.voice.kokoro]);
+    if (keyOf(i) < 0) continue;
+    if (c.voice) picks.push([i, c.voice.piper, c.voice.kokoro]);
+    ids.push([i, seriesId(c.id)]);
   }
-  return { made: f.made, sections: f.sections, narration: tidy, spans, who, tellers, picks };
+  return { made: f.made, sections: f.sections, narration: tidy, spans, who, tellers, picks, ids };
 }
 
 /**
@@ -195,7 +207,7 @@ export function castFor(f: { made: string; voices: Voices; people: AiEntry[] }, 
     let g = c.g;
     const change = latest(c.changes ?? [], p);
     if (change) g = change[2];
-    people.push({ key, name, g, lines: said.get(key) ?? 0, voice: c.voice ?? null });
+    people.push({ key, id: seriesId(c.id), name, g, lines: said.get(key) ?? 0, voice: c.voice ?? null });
   }
   people.sort((a, b) => b.lines - a.lines || before(met.get(a.key)!, met.get(b.key)!));
   return { made: f.made, upTo: p, people };

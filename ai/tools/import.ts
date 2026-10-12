@@ -153,6 +153,15 @@ export async function onServer(db: pg.Client, shas: string[]) {
   return new Map(rows.map((r) => [r.sha256, { made: new Date(r.made).toISOString(), by: r.by, notes: Number(r.notes), music: r.music, voiced: r.voiced }]));
 }
 
+/** These files' casts as the server has them, by sha256: everyone and their voices, without the rest of each file. */
+export async function castsOnServer(db: pg.Client, shas: string[]): Promise<Map<string, AiFile['voices']['cast']>> {
+  const { rows } = await db.query<{ sha256: string; cast: AiFile['voices']['cast'] }>(
+    `SELECT sha256, data->'voices'->'cast' AS cast FROM ai_notes WHERE sha256 = ANY($1)`,
+    [shas],
+  );
+  return new Map(rows.map((r) => [r.sha256, r.cast]));
+}
+
 /** One book's whole file as the server has it. */
 export async function fileOnServer(db: pg.Client, sha256: string): Promise<AiFile | null> {
   const { rows } = await db.query<{ data: AiFile }>('SELECT data FROM ai_notes WHERE sha256 = $1', [sha256]);

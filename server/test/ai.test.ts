@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { book, browser, primary, push, registered } from './helpers.ts';
 import type { AiFile } from '@breader/shared';
+import { seriesId } from '../src/lib/ai.ts';
 import { aiFile } from './ai-fixture.ts';
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
@@ -87,7 +88,7 @@ describe('ai notes', () => {
     const first = await b.get(`/v1/books/${a.id}/cast`);
     expect(first.status).toBe(200);
     expect(first.headers.get('cache-control')).toBe('private, no-store');
-    expect(first.body).toEqual({ made: '2026-09-29T08:00:00.000Z', upTo: [0, 0], people: [{ key: 0, name: 'the girl', g: 'F', lines: 0, voice: { piper: 'kristin', kokoro: 'af_heart' } }] });
+    expect(first.body).toEqual({ made: '2026-09-29T08:00:00.000Z', upTo: [0, 0], people: [{ key: 0, id: seriesId('anna'), name: 'the girl', g: 'F', lines: 0, voice: { piper: 'kristin', kokoro: 'af_heart' } }] });
 
     await readTo(b, a.id, mark(1, 9, 0.6));
     const later = await b.get(`/v1/books/${a.id}/cast`);

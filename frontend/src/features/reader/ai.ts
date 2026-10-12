@@ -15,16 +15,19 @@ import { marksOf, type Marks } from './voice/two';
 
 const STATUS = 'breader.ai.status.v1';
 const REVISIT = 'breader.ai.revisit.v1';
-const VOICES = 'breader.ai.voices.v2';
-const CAST = 'breader.ai.cast.v1';
+const VOICES = 'breader.ai.voices.v3';
+const CAST = 'breader.ai.cast.v2';
 const MUSIC = 'breader.ai.music.v1';
 /** Books whose notes and marks are kept here, the most recently opened ones. */
 const KEEP = 6;
 const NONE: AiStatus = { made: null, revisit: false, voices: false, music: false };
 const path = (bookId: string, what: string) => `/v1/books/${encodeURIComponent(bookId)}/${what}`;
 
-// v1 marks were kept without who says each line, so character voices read them all as hers and his.
-try { localStorage.removeItem('breader.ai.voices.v1'); } catch { /* storage blocked: nothing was kept */ }
+// Answers kept before they said who's who across a series (v2 marks, v1 casts), or who says each
+// line (v1 marks), are fetched again: kept, character voices would read everyone as hers and his.
+for (const old of ['breader.ai.voices.v1', 'breader.ai.voices.v2', 'breader.ai.cast.v1']) {
+  try { localStorage.removeItem(old); } catch { /* storage blocked: nothing was kept */ }
+}
 
 /** Keeps one book's answer under `key`, with the few most recent books' before it. */
 function keep<T>(key: string, bookId: string, value: T | null) {

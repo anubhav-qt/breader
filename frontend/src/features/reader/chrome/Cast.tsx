@@ -81,8 +81,8 @@ export function CastSection({ book, design, playing, engine, children }: { book:
     body = <p className="cs-say"><b>Nobody’s spoken yet.</b> Each person shows up here with their voice once they’ve said a line.</p>;
   } else {
     const cast = castOf(book, people, engine, state);
-    // The AI's picks, unless reshuffled, or the book was marked before it picked voices.
-    const shuffled = (state.seeds[book] ?? 0) > 0;
+    // The AI's picks, unless reshuffled, here or in another book of the series, or the book was marked before it picked voices.
+    const shuffled = cast.some((x) => x.shuffled);
     const voiced = people.some((c) => c.voice !== null);
     const byAi = !shuffled && people.every((c) => c.voice !== null);
     body = (
@@ -138,6 +138,7 @@ function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode
 function Auto({ book, cast, byAi, canGoBack }: { book: string; cast: Cast[]; byAi: boolean; canGoBack: boolean }) {
   const { on, hear } = useHear();
   const voices = new Set(cast.map((x) => x.v.key)).size;
+  const people = cast.map((x) => x.c);
   let how = 'Handed out by how much each one says.';
   if (byAi) how = 'Each one picked by the AI that read the book.';
   const say = (
@@ -146,7 +147,7 @@ function Auto({ book, cast, byAi, canGoBack }: { book: string; cast: Cast[]; byA
     </>
   );
   return (
-    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book) } : undefined}>
+    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book, people)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book, people) } : undefined}>
       {cast.map((x) => (
         <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
       ))}

@@ -8,7 +8,7 @@ import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePref
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { useSpeech } from './voice/server';
-import { castNow, castVoices, useCast } from './voice/cast';
+import { castNow, castSig, castVoices, useCast } from './voice/cast';
 import { failed, hold, letGoKeys, missingAll, play, prepare, release, retry, setLoudness, synth, unlock, type Clip, type Playing } from './voice/speaker';
 import { inTwo, type Marks, type Two } from './voice/two';
 
@@ -442,7 +442,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       }
       // Character voices as the sheet has them now: a pick or a reshuffle makes what's ahead again.
       let castNext = new Map<number, VoiceInfo>();
-      if (shape.startsWith('cast') && marks.current && voices.length) castNext = castVoices(book, voices[0].engine, marks.current.picks);
+      if (shape.startsWith('cast') && marks.current && voices.length) castNext = castVoices(book, voices[0].engine, marks.current);
       const castNextKeys = [...castNext].map(([k, v]) => `${k}=${v.key}`).join(',');
       if (castNextKeys !== castKeys) {
         cast = castNext;
@@ -634,7 +634,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     let want = [voiceFor(p.mode)];
     if (marks.current && p.count[p.mode] === 2) want = both(p.mode);
     // Character voices: those of everyone met so far too. Anyone further on downloads when they first speak.
-    if (marks.current && p.count[p.mode] === 2 && castNow().on) want = [...want, ...castVoices(book, want[0].engine, new Map()).values()];
+    if (marks.current && p.count[p.mode] === 2 && castNow().on) want = [...want, ...castVoices(book, want[0].engine, null).values()];
     const bytes = await missingAll(want);
     if (bytes > 0 && !agreed && askFirst()) { openSheet(); return false; }
     actions.current.start(from);
@@ -686,11 +686,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const pair = twoOn ? both(prefs.mode).map((v) => v.key).join('|') : '';
   // Character voices: on or off, and the book's picks and reshuffles.
   const castState = useCast();
-  const castSig = `${castState.on}:${castState.seeds[book] ?? 0}:${JSON.stringify(castState.picks[book] ?? {})}`;
+  const castPicks = castSig(castState, book);
   useEffect(() => {
     if (playing) cut.current?.('prefs');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made, server, castSig]);
+  }, [prefs.mode, picked, speed, twoOn, pair, twoOn && prefs.noPov, two?.made, server, castPicks]);
   // Louder, softer or muted: the sentence being said changes too.
   useEffect(() => { setLoudness(prefs.volume, prefs.muted); }, [prefs.volume, prefs.muted]);
   // Paused, the lit sentence goes out with a change of mode, which lights its own way.

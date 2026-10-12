@@ -20,7 +20,7 @@ process.env.AI_WORK = join(work, 'work');
 process.env.AI_OUT = join(work, 'out');
 const { Balancer } = await import('../balancer.ts');
 const { castPass } = await import('../cast.ts');
-const { withRandomVoices } = await import('../casting.ts');
+const { addSeriesVoices, seriesVoices, voiceProblems, withRandomVoices } = await import('../casting.ts');
 const { startBook } = await import('../fetch.ts');
 const { checkFile } = await import('../import.ts');
 const { castByFile, castOf, LADDER, PRIMARY } = await import('../kimi.ts');
@@ -156,6 +156,29 @@ test('a book marked before there were voices gets them at random, a woman’s fo
   assert.deepEqual(voiced.map((p) => p.id), ['elena', 'marlo', 'masked-knight', 'ines'], 'the generic speakers get none');
   assert.equal(new Set(voiced.map((p) => p.voice!.piper)).size, 4, 'no one shares a voice while there are others');
   assert.equal(withRandomVoices(file).given, 0, 'and anyone with voices keeps them');
+});
+
+test('the next volume reads everyone in the voices they have in the one before, where those still suit them', () => {
+  const row = readJson<AiFile>(outFile);
+  const earlier = new Map<string, { piper: string; kokoro: string }>();
+  addSeriesVoices(earlier, row.voices.cast);
+  assert.deepEqual([...earlier.keys()], ['elena', 'marlo', 'masked-knight', 'ines'], 'never the generic speakers');
+
+  // Elena with voices of her own at random, Marlo a woman from the start, and someone new.
+  const next: AiFile['voices']['cast'] = row.voices.cast.map((p) => {
+    if (p.id === 'elena') return { ...p, voice: { piper: 'kristin', kokoro: 'af_bella' } };
+    if (p.id === 'marlo') return { id: p.id, name: p.name, g: 'F' };
+    return p;
+  });
+  next.push({ id: 'tobin', name: 'Tobin', g: 'M' });
+  const { cast, changed } = seriesVoices(next, earlier);
+  assert.equal(changed, 3);
+  assert.deepEqual(cast.find((p) => p.id === 'elena')?.voice, { piper: 'lessac', kokoro: 'af_heart' });
+  const marlo = cast.find((p) => p.id === 'marlo')!;
+  assert.notDeepEqual(marlo.voice, earlier.get('marlo'), 'a man’s voices don’t read her');
+  assert.deepEqual(voiceProblems({ gender: 'F' }, marlo.voice!), []);
+  assert.ok(cast.find((p) => p.id === 'tobin')?.voice, 'someone new gets voices at random');
+  assert.equal(seriesVoices(cast, earlier).changed, 0, 'and once they match, nothing changes');
 });
 
 test('a book marked somewhere else gets its cast from the server’s file', async () => {

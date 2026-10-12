@@ -5,11 +5,11 @@ import type { AiFile } from '../../shared/src/ai.ts';
 import { recordError, recordLive, recordOk } from '../../server/src/jobs/runs.ts';
 import { Balancer, jitter } from './balancer.ts';
 import { castPass } from './cast.ts';
-import { voicesIntoCast, withRandomVoices } from './casting.ts';
+import { addSeriesVoices, seriesVoices, voicesIntoCast, type Voices } from './casting.ts';
 import { prodClient, prodPool } from './env.ts';
 import { castFromFile, fetchBook } from './fetch.ts';
 import { waitingForLimits } from './harness.ts';
-import { checkFile, fileOnServer, live, loadOne, onServer, replace, upsert, wanted } from './import.ts';
+import { castsOnServer, checkFile, fileOnServer, live, loadOne, onServer, replace, upsert, wanted } from './import.ts';
 import { castByFile, castOf, fitBy, LADDER, mins, notesBy, notesLedger, PRIMARY } from './kimi.ts';
 import { bookDir, isFetched, loadBook, marksFiles, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
 import { listBooks } from './library.ts';
@@ -409,37 +409,85 @@ async function putBack(f: AiFile, was: string, what: string) {
   }
 }
 
+/** Each series' books as they were last looked at for voices, sha256@made, so it's looked at again only once one changes. */
+const voicesSeen = new Map<string, string>();
+
+/** The books by series, each in volume order; a book in none is a series of its own. */
+function bySeries(books: QueueBook[]): Map<string, QueueBook[]> {
+  const out = new Map<string, QueueBook[]>();
+  for (const b of books) {
+    let key = `book:${b.sha256}`;
+    if (b.series) key = `series:${b.series.toLowerCase()}`;
+    const list = out.get(key) ?? [];
+    list.push(b);
+    out.set(key, list);
+  }
+  const volume = (b: QueueBook) => b.seriesIndex ?? 0;
+  for (const list of out.values()) list.sort((x, y) => volume(x) - volume(y) || x.title.localeCompare(y.title));
+  return out;
+}
+
 /**
- * Voices at random for everyone without them in the files of books marked before the marker picked
- * them (casting.ts), or given people since by their notes: into the server's file, ai/out and the
- * book's cast.json, so a later volume keeps them. A book being worked on waits for the next round.
+ * Everyone's voices the same in every book of a series, as in the first volume to give them any
+ * (casting.ts seriesVoices), and voices at random for anyone without: in books marked before the
+ * marker picked them, or given people since by their notes. Into the server's file, ai/out and the
+ * book's cast.json, so a later volume keeps them. A series is looked at again only once one of its
+ * books changes. A book being worked on waits for the next round.
  */
 async function voicesForOld(books: QueueBook[], server: Map<string, OnServer>) {
-  const old = books.filter((b) => server.get(b.sha256)?.voiced === false && !running.has(b.sha256));
-  if (!old.length) return;
+  const due: Array<{ key: string; list: QueueBook[]; seen: string }> = [];
+  for (const [key, list] of bySeries(books.filter((b) => server.has(b.sha256)))) {
+    const seen = list.map((b) => `${b.sha256}@${server.get(b.sha256)!.made}`).join(',');
+    if (voicesSeen.get(key) !== seen) due.push({ key, list, seen });
+  }
+  if (!due.length) return;
   const db = await prodClient('breader-ai-marker');
   try {
-    for (const b of old) {
-      const row = await fileOnServer(db, b.sha256);
-      if (!row) continue;
-      const { file, given } = withRandomVoices(row);
-      if (!given) continue;
-      // A new time, so the app fetches the file again.
-      const f = { ...file, made: new Date().toISOString() };
-      const c = checkFile(`${f.sha256}.json`, f);
-      if (c.problems.length) {
-        console.log(`${clock()} ${b.title}: its file with voices has problems, so it keeps none. The first: ${c.problems[0]}`);
-        continue;
-      }
-      const ok = await replace(db, f, row.made);
-      if (!ok) continue;
-      writeJson(join(OUT, `${f.sha256}.json`), f);
-      voicesIntoCast(b, f);
-      console.log(`${clock()} ${b.title}: voices at random for ${given} people`);
+    for (const { key, list, seen } of due) {
+      if (await voicesThrough(db, list)) voicesSeen.set(key, seen);
     }
   } finally {
     await db.end();
   }
+}
+
+/** One series' voices made the same through it, volume by volume. True when nothing was left for later. */
+async function voicesThrough(db: pg.Client, list: QueueBook[]): Promise<boolean> {
+  const casts = await castsOnServer(db, list.map((b) => b.sha256));
+  const earlier = new Map<string, Voices>();
+  let done = true;
+  for (const b of list) {
+    let cast = casts.get(b.sha256);
+    if (!cast) continue;
+    if (seriesVoices(cast, earlier).changed) {
+      const put = await voicesInto(db, b, earlier);
+      if (put) cast = put;
+      else done = false;
+    }
+    addSeriesVoices(earlier, cast);
+  }
+  return done;
+}
+
+/** A book's voices as the series has them, into its file on the server and here: its cast then, or null when it has to wait. */
+async function voicesInto(db: pg.Client, b: QueueBook, earlier: Map<string, Voices>): Promise<AiFile['voices']['cast'] | null> {
+  if (running.has(b.sha256)) return null;
+  const row = await fileOnServer(db, b.sha256);
+  if (!row) return null;
+  const { cast, changed } = seriesVoices(row.voices.cast, earlier);
+  // A new time, so the app fetches the file again.
+  const f = { ...row, voices: { ...row.voices, cast }, made: new Date().toISOString() };
+  const c = checkFile(`${f.sha256}.json`, f);
+  if (c.problems.length) {
+    console.log(`${clock()} ${b.title}: its file with voices has problems, so its voices stay as they are. The first: ${c.problems[0]}`);
+    return null;
+  }
+  const ok = await replace(db, f, row.made);
+  if (!ok) return null;
+  writeJson(join(OUT, `${f.sha256}.json`), f);
+  voicesIntoCast(b, f);
+  console.log(`${clock()} ${b.title}: voices for ${changed} people, as the series has them or at random`);
+  return cast;
 }
 
 /** Notes for a book with marks on the server, made here or anywhere, into its file on the server. */
@@ -791,7 +839,7 @@ async function round(lbs: Balancers, pool: pg.Pool) {
   if (can.music) accountHere = await servesGemini();
   seen = { books, server };
   ended.clear();
-  // Voices at random need no model, so they go in before anything starts.
+  // Voices the same through a series, or at random, need no model, so they go in before anything starts.
   await voicesForOld(books, server);
   const byPhase = (p: Phase) => [...running.values()].filter((j) => j.phase === p).length;
 

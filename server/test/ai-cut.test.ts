@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AiFile, aiProblems, printOf } from '@breader/shared';
-import { castFor, cutAt, revisitFor, voicesFor } from '../src/lib/ai.ts';
+import { castFor, cutAt, revisitFor, seriesId, voicesFor } from '../src/lib/ai.ts';
 import { aiFile } from './ai-fixture.ts';
 
 const f = aiFile();
@@ -81,6 +81,12 @@ describe('voice marks', () => {
     const sent = JSON.stringify(v);
     for (const name of ['Anna', 'Tomas', 'stranger', 'anna']) expect(sent).not.toContain(name);
   });
+
+  it('says everyone’s id across the series, by key, the generic speakers left out', () => {
+    const crowd = aiFile();
+    crowd.voices.cast[1] = { id: 'crowd', name: 'Several people at once', g: 'N' };
+    expect(voicesFor(crowd).ids).toEqual([[0, seriesId('anna')], [2, seriesId('tomas')]]);
+  });
 });
 
 describe('the cast', () => {
@@ -89,7 +95,7 @@ describe('the cast', () => {
 
   it('has only who the reader has heard from, by the names they know them by', () => {
     // Through her eyes from the first paragraph, before the book names her.
-    expect(castAt([0, 0]).people).toEqual([{ key: 0, name: 'the girl', g: 'F', lines: 0, voice: { piper: 'kristin', kokoro: 'af_heart' } }]);
+    expect(castAt([0, 0]).people).toEqual([{ key: 0, id: seriesId('anna'), name: 'the girl', g: 'F', lines: 0, voice: { piper: 'kristin', kokoro: 'af_heart' } }]);
     expect(cast(0, 3)).toEqual([['the girl', 'F', 1], ['the stranger', 'N', 1]]);
     expect(cast(1, 7)).toEqual([['Anna', 'F', 1], ['the stranger', 'N', 1]]);
   });
@@ -115,8 +121,8 @@ describe('the cast', () => {
     const old = aiFile();
     for (const c of old.voices.cast) delete c.voice;
     expect(castAt([1, 9], old).people).toEqual([
-      { key: 1, name: 'the stranger', g: 'M', lines: 2, voice: null },
-      { key: 0, name: 'Anna', g: 'F', lines: 1, voice: null },
+      { key: 1, id: seriesId('stranger'), name: 'the stranger', g: 'M', lines: 2, voice: null },
+      { key: 0, id: seriesId('anna'), name: 'Anna', g: 'F', lines: 1, voice: null },
     ]);
   });
 
@@ -124,6 +130,22 @@ describe('the cast', () => {
     const bare = aiFile();
     bare.revisit.people = [];
     expect(castAt([0, 3], bare).people.map((c) => c.name)).toEqual(['Anna', 'the stranger']);
+  });
+
+  it('gives everyone the same id in every book of a series, and never their cast id', () => {
+    // The next volume, with someone new ahead of her in its cast.
+    const next = aiFile();
+    next.voices.cast.unshift({ id: 'mara', name: 'Mara', g: 'F' });
+    for (const sp of next.voices.spans) sp[5] += 1;
+    for (const n of next.voices.narration) {
+      if (n[2] >= 0) n[2] += 1;
+      if (n[3] >= 0) n[3] += 1;
+    }
+    const anna = castAt([0, 3]).people.find((c) => c.key === 0)!;
+    const again = castAt([0, 3], next).people.find((c) => c.key === 1)!;
+    expect(again.id).toBe(anna.id);
+    expect(anna.id).not.toContain('anna');
+    expect(voicesFor(next).ids).toEqual([[0, seriesId('mara')], [1, anna.id], [2, seriesId('stranger')], [3, seriesId('tomas')]]);
   });
 });
 

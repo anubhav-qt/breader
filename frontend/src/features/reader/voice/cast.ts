@@ -4,6 +4,7 @@ import { readLocal, writeLocal } from '../../../lib/store';
 import { keptCast, loadCast } from '../ai';
 import { BUILT_IN, type Engine, type SamplePart, type VoiceInfo } from './catalog';
 import { playSample } from './speaker';
+import type { Marks } from './two';
 
 /*
  * Character voices: every person in a book read by a voice of their own, from the thirty of the
@@ -14,6 +15,9 @@ import { playSample } from './speaker';
  *
  * The server says who's in the book as far as the reader has read (server/src/lib/ai.ts castFor):
  * nobody they haven't heard from yet, by the names they know them by.
+ *
+ * A voice picked by hand or reshuffled is kept for the series the book is in, as the library has
+ * it, by the person's id across the series: so they sound the same in every one of its books.
  */
 
 /** A woman, a man, or neither (anyone's voice will do). */
@@ -32,6 +36,9 @@ export function voicesOf(kind: Kind, engine: Engine): VoiceInfo[] {
 }
 
 export interface Character {
+  /** Who says each line in the voice marks, in this book. */
+  key: number;
+  /** The same in every book of the series (AiCastMember.id): what their picks are kept by. */
   id: string;
   name: string;
   kind: Kind;
@@ -43,7 +50,7 @@ export interface Character {
 
 function charactersOf(r: AiCastResponse | null): Character[] | null {
   if (!r) return null;
-  return r.people.map((p) => ({ id: String(p.key), name: p.name, kind: p.g, lines: p.lines, voice: p.voice }));
+  return r.people.map((p) => ({ key: p.key, id: p.id, name: p.name, kind: p.g, lines: p.lines, voice: p.voice }));
 }
 
 export interface BookCast {
@@ -76,16 +83,24 @@ export function useBookCast(book: string): BookCast {
 interface CastState {
   /** Character voices picked over 1 voice or 2. */
   on: boolean;
-  /** Each book's voices picked by hand, by character: the voice's key. */
+  /** Each series' voices picked by hand, by character: the voice's key. */
   picks: Record<string, Record<string, string>>;
-  /** How many times each book's voices were reshuffled; none keeps the AI's picks. */
+  /** Each series' voices from its last reshuffle, by character: the voice's key in each model. */
+  dealt: Record<string, Record<string, Record<Engine, string>>>;
+  /** How many times each series' voices were reshuffled, so the next one hands them out another way. */
   seeds: Record<string, number>;
+  /** The series each book is in, as the library has it; a book in none keeps its picks to itself. */
+  series: Record<string, string>;
 }
 
-const KEY = 'breader.cast.v2';
-// v1 kept picks and shuffles for the design round's pretend cast; only whether it was on carries over.
-const before = readLocal<Partial<CastState>>('breader.cast.v1', {});
-let state: CastState = { on: before.on ?? false, picks: {}, seeds: {}, ...readLocal<Partial<CastState>>(KEY, {}) };
+const KEY = 'breader.cast.v3';
+// v2 kept picks by book and by where someone was in its cast, v1 for the design round's pretend
+// cast; only whether it was on carries over.
+const v2 = readLocal<Partial<CastState>>('breader.cast.v2', {});
+const v1 = readLocal<Partial<CastState>>('breader.cast.v1', {});
+let wasOn = v1.on ?? false;
+if (v2.on !== undefined) wasOn = v2.on;
+let state: CastState = { on: wasOn, picks: {}, dealt: {}, seeds: {}, series: {}, ...readLocal<Partial<CastState>>(KEY, {}) };
 const subs = new Set<() => void>();
 
 function set(next: CastState) {
@@ -109,26 +124,67 @@ export const setCastOn = (on: boolean) => set({ ...state, on });
 /** The picks as they are now, for the voice reading. */
 export const castNow = () => state;
 
+/** Where a book's picks are kept: its series, or the book itself. */
+function scopeOf(book: string, s: CastState = state) {
+  const series = s.series[book];
+  if (series) return `series:${series}`;
+  return `book:${book}`;
+}
+
+/** Puts a book in a series (seriesKey, gallery/series.ts), or none, for whose picks it shares. */
+export function castInSeries(book: string, series: string | null) {
+  const now = state.series[book] ?? null;
+  if (now === series) return;
+  const all = { ...state.series };
+  if (series) all[book] = series;
+  else delete all[book];
+  set({ ...state, series: all });
+}
+
+/** What the voice reading starts the sentence again for: Characters on or off, and a change to the book's picks. */
+export function castSig(s: CastState, book: string) {
+  const scope = scopeOf(book, s);
+  return JSON.stringify([s.on, s.picks[scope] ?? {}, s.dealt[scope] ?? {}]);
+}
+
 export function pickVoice(book: string, character: string, voice: string) {
-  const mine = { ...(state.picks[book] ?? {}), [character]: voice };
-  set({ ...state, picks: { ...state.picks, [book]: mine } });
+  const scope = scopeOf(book);
+  const mine = { ...(state.picks[scope] ?? {}), [character]: voice };
+  set({ ...state, picks: { ...state.picks, [scope]: mine } });
 }
 
-/** Everyone's voices handed out again, a different way, the AI's picks and the ones picked by hand too. */
-export function reshuffle(book: string) {
-  const seed = (state.seeds[book] ?? 0) + 1;
-  const picks = { ...state.picks };
-  delete picks[book];
-  set({ ...state, picks, seeds: { ...state.seeds, [book]: seed } });
+/**
+ * Voices handed out again, a different way, to the people here, the AI's picks and the ones picked
+ * by hand too: by line count, so the people with most to say get the first voices, and kept for
+ * them in every book of the series.
+ */
+export function reshuffle(book: string, people: Character[]) {
+  const scope = scopeOf(book);
+  const seed = (state.seeds[scope] ?? 0) + 1;
+  const picks = { ...(state.picks[scope] ?? {}) };
+  const dealt = { ...(state.dealt[scope] ?? {}) };
+  const handed: Record<Kind, number> = { F: 0, M: 0, N: 0 };
+  for (const c of people) {
+    const piper = voicesOf(c.kind, 'piper');
+    const kokoro = voicesOf(c.kind, 'kokoro');
+    const at = handed[c.kind] + seed;
+    handed[c.kind] += 1;
+    dealt[c.id] = { piper: piper[at % piper.length].key, kokoro: kokoro[at % kokoro.length].key };
+    delete picks[c.id];
+  }
+  set({ ...state, picks: { ...state.picks, [scope]: picks }, dealt: { ...state.dealt, [scope]: dealt }, seeds: { ...state.seeds, [scope]: seed } });
 }
 
-/** Back to the AI's picks: no reshuffles, and nothing picked by hand. */
-export function aiPicks(book: string) {
-  const picks = { ...state.picks };
-  delete picks[book];
-  const seeds = { ...state.seeds };
-  delete seeds[book];
-  set({ ...state, picks, seeds });
+/** Back to the AI's picks for the people here, in every book of the series: no reshuffles, and nothing picked by hand. */
+export function aiPicks(book: string, people: Character[]) {
+  const scope = scopeOf(book);
+  const picks = { ...(state.picks[scope] ?? {}) };
+  const dealt = { ...(state.dealt[scope] ?? {}) };
+  for (const c of people) {
+    delete picks[c.id];
+    delete dealt[c.id];
+  }
+  set({ ...state, picks: { ...state.picks, [scope]: picks }, dealt: { ...state.dealt, [scope]: dealt } });
 }
 
 export interface Cast {
@@ -136,55 +192,79 @@ export interface Cast {
   v: VoiceInfo;
   /** Picked by hand, rather than handed out. */
   picked: boolean;
+  /** Handed out by a reshuffle, here or in another book of the series. */
+  shuffled: boolean;
 }
 
+/** One of `fit` by its key, if it's there. */
+const voiceIn = (fit: VoiceInfo[], key: string | undefined) => fit.find((v) => v.key === key);
+
 /**
- * Who reads whom in a book, in a model: picked by hand, or the AI's pick, or, once reshuffled,
- * handed out by line count, so the people with most to say get the first voices. Two share a voice
- * only once the women's or the men's run out.
+ * Who reads whom in a book, in a model: picked by hand, or reshuffled, in any book of the series,
+ * or else the AI's pick, or, in a book marked before the AI picked voices, handed out by line
+ * count, so the people with most to say get the first voices. Two share a voice only once the
+ * women's or the men's run out.
  */
 export function castOf(book: string, people: Character[], engine: Engine, s: CastState = state): Cast[] {
-  const seed = s.seeds[book] ?? 0;
-  const picks = s.picks[book] ?? {};
+  const scope = scopeOf(book, s);
+  const seed = s.seeds[scope] ?? 0;
+  const picks = s.picks[scope] ?? {};
+  const dealt = s.dealt[scope] ?? {};
   const handed: Record<Kind, number> = { F: 0, M: 0, N: 0 };
   const out: Cast[] = [];
   for (const c of people) {
     const fit = voicesOf(c.kind, engine);
-    const own = fit.find((v) => v.key === picks[c.id]);
+    const own = voiceIn(fit, picks[c.id]);
     if (own) {
-      out.push({ c, v: own, picked: true });
+      out.push({ c, v: own, picked: true, shuffled: false });
       continue;
     }
-    let ai: VoiceInfo | undefined;
+    const mine = dealt[c.id];
+    if (mine) {
+      const again = voiceIn(fit, mine[engine]);
+      if (again) {
+        out.push({ c, v: again, picked: false, shuffled: true });
+        continue;
+      }
+    }
     if (c.voice) {
-      const key = `${engine}:${c.voice[engine]}`;
-      ai = fit.find((v) => v.key === key);
-    }
-    if (seed === 0 && ai) {
-      out.push({ c, v: ai, picked: false });
-      continue;
+      const ai = voiceIn(fit, `${engine}:${c.voice[engine]}`);
+      if (ai) {
+        out.push({ c, v: ai, picked: false, shuffled: false });
+        continue;
+      }
     }
     const at = (handed[c.kind] + seed) % fit.length;
     handed[c.kind] += 1;
-    out.push({ c, v: fit[at], picked: false });
+    out.push({ c, v: fit[at], picked: false, shuffled: false });
   }
   return out;
 }
 
 /**
  * Each speaker's voice for reading the book aloud, by their key: as the voice sheet hands them out
- * (castOf) for the people met so far, and the AI's pick (`picks`, from the voice marks) for anyone
- * further on. Anyone missing reads in her voice or his.
+ * (castOf) for the people met so far, and for anyone further on, as picked or reshuffled in
+ * another book of the series, or else the AI's pick, from the voice `marks`. Without them, only
+ * the people met so far. Anyone missing reads in her voice or his.
  */
-export function castVoices(book: string, engine: Engine, picks: Map<number, Record<Engine, string>>): Map<number, VoiceInfo> {
+export function castVoices(book: string, engine: Engine, marks: Pick<Marks, 'picks' | 'ids'> | null): Map<number, VoiceInfo> {
   const out = new Map<number, VoiceInfo>();
-  const all = voicesOf('N', engine);
-  for (const [key, voice] of picks) {
-    const v = all.find((x) => x.key === `${engine}:${voice[engine]}`);
-    if (v) out.set(key, v);
+  if (marks) {
+    const all = voicesOf('N', engine);
+    const scope = scopeOf(book);
+    const picks = state.picks[scope] ?? {};
+    const dealt = state.dealt[scope] ?? {};
+    for (const [key, id] of marks.ids) {
+      let v = voiceIn(all, picks[id]);
+      const mine = dealt[id];
+      if (!v && mine) v = voiceIn(all, mine[engine]);
+      const ai = marks.picks.get(key);
+      if (!v && ai) v = voiceIn(all, `${engine}:${ai[engine]}`);
+      if (v) out.set(key, v);
+    }
   }
   const people = charactersOf(keptCast(book)) ?? [];
-  for (const x of castOf(book, people, engine)) out.set(Number(x.c.id), x.v);
+  for (const x of castOf(book, people, engine)) out.set(x.c.key, x.v);
   return out;
 }
 

@@ -22,6 +22,7 @@ import { MangaView } from './MangaView';
 import { unlockMusic, useMusic } from './music';
 import { overlaps, usePacing, type Spot } from './pacing';
 import { PdfView } from './PdfView';
+import { castInSeries } from './voice/cast';
 import { refreshVoices } from './voice/list';
 import { refreshSpeech } from './voice/server';
 import { setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
@@ -59,6 +60,8 @@ interface Props {
   onAi?: (on: boolean) => void;
   /** A manga opened a few chapters at a time, with the chapters after them added as they're neared. */
   onBook?: (book: LoadedBook) => void;
+  /** The series the library has it in (gallery/series.ts seriesKey), whose books share their character voices. */
+  series?: string;
 }
 
 const noTime = () => {};
@@ -67,7 +70,7 @@ const samePos = (a: Position, b: Position | undefined) => !!b && a.section === b
 
 const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause: 'toggle', MediaPlay: 'play', MediaPause: 'pause', MediaStop: 'pause' };
 
-export function Reader({ record, title, color, book, initial, latest, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, aiElsewhere = false, onAi, onBook }: Props) {
+export function Reader({ record, title, color, book, initial, latest, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, aiElsewhere = false, onAi, onBook, series }: Props) {
   const [settings, update] = useReaderSettings();
   // Each manga keeps its own layout and direction, a layout for narrow screens (scrolled, until
   // another's picked) apart from wide ones. Opened, it keeps the one it opened in.
@@ -101,6 +104,8 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   const aiStatus = useAiStatus(record.id, ai);
   const loadNotes = useCallback(() => loadRevisit(record.id), [record.id]);
   const marks = useVoiceMarks(record.id, aiStatus);
+  // A voice picked for someone here reads them in the series' other books too (voice/cast.ts).
+  useEffect(() => castInSeries(record.id, series ?? null), [record.id, series]);
   // How far the AI has got, asked again while the book's open; pretend, during the design round.
   const aiProgress = useAiProgress(record.id, ai);
   const round = useRound();

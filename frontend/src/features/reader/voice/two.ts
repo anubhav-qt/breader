@@ -26,6 +26,8 @@ export interface Marks {
   tellerAt: (section: number, block: number) => number;
   /** The voice the AI picked for each speaker, by key: its id in each model. */
   picks: Map<number, Record<Engine, string>>;
+  /** Each speaker's id across the series, by key (AiCastMember.id). */
+  ids: Map<number, string>;
 }
 
 const before = (a: readonly [number, number, ...unknown[]], s: number, b: number) => a[0] < s || (a[0] === s && a[1] <= b);
@@ -57,6 +59,7 @@ export function marksOf(r: AiVoicesResponse): Marks {
   const tellers = (r.tellers ?? []).slice().sort(byPlace);
   const picks = new Map<number, Record<Engine, string>>();
   for (const [key, piper, kokoro] of r.picks ?? []) picks.set(key, { piper, kokoro });
+  const ids = new Map<number, string>(r.ids ?? []);
   return {
     made: r.made,
     prints: r.sections,
@@ -70,6 +73,7 @@ export function marksOf(r: AiVoicesResponse): Marks {
       return at >= 0 ? tellers[at][2] : -1;
     },
     picks,
+    ids,
   };
 }
 

@@ -288,12 +288,16 @@ export interface AiVoicesResponse {
   tellers?: Array<[number, number, number]>;
   /** The voices the AI picked: [key, Piper's voice id, Kokoro's]. */
   picks?: Array<[number, string, string]>;
+  /** Everyone's id across the series (AiCastMember.id): [key, id]. */
+  ids?: Array<[number, string]>;
 }
 
 /** Someone in a book with a voice of their own, as far as the reader has read. */
 export interface AiCastMember {
   /** Tells them apart; says nothing about them. */
   key: number;
+  /** The same for them in every book of a series, so a voice picked in one reads them in the others; says nothing about them either. */
+  id: string;
   /** What the book calls them by now. */
   name: string;
   /** How they sound by now: a woman, a man, or neither. */

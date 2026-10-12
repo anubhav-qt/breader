@@ -28,7 +28,7 @@ import { SettingsMenu } from './features/account/SettingsMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
 import { RemoveDialog } from './features/gallery/RemoveDialog';
-import { detectSeries, seriesNames } from './features/gallery/series';
+import { detectSeries, seriesKey, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
 import { urlOf } from './features/manga/copies';
 import type { About, Picked } from './features/manga/MangaSheet';
@@ -868,6 +868,16 @@ export default function App() {
   const leaving = !reading && closing && loaded?.id === closing.id ? loaded : null;
   const shown = reading ?? leaving;
   const shownRec = shown ? recordById.get(shown.id) : undefined;
+  const shownId = shown?.id;
+  // The open book's series as the library shows it, filled in where its file names none: its books share their character voices.
+  const shownSeries = useMemo(() => {
+    for (const b of [...everything.mine, ...everything.shelf]) {
+      if (b.id !== shownId) continue;
+      if (!b.series?.trim()) return undefined;
+      return seriesKey(b.series);
+    }
+    return undefined;
+  }, [shownId, everything]);
   const books = tab === 'shelf' ? items.shelf : items.mine;
   const ownShared = useMemo(() => lib.records.filter((r) => r.shared && !lapsed.has(r.id) && !hidden.has(r.id)).length, [lib.records, lapsed, hidden]);
   /** Someone's book, put in the reader's own library from their shared one without opening it. */
@@ -1197,6 +1207,7 @@ export default function App() {
             ai={!!lib.edits[shown.id]?.ai}
             aiElsewhere={!!lib.edits[shown.id]?.aiElsewhere}
             onAi={(on) => on && void editBook(shown.id, { ai: true })}
+            series={shownSeries}
             // A series opened a few chapters at a time, with the next few added as it's read on.
             onBook={(grown) => setLoaded((l) => (l && l.id === shown.id ? { id: l.id, book: grown } : l))}
           />

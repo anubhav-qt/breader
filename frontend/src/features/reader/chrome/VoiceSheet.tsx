@@ -162,7 +162,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     let on = true;
     let want = [current];
     if (paired) want = [pair.F, pair.M];
-    if (paired && characters) want = [...want, ...castVoices(bookId, pair.F.engine, new Map()).values()];
+    if (paired && characters) want = [...want, ...castVoices(bookId, pair.F.engine, null).values()];
     void missingAll(want).then((n) => { if (on) setBytes(n); });
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

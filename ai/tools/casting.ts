@@ -16,7 +16,8 @@ import { validate, type Cast } from './validate.ts';
  * packed until everyone but the generic speakers has a voice in both. A later volume of a series
  * starts with the earlier one's cast (fetch.ts), voices and all, so only the people new to it are
  * picked for. Books marked before there were voices get theirs at random (withRandomVoices), from
- * the marker. Nothing it prints has the book's text in it.
+ * the marker, which also keeps everyone's voices the same through a series (seriesVoices). Nothing
+ * it prints has the book's text in it.
  */
 
 export type Voices = Record<VoiceModel, string>;
@@ -135,27 +136,68 @@ function anyVoice(model: VoiceModel, g: AiGender, taken: Set<string>): string {
   return id;
 }
 
+type FileCast = AiFile['voices']['cast'];
+
+/** A cast with voices at random for everyone without them, but the generic speakers. Says how many it gave voices to. */
+function randomVoices(people: FileCast): { cast: FileCast; given: number } {
+  const generic = new Set(GENERIC.map((p) => p.id));
+  const taken: Record<VoiceModel, Set<string>> = { piper: new Set(), kokoro: new Set() };
+  for (const c of people) {
+    if (!c.voice) continue;
+    for (const model of VOICE_MODELS) taken[model].add(c.voice[model]);
+  }
+  let given = 0;
+  const cast = people.map((c) => {
+    if (c.voice || generic.has(c.id)) return c;
+    given++;
+    return { ...c, voice: { piper: anyVoice('piper', c.g, taken.piper), kokoro: anyVoice('kokoro', c.g, taken.kokoro) } };
+  });
+  return { cast, given };
+}
+
 /**
  * A book's file with voices at random for everyone without them, but the generic speakers: for
  * books marked before voices were picked. Says how many it gave voices to.
  */
 export function withRandomVoices(f: AiFile): { file: AiFile; given: number } {
-  const generic = new Set(GENERIC.map((p) => p.id));
-  const taken: Record<VoiceModel, Set<string>> = { piper: new Set(), kokoro: new Set() };
-  for (const c of f.voices.cast) {
-    if (!c.voice) continue;
-    for (const model of VOICE_MODELS) taken[model].add(c.voice[model]);
-  }
-  let given = 0;
-  const cast = f.voices.cast.map((c) => {
-    if (c.voice || generic.has(c.id)) return c;
-    given++;
-    return { ...c, voice: { piper: anyVoice('piper', c.g, taken.piper), kokoro: anyVoice('kokoro', c.g, taken.kokoro) } };
-  });
+  const { cast, given } = randomVoices(f.voices.cast);
   return { file: { ...f, voices: { ...f.voices, cast } }, given };
 }
 
-/** The voices a book's file has, into its cast.json here, for the people there without them. */
+/** Whether someone already has these voices, the same in both models. */
+function sameVoices(a: Voices | undefined, b: Voices): boolean {
+  if (!a) return false;
+  return a.piper === b.piper && a.kokoro === b.kokoro;
+}
+
+/**
+ * A volume's cast with everyone's voices as the series has them: the ones each person has in an
+ * earlier volume (`earlier`, by their id), where those still suit how they sound here, and voices at
+ * random for anyone left without. Says how many people it changed.
+ */
+export function seriesVoices(people: FileCast, earlier: Map<string, Voices>): { cast: FileCast; changed: number } {
+  let changed = 0;
+  const kept = people.map((c) => {
+    const was = earlier.get(c.id);
+    if (!was || sameVoices(c.voice, was)) return c;
+    if (voiceProblems({ gender: c.g }, was).length) return c;
+    changed++;
+    return { ...c, voice: was };
+  });
+  const { cast, given } = randomVoices(kept);
+  return { cast, changed: changed + given };
+}
+
+/** Adds a volume's voices to the series' (`earlier`), for the people it's the first to give any. */
+export function addSeriesVoices(earlier: Map<string, Voices>, people: FileCast) {
+  const generic = new Set(GENERIC.map((p) => p.id));
+  for (const c of people) {
+    if (!c.voice || generic.has(c.id) || earlier.has(c.id)) continue;
+    earlier.set(c.id, c.voice);
+  }
+}
+
+/** The voices a book's file has, into its cast.json here, so a later volume starts with them. */
 export function voicesIntoCast(book: { key: string }, f: AiFile) {
   const file = join(bookDir(book.key), 'cast.json');
   if (!existsSync(file)) return;
@@ -164,7 +206,7 @@ export function voicesIntoCast(book: { key: string }, f: AiFile) {
   let changed = false;
   for (const p of cast.people) {
     const voice = fromFile.get(p.id);
-    if (p.voice || !voice || voiceProblems(p, voice).length) continue;
+    if (!voice || sameVoices(p.voice, voice) || voiceProblems(p, voice).length) continue;
     p.voice = voice;
     changed = true;
   }
