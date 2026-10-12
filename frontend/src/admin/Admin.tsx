@@ -81,16 +81,21 @@ export function AdminPage() {
       </header>
       {snap && (
         <main className="ad-main">
-          <Needs snap={snap} admin={admin} />
-          <Glance snap={snap} />
-          <div className="ad-cols">
-            <div className="ad-col">
+          {/* Each at its own width: what needs you and the marker wide, the rest narrow, side by side where they fit. */}
+          <div className="ad-board">
+            <div className="ad-col is-wide">
+              <Needs snap={snap} admin={admin} />
               {snap.marker && <MarkerCard m={snap.marker} admin={admin} />}
             </div>
-            <div className="ad-col">
-              {snap.accounts && <Accounts list={snap.accounts} admin={admin} />}
-              <Workers jobs={snap.status.jobs} admin={admin} />
-              <Music admin={admin} />
+            <div className="ad-side">
+              <div className="ad-col">
+                <Glance snap={snap} />
+                {snap.accounts && <Accounts list={snap.accounts} admin={admin} />}
+              </div>
+              <div className="ad-col">
+                <Workers jobs={snap.status.jobs} admin={admin} />
+                <Music admin={admin} />
+              </div>
             </div>
           </div>
         </main>
@@ -124,7 +129,7 @@ function needsOf(s: Snapshot, admin: Admin): Need[] {
   const out: Need[] = [];
   const st = s.status;
   if (!st.supabase) out.push({ key: 'db', text: 'Database down' });
-  if (st.copy?.down) out.push({ key: 'copy', text: 'Laptop copy down' });
+  if (st.copy?.down) out.push({ key: 'copy', text: 'ThinkPad copy down' });
   for (const j of st.jobs) {
     const failing = !!j.last_error_at && (!j.last_ok_at || new Date(j.last_error_at) > new Date(j.last_ok_at));
     if (!failing || j.off || j.name === 'ai-marker') continue;
@@ -145,8 +150,8 @@ function needsOf(s: Snapshot, admin: Admin): Need[] {
     if (a.problem) out.push({ key: `acc-${a.id}`, text: `${a.name}: ${a.problem}`, act: { label: 'Go to it', run: jumpTo('ad-acc-h') } });
   }
   if (st.supabase && st.supabase.bytes > 0.8 * st.supabase.freeBytes) out.push({ key: 'db-full', text: `Database ${Math.round((100 * st.supabase.bytes) / st.supabase.freeBytes)}% full` });
-  if (st.feed && (st.feed.ack === null || st.feed.ack > 600)) out.push({ key: 'feed', text: `Laptop stopped reading changes ${st.feed.ack === null ? 'ever ago' : `${span(st.feed.ack)} ago`} · ${st.feed.unread} waiting` });
-  if (st.copy && !st.copy.down && st.copy.lag !== null && st.copy.lag > 60) out.push({ key: 'lag', text: `Laptop copy ${span(st.copy.lag)} behind` });
+  if (st.feed && (st.feed.ack === null || st.feed.ack > 600)) out.push({ key: 'feed', text: `ThinkPad stopped reading changes ${st.feed.ack === null ? 'ever ago' : `${span(st.feed.ack)} ago`} · ${st.feed.unread} waiting` });
+  if (st.copy && !st.copy.down && st.copy.lag !== null && st.copy.lag > 60) out.push({ key: 'lag', text: `ThinkPad copy ${span(st.copy.lag)} behind` });
   if (!st.server.sentry) out.push({ key: 'sentry', text: 'Sentry off: SENTRY_DSN not set' });
   return out;
 }
@@ -193,7 +198,7 @@ function Glance({ snap }: { snap: Snapshot }) {
   const fileShare = ready ? (100 * ready.bytes) / st.files.freeBytes : 0;
 
   const tiles: Array<{ area: Area; label: string; big: string; sub: ReactNode; bad?: boolean }> = [
-    { area: 'server', label: 'Server', big: st.server.role === 'laptop' ? 'Laptop' : 'Fallback', sub: `up ${span(st.server.uptimeSeconds)}` },
+    { area: 'server', label: 'Server', big: st.server.role === 'laptop' ? 'ThinkPad' : 'Fallback', sub: `up ${span(st.server.uptimeSeconds)}` },
     {
       area: 'database',
       label: 'Database',
@@ -210,7 +215,7 @@ function Glance({ snap }: { snap: Snapshot }) {
     },
     {
       area: 'sync',
-      label: 'Laptop copy',
+      label: 'ThinkPad copy',
       big: st.copy?.down ? 'Down' : `${span(st.copy?.lag ?? 0)}`,
       sub: 'behind the database',
       bad: !!st.copy?.down || (st.copy?.lag ?? 0) > 60,
@@ -254,7 +259,7 @@ function detailsOf(area: Area, snap: Snapshot): Array<[string, string]> {
   if (area === 'server') {
     const headers = Object.entries(st.request.headers).map(([k, v]) => `${k}: ${v}`).join(', ');
     return [
-      ['Answering', st.server.role === 'laptop' ? 'the laptop' : 'the fallback (Render)'],
+      ['Answering', st.server.role === 'laptop' ? 'the ThinkPad' : 'the fallback (Render)'],
       ['Release', st.server.release],
       ['Up for', span(st.server.uptimeSeconds)],
       ['Errors to Sentry', st.server.sentry ? 'on' : 'off: SENTRY_DSN isn’t set'],
@@ -284,7 +289,7 @@ function detailsOf(area: Area, snap: Snapshot): Array<[string, string]> {
       rows.push(['Last full reload', ago(st.copy.loaded_at)]);
     }
     if (st.feed) {
-      rows.push(['Laptop last read the changes', st.feed.ack === null ? 'never' : `${span(st.feed.ack)} ago`]);
+      rows.push(['ThinkPad last read the changes', st.feed.ack === null ? 'never' : `${span(st.feed.ack)} ago`]);
       rows.push(['Changes waiting for it', String(st.feed.unread)]);
     }
     return rows;

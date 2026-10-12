@@ -14,7 +14,7 @@ export function Accounts({ list, admin }: { list: AiAccount[]; admin: Admin }) {
   const [removing, setRemoving] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   return (
-    <section className="ad-card" aria-labelledby="ad-acc-h">
+    <section className="ad-card ad-accounts" aria-labelledby="ad-acc-h">
       <Label>AI accounts</Label>
       <h2 id="ad-acc-h" className="ad-mid">{list.length} connected</h2>
       <div className="ad-accs">
@@ -120,10 +120,10 @@ function Connect({ admin, onDone }: { admin: Admin; onDone: () => void }) {
 
 /** The worker's jobs, by what they're called and what they do. */
 const JOBS: Record<string, { name: string; about: string }> = {
-  'backup': { name: 'Nightly backup', about: 'After 3 am, an encrypted copy of the database: 14 days on the laptop, and in R2.' },
+  'backup': { name: 'Nightly backup', about: 'After 3 am, an encrypted copy of the database: 14 days on the ThinkPad, and in R2.' },
   'restore-drill': { name: 'Restore test', about: 'Once a month, after a backup, restores it to prove it works.' },
   'clean-up': { name: 'Clean-up', about: 'Every hour: removed books after 30 days, files nothing needs, key libraries unused for a year.' },
-  'storage-check': { name: 'R2 check', about: 'Once a day, puts back any file missing from R2, from the laptop’s copy.' },
+  'storage-check': { name: 'R2 check', about: 'Once a day, puts back any file missing from R2, from the ThinkPad’s copy.' },
   'extensions': { name: 'Manga extensions', about: 'Once a day, updates the manga sites’ extensions to their newest versions.' },
   'manga-prefetch': { name: 'Manga prefetch', about: 'At 4 am, fetches Browse’s lists ahead, so they open at once.' },
   'yt-dlp': { name: 'yt-dlp update', about: 'Keeps the downloader the music finds its tracks with up to date.' },
@@ -138,7 +138,7 @@ export function Workers({ jobs, admin }: { jobs: Job[]; admin: Admin }) {
   if (bad === 1) title = '1 failing';
   if (bad > 1) title = `${bad} failing`;
   return (
-    <section className="ad-card" aria-labelledby="ad-jobs-h">
+    <section className="ad-card ad-workers" aria-labelledby="ad-jobs-h">
       <Label>Workers</Label>
       <h2 id="ad-jobs-h" className={`ad-mid${bad ? ' ad-bad' : ''}`}>{title}</h2>
       <ul className="ad-jobs">
@@ -197,7 +197,7 @@ export function Music({ admin }: { admin: Admin }) {
   };
 
   return (
-    <section className="ad-card" aria-labelledby="ad-music-h">
+    <section className="ad-card ad-music" aria-labelledby="ad-music-h">
       <Label>Upload music</Label>
       <div
         className={`ad-drop${over ? ' is-over' : ''}`}
