@@ -240,28 +240,23 @@ const JOB_NAMES: Record<string, string> = {
   'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'yt-dlp': 'yt-dlp update',
 };
 
-/** The top of the page: all well, or what needs doing. */
+/** What needs doing, at the top of the page; nothing at all when nothing does. */
 function Needs({ snap, admin }: { snap: Snapshot; admin: Admin }) {
   const needs = needsOf(snap, admin);
-  let title = 'All well.';
-  if (needs.length === 1) title = '1 thing needs you.';
-  if (needs.length > 1) title = `${needs.length} things need you.`;
+  if (!needs.length) return null;
   return (
-    <section className="adm-needs" aria-labelledby="adm-needs-h">
-      <h1 id="adm-needs-h" className={`adm-head${needs.length ? ' is-bad' : ''}`}>{title}</h1>
-      {needs.length > 0 && (
-        <ul className="adm-need-list">
-          <AnimatePresence initial={false}>
-            {needs.map((n) => (
-              <motion.li key={n.key} layout initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }} transition={springs.snappy}>
-                <i aria-hidden="true" />
-                <span>{n.text}</span>
-                {n.act && <button type="button" className="btn btn-quiet adm-small" onClick={n.act.run}>{n.act.label}</button>}
-              </motion.li>
-            ))}
-          </AnimatePresence>
-        </ul>
-      )}
+    <section className="adm-needs" aria-label="Needs you">
+      <ul className="adm-need-list">
+        <AnimatePresence initial={false}>
+          {needs.map((n) => (
+            <motion.li key={n.key} layout initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }} transition={springs.snappy}>
+              <i aria-hidden="true" />
+              <span>{n.text}</span>
+              {n.act && <button type="button" className="btn btn-quiet adm-small" onClick={n.act.run}>{n.act.label}</button>}
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </ul>
     </section>
   );
 }

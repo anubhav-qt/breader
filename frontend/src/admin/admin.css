@@ -37,7 +37,6 @@
 /* Words */
 .adm-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
 .adm-count { color: var(--ink); }
-.adm-head { margin: 14px 0 4px; font: 700 64px/0.85 var(--read); letter-spacing: -0.01em; }
 .adm-big { margin: 0; font: 700 46px/0.85 var(--read); }
 .adm-mid { margin: 0; font: 700 32px/0.9 var(--read); }
 .adm-sub, .adm-dim, .adm-bad, .adm-none { margin: 0; font: var(--ui-w) 12px/1.5 var(--ui); }
@@ -50,7 +49,7 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 .adm-wide { width: 100%; }
 
 /* What needs you: a red square, what's wrong, and the button that sees to it. */
-.adm-need-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; max-width: var(--adm-wide); }
+.adm-need-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: var(--adm-wide); }
 .adm-need-list li { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 10px 8px 16px; border-radius: 14px; background: var(--danger-soft); }
 .adm-need-list li > i { flex: none; width: 8px; height: 8px; background: var(--danger); }
 .adm-need-list li > span { flex: 1; min-width: 0; font: var(--ui-w) 13px/1.45 var(--ui); overflow-wrap: anywhere; }
@@ -239,7 +238,6 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
   .adm { --adm-pad: 16px; }
   .adm-main { padding: 0 0 150px; gap: 20px; }
   .adm-hdr { padding-bottom: 12px; }
-  .adm-head { font-size: 48px; }
   .adm-big { font-size: 38px; }
   .adm-glance { gap: 8px; }
   .adm-tile b { font-size: 30px; }
