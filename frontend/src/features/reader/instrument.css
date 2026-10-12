@@ -130,6 +130,15 @@
 /* 2 voices: her lines and his in their own colours (Aa), deeper on light pages like the book's. */
 .rd ::highlight(narrate-her) { color: var(--her-mark); }
 .rd ::highlight(narrate-his) { color: var(--his-mark); }
+/* Character voices: the people with most to say each in their own colour (voice/cast.ts castPalette). */
+.rd ::highlight(narrate-0) { color: var(--cast-0); }
+.rd ::highlight(narrate-1) { color: var(--cast-1); }
+.rd ::highlight(narrate-2) { color: var(--cast-2); }
+.rd ::highlight(narrate-3) { color: var(--cast-3); }
+.rd ::highlight(narrate-4) { color: var(--cast-4); }
+.rd ::highlight(narrate-5) { color: var(--cast-5); }
+.rd ::highlight(narrate-6) { color: var(--cast-6); }
+.rd ::highlight(narrate-7) { color: var(--cast-7); }
 /* The word a tap is asking about (chrome/SayAs.tsx), lit like a selection. */
 .rd ::highlight(say-as) { background-color: color-mix(in srgb, var(--book) 34%, transparent); }
 .i3-mid {
@@ -284,6 +293,22 @@
 .rd.is-immersed ::highlight(narrate-his) { color: var(--r-fg); }
 .rd.is-immersed ::highlight(narrate-said-her) { color: var(--her-mark); }
 .rd.is-immersed ::highlight(narrate-said-his) { color: var(--his-mark); }
+.rd.is-immersed ::highlight(narrate-0),
+.rd.is-immersed ::highlight(narrate-1),
+.rd.is-immersed ::highlight(narrate-2),
+.rd.is-immersed ::highlight(narrate-3),
+.rd.is-immersed ::highlight(narrate-4),
+.rd.is-immersed ::highlight(narrate-5),
+.rd.is-immersed ::highlight(narrate-6),
+.rd.is-immersed ::highlight(narrate-7) { color: var(--r-fg); }
+.rd.is-immersed ::highlight(narrate-said-0) { color: var(--cast-0); }
+.rd.is-immersed ::highlight(narrate-said-1) { color: var(--cast-1); }
+.rd.is-immersed ::highlight(narrate-said-2) { color: var(--cast-2); }
+.rd.is-immersed ::highlight(narrate-said-3) { color: var(--cast-3); }
+.rd.is-immersed ::highlight(narrate-said-4) { color: var(--cast-4); }
+.rd.is-immersed ::highlight(narrate-said-5) { color: var(--cast-5); }
+.rd.is-immersed ::highlight(narrate-said-6) { color: var(--cast-6); }
+.rd.is-immersed ::highlight(narrate-said-7) { color: var(--cast-7); }
 .rd.is-immersed:not(.is-aloud) .fv-flow { cursor: pointer; }
 
 .rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }

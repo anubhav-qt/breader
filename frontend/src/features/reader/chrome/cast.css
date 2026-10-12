@@ -1,5 +1,6 @@
 /* Character voices in the voice sheet (chrome/Cast.tsx). Each kind of voice has a colour: women and
-   men in her and his colours from 2 voices, anyone neither in the book's. */
+   men in her and his colours from 2 voices, anyone neither in the book's. The people with most to
+   say have a colour of their own instead (--cast-0…), the one their lines are lit in. */
 
 .rd {
   --cs-F: var(--her-mark);
@@ -29,7 +30,6 @@
 }
 .cs-face.is-F { --k: var(--cs-F); }
 .cs-face.is-M { --k: var(--cs-M); }
-.cs-face.is-N { --k: var(--cs-N); }
 .cs-face.is-all { --k: var(--book-mark); }
 .cs-face.is-s { width: 28px; height: 28px; border-radius: 7px; font-size: 10.5px; }
 .cs-face.is-m { width: 42px; height: 42px; }

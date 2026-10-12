@@ -1,10 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { AiCastResponse, AiGender } from '@breader/shared/ai';
+import type { BookColor } from '../../../data/colors';
 import { readLocal, writeLocal } from '../../../lib/store';
 import { keptCast, loadCast } from '../ai';
 import { BUILT_IN, type Engine, type SamplePart, type VoiceInfo } from './catalog';
 import { playSample } from './speaker';
-import type { Marks } from './two';
+import type { Marks, Two } from './two';
 
 /*
  * Character voices: every person in a book read by a voice of their own, from the thirty of the
@@ -18,6 +19,9 @@ import type { Marks } from './two';
  *
  * A voice picked by hand or reshuffled is kept for the series the book is in, as the library has
  * it, by the person's id across the series: so they sound the same in every one of its books.
+ *
+ * The people with most to say so far get a colour each, for their face and their lines lit as
+ * they're read; everyone else is lit in her colour or his.
  */
 
 /** A woman, a man, or neither (anyone's voice will do). */
@@ -46,11 +50,48 @@ export interface Character {
   lines: number;
   /** The voice the AI picked for them in each model, by its id there; null until it has. */
   voice: Record<Engine, string> | null;
+  /** Their own colour, for their face and their lines read aloud (--cast-0…), or -1 for their kind's. */
+  color: number;
+}
+
+/** How many of the people with most to say get a colour of their own. */
+export const COLORED = 8;
+
+/**
+ * The colours they get, in the order they're handed out: book colours, the ones furthest apart
+ * first. Graphite reads like the text, so it's left out.
+ */
+const COLOR_ORDER: BookColor[] = ['ochre', 'teal', 'plum', 'clay', 'moss', 'lilac', 'sand', 'indigo', 'green', 'blush', 'sage', 'sky', 'rose'];
+
+/** The colours for the people with most to say, the first first: never her colour or his (`two`), which everyone else is lit in. */
+export function castPalette(two: Record<Two, BookColor>): BookColor[] {
+  const out: BookColor[] = [];
+  for (const c of COLOR_ORDER) {
+    if (out.length === COLORED) break;
+    if (c === two.F || c === two.M) continue;
+    out.push(c);
+  }
+  return out;
 }
 
 function charactersOf(r: AiCastResponse | null): Character[] | null {
   if (!r) return null;
-  return r.people.map((p) => ({ key: p.key, id: p.id, name: p.name, kind: p.g, lines: p.lines, voice: p.voice }));
+  // The people with most to say come first, and the first few get a colour each.
+  return r.people.map((p, i) => {
+    let color = -1;
+    if (i < COLORED) color = i;
+    return { key: p.key, id: p.id, name: p.name, kind: p.g, lines: p.lines, voice: p.voice, color };
+  });
+}
+
+/** Each speaker's own colour by their key, for the people met so far who have one. */
+export function castColors(book: string): Map<number, number> {
+  const out = new Map<number, number>();
+  const people = charactersOf(keptCast(book)) ?? [];
+  for (const c of people) {
+    if (c.color >= 0) out.set(c.key, c.color);
+  }
+  return out;
 }
 
 export interface BookCast {

@@ -8,7 +8,7 @@ import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePref
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { useSpeech } from './voice/server';
-import { castNow, castSig, castVoices, useCast } from './voice/cast';
+import { castColors, castNow, castSig, castVoices, COLORED, useCast } from './voice/cast';
 import { failed, hold, letGoKeys, missingAll, play, prepare, release, retry, setLoudness, synth, unlock, type Clip, type Playing } from './voice/speaker';
 import { inTwo, type Marks, type Two } from './voice/two';
 
@@ -130,9 +130,18 @@ const HIGHLIGHT = 'narrate';
 const SAID = 'narrate-said';
 /** 2 voices lights her lines and his in their own colours: `narrate-her`, `narrate-said-his`… */
 const TONES = { F: '-her', M: '-his' } as const;
-let tone: Two | null = null;
-/** Whose voice the sentence lit next is in, for its colour; null for one voice. */
-export const setTone = (g: Two | null) => { tone = g; };
+/** Character voices light the people with most to say in a colour each: `narrate-0`, `narrate-said-0`… */
+const OWN = Array.from({ length: COLORED }, (_, i) => `-${i}`);
+let tone = '';
+/**
+ * The colour of the sentence lit next: whose voice it's in, hers or his, or null for one voice. Or
+ * the speaker's own `color` (voice/cast.ts castColors), when they have one.
+ */
+export const setTone = (g: Two | null, color = -1) => {
+  if (color >= 0) tone = OWN[color];
+  else if (g) tone = TONES[g];
+  else tone = '';
+};
 type Highlights = { get: (name: string) => { clear: () => void } | undefined; set: (name: string, h: unknown) => void; delete: (name: string) => void };
 const highlights = (globalThis.CSS as unknown as { highlights?: Highlights } | undefined)?.highlights;
 
@@ -149,18 +158,17 @@ function unlight(name: string) {
 
 export function light(range: Range | null, said: Range | null = null) {
   if (!highlights) return;
-  for (const sfx of ['', ...Object.values(TONES)]) {
+  for (const sfx of ['', ...Object.values(TONES), ...OWN]) {
     unlight(HIGHLIGHT + sfx);
     unlight(SAID + sfx);
   }
   if (!range) return;
-  const sfx = tone ? TONES[tone] : '';
   const H = (globalThis as unknown as { Highlight: new (...r: Range[]) => { priority: number } }).Highlight;
-  highlights.set(HIGHLIGHT + sfx, new H(range));
+  highlights.set(HIGHLIGHT + tone, new H(range));
   if (!said) return;
   const h = new H(said);
   h.priority = 1;
-  highlights.set(SAID + sfx, h);
+  highlights.set(SAID + tone, h);
 }
 
 /* Timing */
@@ -317,6 +325,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     /** Character voices, by the speaker's key, as the voice sheet hands them out (voice/cast.ts). */
     let cast = new Map<number, VoiceInfo>();
     let castKeys = '';
+    /** The colours of the people with most to say, by key, as the voice sheet shows them. */
+    let colors = new Map<number, number>();
     const voiceOf = (s: Sentence) => {
       if (s.who !== undefined && s.who >= 0) {
         const own = cast.get(s.who);
@@ -325,6 +335,12 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       }
       if (voices.length > 1 && s.g === 'M') return voices[1];
       return voices[0];
+    };
+    /** The speaker's own colour while it's their own voice reading, or -1 for hers or his. */
+    const colorOf = (s: Sentence) => {
+      if (s.who === undefined || s.who < 0) return -1;
+      if (voiceOf(s) !== cast.get(s.who)) return -1;
+      return colors.get(s.who) ?? -1;
     };
     /**
      * Character voices kept loaded beside hers and his, the last used first: only a couple on this
@@ -443,7 +459,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       }
       // Character voices as the sheet has them now: a pick or a reshuffle makes what's ahead again.
       let castNext = new Map<number, VoiceInfo>();
-      if (shape.startsWith('cast') && marks.current && voices.length) castNext = castVoices(book, voices[0].engine, marks.current);
+      colors = new Map();
+      if (shape.startsWith('cast') && marks.current && voices.length) {
+        castNext = castVoices(book, voices[0].engine, marks.current);
+        colors = castColors(book);
+      }
       const castNextKeys = [...castNext].map(([k, v]) => `${k}=${v.key}`).join(',');
       if (castNextKeys !== castKeys) {
         cast = castNext;
@@ -460,7 +480,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       const s = list[i];
       const pic = s.pic !== undefined;
       spot.current = { s, at: 0 };
-      setTone(voices.length > 1 ? s.g ?? null : null);
+      if (voices.length > 1) setTone(s.g ?? null, colorOf(s));
+      else setTone(null);
       // Into the next chapter: the page follows as soon as it's seen.
       if (s.section !== l.at()) behind.current = true;
       ahead();

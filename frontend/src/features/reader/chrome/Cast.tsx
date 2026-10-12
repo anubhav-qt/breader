@@ -35,9 +35,15 @@ function initials(name: string) {
   return name.slice(0, 2);
 }
 
-/** A face: the character's initials, in their kind's colour. */
+/** A character's colour: their own, for the people with most to say, or else their kind's. */
+function tintOf(c: Character) {
+  if (c.color >= 0) return `var(--cast-${c.color})`;
+  return `var(--cs-${c.kind})`;
+}
+
+/** A face: the character's initials, in their colour. */
 function Face({ c, size = 'm' }: { c: Character; size?: 's' | 'm' | 'l' }) {
-  return <span className={`cs-face is-${c.kind} is-${size}`} aria-hidden="true">{initials(c.name)}</span>;
+  return <span className={`cs-face is-${size}`} style={{ '--k': tintOf(c) } as CSSProperties} aria-hidden="true">{initials(c.name)}</span>;
 }
 
 /** Plays a voice's sample, and says which one is playing. */
@@ -314,7 +320,7 @@ function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
   return (
     <div className="cs-speaking">
       {now && (
-        <div className={`cs-now${playing ? ' is-live' : ''}`} style={{ '--k': `var(--cs-${now.c.kind})` } as CSSProperties}>
+        <div className={`cs-now${playing ? ' is-live' : ''}`} style={{ '--k': tintOf(now.c) } as CSSProperties}>
           <Face c={now.c} size="l" />
           <span className="cs-now-t">
             <span className="cs-now-w">{playing ? 'Speaking now' : 'First to speak'}</span>
