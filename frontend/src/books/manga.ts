@@ -139,7 +139,7 @@ async function filesOf(blob: Blob): Promise<Page[]> {
 export async function openManga(blob: Blob, fallbackTitle: string): Promise<MangaBook> {
   const files = await filesOf(blob);
   const pages = files.filter((f) => typeOf(f.name) && !hidden(f.name)).sort((a, b) => byPage(a.name, b.name));
-  if (!pages.length) throw new Error('This file has no pages. Breader reads CBZ files of JPEG, PNG, WebP, GIF or AVIF pictures.');
+  if (!pages.length) throw new Error('This file has no pages.');
   const infoFile = files.find((f) => fileName(f.name).toLowerCase() === 'comicinfo.xml' && !hidden(f.name));
   const info: ComicInfo = infoFile
     ? await infoFile.read('text/xml').then((b) => b.text()).then(readComicInfo).catch((): ComicInfo => ({}))

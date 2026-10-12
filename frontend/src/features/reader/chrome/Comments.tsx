@@ -58,7 +58,7 @@ export function Thread({ section, open, ...view }: TalkView & { section: number;
   if (!open) {
     return (
       <p className="p-note cm-why">
-        {info ? `${many(info.count)} here. ` : ''}It opens once you’ve read to the end of this chapter, so nothing is given away.
+        {info ? `${many(info.count)} · ` : ''}Opens at the chapter’s end
       </p>
     );
   }
@@ -230,13 +230,12 @@ function Composer({ view, section, to, onDone }: { view: TalkView; section: numb
 
   const note = needName
     ? check && check.name === typed && !check.free
-      ? check.message ?? 'Someone already has that name.'
+      ? check.message ?? 'Taken'
       : typed && nameIsCensored(typed)
-        ? 'Others will see this name as a WeirdName.'
+        ? 'Shown as a WeirdName'
         : nameOk && typed
-          ? 'That name is free. It’s yours once you send.'
-          // Said once, at the top of the thread.
-          : to ? '' : 'Pick the name others see you by. Nobody else can have it.'
+          ? 'Free'
+          : ''
     : '';
 
   return (

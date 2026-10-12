@@ -154,7 +154,6 @@ function GenrePicker({ value, added, others, onPick, onSeries, onClose }: Omit<P
         role="dialog"
         aria-modal="true"
         aria-labelledby="gp-title"
-        aria-describedby="gp-note"
         onKeyDown={onKeyDown}
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -172,9 +171,6 @@ function GenrePicker({ value, added, others, onPick, onSeries, onClose }: Omit<P
             <IconClose />
           </button>
         </div>
-        <p className="gp-note" id="gp-note">
-          {others ? `As many as fit. Each one asks: this book, or all ${total} in the series.` : 'As many as fit.'}
-        </p>
         <div ref={grid} className="gp-grid" role="group" aria-labelledby="gp-title">
           {GENRES.map((g, i) => {
             const on = picked.includes(g.id);

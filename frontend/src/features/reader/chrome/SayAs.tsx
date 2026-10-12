@@ -335,7 +335,7 @@ function Card({ at, area, onDone }: { at: Picked; area: RefObject<HTMLDivElement
       transition={springs.snappy}
     >
       <CloseDots onClick={cancel} />
-      <p className="sa-q">What should it be pronounced as?</p>
+      <p className="sa-q">Say it as</p>
       <p className="sa-word">{at.text}</p>
       <div className="sa-say">
         <input

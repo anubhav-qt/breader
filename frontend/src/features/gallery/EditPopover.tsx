@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { AI_ELSEWHERE, AI_LABEL, AI_ON, AI_WHY } from '../../books/ai';
+import { AI_ELSEWHERE, AI_LABEL, AI_WHY } from '../../books/ai';
 import type { BookEdit } from '../../books/types';
 import { BOOK_COLORS, colorVars } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
@@ -254,7 +254,7 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
           on={!!book.ai}
           label={AI_LABEL}
           note={book.aiElsewhere ? AI_ELSEWHERE : undefined}
-          why={book.ai ? AI_ON : AI_WHY}
+          why={book.ai ? undefined : AI_WHY}
           onTurnOn={() => onChange({ ai: true })}
         />
       )}

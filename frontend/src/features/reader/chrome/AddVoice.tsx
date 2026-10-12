@@ -65,9 +65,6 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
         <div className="pnl-h">Add a voice</div>
         <button type="button" className="vs-back" onClick={() => onDone(null)} disabled={!!step}>‹ Voices</button>
       </div>
-      <p className="p-note vs-about">
-        {mode === 'normal' ? 'A Piper voice: its .onnx and .onnx.json together.' : 'A Piper voice (its .onnx and .onnx.json together), or a Kokoro pack for a heavy voice (a .bin or .pt).'} English only, for now.
-      </p>
       <input ref={input} type="file" multiple hidden accept=".onnx,.json,.bin,.pt" onChange={(e) => { void take([...(e.target.files ?? [])]); e.target.value = ''; }} />
       <button
         type="button"
@@ -84,7 +81,7 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
             <span className="vs-tag">{mb(draft.model.byteLength + (draft.config?.byteLength ?? 0))}</span>
           </>
         ) : (
-          <><DotIcon rows={PLUS} /><span>Choose or drop files</span></>
+          <><DotIcon rows={PLUS} /><span>{mode === 'normal' ? '.onnx + .onnx.json' : '.onnx + .onnx.json, or .bin / .pt'}</span></>
         )}
       </button>
       {draft && (
@@ -95,12 +92,11 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
           </div>
           <Segmented label="Accent" value={accent} onChange={setAccent} options={[{ v: 'US', label: 'US' }, { v: 'UK', label: 'UK' }]} />
           <Segmented label="Sounds like" value={gender} onChange={setGender} options={SOUNDS} />
-          <p className="p-note vs-about">A woman’s voice or a man’s can read in 2 voices too.</p>
           <div className="ctl tgrow vs-share">
             <span className="clbl">Share with every reader</span>
             <button type="button" className="tg" role="switch" aria-checked={open} aria-label="Share with every reader" onClick={() => setOpen(!open)} disabled={!!step} />
           </div>
-          <p className="p-note vs-about">Anyone who hears {KEEP_WORDS} words of a shared voice keeps it, even if you stop sharing it. Only share voices you’re free to.</p>
+          <p className="p-note vs-about">Listeners keep it after {KEEP_WORDS} words.</p>
         </>
       )}
       {error && <p className="p-note vs-err vs-about" role="alert">{error}</p>}

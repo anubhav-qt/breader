@@ -30,61 +30,26 @@ import { CloseDots, DotIcon } from './parts';
  * and a tap says why, as 2 voices does.
  */
 
-const ABOUT: Record<Mode, string> = {
-  normal: 'Voices that run on this device’s processor, fine on any phone or laptop. Each one downloads once, about 66 MB, and then reads offline.',
-  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, from where you pick, until Immersive is off: any Piper voice, or on a computer, one of Kokoro’s richer ones below.',
-};
-const HEAVY = 'Richer, and much heavier: one download of about 330 MB for all thirty, run on the graphics chip. Use them on a computer. On a phone they can hang the browser.';
-/** The heavy voices, read on the server. */
-const SERVER_HEAVY = 'Richer voices, read on Breader’s own computer, so nothing downloads and any phone can have them. Each sentence takes it a little longer than a Normal voice.';
-const FALLBACK = 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, with a Piper voice, each about 66 MB. Kokoro’s need a newer computer with a recent Chrome, Edge or Safari.';
 /** Why Kokoro can't be picked: Normal reads only with Piper, and this browser can't run Kokoro. */
 const NO_KOKORO = {
-  normal: 'Kokoro’s voices read in Immersive. Switch Mode to Immersive to pick one.',
-  fallback: 'Kokoro’s voices need a newer computer with a recent Chrome, Edge or Safari.',
+  normal: 'Immersive only.',
+  fallback: 'Needs a newer computer.',
 };
 /** A browser that can't run any voice still has Immersive. */
-const NO_VOICES: Record<Mode, string> = {
-  normal: 'This browser can’t run voices. Immersive still works without one.',
-  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. This browser can’t run voices, so it stays quiet.',
-};
-const HUNG = 'A Kokoro voice stopped this browser last time, so Immersive reads with a Piper voice now. Kokoro’s are best on a computer.';
-/** Read on the server: what each mode does then. */
-const SERVER: Record<Mode, string> = {
-  normal: 'Breader’s own computer reads aloud and sends the sound here, for a phone that’s slow with voices of its own. Nothing downloads, but it needs a connection.',
-  immersive: 'The page dims. Begin on the bottom line, pick where to start, and the words light up at your pace; any tap stops them. Play reads them aloud instead at the same pace, from where you pick, until Immersive is off, with a voice from Breader’s own computer: a Piper one, or one of Kokoro’s richer ones below.',
-};
+const NO_VOICES = 'This browser can’t run voices.';
+const HUNG = 'Kokoro froze this browser last time, so Piper reads.';
 
 /*
- * Two voices, a woman's and a man's, need the book read through first to know who says each line
- * (ai/procedure.md), and its background music to know each scene. Until this book has been, 2 and
- * the music look off and a tap on them says why, warmly, with the book's AI switch right there
- * when it's off.
+ * Two voices, character voices and the background music need the book read through first
+ * (ai/procedure.md). Until this book has been, they look off and a tap on them opens a small card,
+ * with the book's AI switch right there when it's off.
  */
 export type Soon = 'two' | 'music' | 'cast';
-/** What the card says of each: its name, what it will be, why the book is read first, and what turns on. */
-const SOON: Record<Soon, { title: string; promise: string; asked: string; told: string; name: string }> = {
-  two: {
-    title: 'Two voices',
-    promise: 'Soon a book can be read by two voices, a woman’s and a man’s, so every conversation sounds like people talking.',
-    asked: 'To get each line right, an AI reads the whole book first, noting who says what.',
-    told: 'To get each line right, the whole book is read first, noting who says what.',
-    name: '2 voices',
-  },
-  music: {
-    title: 'Background music',
-    promise: 'Soon a book can have music of its own, scored the way an anime is: a track or a silence under every scene while it reads aloud or lights up.',
-    asked: 'To choose each scene’s music, an AI reads the whole book first.',
-    told: 'To choose each scene’s music, the whole book is read first.',
-    name: 'background music',
-  },
-  cast: {
-    title: 'Character voices',
-    promise: 'Soon every person in a book can have a voice of their own, picked from thirty, so you know who’s talking before the line says.',
-    asked: 'To know who says each line, an AI reads the whole book first and lists who’s in it.',
-    told: 'To know who says each line, the whole book is read first and everyone in it listed.',
-    name: 'character voices',
-  },
+/** The card's title for each. */
+const SOON: Record<Soon, string> = {
+  two: 'Two voices',
+  music: 'Background music',
+  cast: 'Character voices',
 };
 /** 1 voice, 2 (hers and his), or a voice for each character. */
 type Count = 1 | 2 | 'cast';
@@ -92,10 +57,6 @@ const counts = (ready: boolean, castReady: boolean): Array<{ v: Count; label: st
   { v: 1, label: '1 voice' },
   { v: 2, label: '2 voices', muted: !ready },
   { v: 'cast', label: 'Characters', muted: !castReady },
-];
-const SIDES = [
-  { v: 'F' as const, label: 'Her' },
-  { v: 'M' as const, label: 'His' },
 ];
 const modelsOf = (kokoro: boolean): Array<{ v: Engine; label: string; muted?: boolean }> => [
   { v: 'piper', label: 'Piper' },
@@ -257,19 +218,17 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       <div className="pnl vs">
         <div className="pnl-h">Read aloud</div>
         <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
-        <p className="p-note vs-about">{NO_VOICES[mode]}</p>
+        <p className="p-note vs-about">{NO_VOICES}</p>
         {canPace && pace}
         {canPace && music === 'ready' && <Music />}
       </div>
     );
   }
 
-  // The model toggle, and what it says when Kokoro is picked or can't be.
+  // The model toggle, and why Kokoro can't be picked, when it can't.
   let modelNote: string | null = null;
   if (noKokoro && fallback) modelNote = NO_KOKORO.fallback;
   else if (noKokoro) modelNote = NO_KOKORO.normal;
-  else if (model === 'kokoro' && server) modelNote = SERVER_HEAVY;
-  else if (model === 'kokoro') modelNote = HEAVY;
   const models = (
     <>
       <Segmented label="Model" value={model} onChange={setModel} options={modelsOf(voices === 'immersive')} />
@@ -297,7 +256,6 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
           <button type="button" className="tg" role="switch" aria-checked={prefs.server} aria-label="Read aloud on Breader’s own computer" onClick={() => setVoicePrefs({ server: !prefs.server })} />
         </div>
       )}
-      <p className="p-note vs-about">{server ? SERVER[mode] : fallback ? FALLBACK : ABOUT[mode]}</p>
       {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
       <Music onLocked={musicLocked} />
@@ -319,8 +277,6 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
           {models}
         </CastSection>
       )}
-      {/* Whose voice reads a story told by no one: 2 voices only. */}
-      {paired && !characters && <Segmented label="No point of view" value={prefs.noPov} onChange={(g) => setVoicePrefs({ noPov: g })} options={SIDES} />}
       {mode === 'normal' && <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />}
       <div className="vs-foot">
         {loading ? (
@@ -343,7 +299,6 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
  * the book's AI switch is, and the card has it, to turn on there and then.
  */
 export function NotYet({ what, off, onAi, onClose }: { what: Soon; off: boolean; onAi?: (on: boolean) => void; onClose: () => void }) {
-  const say = SOON[what];
   // Asked while the switch was off: it stays on the card, on or off, until the card closes.
   const [asked] = useState(off && !!onAi);
   const first = useRef<HTMLButtonElement>(null);
@@ -379,24 +334,18 @@ export function NotYet({ what, off, onAi, onClose }: { what: Soon; off: boolean;
         transition={springs.snappy}
       >
         <CloseDots onClick={onClose} />
-        <div className="pnl-h">{say.title}</div>
+        <div className="pnl-h">{SOON[what]}</div>
         <p className="vs-soon-t" id="vs-soon-t">Not quite yet</p>
-        <p className="p-note">{say.promise}</p>
         {asked ? (
           <>
-            <p className="p-note">{say.asked} Let one read along with this book, and it joins the queue.</p>
             <div className="ctl tgrow vs-soon-ai">
               <span className="clbl" id="vs-soon-ai">{AI_LABEL}</span>
               <button type="button" className="tg" role="switch" aria-checked={!off} aria-labelledby="vs-soon-ai" ref={first} disabled={!off} onClick={() => onAi!(true)} />
             </div>
-            <p className="p-note" aria-live="polite">{off ? 'It never keeps your book or learns from it. Once on, it stays on, for everyone who has this book.' : `It’s in the queue. Once it’s ready, ${say.name} turns on here by itself. Thank you for bearing with us.`}</p>
+            <p className="p-note" aria-live="polite">{off ? 'Once on, it stays on.' : 'In the queue.'}</p>
           </>
         ) : (
-          <>
-            <p className="p-note">{say.told} That takes a while, and this book isn’t ready yet. Sorry for the wait, and thank you for bearing with us.</p>
-            {off && <p className="p-note">This book hasn’t let an AI read along yet. Turn that on from its ⋯ in your library, and it joins the queue.</p>}
-            <p className="p-note">Once it’s ready, {say.name} turns on here by itself.</p>
-          </>
+          <p className="p-note">{off ? 'Turn on AI from its ⋯ in your library.' : 'In the queue.'}</p>
         )}
         <button type="button" className="vs-go" ref={asked ? undefined : first} onClick={onClose}>{asked && off ? 'Not now' : 'I’ll wait'}</button>
       </motion.div>

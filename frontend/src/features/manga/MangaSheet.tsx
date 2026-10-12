@@ -52,7 +52,7 @@ interface Props {
 type Load<T> = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; value: T };
 
 function errorText(e: unknown): string {
-  if (e instanceof ApiError && e.code === 'laptop_off') return 'Manga comes through Breader’s own computer, which can’t be reached just now.';
+  if (e instanceof ApiError && e.code === 'laptop_off') return 'Breader’s computer can’t be reached right now.';
   if (e instanceof Error) return e.message;
   return 'Breader couldn’t reach it.';
 }
@@ -392,9 +392,8 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
     askText = `Read it from ${siteOf(asking.found)}`;
     if (asking.group) askText += `, ${asking.group.name}`;
     askText += ', from now on?';
-    if (here !== null) askText += ` Your place stays at Ch. ${here}.`;
-    if (kept === 1) askText += ' The chapter kept offline would need keeping again.';
-    else if (kept > 1) askText += ` The ${kept} chapters kept offline would need keeping again.`;
+    if (kept === 1) askText += ' Its offline chapter downloads again.';
+    else if (kept > 1) askText += ` Its ${kept} offline chapters download again.`;
   }
   const move = () => {
     if (!had || !asking) return;
@@ -413,8 +412,8 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
     else count = extras ? `${plural(whole, 'chapter')} · ${plural(extras, 'extra')}` : plural(whole, 'chapter');
   }
 
-  let credit = `From ${siteOf(shown)}, through Breader’s own computer. Breader asks it for each chapter’s pages as they’re read.`;
-  if (shown.kind === 'mangadex') credit = 'Chapters come from MangaDex, made by the scanlation groups named with each. Reading them here, Breader asks MangaDex for each page as it’s read.';
+  let credit = `From ${siteOf(shown)}.`;
+  if (shown.kind === 'mangadex') credit = 'From MangaDex.';
 
   return createPortal(
     <Modal title={main.card.title} onClose={onClose} width={860} className="mds">

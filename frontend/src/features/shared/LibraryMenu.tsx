@@ -153,8 +153,7 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
       </form>
       {error && <p className="lm-error" role="alert">{error}</p>}
       <p className="lm-note">
-        Your key opens the books you share for anyone you give it to: they can read them and keep a copy, never change yours.
-        It opens your whole library too, so give it to people you trust.
+        Your key opens your whole library. Give it only to people you trust.
       </p>
     </motion.div>
   );

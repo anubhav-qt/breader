@@ -224,15 +224,6 @@ function DataSaver() {
  * scrolled, and keeps a layout there apart from wider ones; the column of pages is as wide as the screen.
  */
 function MangaLookControls({ look, pick, widen, saver }: MangaControls) {
-  const keeps = look.narrow ? 'Each manga keeps its own layout on a screen this narrow, apart from wider ones.' : 'Each manga keeps its own layout.';
-  let note = `One page after another, down the screen. A panel held steps on to the next in the direction picked. ${keeps}`;
-  if (look.layout === 'pages') {
-    const shown = look.narrow ? 'One page at a time, and a spread printed across two pages whole: tap it twice to look closer.' : 'Two pages side by side when the screen is wide enough.';
-    note = `${shown} Manga reads right to left, comics left to right. ${keeps}`;
-  }
-  if (look.layout === 'panels') {
-    note = `One panel at a time, fitted to the screen, in the order it’s read: the arrows or a swipe glide on to the next, and after a page’s last panel, turn the page. Manga reads right to left, comics left to right. ${keeps}`;
-  }
   return (
     <>
       <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }, { v: 'panels', label: 'Panels' }]} />
@@ -240,13 +231,7 @@ function MangaLookControls({ look, pick, widen, saver }: MangaControls) {
       {!look.narrow && look.layout === 'scroll' && (
         <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
       )}
-      <p className="p-note">{note}</p>
-      {saver && (
-        <>
-          <DataSaver />
-          <p className="p-note">Data saver brings MangaDex’s smaller copy of each page, for a slow or metered connection. Pages kept offline stay as they were kept.</p>
-        </>
-      )}
+      {saver && <DataSaver />}
     </>
   );
 }
@@ -282,10 +267,7 @@ export function AppearancePanel({ settings, kind, update, two = false, manga }: 
       {kind === 'manga' && manga ? (
         <MangaLookControls {...manga} />
       ) : kind === 'pdf' ? (
-        <>
-          <Segmented label="Layout" value={settings.pdfLayout} onChange={(v) => update((s) => ({ ...s, pdfLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
-          <p className="p-note">PDF pages keep their own layout, so typeface and size don’t apply.</p>
-        </>
+        <Segmented label="Layout" value={settings.pdfLayout} onChange={(v) => update((s) => ({ ...s, pdfLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
       ) : (
         <>
           <div className="ctl">

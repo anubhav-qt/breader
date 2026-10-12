@@ -146,7 +146,6 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
           {form && (
             <form className="login" onSubmit={submit} noValidate>
               {note && step.mode === 'login' && <p className="login-note" role="status">{note}</p>}
-              {step.mode === 'forgot' && <p className="add-local">We’ll email you a link to choose a new password.</p>}
               {google && (step.mode === 'login' || step.mode === 'signup') && (
                 <>
                   <button type="button" className="btn btn-quiet login-google" disabled={busy} onClick={google_}>
@@ -210,7 +209,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
 
           {step.mode === 'sent' && (
             <>
-              <p className="add-keynote">If there’s an account for {step.email}, a link to reset its password is on its way. It works for an hour.</p>
+              <p className="add-keynote">If {step.email} has an account, a link is on its way.</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
               </div>
@@ -249,7 +248,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
 
           {step.mode === 'failed' && (
             <>
-              <p className="add-keynote">You’re logged in, but Breader couldn’t open your library. {step.message}</p>
+              <p className="add-keynote">Couldn’t open your library. {step.message}</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={onClose}>Not now</button>
                 <button type="button" className="btn btn-primary" onClick={() => go({ mode: 'entering' })}>Try again</button>

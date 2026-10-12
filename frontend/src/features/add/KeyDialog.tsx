@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { IconCheck } from '../../components/icons';
-import { useLabels } from '../../data/labels';
 import { useSyncStatus, type SyncStatus } from '../../data/sync';
 import { normalizeKey } from '../../lib/key';
 import { FreshKey } from './FreshKey';
@@ -33,7 +32,6 @@ function syncLine(s: SyncStatus): string | null {
 }
 
 export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogin, loggedIn }: Props) {
-  const labels = useLabels();
   const [copied, setCopied] = useState(false);
   const [entered, setEntered] = useState('');
   const [busy, setBusy] = useState(false);
@@ -78,11 +76,7 @@ export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogi
           <FreshKey libraryKey={libraryKey} onLogin={onLogin} onDone={onClose} />
         ) : libraryKey ? (
           <>
-            <p className="add-keynote">
-              {loggedIn
-                ? 'Your account keeps this key. It opens your private books in any browser, without logging in.'
-                : 'This key opens your private books in any browser. Keep it somewhere safe: Breader can’t recover it.'}
-            </p>
+            {!loggedIn && <p className="add-keynote">Keep this key safe: it can’t be recovered.</p>}
             <div className="key-box">{libraryKey}</div>
             {status && <p className="add-local" role="status">{status}</p>}
             <div className="add-actions">
@@ -90,7 +84,7 @@ export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogi
             </div>
           </>
         ) : (
-          <p className="add-keynote">You’ll get a key when you add your first private book.</p>
+          <p className="add-keynote">No key yet.</p>
         )}
         {!fresh && <>
         <div className="add-sep" />
@@ -106,16 +100,13 @@ export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogi
           autoComplete="off"
           disabled={busy}
         />
-        {error ? (
-          <p className="add-local key-error" role="alert">{error}</p>
-        ) : swapping ? (
+        {error && <p className="add-local key-error" role="alert">{error}</p>}
+        {!error && swapping && (
           <p className="add-local key-error" role="alert">
             {libraryKey
-              ? 'Only for your own key from another browser: the books in this browser, and where you are in them, are swapped for that library’s. Keep your current key to come back to these.'
-              : 'Only for your own key from another browser: the books in this browser, and where you are in them, are swapped for that library’s.'}
+              ? 'Swaps this browser’s books for that library’s. Copy your key first to come back.'
+              : 'Swaps this browser’s books for that library’s.'}
           </p>
-        ) : (
-          <p className="add-local">Their shared books open as a shared library of their own. Nothing of theirs comes into {labels.mine}.</p>
         )}
         <div className="add-actions">
           {swapping ? (

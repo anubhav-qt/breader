@@ -145,7 +145,6 @@
 .rd .i3-head .i3-ai { opacity: 1; transform: none; }
 .i3-drop.is-ai { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(360px, calc(100% - 24px)); }
 .ai-pnl .ai-status { margin-top: 4px; }
-.ai-pnl-note { margin: 12px 0 0; }
 .ai-sheet { margin: 0 0 14px; padding: 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--r-line); }
 .ai-sheet .ai-label { color: var(--r-fg); }
 /* What the AI just made, or where it is, said over the bottom line. */

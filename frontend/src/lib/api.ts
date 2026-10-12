@@ -33,7 +33,7 @@ export class ApiError extends Error {
 
 export class OfflineError extends Error {
   constructor() {
-    super('Breader can’t reach its server right now. Your changes are kept in this browser and sync when it’s back.');
+    super('Can’t reach the server. Your changes sync when it’s back.');
   }
 }
 
@@ -115,7 +115,7 @@ async function laptop(path: string, body: unknown, timeout: number): Promise<Res
   if (res.ok) return res;
   const data = await res.json().catch(() => null);
   if (!data?.code && LAPTOP_GATEWAY.has(res.status)) {
-    throw new ApiError(503, 'laptop_off', 'Breader’s own computer, which reads aloud for this device, can’t be reached just now. Turn off Read on the server to read with this device’s voice.');
+    throw new ApiError(503, 'laptop_off', 'Breader’s computer can’t be reached. Turn off Read on the server to use this device’s voice.');
   }
   throw new ApiError(res.status, data?.code ?? 'error', data?.message ?? `The server answered ${res.status}.`);
 }

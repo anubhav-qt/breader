@@ -238,7 +238,6 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
       {!onlyManga && (
         <AiSwitch id="bulk-ai" label={AI_LABEL} why={AI_WHY} on={readAlong} onChange={setReadAlong} />
       )}
-      <p className="add-local">Saved in this browser first, then synced, so your key or account opens them anywhere.</p>
       <div className="add-actions">
         <button type="button" className="btn btn-ghost" disabled={adding !== null} onClick={onBack}>Choose others</button>
         <button type="button" className="btn btn-primary" disabled={reading || !total || adding !== null} onClick={() => void addAll()}>

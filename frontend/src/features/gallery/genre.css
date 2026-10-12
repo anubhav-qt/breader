@@ -37,7 +37,7 @@
   outline: none;
   overflow: hidden;
 }
-.gp-head { display: flex; align-items: center; gap: 6px; padding: 18px 14px 4px 22px; }
+.gp-head { display: flex; align-items: center; gap: 6px; padding: 18px 14px 10px 22px; }
 .gp-title {
   flex: 1;
   margin: 0;
@@ -68,7 +68,6 @@
 }
 .gp-x:hover { background: var(--fill); color: var(--ink); }
 .gp-x svg { width: 18px; height: 18px; }
-.gp-note { margin: 0; padding: 0 22px 12px; font: var(--ui-w) 12px/1.45 var(--ui); color: var(--ink-2); }
 
 /* Two columns of flat tiles: the name in capitals, a dot that lights when it's picked. */
 .gp-grid {
@@ -137,5 +136,4 @@
 @media (max-width: 560px) {
   .gp-grid { padding: 2px 16px 16px; }
   .gp-head { padding-left: 18px; }
-  .gp-note { padding-left: 18px; padding-right: 18px; }
 }

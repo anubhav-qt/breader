@@ -8,7 +8,7 @@ import { readLocal, writeLocal } from './store';
  * them, so it's asked and nothing else.
  */
 
-const OFF = 'Manga comes through Breader’s own computer, which can’t be reached just now. Chapters kept offline still open.';
+const OFF = 'Breader’s computer can’t be reached right now. Offline chapters still open.';
 
 async function ask<T>(fn: () => Promise<T>): Promise<T> {
   try {

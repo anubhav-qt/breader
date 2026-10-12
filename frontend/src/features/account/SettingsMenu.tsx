@@ -75,13 +75,12 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
     <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onLogin)}>Log in</button>
   );
   if (user && confirming) {
+    let ask = 'Log out of this browser?';
+    if (sync.pending === 1) ask = '1 change hasn’t synced and would be lost. Log out anyway?';
+    else if (sync.pending > 1) ask = `${sync.pending} changes haven’t synced and would be lost. Log out anyway?`;
     ending = (
       <div className="acct-confirm">
-        <p>
-          {sync.pending
-            ? `${sync.pending === 1 ? '1 change hasn’t' : `${sync.pending} changes haven’t`} reached your account yet, and would be lost. Log out anyway?`
-            : 'Your books stay in your account. Logging out removes them from this browser.'}
-        </p>
+        <p>{ask}</p>
         <div className="add-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
           <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run(onLogOut)}>

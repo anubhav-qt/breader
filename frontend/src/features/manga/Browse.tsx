@@ -372,7 +372,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       {body}
 
       <p className="mdx-credit">
-        Series come from <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a>, and the sites Breader’s Suwayomi reads, each card saying which. Chapters credit the scanlation groups that made them, and where a publisher puts a series up itself, its sheet links there.
+        From <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a> and Suwayomi’s sites.
       </p>
 
       {createPortal(
@@ -381,7 +381,6 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
             <Modal title="Show 18+ series" onClose={() => setAsking18(false)} width={420}>
               <div className="rm">
                 <p className="rm-ask">Only series for adults, or mixed in with everything else?</p>
-                <p className="rm-note">Tap 18+ again to hide them.</p>
                 <div className="rm-actions">
                   <button type="button" className="btn btn-quiet" onClick={() => { setAsking18(false); set({ adult: true, adultOnly: false }); }}>Mixed</button>
                   <button type="button" className="btn btn-primary" onClick={() => { setAsking18(false); set({ adult: true, adultOnly: true }); }}>Only 18+</button>

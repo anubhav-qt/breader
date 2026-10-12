@@ -67,11 +67,11 @@ export function Download({ book }: { book: ShelfItem }) {
     setPlan(null);
   };
 
-  let note: string;
+  let note: string | null = null;
   let actions: ReactNode;
   if (going) {
     const of = done.length + queued + (now ? 1 : 0);
-    note = `${done.length} of ${plural(of, 'chapter')} downloaded${now ? `, ${now.label} ${now.done} of ${now.of} pages` : ''}. It carries on while Breader is open.`;
+    note = `${done.length} of ${plural(of, 'chapter')} downloaded${now ? `, ${now.label} ${now.done} of ${now.of} pages` : ''}`;
     actions = <button type="button" className="ep-mini" onClick={stopKeeping}>Stop</button>;
   } else if (plan?.state === 'counting') {
     note = 'Counting its chapters…';
@@ -80,9 +80,7 @@ export function Download({ book }: { book: ShelfItem }) {
     note = plan.text;
     actions = <button type="button" className="ep-mini" onClick={() => void ask()}>Try again</button>;
   } else if (plan?.state === 'ready') {
-    note = left.length
-      ? `${sizeNote(left)}, kept in this browser to read with no connection. It downloads while Breader is open.`
-      : 'Every chapter is downloaded already.';
+    note = left.length ? sizeNote(left) : 'All downloaded.';
     actions = (
       <>
         <button type="button" className="ep-mini is-quiet" onClick={() => setPlan(null)}>{left.length ? 'Cancel' : 'OK'}</button>
@@ -98,7 +96,6 @@ export function Download({ book }: { book: ShelfItem }) {
       </>
     );
   } else {
-    note = 'Download every chapter to read with no connection.';
     actions = <button type="button" className="ep-mini" onClick={() => void ask()}><IconDownload />Download</button>;
   }
 
@@ -108,7 +105,7 @@ export function Download({ book }: { book: ShelfItem }) {
         <span className="ep-label">Offline</span>
         <span className="ep-off-b">{actions}</span>
       </div>
-      <p className="ep-note">{note}</p>
+      {note && <p className="ep-note">{note}</p>}
     </div>
   );
 }

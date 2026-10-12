@@ -80,20 +80,18 @@ export function CastSection({ book, design, playing, engine, children }: { book:
   const { people, asking } = useBookCast(book);
   let body: ReactNode;
   if (!people && asking) {
-    body = <p className="cs-say">Looking up who’s spoken so far…</p>;
+    body = <p className="cs-say">Looking…</p>;
   } else if (!people) {
-    body = <p className="cs-say">Can’t reach Breader to see who’s in the book. Try again once you’re online.</p>;
+    body = <p className="cs-say">Offline.</p>;
   } else if (!people.length) {
-    body = <p className="cs-say"><b>Nobody’s spoken yet.</b> Each person shows up here with their voice once they’ve said a line.</p>;
+    body = <p className="cs-say">Nobody’s spoken yet.</p>;
   } else {
     const cast = castOf(book, people, engine, state);
-    // The AI's picks, unless reshuffled, here or in another book of the series, or the book was marked before it picked voices.
-    const shuffled = cast.some((x) => x.shuffled);
+    // Back to the AI's picks, once reshuffled, where the AI picked voices.
     const voiced = people.some((c) => c.voice !== null);
-    const byAi = !shuffled && people.every((c) => c.voice !== null);
     body = (
       <>
-        {design === 'A' && <Auto book={book} cast={cast} byAi={byAi} canGoBack={reshuffled(book, state) && voiced} />}
+        {design === 'A' && <Auto book={book} cast={cast} canGoBack={reshuffled(book, state) && voiced} />}
         {design === 'B' && <List book={book} cast={cast} engine={engine} />}
         {design === 'C' && <Board book={book} cast={cast} engine={engine} />}
         {design === 'D' && <Speaking cast={cast} playing={playing} />}
@@ -104,16 +102,14 @@ export function CastSection({ book, design, playing, engine, children }: { book:
     <div className={`cs cs-${design}`}>
       {body}
       {children}
-      <p className="p-note cs-sample">Only the people who’ve spoken up to where you are. Anyone else reads in her voice or his.</p>
     </div>
   );
 }
 
-/** Auto's shape, for the cast and for 1 voice and 2: who reads, a face each, and another go, or a way `back`. */
-function Faces({ say, again, onAgain, back, children }: { say: ReactNode; again: string; onAgain: () => void; back?: { label: string; run: () => void }; children: ReactNode }) {
+/** Auto's shape, for the cast and for 1 voice and 2: a face each, and another go, or a way `back`. */
+function Faces({ again, onAgain, back, children }: { again: string; onAgain: () => void; back?: { label: string; run: () => void }; children: ReactNode }) {
   return (
     <div className="cs-auto">
-      <p className="cs-say">{say}</p>
       <div className="cs-faces">{children}</div>
       <button type="button" className="vs-add cs-shuffle" onClick={onAgain}>
         <DotIcon rows={SHUFFLE} />
@@ -141,19 +137,11 @@ function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode
 }
 
 /** A: the AI's picks, or handed out, to be heard and shuffled, and back to the AI's picks once the series is shuffled. */
-function Auto({ book, cast, byAi, canGoBack }: { book: string; cast: Cast[]; byAi: boolean; canGoBack: boolean }) {
+function Auto({ book, cast, canGoBack }: { book: string; cast: Cast[]; canGoBack: boolean }) {
   const { on, hear } = useHear();
-  const voices = new Set(cast.map((x) => x.v.key)).size;
   const people = cast.map((x) => x.c);
-  let how = 'Handed out by how much each one says.';
-  if (byAi) how = 'Each one picked by the AI that read the book.';
-  const say = (
-    <>
-      <b>{many(cast.length, 'person', 'people')}, {many(voices, 'voice', 'voices')}.</b> {how} Tap a face to hear them.
-    </>
-  );
   return (
-    <Faces say={say} again="Reshuffle the voices" onAgain={() => reshuffle(book, people)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book) } : undefined}>
+    <Faces again="Reshuffle the voices" onAgain={() => reshuffle(book, people)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book) } : undefined}>
       {cast.map((x) => (
         <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
       ))}
@@ -168,14 +156,9 @@ function Who({ kind, text }: { kind: 'all' | 'F' | 'M'; text: string }) {
 
 /** 1 voice, as Auto draws the cast: one face, everyone's. `children`: the model toggle and its voices. */
 export function OneVoice({ v, hearing, onHear, onAgain, children }: { v: VoiceInfo; hearing: boolean; onHear: () => void; onAgain: () => void; children: ReactNode }) {
-  const say = (
-    <>
-      <b>1 voice for everyone.</b> {v.name} reads it all, the story and every line said. Tap the face to hear it, or pick another voice below.
-    </>
-  );
   return (
     <div className="cs">
-      <Faces say={say} again="Another voice" onAgain={onAgain}>
+      <Faces again="Another voice" onAgain={onAgain}>
         <FaceButton face={<Who kind="all" text="All" />} name="Everyone" voice={v.name} on={hearing} label={`Hear ${v.name}, who reads everyone`} onClick={onHear} />
       </Faces>
       {children}
@@ -193,14 +176,9 @@ export function TwoVoices({ her, his, hearing, onHear, onAgain, children }: {
   onAgain: () => void;
   children: ReactNode;
 }) {
-  const say = (
-    <>
-      <b>2 voices, hers and his.</b> Women’s lines read by {her.name}, men’s by {his.name}, and the story by whoever’s telling it. Tap a face to hear them.
-    </>
-  );
   return (
     <div className="cs">
-      <Faces say={say} again="Another pair" onAgain={onAgain}>
+      <Faces again="Another pair" onAgain={onAgain}>
         <FaceButton face={<Who kind="F" text="Her" />} name="Women" voice={her.name} on={hearing === her.key} label={`Hear ${her.name}, who reads the women`} onClick={() => onHear(her)} />
         <FaceButton face={<Who kind="M" text="His" />} name="Men" voice={his.name} on={hearing === his.key} label={`Hear ${his.name}, who reads the men`} onClick={() => onHear(his)} />
       </Faces>

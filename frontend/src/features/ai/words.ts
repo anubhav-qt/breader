@@ -40,7 +40,7 @@ export function featuresIn(p: AiProgress, state: FeatureState): AiFeature[] {
 }
 
 /** What it would do, for a book whose switch is off. */
-export const OFFER = 'Turn this on and Breader can read it in 2 voices, give every character a voice of their own, score it with music, and remember who’s who for you.';
+export const OFFER = '2 voices, character voices, music and Revisit.';
 
 /** Where it is and what's coming, as a person would say it. */
 export function sentence(p: AiProgress): string {
@@ -48,7 +48,7 @@ export function sentence(p: AiProgress): string {
   if (p.stage === 'done') return `All read. ${joined(named(FEATURES, true))} are ready.`;
   if (p.stage === 'queued') {
     const before = p.ahead && p.ahead > 1 ? `${p.ahead} books before it` : 'next';
-    return `It’s in line, ${before}. Nothing to do: it starts by itself, and each part turns on as soon as it’s made.`;
+    return `In line, ${before}.`;
   }
   const ready = featuresIn(p, 'ready');
   const making = featuresIn(p, 'making');

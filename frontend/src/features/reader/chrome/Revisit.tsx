@@ -26,7 +26,6 @@ export function RevisitMenu({ chapters, current, read, onPick }: { chapters: Cha
   return (
     <div className="pnl">
       <div className="pnl-h">Revisit</div>
-      <p className="p-note rv-about">Who’s who, where’s where, and the words to know, from what you’ve read.</p>
       <div className="p-list rv-scopes">
         {shown.map((s) => (
           <button key={s.v} type="button" className="p-item rv-scope" onClick={() => onPick(s.v)}>
@@ -48,9 +47,9 @@ const TABS: Array<{ v: Tab; label: string }> = [
   { v: 'terms', label: 'Words' },
 ];
 const EMPTY: Record<Tab, string> = {
-  people: 'No one to remember here yet.',
-  places: 'No places to remember here yet.',
-  terms: 'No words that need explaining here.',
+  people: 'No one yet',
+  places: 'No places yet',
+  terms: 'No words yet',
 };
 
 type Loaded = { notes: RevisitResponse; offline: boolean };
@@ -84,7 +83,7 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
     let live = true;
     load()
       .then((g) => { if (live) setGot(g); })
-      .catch(() => { if (live) setError('Revisit can’t reach your notes just now. Check the connection, then try again.'); });
+      .catch(() => { if (live) setError('Can’t reach your notes'); });
     return () => { live = false; };
   }, [load]);
   useEffect(fetchNotes, [fetchNotes]);
@@ -108,7 +107,7 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
 
   const toggle = (key: number) => setOpen((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const title = SCOPES.find((s) => s.v === scope)!.label;
-  const status = error ?? (!got ? 'Finding your notes…' : got.offline ? 'You’re offline, so these are your notes from last time.' : null);
+  const status = error ?? (!got ? 'Finding…' : got.offline ? 'Offline: from last time' : null);
 
   /** Events, each chapter's name before its first one when the scope has more than one. */
   const events = (did: Array<[number, number, string]>) =>
@@ -198,7 +197,7 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
               </p>
             </div>
           ))}
-        {got && lists[tab].length === 0 && <p className="p-empty rv-empty">{wanted ? 'Nothing here goes by that.' : EMPTY[tab]}</p>}
+        {got && lists[tab].length === 0 && <p className="p-empty rv-empty">{wanted ? 'No match' : EMPTY[tab]}</p>}
       </div>
     </div>
   );

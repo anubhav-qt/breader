@@ -52,12 +52,12 @@ export function SearchPanel({ book, chapters, read, onGo }: Props) {
   const status = !blocks
     ? `Reading the book… ${Math.round(reading * 100)}%`
     : wanted.length < 2
-      ? 'Type a few words you remember from it.'
+      ? ''
       : n === 0
-        ? 'Nowhere in this book says that.'
+        ? 'No match'
         : result?.more
-          ? `The first ${n} places that say it.`
-          : n === 1 ? 'Once in this book.' : `${n} places say it.`;
+          ? `First ${n}`
+          : n === 1 ? '1 place' : `${n} places`;
 
   return (
     <div className="pnl pp fd">

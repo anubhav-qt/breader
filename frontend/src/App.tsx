@@ -73,9 +73,7 @@ const byRecent = (a: ShelfItem, b: ShelfItem) => b.lastOpened - a.lastOpened;
 
 /** What stopping sharing some books at once says. */
 function stoppedSharing(n: number, category: Category): string {
-  let after = 'Anyone well into one keeps their copy.';
-  if (n === 1) after = 'Anyone well into it keeps their copy.';
-  return `Stopped sharing ${countOf(n, category)}. ${after}`;
+  return `Stopped sharing ${countOf(n, category)}`;
 }
 
 /** Links that bring the reader back to the app: from Google, and from Breader's emails. */
@@ -231,7 +229,7 @@ export default function App() {
     window.history.replaceState(null, '', url);
     if (q.reset) setLogin({ mode: 'reset', token: q.reset });
     else if (q.login === 'google') setLogin({ mode: 'entering' });
-    else if (q.login === 'failed') say('Logging in with Google didn’t work. Try again, or use your email and a password.');
+    else if (q.login === 'failed') say('Google login didn’t work.');
     else if (q.verify) {
       const token = q.verify;
       void (async () => {
@@ -812,7 +810,7 @@ export default function App() {
     const r = await addLibrary(key);
     setPreview('live');
     setTab('shelf');
-    say(r.own ? 'That’s your own key: these are the books you share with it.' : `Added ${r.label} to your shared libraries`);
+    say(r.own ? 'That’s your own key.' : `Added ${r.label} to your shared libraries`);
   }, [say]);
 
   /* The Key dialog's "It's my own key": this browser switches to the library behind that key. */
@@ -1071,15 +1069,15 @@ export default function App() {
   const browseButton = mdOn !== false && (
     <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconPlus /> Browse</button>
   );
-  /** An empty shared library, of manga or books: the reader's own says how to share; someone else's, why it's empty. */
+  /** An empty shared library, of manga or books: the reader's own, with a way to add; someone else's, why it's empty. */
   const emptyShelf = (manga: boolean) => showing === 'own' ? (
     <div className="gallery-empty">
-      <p>You don’t share any {manga ? 'manga' : 'books'} yet. Switch on <b>Share with your key</b> in {manga ? 'a manga’s' : 'a book’s'} ⋯ menu, or as you add one, and anyone you give your key to can read it here.</p>
+      <p>Nothing shared yet.</p>
       {manga ? browseButton : <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>}
     </div>
   ) : others?.state === 'closed' ? (
     <div className="gallery-empty">
-      <p>This key doesn’t open {libraryName(sharing, showing)} any more. Its owner may have a new key to give you.</p>
+      <p>This key doesn’t open {libraryName(sharing, showing)} any more.</p>
     </div>
   ) : (
     <div className="gallery-empty"><p>{others?.state === 'ready' ? `Nothing is shared in ${libraryName(sharing, showing)} yet.` : 'Opening…'}</p></div>
@@ -1092,10 +1090,10 @@ export default function App() {
       if (seen.has(t)) galleries.push({ c, t });
     }
   }
-  /** No manga yet: what goes here, and how. */
+  /** No manga yet, and Browse to find some. */
   const emptyManga = (
     <div className="gallery-empty">
-      <p>Manga and comics go here. Find a series in <b>Browse</b> and add it to {labels.mine}.</p>
+      <p>No manga yet.</p>
       {browseButton}
     </div>
   );
@@ -1167,7 +1165,7 @@ export default function App() {
                 // Out of their books already: not shared either, it's nowhere, so it goes.
                 if (!shared && b.sharedOnly) { void removeBook(b.id); return; }
                 lib.setShared(b.id, shared);
-                say(shared ? `“${b.title}” is shared with your key` : `Stopped sharing “${b.title}”. Anyone well into it keeps their copy.`);
+                say(shared ? `“${b.title}” is shared with your key` : `Stopped sharing “${b.title}”`);
               }}
               picked={picking && t === tab && c === category ? picking.ids : undefined}
               onPick={pick}

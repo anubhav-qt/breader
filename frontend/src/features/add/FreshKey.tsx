@@ -29,17 +29,14 @@ export function FreshKey({ libraryKey, title, count = 1, onLogin, onDone }: Prop
     }
   };
 
+  let added = '';
+  if (count > 1) added = `Your ${count} books are in ${labels.mine}. `;
+  else if (title) added = `“${title}” is in ${labels.mine}. `;
+
   return (
     <>
-      <p className="add-keynote">
-        {count > 1 ? `Your ${count} books are in ${labels.mine}. ` : title ? `“${title}” is in ${labels.mine}. ` : ''}This is your personal key. Store it somewhere safe: it can’t be recovered.
-      </p>
+      <p className="add-keynote">{added}Keep this key safe: it can’t be recovered.</p>
       <div className="key-box">{libraryKey}</div>
-      <p className="add-local">
-        {onLogin
-          ? 'Log in to keep your books and details with an account, or use this key to open them in any browser.'
-          : 'Your account keeps this key too. It opens your books in any browser.'}
-      </p>
       <div className="add-actions key-actions">
         <button type="button" className="btn btn-quiet" onClick={() => void copy()}>
           {copied ? <><IconCheck /> Copied</> : 'Copy key'}

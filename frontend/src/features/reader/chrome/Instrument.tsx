@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, useIsPresent, type HTMLMotionProps } from 'motion/react';
-import { duration, minutesFor } from '../../../lib/format';
+import { minutesFor } from '../../../lib/format';
 import { springs } from '../../../lib/springs';
 import { chapterAtFraction, chapterName, pad2, type Chapter } from '../chapters';
 import { paceLevel } from '../pacing';
@@ -90,7 +90,6 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
     return () => window.clearTimeout(t);
   }, [kept]);
   const keep = () => { setVoicePrefs({ paceKept: true }); setKept(true); };
-  const tap = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches ? 'Tap' : 'Click';
   const choosing = !!immersion?.choosing;
   // Revisit, when the book has notes and anything's been read: past the first screen of it.
   const [scope, setScope] = useState<Scope>('chapter');
@@ -202,8 +201,6 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
 
       {note && !focus.ask ? (
         <div className="i3-hint" role="status">{note}</div>
-      ) : choosing && !panel ? (
-        <div className="i3-hint" role="status"><Typed text={`${tap} a paragraph, or type its number`} /></div>
       ) : aiHint && !panel && !focus.ask && (
         <div className="i3-hint is-ai" role="status"><Spark p={aiProgress} /><Typed text={aiHint} /></div>
       )}
@@ -262,7 +259,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
               ) : panel === 'keys' ? (
                 <KeysPanel />
               ) : panel === 'paras' && immersion ? (
-                <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} tap={tap} />
+                <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} />
               ) : (
                 <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} manga={manga ?? undefined} />
               )}
@@ -307,7 +304,6 @@ function Drop(props: HTMLMotionProps<'div'>) {
 function SleepPanel({ asked, chapters, playing, onBack, onAwake }: { asked: Asleep; chapters: Chapter[]; playing: boolean; onBack: (s: Sentence) => void; onAwake: () => void }) {
   const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const chapterOf = (s: Sentence) => chapterName(chapters, chapters.reduce((at, c, i) => (c.section <= s.section ? i : at), 0));
-  const end = asked.stopped?.at ?? asked.points[asked.points.length - 1]?.at ?? asked.touch;
   const rows = [
     ...(asked.touched ? [{ at: asked.touch, s: asked.touched, note: 'Last touch' }] : []),
     ...asked.points.map((p) => ({ ...p, note: '' })),
@@ -316,10 +312,6 @@ function SleepPanel({ asked, chapters, playing, onBack, onAwake }: { asked: Asle
   return (
     <div className="pnl">
       <div className="pnl-h">Did you sleep?</div>
-      <p className="p-note sl-about">
-        Nothing was touched for {duration((end - asked.touch) / 60_000)}
-        {asked.stopped ? `, and the voice faded out at ${clock(asked.stopped.at)}` : ''}. Go back to where you last heard it.
-      </p>
       <div className="p-list">
         {rows.map((r, i) => (
           <button key={`${r.at}.${i}`} type="button" className={`p-item sl-item${r.note === 'Last touch' ? ' is-now' : ''}`} onClick={() => onBack(r.s)}>
@@ -347,7 +339,6 @@ function KeysPanel() {
   return (
     <div className="pnl">
       <div className="pnl-h">Keys</div>
-      <p className="p-note">Space and the arrows play and move the voice, or the light, once either has started. Page Up and Page Down turn the page.</p>
       <dl className="ky-list">
         {KEY_LIST.map(([keys, does]) => (
           <div key={keys} className="ky-row">
@@ -364,7 +355,7 @@ function KeysPanel() {
  * Where the light begins: a paragraph's number, typed (Enter or Go), or picked from the chapter's
  * list, which opens on the first paragraph on screen.
  */
-function ParagraphsPanel({ list, now, onPick, tap }: { list: Paragraph[]; now?: number; onPick: (p: Paragraph) => void; tap: string }) {
+function ParagraphsPanel({ list, now, onPick }: { list: Paragraph[]; now?: number; onPick: (p: Paragraph) => void }) {
   const [typed, setTyped] = useState('');
   const hit = typed ? list.find((p) => p.n === Number(typed)) : undefined;
   const input = useRef<HTMLInputElement>(null);
@@ -386,7 +377,6 @@ function ParagraphsPanel({ list, now, onPick, tap }: { list: Paragraph[]; now?: 
     <div className="pnl pp">
       <div className="pp-head" ref={head}>
         <div className="pnl-h">Begin from</div>
-        <p className="p-note pp-about">{tap} a paragraph on the page, or type its number.</p>
         <div className="sa-say">
           <input
             ref={input}

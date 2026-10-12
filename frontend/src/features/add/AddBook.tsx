@@ -218,7 +218,6 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
               <WhoReads shared={shared} onChange={setShared} />
               <label className="add-label" htmlFor="add-genre">Genres</label>
               <GenreField id="add-genre" value={genre} className="add-input" onPick={setGenre} />
-              {shared && <span className="add-found">Anyone who reads it from your shared library starts with your genres, and can pick their own.</span>}
               <div className="add-switch">
                 <span className="add-label" id="add-series">Part of a series</span>
                 <button type="button" className="switch" role="switch" aria-checked={inSeries} aria-labelledby="add-series" onClick={() => setInSeries(!inSeries)} />
@@ -234,11 +233,9 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
                     transition={springs.snappy}
                   >
                     <SeriesField id="add-series-name" value={series} known={knownSeries} inputClass="add-input" onChange={setSeries} autoFocus={!series.name} />
-                    <span className="add-found">
-                      {step.found && series.name.trim() === step.found.name
-                        ? step.found.from === 'file' ? 'Found in the book’s details' : 'Guessed from its title'
-                        : 'Type a series, or pick one as it appears'}
-                    </span>
+                    {step.found && series.name.trim() === step.found.name && (
+                      <span className="add-found">{step.found.from === 'file' ? 'Found in the book’s details' : 'Guessed from its title'}</span>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -246,7 +243,6 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
               {step.format !== 'CBZ' && (
                 <AiSwitch id="add-ai" label={AI_LABEL} why={AI_WHY} on={readAlong} onChange={setReadAlong} />
               )}
-              <p className="add-local">Saved in this browser first, then synced, so your key or account opens it anywhere.</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep({ kind: 'choose' })}>Choose another</button>
                 <button type="button" className="btn btn-primary" onClick={() => void add()}>{step.format === 'CBZ' ? 'Add manga' : 'Add book'}</button>

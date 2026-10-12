@@ -61,7 +61,7 @@ export const threadOf = (rec: BookRecord) => rec.origin ?? rec.id;
 
 export async function refreshTalk(thread: string) {
   if (!hasKey()) {
-    set(thread, { ...EMPTY, state: 'off', why: 'Comments need a library. Make one, or sign in, from your books.' });
+    set(thread, { ...EMPTY, state: 'off', why: 'Needs a library' });
     return;
   }
   try {

@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../../lib/springs';
 import { CHECK } from '../reader/chrome/icons';
 import { DotIcon, Typed } from '../reader/chrome/parts';
-import { AI_ELSEWHERE } from '../../books/ai';
+import { AI_ELSEWHERE, AI_WHY } from '../../books/ai';
 import { colorVars } from '../../data/colors';
 import { useRound, type AiDesign } from '../design/round';
 import { FEATURE, FEATURE_ICON, SPARK, SPARK_DIM } from './glyphs';
@@ -233,7 +233,8 @@ export function AiSwitch({ id, label, note, why, on, locked = false, p, book, st
   label: string;
   /** A small line right under the switch: someone else turned it on (AI_ELSEWHERE). */
   note?: string;
-  why: string;
+  /** A small line under it all: what saying yes means, before it's said. */
+  why?: string;
   on: boolean;
   locked?: boolean;
   /** A book already in the library: its progress, asked again while this shows. Adding one has none. */
@@ -248,11 +249,11 @@ export function AiSwitch({ id, label, note, why, on, locked = false, p, book, st
       <div className="ai-head">
         {ai === 'C' && <Spark p={on ? shown : { ...shown, stage: 'off' }} className="is-big" />}
         <span className="ai-label" id={`${id}-l`}>{label}</span>
-        <button type="button" className="switch" role="switch" aria-checked={on} aria-labelledby={`${id}-l`} aria-describedby={`${id}-why`} disabled={locked} onClick={() => onChange(!on)} />
+        <button type="button" className="switch" role="switch" aria-checked={on} aria-labelledby={`${id}-l`} aria-describedby={why ? `${id}-why` : undefined} disabled={locked} onClick={() => onChange(!on)} />
       </div>
       {note && <p className="ai-else">{note}</p>}
       {offer ? <Offer design={ai} on={on} compact={compact} /> : <Status p={shown} design={ai} book={book} compact={compact} />}
-      <p className="ai-why" id={`${id}-why`}>{why}</p>
+      {why && <p className="ai-why" id={`${id}-why`}>{why}</p>}
     </div>
   );
 }
@@ -264,7 +265,7 @@ export function BookAiSwitch({ bookId, color, on, label, note, why, onTurnOn }: 
   on: boolean;
   label: string;
   note?: string;
-  why: string;
+  why?: string;
   onTurnOn: () => void;
 }) {
   const p = useAiProgress(bookId, on);
@@ -279,11 +280,11 @@ function Offer({ design, on, compact = false }: { design: AiDesign; on: boolean;
     return (
       <div className="ai-status">
         <Meter p={none} />
-        <span className="ai-sub">{on ? 'Joins the line once it’s added' : 'Four things this unlocks, made one after another'}</span>
+        {on && <span className="ai-sub">In the queue once added</span>}
       </div>
     );
   }
-  if (design === 'C') return <p className="ai-offer">Unlocks 2 voices, character voices, music and Revisit for this book.</p>;
+  if (design === 'C') return <p className="ai-offer">2 voices · Characters · Music · Revisit</p>;
   if (design === 'D') return <Steps p={none} />;
   return <p className="ai-note">{OFFER}</p>;
 }
@@ -350,7 +351,6 @@ export function AiPanel({ p, book }: { p: AiProgress; book: string }) {
     <div className="pnl ai-pnl">
       <div className="pnl-h">AI reading along</div>
       <Status p={p} design={ai} book={book} />
-      <p className="p-note ai-pnl-note">Each part turns on here by itself as soon as it’s made.</p>
     </div>
   );
 }
@@ -359,8 +359,8 @@ export function AiPanel({ p, book }: { p: AiProgress; book: string }) {
 export function SheetAi({ p, book, elsewhere = false, onAi }: { p: AiProgress; book: string; elsewhere?: boolean; onAi?: (on: boolean) => void }) {
   const on = p.stage !== 'off';
   if (!on && !onAi) return null;
-  let why = 'It never keeps your book or learns from it. Once on, it stays on, for everyone who has this book.';
-  if (on) why = 'Each part turns on here by itself as soon as it’s made.';
+  let why: string | undefined = AI_WHY;
+  if (on) why = undefined;
   return (
     <div className="ai-sheet">
       <AiSwitch
