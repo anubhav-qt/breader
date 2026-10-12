@@ -319,6 +319,7 @@
 .rd.is-barless:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot:not(.is-setting) { opacity: 0; }
 .rd-chrome > .i3-hint.is-ask { display: flex; align-items: center; gap: 8px; padding: 5px 5px 5px 12px; pointer-events: auto; }
 .i3-hint.is-ask .i3-para { text-transform: uppercase; }
+.i3-hint.is-ask .i3-x { position: static; margin-left: -4px; }
 
 /* The bottom line asks where to begin, and the first time the light moves, how fast: slower,
    faster, and Keep, after which the pace is in the voice sheet. */

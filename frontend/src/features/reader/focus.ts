@@ -91,7 +91,7 @@ export function useWake(active: boolean) {
 /*
  * Immersive's voice bar: the dot row that stays while a voice or the light goes on and the rest of
  * the controls sleep. Each time it's left on its own, a question above it asks for a few seconds
- * whether to hide it too. Hidden, it's gone until the voice or the light stops, and the next time
+ * whether to hide it too, or its X sends it off sooner. Hidden, it's gone until the voice or the light stops, and the next time
  * it asks again. From the second time it's asked, Always hide too, which Appearance undoes. Kept
  * per device, like full screen.
  */
@@ -121,6 +121,8 @@ export interface BarAsk {
   always: boolean;
   hide: () => void;
   hideAlways: () => void;
+  /** Goes now, the bar staying. */
+  close: () => void;
   /** The pointer is on the question: it waits. */
   hold: (on: boolean) => void;
 }
@@ -168,6 +170,7 @@ export function useBarAsk(shown: boolean, alone: boolean) {
     always: asking.always,
     hide: () => { close(); setHidden(true); },
     hideAlways: () => { close(); setBar({ always: true }); },
+    close,
     hold: (on) => { if (on) window.clearTimeout(timer.current); else closeIn(ASK_AGAIN_MS); },
   };
   return { hidden: always || hidden, ask };

@@ -223,6 +223,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
             <Typed text="Hide this bar too?" />
             <button type="button" className="i3-begin" onClick={focus.ask.hide}>Hide</button>
             {focus.ask.always && <button type="button" className="i3-para" onClick={focus.ask.hideAlways}>Always hide</button>}
+            <CloseDots onClick={focus.ask.close} />
           </Drop>
         )}
       </AnimatePresence>
