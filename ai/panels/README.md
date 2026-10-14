@@ -27,8 +27,10 @@ address (`#sbr-c30-p21`) is the one shown, so a reload stays put.
 ### Sets
 
 Pages are labelled a set at a time. The first is picked in `picks.json`, the second in
-`picks2.json`, and so on. Fetch the second with `npm --prefix ai run panels-fetch -- 2` and label it
-at http://127.0.0.1:5180/?set=2. A page belongs to one set only. The export takes every set.
+`picks2.json`, and so on. Fetch the second with `npm --prefix ai run panels-fetch -- 2`.
+http://127.0.0.1:5180/ shows the pages not labelled yet from every set, and
+http://127.0.0.1:5180/?set=2 just the second's.
+A page belongs to one set only. The export takes every set.
 
 ```bash
 npm --prefix ai run panels-export

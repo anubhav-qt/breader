@@ -620,14 +620,19 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 async function start() {
-  // The set of pages to label, from ?set= (README.md), the first unless another is asked for.
-  const set = Number(new URLSearchParams(location.search).get('set') ?? 1);
-  if (set > 1) document.title = `Panel labeller, set ${set}`;
-  const r = (await (await fetch(`/api/pages?set=${set}`)).json()) as { pages: Page[]; labels: typeof labelled };
-  pages = r.pages ?? [];
+  // One set of pages to label, from ?set= (README.md), or every set's unless one is asked for.
+  const set = new URLSearchParams(location.search).get('set');
+  if (set) document.title = `Panel labeller, set ${set}`;
+  const r = (await (await fetch(set ? `/api/pages?set=${set}` : '/api/pages')).json()) as { pages: Page[]; labels: typeof labelled };
   labelled = r.labels ?? {};
+  // Just the pages not labelled yet when it opens: one labelled since stays, to go back to.
+  pages = (r.pages ?? []).filter((p) => !labelled[p.id]);
+  if (!r.pages?.length) {
+    say(`No pages${set ? ` in set ${set}` : ''} yet: run npm --prefix ai run panels-fetch${set && set !== '1' ? ` -- ${set}` : ''} first.`, 'bad');
+    return;
+  }
   if (!pages.length) {
-    say(`No pages in set ${set} yet: run npm --prefix ai run panels-fetch${set > 1 ? ` -- ${set}` : ''} first.`, 'bad');
+    say(`Every page${set ? ` in set ${set}` : ''} is labelled.`, 'good');
     return;
   }
   // The page in the address, or else the first one not labelled yet.

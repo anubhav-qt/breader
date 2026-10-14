@@ -108,9 +108,11 @@ const api = (): Plugin => ({
       const url = new URL(req.url ?? '/', 'http://here');
       try {
         if (url.pathname === '/api/pages') {
-          const set = Number(url.searchParams.get('set') ?? 1);
-          if (!Number.isInteger(set) || set < 1) return send(res, 400, { error: 'no such set' });
-          const pages = await setOf(set);
+          // One set from ?set=, or every set's pages without it.
+          const asked = url.searchParams.get('set');
+          const set = Number(asked);
+          if (asked !== null && (!Number.isInteger(set) || set < 1)) return send(res, 400, { error: 'no such set' });
+          const pages = asked === null ? await everyPage() : await setOf(set);
           const labels: Record<string, { panels: number; saved: string; edited: boolean; guessed: boolean }> = {};
           for (const p of pages) {
             const l = await labelOf(p.id);
