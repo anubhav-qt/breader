@@ -72,6 +72,15 @@ round can be measured by how much of its guesses had to be fixed. Guesses are on
 check every corner. A guess that's nearly right is the easiest kind to save wrong, and the next
 round learns from whatever's saved.
 
+### Keeping the model
+
+`data/` stays on this machine, so each round worth keeping is committed to
+`model/rounds/round-N/`: its `best.pt` (in Git LFS), `round.json` and `results.csv`. No pages or
+labels go with it. To keep a new round, copy those three files from `data/model/round-N/`.
+
+To bring a round back, copy its `best.pt` to `data/model/round-N/` and set `data/model/latest.json`
+to `{"round": N}`. Then `npm --prefix ai run panels-guess` guesses with it.
+
 ## Labels
 
 A panel is four corners, in whole pixels of the page's own picture, counted from its top left:
