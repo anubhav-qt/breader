@@ -256,6 +256,10 @@ function bookOf(rec: BookRecord, remote: NonNullable<MangaBook['remote']>, total
       const c = at(i);
       return page(c, i - c.first);
     },
+    where: (i) => {
+      const c = at(i);
+      return { chapter: c.id, n: i - c.first };
+    },
     // Its pictures say their size once they're in; asking first would cost a call each.
     size: async () => null,
     toc,

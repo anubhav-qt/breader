@@ -89,6 +89,8 @@ export interface MangaBook {
     prev?: { label: string; at: Position };
     next?: { label: string; at: Position };
   };
+  /** Where page i is in its catalogue, for one read from a catalogue: its chapter's id there and its page in it. */
+  where?(i: number): { chapter: string; n: number };
   /**
    * Opened a few chapters at a time: the same book with the chapters after these added at its end,
    * or null when they can't be opened just now.

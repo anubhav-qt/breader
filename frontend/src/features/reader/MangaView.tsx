@@ -4,7 +4,8 @@ import { WORDS_PER_MANGA_PAGE } from '../../books/manga';
 import type { MangaBook, Position, RemoteChapter } from '../../books/types';
 import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
-import { frameAt, framesKnown, framesSoon, type Box } from './frames';
+import { frameAt, framesSoon, type Box } from './frames';
+import { pageFramesKnown, pageFramesSoon, panelsAhead } from './serverPanels';
 import { PanelPicture } from './MangaPanels';
 import { MangaZoom, type Look } from './MangaZoom';
 import type { MangaDir, MangaLayout } from './settings';
@@ -525,6 +526,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     });
     for (let i = from; i <= to; i++) {
       void pics.get(i).then((url) => {
+        if (url) panelsAhead(pics.book, i);
         if (!live) return;
         // Its shape with it, so it's never shown in a box of the wrong one.
         shaped([[i, pics.shape(i)]]);
@@ -538,7 +540,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   useEffect(() => {
     for (const i of [at.page, at.page + 1, at.page - 1, at.page + 2]) {
       const img = pics.image(i);
-      if (srcs.get(i) && img) void framesSoon(img);
+      if (srcs.get(i) && img) void pageFramesSoon(pics.book, i, img);
     }
   }, [srcs, at.page, pics]);
 
@@ -640,7 +642,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const url = await pics.get(i);
     const img = pics.image(i);
     if (!url || !img) return null;
-    const frames = await framesSoon(img);
+    const frames = await pageFramesSoon(pics.book, i, img);
     return stepsOf(frames);
   }, [pics]);
 
@@ -648,7 +650,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const stepsKnown = useCallback((i: number): Box[] | null => {
     const img = pics.image(i);
     if (!img) return null;
-    const frames = framesKnown(img);
+    const frames = pageFramesKnown(pics.book, i, img);
     if (!frames) return null;
     return stepsOf(frames);
   }, [pics]);
@@ -801,7 +803,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     let steps: Box[] | undefined;
     let shown: { from: number; to: number } | undefined;
     if (what !== 'page') {
-      const frames = await framesSoon(img);
+      const frames = Number.isInteger(page) ? await pageFramesSoon(pics.book, page, img) : await framesSoon(img);
       steps = stepsOf(frames);
       const hit = frameAt(frames, x, y);
       if (hit) {

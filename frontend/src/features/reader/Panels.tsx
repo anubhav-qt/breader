@@ -7,6 +7,7 @@ import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
+import { setServerPanels, useServerPanels } from './serverPanels';
 import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -219,6 +220,18 @@ function DataSaver() {
   return <Segmented label="Quality" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
 }
 
+/** Panels found on Breader's own computer, for the accounts it's open to (serverPanels.ts): this device's choice. */
+function ServerPanels() {
+  const { allowed, on } = useServerPanels();
+  if (!allowed) return null;
+  return (
+    <div className="ctl tgrow">
+      <span className="clbl">Find panels on the server</span>
+      <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Find panels on Breader’s own computer" onClick={() => setServerPanels(!on)} />
+    </div>
+  );
+}
+
 /**
  * A manga's layout, the way its pages turn, and how wide they scroll. On a narrow screen it opens
  * scrolled, and keeps a layout there apart from wider ones; the column of pages is as wide as the screen.
@@ -232,6 +245,7 @@ function MangaLookControls({ look, pick, widen, saver }: MangaControls) {
         <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
       )}
       {saver && <DataSaver />}
+      <ServerPanels />
     </>
   );
 }
