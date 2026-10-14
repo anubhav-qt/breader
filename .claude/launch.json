@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port", "5173", "--strictPort"],
       "port": 5173
+    },
+    {
+      "name": "panels",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "ai", "run", "panels"],
+      "port": 5180
     }
   ]
 }

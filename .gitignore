@@ -13,3 +13,5 @@ frontend/public/tts/
 # Private: books, their text, notes and voice marks (ai/procedure.md).
 ai/work/
 ai/out/
+# Private: manga pages and their panel labels (ai/panels/README.md).
+ai/panels/data/

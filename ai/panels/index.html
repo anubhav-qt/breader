@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel labeller</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <button id="prev" title="Previous page (,)">‹</button>
+        <button id="count" title="All pages (L)"></button>
+        <button id="next" title="Next page (.)">›</button>
+      </div>
+      <div class="about">
+        <div id="title"></div>
+        <div id="note"></div>
+      </div>
+      <div class="tools">
+        <button id="out" title="Zoom out (-)">−</button>
+        <button id="fit" title="Fit (0)">Fit</button>
+        <button id="in" title="Zoom in (+)">+</button>
+        <button id="reset" title="Put back what Breader found">Reset to found</button>
+        <button id="save" class="go" title="Save (Ctrl+S)">Save</button>
+      </div>
+    </header>
+    <div id="status"></div>
+    <main>
+      <section class="pane" id="raw"><div class="stage"><img alt="" /></div></section>
+      <section class="pane" id="marked">
+        <div class="stage"><img alt="" /><svg></svg></div>
+      </section>
+    </main>
+    <footer>
+      Drag a dot to move that corner. Arrows nudge it a pixel (Shift: ten), Tab picks the next corner.
+      Drag on bare page to draw a panel (Shift: anywhere). Delete removes a panel, [ and ] change its
+      place in the order. Ctrl+Z undoes, Ctrl+S saves.
+    </footer>
+    <canvas id="loupe" width="200" height="200"></canvas>
+    <dialog id="list">
+      <form method="dialog"><button class="close">Close</button></form>
+      <table><tbody></tbody></table>
+    </dialog>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

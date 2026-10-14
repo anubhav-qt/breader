@@ -1,0 +1,275 @@
+:root {
+  color-scheme: dark;
+  --bg: #1d1d1f;
+  --bar: #26262a;
+  --line: #3a3a40;
+  --text: #ececf0;
+  --dim: #9a9aa4;
+  --go: #3d7cf5;
+  --bad: #e5484d;
+  --good: #30a46c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+}
+
+.nav,
+.tools {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.about {
+  flex: 1;
+  min-width: 0;
+}
+
+#title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#note {
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: #34343a;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #404048;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.go {
+  background: var(--go);
+  border-color: var(--go);
+  font-weight: 600;
+}
+
+#count {
+  min-width: 84px;
+  font-variant-numeric: tabular-nums;
+}
+
+#status {
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--dim);
+  border-bottom: 1px solid var(--line);
+  min-height: 25px;
+}
+
+#status.dirty {
+  color: #f5b13d;
+}
+
+#status.good {
+  color: var(--good);
+}
+
+#status.bad {
+  color: #fff;
+  background: var(--bad);
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line);
+}
+
+.pane {
+  overflow: auto;
+  /* The same width with a scrollbar or without, so a page is fitted the same whichever came before. */
+  scrollbar-gutter: stable;
+  background: var(--bg);
+  padding: 12px;
+}
+
+.stage {
+  position: relative;
+  margin: 0 auto;
+}
+
+.stage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.stage svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+svg .quad {
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  cursor: pointer;
+}
+
+svg .quad.picked {
+  stroke-width: 3;
+}
+
+svg .num {
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+svg .dot {
+  fill: #fff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+svg .dot.picked {
+  fill: currentColor;
+}
+
+svg .hit {
+  fill: transparent;
+  cursor: grab;
+}
+
+svg .drawing {
+  fill: rgb(61 124 245 / 0.15);
+  stroke: var(--go);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+footer {
+  padding: 6px 12px;
+  color: var(--dim);
+  font-size: 12px;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+}
+
+#loupe {
+  position: fixed;
+  display: none;
+  width: 200px;
+  height: 200px;
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  background: #000;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+dialog {
+  background: var(--bar);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  width: min(900px, 92vw);
+  max-height: 84vh;
+  padding: 12px;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+dialog form {
+  text-align: right;
+  margin-bottom: 8px;
+}
+
+dialog table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+dialog td {
+  padding: 5px 8px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+
+dialog tr {
+  cursor: pointer;
+}
+
+dialog tr:hover td {
+  background: #303036;
+}
+
+dialog tr.here td {
+  background: #2d3a55;
+}
+
+dialog .state {
+  white-space: nowrap;
+}
+
+dialog .state.saved {
+  color: var(--good);
+}
+
+dialog .dim {
+  color: var(--dim);
+}

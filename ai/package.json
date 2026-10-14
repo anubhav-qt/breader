@@ -21,7 +21,10 @@
     "selftest": "tsx tools/cli/selftest.ts",
     "typecheck": "tsc -p .",
     "test": "tsx --test tools/test/*.test.ts",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "panels": "vite --config panels/vite.config.ts",
+    "panels-fetch": "tsx panels/fetch.ts",
+    "panels-export": "tsx panels/export.ts"
   },
   "dependencies": {
     "@google/genai": "2.21.0",

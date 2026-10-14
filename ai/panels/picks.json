@@ -1,0 +1,283 @@
+{
+  "series": [
+    {
+      "key": "chainsaw",
+      "title": "Chainsaw Man",
+      "manga": "a77742b1-befd-49a4-bff5-1ad4e6b0ef7b",
+      "chapter": "4fae801e-e4f2-43fa-b1fa-de713467eb4f",
+      "number": "32",
+      "pages": [
+        { "page": 1, "note": "chapter's first page: title lettering over panels" },
+        { "page": 2, "note": "scanlators' square cover: no panels" },
+        { "page": 4, "note": "panels bleeding off the page, no borders on some" },
+        { "page": 9, "note": "a plain modern grid" },
+        { "page": 19, "note": "a two page spread in one picture" }
+      ]
+    },
+    {
+      "key": "sbr",
+      "title": "Steel Ball Run",
+      "manga": "b30dfee3-9d1d-4e8d-bfbe-8fcabc3c96f6",
+      "chapter": "5548ae02-0272-4866-8cad-d2c38fa8322f",
+      "number": "30",
+      "pages": [
+        { "page": 6, "note": "dense panels, sound effects over the gutters" },
+        { "page": 19, "note": "a figure bursting out across the panels" },
+        { "page": 21, "note": "slanted gutters, dynamic layout" },
+        { "page": 26, "note": "a two page spread in one picture" }
+      ]
+    },
+    {
+      "key": "sbrcolor",
+      "title": "Steel Ball Run, colour edition",
+      "manga": "1044287a-73df-48d0-b0b2-5327f32dd651",
+      "chapter": "acca93ae-f811-45b1-8ef1-94c8fde4ca5a",
+      "number": "31",
+      "pages": [
+        { "page": 4, "note": "full colour two page spread" },
+        { "page": 7, "note": "full colour, slanted gutters" },
+        { "page": 16, "note": "full colour, a tall panel beside a column" },
+        { "page": 28, "note": "full colour, panels over a bleed" }
+      ]
+    },
+    {
+      "key": "hxh",
+      "title": "Hunter x Hunter",
+      "manga": "db692d58-4b13-4174-ae8c-30c515c0689c",
+      "chapter": "d1780119-e07b-4e01-b582-181a669de2af",
+      "number": "33",
+      "pages": [
+        { "page": 1, "note": "a mostly blank page with one small panel" },
+        { "page": 4, "note": "a scanned page with a diagram in a panel" },
+        { "page": 11, "note": "scan with a grey shadow down the binding side" },
+        { "page": 13, "note": "speed lines and panels without borders" }
+      ]
+    },
+    {
+      "key": "slamdunk",
+      "title": "Slam Dunk",
+      "manga": "319df2e2-e6a6-4e3a-a31c-68539c140a84",
+      "chapter": "a1b49891-9425-49f3-8985-731f932892dc",
+      "number": "21",
+      "pages": [
+        { "page": 2, "note": "a narrower full page title illustration" },
+        { "page": 7, "note": "old scan, a figure leaving the panels" },
+        { "page": 10, "note": "old scan, uneven page size" },
+        { "page": 20, "note": "a scanlators' page with one framed picture" }
+      ]
+    },
+    {
+      "key": "cityhunter",
+      "title": "City Hunter",
+      "manga": "f1c716b5-e82f-4625-a646-280cfa66abad",
+      "chapter": "f0fdebfb-5aab-4639-adfd-7d3a305c7156",
+      "number": "26.2",
+      "pages": [
+        { "page": 3, "note": "1980s scan, many small panels" },
+        { "page": 9, "note": "1980s scan, slanted panels and black" },
+        { "page": 14, "note": "1980s scan, action with radiating lines" }
+      ]
+    },
+    {
+      "key": "kingdom",
+      "title": "Kingdom",
+      "manga": "077a3fed-1634-424f-be7a-9a96b7f07b78",
+      "chapter": "f3a4ec96-80c4-4fc0-8a06-0354c4707b83",
+      "number": "827",
+      "pages": [
+        { "page": 4, "note": "title page: a bleed over panels below" },
+        { "page": 8, "note": "crowded battle panels" },
+        { "page": 17, "note": "slanted gutters" },
+        { "page": 20, "note": "a last page bleeding to the edges" }
+      ]
+    },
+    {
+      "key": "bocchi",
+      "title": "Bocchi the Rock!",
+      "manga": "2e0fdb3b-632c-4f8f-a311-5b56952db647",
+      "chapter": "9c82b091-269f-415b-9ed9-1dcad2226f25",
+      "number": "32",
+      "pages": [
+        { "page": 2, "note": "4-koma: two columns of four" },
+        { "page": 6, "note": "4-koma with lettering in the margins" },
+        { "page": 10, "note": "a credits page of text: no panels" }
+      ]
+    },
+    {
+      "key": "komi",
+      "title": "Komi Can't Communicate",
+      "manga": "a96676e5-8ae2-425e-b549-7f15dd34a6d8",
+      "chapter": "54b81138-ce88-408c-8e5a-1b301ed68d8d",
+      "number": "500",
+      "pages": [
+        { "page": 1, "note": "wide panels stacked, one black" },
+        { "page": 6, "note": "wide panels with black between" },
+        { "page": 8, "note": "one big panel over a black band" }
+      ]
+    },
+    {
+      "key": "mieruko",
+      "title": "Mieruko-chan",
+      "manga": "6670ee28-f26d-4b61-b49c-d71149cd5a6e",
+      "chapter": "8ad57d35-311d-4995-9acb-d92e27f3ffdb",
+      "number": "25",
+      "pages": [
+        { "page": 3, "note": "screentone heavy panels" },
+        { "page": 9, "note": "a phone screen as a panel in a panel" },
+        { "page": 12, "note": "a tall figure standing over the panels" },
+        { "page": 21, "note": "panels touching with thin gutters" }
+      ]
+    },
+    {
+      "key": "yona",
+      "title": "Yona of the Dawn",
+      "manga": "3bb0279f-a01d-4aa4-93e4-305800f4b83e",
+      "chapter": "248ab0de-f04c-4009-af74-c4824eb14b14",
+      "number": "34",
+      "pages": [
+        { "page": 3, "note": "shoujo: panels overlapping each other" },
+        { "page": 14, "note": "a two page spread, black and white halves" },
+        { "page": 17, "note": "borderless panels fading into the page" },
+        { "page": 28, "note": "a black page with lettering" }
+      ]
+    },
+    {
+      "key": "kaoruhana",
+      "title": "The Fragrant Flower Blooms with Dignity",
+      "manga": "418791c0-35cf-4f87-936b-acd9cddf0989",
+      "chapter": "aa592336-67aa-4a69-b431-2375fd30b74c",
+      "number": "136.5",
+      "pages": [
+        { "page": 2, "note": "modern romance, panels without borders" },
+        { "page": 4, "note": "lettering crossing the gutters" },
+        { "page": 6, "note": "a credits page with a small picture" }
+      ]
+    },
+    {
+      "key": "princess",
+      "title": "Who Made Me a Princess",
+      "manga": "722a45c0-5e55-40f2-929b-ff69b0989edb",
+      "chapter": "6f194018-828b-4d21-926d-5d070bec8ddb",
+      "number": "66",
+      "pages": [
+        { "page": 5, "note": "colour webtoon strip with black bands" },
+        { "page": 7, "note": "colour webtoon strip, tall panels overlapping" },
+        { "page": 13, "note": "colour webtoon strip, slanted panels" }
+      ]
+    },
+    {
+      "key": "orv",
+      "title": "Omniscient Reader's Viewpoint",
+      "manga": "9a414441-bbad-43f1-a3a7-dc262ca790a3",
+      "chapter": "151886b7-a7a7-4907-bdce-d66ee479e049",
+      "number": "256",
+      "pages": [
+        { "page": 12, "note": "dark webtoon strip, panels apart on white" },
+        { "page": 14, "note": "webtoon strip, panels overlapping" },
+        { "page": 24, "note": "webtoon strip, slanted panels with lightning" },
+        { "page": 29, "note": "webtoon strip fading into black" }
+      ]
+    },
+    {
+      "key": "tieji",
+      "title": "Iron Ladies",
+      "manga": "4a4786cf-c185-4ad3-89a9-294a1ec0bfc9",
+      "chapter": "94eecf71-5c03-4852-bdbb-2745fd860bca",
+      "number": "34",
+      "pages": [
+        { "page": 1, "note": "colour manhua page, dark gutters" },
+        { "page": 4, "note": "colour manhua page, slanted panels" },
+        { "page": 7, "note": "colour manhua page, figures over panels" }
+      ]
+    },
+    {
+      "key": "dbcolor",
+      "title": "Dragon Ball, coloured",
+      "manga": "af0527c1-8734-4498-b128-7090340bc10d",
+      "chapter": "3a7dedc9-3158-40cd-81eb-82a05629d546",
+      "number": "35",
+      "pages": [
+        { "page": 2, "note": "colour, a wide panel over a small one" },
+        { "page": 7, "note": "colour, a panel bleeding off the top" },
+        { "page": 13, "note": "colour, a big crowd panel at the foot" }
+      ]
+    },
+    {
+      "key": "radiant",
+      "title": "Radiant",
+      "manga": "8de2456c-95ef-4958-8f27-af7a4cc275b7",
+      "chapter": "551126bd-80b8-4bd5-a22c-7ad98884e0a9",
+      "number": "19",
+      "pages": [
+        { "page": 3, "note": "French manga, slanted panels" },
+        { "page": 5, "note": "a two page spread in one picture" },
+        { "page": 16, "note": "slanted panels with black" },
+        { "page": 18, "note": "sound effects breaking the panels" }
+      ]
+    },
+    {
+      "key": "legendaries",
+      "title": "The Legendaries",
+      "manga": "5e418660-a917-47f5-8402-e6ee0089ebf1",
+      "chapter": "93660649-0f82-4c6f-95ff-d39551d2cc20",
+      "number": "2",
+      "pages": [
+        { "page": 5, "note": "Franco-Belgian album, very large colour page" },
+        { "page": 9, "note": "Franco-Belgian, many panels, read left to right" },
+        { "page": 21, "note": "Franco-Belgian, dark panels" },
+        { "page": 23, "note": "Franco-Belgian, a wide strip panel" }
+      ]
+    },
+    {
+      "key": "uzai",
+      "title": "My Senpai Is Annoying",
+      "manga": "af38f328-8df1-4b4c-a272-e737625c3ddc",
+      "chapter": "01838cd4-0813-4547-a0a3-e01f0a12dcfa",
+      "number": "21.5",
+      "pages": [
+        { "page": 4, "note": "colour webcomic on tinted paper" },
+        { "page": 11, "note": "colour, dark panels on tinted paper" },
+        { "page": 16, "note": "colour, a big close up below small panels" },
+        { "page": 19, "note": "a small picture on a blank page: no panels" }
+      ]
+    },
+    {
+      "key": "usogui",
+      "title": "Usogui",
+      "manga": "a07320a4-afcd-413a-a451-d69a448d0c28",
+      "chapter": "c9fba2cb-bff7-4fb8-9f0c-b331f64398c5",
+      "number": "12",
+      "pages": [
+        { "page": 3, "note": "seinen, a heavy black panel at the top" },
+        { "page": 8, "note": "a full page splash with lettering" },
+        { "page": 10, "note": "jagged slanted panels" },
+        { "page": 16, "note": "a two page spread in one picture" }
+      ]
+    },
+    {
+      "key": "ippo",
+      "title": "Hajime no Ippo",
+      "manga": "f7888782-0727-49b0-95ec-a3530c70f83b",
+      "chapter": "64489a99-ec3c-4787-9b66-0db21411738c",
+      "number": "1490",
+      "pages": [
+        { "page": 3, "note": "boxing: dense panels and speed lines" },
+        { "page": 5, "note": "slanted panels, a punch through them" },
+        { "page": 8, "note": "a huge black shape bleeding off the page" }
+      ]
+    },
+    {
+      "key": "guyver",
+      "title": "Guyver",
+      "manga": "17b910e5-7fd1-4aef-8904-c0bd3820ae04",
+      "chapter": "1748be51-6741-48b7-8880-ba82bc0267b8",
+      "number": "35",
+      "pages": [
+        { "page": 6, "note": "American edition scan, starbursts over panels" },
+        { "page": 10, "note": "black gutters" },
+        { "page": 14, "note": "a two page spread in one picture" },
+        { "page": 18, "note": "black gutters, panels of every size" }
+      ]
+    }
+  ]
+}
