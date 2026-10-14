@@ -130,15 +130,20 @@
 /* 2 voices: her lines and his in their own colours (Aa), deeper on light pages like the book's. */
 .rd ::highlight(narrate-her) { color: var(--her-mark); }
 .rd ::highlight(narrate-his) { color: var(--his-mark); }
-/* Character voices: the people with most to say each in their own colour (voice/cast.ts castPalette). */
-.rd ::highlight(narrate-0) { color: var(--cast-0); }
-.rd ::highlight(narrate-1) { color: var(--cast-1); }
-.rd ::highlight(narrate-2) { color: var(--cast-2); }
-.rd ::highlight(narrate-3) { color: var(--cast-3); }
-.rd ::highlight(narrate-4) { color: var(--cast-4); }
-.rd ::highlight(narrate-5) { color: var(--cast-5); }
-.rd ::highlight(narrate-6) { color: var(--cast-6); }
-.rd ::highlight(narrate-7) { color: var(--cast-7); }
+/* Character voices: the people with a colour of their own lit in it (voice/cast.ts colorsOf). */
+.rd ::highlight(narrate-ochre) { color: var(--bc-ochre); }
+.rd ::highlight(narrate-teal) { color: var(--bc-teal); }
+.rd ::highlight(narrate-plum) { color: var(--bc-plum); }
+.rd ::highlight(narrate-clay) { color: var(--bc-clay); }
+.rd ::highlight(narrate-moss) { color: var(--bc-moss); }
+.rd ::highlight(narrate-lilac) { color: var(--bc-lilac); }
+.rd ::highlight(narrate-sand) { color: var(--bc-sand); }
+.rd ::highlight(narrate-indigo) { color: var(--bc-indigo); }
+.rd ::highlight(narrate-green) { color: var(--bc-green); }
+.rd ::highlight(narrate-blush) { color: var(--bc-blush); }
+.rd ::highlight(narrate-sage) { color: var(--bc-sage); }
+.rd ::highlight(narrate-sky) { color: var(--bc-sky); }
+.rd ::highlight(narrate-rose) { color: var(--bc-rose); }
 /* The word a tap is asking about (chrome/SayAs.tsx), lit like a selection. */
 .rd ::highlight(say-as) { background-color: color-mix(in srgb, var(--book) 34%, transparent); }
 .i3-mid {
@@ -293,22 +298,32 @@
 .rd.is-immersed ::highlight(narrate-his) { color: var(--r-fg); }
 .rd.is-immersed ::highlight(narrate-said-her) { color: var(--her-mark); }
 .rd.is-immersed ::highlight(narrate-said-his) { color: var(--his-mark); }
-.rd.is-immersed ::highlight(narrate-0),
-.rd.is-immersed ::highlight(narrate-1),
-.rd.is-immersed ::highlight(narrate-2),
-.rd.is-immersed ::highlight(narrate-3),
-.rd.is-immersed ::highlight(narrate-4),
-.rd.is-immersed ::highlight(narrate-5),
-.rd.is-immersed ::highlight(narrate-6),
-.rd.is-immersed ::highlight(narrate-7) { color: var(--r-fg); }
-.rd.is-immersed ::highlight(narrate-said-0) { color: var(--cast-0); }
-.rd.is-immersed ::highlight(narrate-said-1) { color: var(--cast-1); }
-.rd.is-immersed ::highlight(narrate-said-2) { color: var(--cast-2); }
-.rd.is-immersed ::highlight(narrate-said-3) { color: var(--cast-3); }
-.rd.is-immersed ::highlight(narrate-said-4) { color: var(--cast-4); }
-.rd.is-immersed ::highlight(narrate-said-5) { color: var(--cast-5); }
-.rd.is-immersed ::highlight(narrate-said-6) { color: var(--cast-6); }
-.rd.is-immersed ::highlight(narrate-said-7) { color: var(--cast-7); }
+.rd.is-immersed ::highlight(narrate-ochre),
+.rd.is-immersed ::highlight(narrate-teal),
+.rd.is-immersed ::highlight(narrate-plum),
+.rd.is-immersed ::highlight(narrate-clay),
+.rd.is-immersed ::highlight(narrate-moss),
+.rd.is-immersed ::highlight(narrate-lilac),
+.rd.is-immersed ::highlight(narrate-sand),
+.rd.is-immersed ::highlight(narrate-indigo),
+.rd.is-immersed ::highlight(narrate-green),
+.rd.is-immersed ::highlight(narrate-blush),
+.rd.is-immersed ::highlight(narrate-sage),
+.rd.is-immersed ::highlight(narrate-sky),
+.rd.is-immersed ::highlight(narrate-rose) { color: var(--r-fg); }
+.rd.is-immersed ::highlight(narrate-said-ochre) { color: var(--bc-ochre); }
+.rd.is-immersed ::highlight(narrate-said-teal) { color: var(--bc-teal); }
+.rd.is-immersed ::highlight(narrate-said-plum) { color: var(--bc-plum); }
+.rd.is-immersed ::highlight(narrate-said-clay) { color: var(--bc-clay); }
+.rd.is-immersed ::highlight(narrate-said-moss) { color: var(--bc-moss); }
+.rd.is-immersed ::highlight(narrate-said-lilac) { color: var(--bc-lilac); }
+.rd.is-immersed ::highlight(narrate-said-sand) { color: var(--bc-sand); }
+.rd.is-immersed ::highlight(narrate-said-indigo) { color: var(--bc-indigo); }
+.rd.is-immersed ::highlight(narrate-said-green) { color: var(--bc-green); }
+.rd.is-immersed ::highlight(narrate-said-blush) { color: var(--bc-blush); }
+.rd.is-immersed ::highlight(narrate-said-sage) { color: var(--bc-sage); }
+.rd.is-immersed ::highlight(narrate-said-sky) { color: var(--bc-sky); }
+.rd.is-immersed ::highlight(narrate-said-rose) { color: var(--bc-rose); }
 .rd.is-immersed:not(.is-aloud) .fv-flow { cursor: pointer; }
 
 .rd:is(.is-listening, .is-pacing):not(.is-awake) .i3-foot { opacity: 1; pointer-events: none; }

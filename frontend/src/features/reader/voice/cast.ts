@@ -3,6 +3,7 @@ import type { AiCastResponse, AiGender } from '@breader/shared/ai';
 import type { BookColor } from '../../../data/colors';
 import { readLocal, writeLocal } from '../../../lib/store';
 import { keptCast, loadCast } from '../ai';
+import { readSetting, TWO_COLORS } from '../settings';
 import { BUILT_IN, type Engine, type SamplePart, type VoiceInfo } from './catalog';
 import { playSample } from './speaker';
 import type { Marks, Two } from './two';
@@ -21,7 +22,8 @@ import type { Marks, Two } from './two';
  * it, by the person's id across the series: so they sound the same in every one of its books.
  *
  * The people with most to say so far get a colour each, for their face and their lines lit as
- * they're read; everyone else is lit in her colour or his.
+ * they're read; everyone else is lit in her colour or his. A colour picked by hand is kept as a
+ * voice is, for the series.
  */
 
 /** A woman, a man, or neither (anyone's voice will do). */
@@ -50,48 +52,27 @@ export interface Character {
   lines: number;
   /** The voice the AI picked for them in each model, by its id there; null until it has. */
   voice: Record<Engine, string> | null;
-  /** Their own colour, for their face and their lines read aloud (--cast-0…), or -1 for their kind's. */
-  color: number;
 }
 
-/** How many of the people with most to say get a colour of their own. */
+/** How many of the people with most to say get a colour of their own, unless one is picked for someone else. */
 export const COLORED = 8;
 
 /**
  * The colours they get, in the order they're handed out: book colours, the ones furthest apart
  * first. Graphite reads like the text, so it's left out.
  */
-const COLOR_ORDER: BookColor[] = ['ochre', 'teal', 'plum', 'clay', 'moss', 'lilac', 'sand', 'indigo', 'green', 'blush', 'sage', 'sky', 'rose'];
+export const COLOR_ORDER: BookColor[] = ['ochre', 'teal', 'plum', 'clay', 'moss', 'lilac', 'sand', 'indigo', 'green', 'blush', 'sage', 'sky', 'rose'];
 
-/** The colours for the people with most to say, the first first: never her colour or his (`two`), which everyone else is lit in. */
-export function castPalette(two: Record<Two, BookColor>): BookColor[] {
-  const out: BookColor[] = [];
-  for (const c of COLOR_ORDER) {
-    if (out.length === COLORED) break;
-    if (c === two.F || c === two.M) continue;
-    out.push(c);
-  }
-  return out;
-}
+/** The colours anyone can have of their own: never her colour or his (`two`), which everyone else is lit in. */
+export const castable = (two: Record<Two, BookColor>) => COLOR_ORDER.filter((c) => c !== two.F && c !== two.M);
+
+/** Her colour and his, as the reader has them (Aa). */
+const twoNow = () => (readSetting('twoColors') as Record<Two, BookColor> | undefined) ?? TWO_COLORS;
 
 function charactersOf(r: AiCastResponse | null): Character[] | null {
   if (!r) return null;
-  // The people with most to say come first, and the first few get a colour each.
-  return r.people.map((p, i) => {
-    let color = -1;
-    if (i < COLORED) color = i;
-    return { key: p.key, id: p.id, name: p.name, kind: p.g, lines: p.lines, voice: p.voice, color };
-  });
-}
-
-/** Each speaker's own colour by their key, for the people met so far who have one. */
-export function castColors(book: string): Map<number, number> {
-  const out = new Map<number, number>();
-  const people = charactersOf(keptCast(book)) ?? [];
-  for (const c of people) {
-    if (c.color >= 0) out.set(c.key, c.color);
-  }
-  return out;
+  // The people with most to say come first.
+  return r.people.map((p) => ({ key: p.key, id: p.id, name: p.name, kind: p.g, lines: p.lines, voice: p.voice }));
 }
 
 export interface BookCast {
@@ -124,12 +105,14 @@ export function useBookCast(book: string): BookCast {
 interface CastState {
   /** Character voices picked over 1 voice or 2. */
   on: boolean;
-  /** Each series' voices picked by hand, by character: the voice's key. */
-  picks: Record<string, Record<string, string>>;
+  /** Each series' voices picked by hand, by character: the voice's key in each model it was picked in. */
+  picks: Record<string, Record<string, Partial<Record<Engine, string>>>>;
   /** Each series' voices from its last reshuffle, by character: the voice's key in each model. */
   dealt: Record<string, Record<string, Record<Engine, string>>>;
   /** How many times each series' voices were reshuffled, so the next one hands them out another way. */
   seeds: Record<string, number>;
+  /** Each series' colours picked by hand, by character: a book colour, or null for her colour or his. */
+  colors: Record<string, Record<string, BookColor | null>>;
   /** The series each book is in, as the library has it; a book in none keeps its picks to itself. */
   series: Record<string, string>;
 }
@@ -141,7 +124,13 @@ const v2 = readLocal<Partial<CastState>>('breader.cast.v2', {});
 const v1 = readLocal<Partial<CastState>>('breader.cast.v1', {});
 let wasOn = v1.on ?? false;
 if (v2.on !== undefined) wasOn = v2.on;
-let state: CastState = { on: wasOn, picks: {}, dealt: {}, seeds: {}, series: {}, ...readLocal<Partial<CastState>>(KEY, {}) };
+let state: CastState = { on: wasOn, picks: {}, dealt: {}, seeds: {}, colors: {}, series: {}, ...readLocal<Partial<CastState>>(KEY, {}) };
+// A pick was one voice, in whichever model it was picked; now it's one in each.
+for (const mine of Object.values(state.picks)) {
+  for (const [id, v] of Object.entries(mine as Record<string, unknown>)) {
+    if (typeof v === 'string') mine[id] = { [voiceEngine(v)]: v };
+  }
+}
 const subs = new Set<() => void>();
 
 function set(next: CastState) {
@@ -188,10 +177,102 @@ export function castSig(s: CastState, book: string) {
   return JSON.stringify([s.on, s.picks[scope] ?? {}, s.dealt[scope] ?? {}]);
 }
 
+/** The model a voice is of, by its key ("kokoro:af_heart"). */
+function voiceEngine(voice: string) {
+  return voice.split(':')[0] as Engine;
+}
+
+/** Someone's voice picked by hand, in the model it's of, and the voices picked here with it. */
+function withPick(picks: Record<string, Partial<Record<Engine, string>>>, character: string, voice: string) {
+  return { ...picks, [character]: { ...picks[character], [voiceEngine(voice)]: voice } };
+}
+
 export function pickVoice(book: string, character: string, voice: string) {
   const scope = scopeOf(book);
-  const mine = { ...(state.picks[scope] ?? {}), [character]: voice };
+  const mine = withPick(state.picks[scope] ?? {}, character, voice);
   set({ ...state, picks: { ...state.picks, [scope]: mine } });
+}
+
+/** Two people's voices, each to the other, in the model they're of. */
+export function swapVoices(book: string, a: Cast, b: Cast) {
+  const scope = scopeOf(book);
+  const mine = withPick(withPick(state.picks[scope] ?? {}, a.c.id, b.v.key), b.c.id, a.v.key);
+  set({ ...state, picks: { ...state.picks, [scope]: mine } });
+}
+
+/** Someone's own colour picked by hand, or null for her colour or his. */
+export function pickColor(book: string, character: string, color: BookColor | null) {
+  const scope = scopeOf(book);
+  const mine = { ...(state.colors[scope] ?? {}), [character]: color };
+  set({ ...state, colors: { ...state.colors, [scope]: mine } });
+}
+
+/** Two people's colours, each to the other. */
+export function swapColors(book: string, a: Cast, b: Cast) {
+  const scope = scopeOf(book);
+  const mine = { ...(state.colors[scope] ?? {}), [a.c.id]: b.color, [b.c.id]: a.color };
+  set({ ...state, colors: { ...state.colors, [scope]: mine } });
+}
+
+/**
+ * Everyone's own colour by id, or null for her colour or his: picked by hand, in any book of the
+ * series, or else handed out to the people with most to say, in turn. Two never share one: a
+ * colour handed out that someone has picked goes to whoever it was for as the next one free.
+ */
+export function colorsOf(book: string, people: Character[], s: CastState = state, two = twoNow()): Map<string, BookColor | null> {
+  const can = castable(two);
+  const picked = s.colors[scopeOf(book, s)] ?? {};
+  const out = new Map<string, BookColor | null>();
+  const taken = new Set<BookColor>();
+  for (const c of people) {
+    if (!(c.id in picked)) continue;
+    const mine = picked[c.id];
+    if (mine === null) {
+      out.set(c.id, null);
+    } else if (can.includes(mine) && !taken.has(mine)) {
+      out.set(c.id, mine);
+      taken.add(mine);
+    }
+  }
+  for (const [i, c] of people.entries()) {
+    if (out.has(c.id)) continue;
+    let mine: BookColor | null = null;
+    if (i < COLORED) mine = can.slice(i).find((x) => !taken.has(x)) ?? can.find((x) => !taken.has(x)) ?? null;
+    if (mine) taken.add(mine);
+    out.set(c.id, mine);
+  }
+  return out;
+}
+
+/** The colours nobody in `cast` has, to pick from. */
+export function freeColors(cast: Cast[]): BookColor[] {
+  const used = new Set(cast.map((x) => x.color));
+  return castable(twoNow()).filter((c) => !used.has(c));
+}
+
+/** The voices of someone's kind that nobody in `cast` reads in, in the model they're of. */
+export function freeVoices(cast: Cast[], who: Cast): VoiceInfo[] {
+  const used = new Set(cast.map((x) => x.v.key));
+  return voicesOf(who.c.kind, who.v.engine).filter((v) => !used.has(v.key));
+}
+
+/** Whether two people can have each other's voices: different ones, each fitting the other's kind. */
+export function canSwapVoices(a: Cast, b: Cast) {
+  if (a.v.key === b.v.key) return false;
+  const fits = (x: Cast, v: VoiceInfo) => voicesOf(x.c.kind, v.engine).some((f) => f.key === v.key);
+  return fits(a, b.v) && fits(b, a.v);
+}
+
+/** Each speaker's own colour by their key, for the people met so far who have one. */
+export function castColors(book: string): Map<number, BookColor> {
+  const out = new Map<number, BookColor>();
+  const people = charactersOf(keptCast(book)) ?? [];
+  const colors = colorsOf(book, people);
+  for (const c of people) {
+    const mine = colors.get(c.id);
+    if (mine) out.set(c.key, mine);
+  }
+  return out;
 }
 
 /**
@@ -238,6 +319,8 @@ export interface Cast {
   picked: boolean;
   /** Handed out by a reshuffle, here or in another book of the series. */
   shuffled: boolean;
+  /** Their own colour (colorsOf), or null for her colour or his. */
+  color: BookColor | null;
 }
 
 /** One of `fit` by its key, if it's there. */
@@ -254,33 +337,35 @@ export function castOf(book: string, people: Character[], engine: Engine, s: Cas
   const seed = s.seeds[scope] ?? 0;
   const picks = s.picks[scope] ?? {};
   const dealt = s.dealt[scope] ?? {};
+  const colors = colorsOf(book, people, s);
   const handed: Record<Kind, number> = { F: 0, M: 0, N: 0 };
   const out: Cast[] = [];
   for (const c of people) {
     const fit = voicesOf(c.kind, engine);
-    const own = voiceIn(fit, picks[c.id]);
+    const color = colors.get(c.id) ?? null;
+    const own = voiceIn(fit, picks[c.id]?.[engine]);
     if (own) {
-      out.push({ c, v: own, picked: true, shuffled: false });
+      out.push({ c, v: own, picked: true, shuffled: false, color });
       continue;
     }
     const mine = dealt[c.id];
     if (mine) {
       const again = voiceIn(fit, mine[engine]);
       if (again) {
-        out.push({ c, v: again, picked: false, shuffled: true });
+        out.push({ c, v: again, picked: false, shuffled: true, color });
         continue;
       }
     }
     if (c.voice) {
       const ai = voiceIn(fit, `${engine}:${c.voice[engine]}`);
       if (ai) {
-        out.push({ c, v: ai, picked: false, shuffled: false });
+        out.push({ c, v: ai, picked: false, shuffled: false, color });
         continue;
       }
     }
     const at = (handed[c.kind] + seed) % fit.length;
     handed[c.kind] += 1;
-    out.push({ c, v: fit[at], picked: false, shuffled: false });
+    out.push({ c, v: fit[at], picked: false, shuffled: false, color });
   }
   return out;
 }
@@ -299,7 +384,7 @@ export function castVoices(book: string, engine: Engine, marks: Pick<Marks, 'pic
     const picks = state.picks[scope] ?? {};
     const dealt = state.dealt[scope] ?? {};
     for (const [key, id] of marks.ids) {
-      let v = voiceIn(all, picks[id]);
+      let v = voiceIn(all, picks[id]?.[engine]);
       const mine = dealt[id];
       if (!v && mine) v = voiceIn(all, mine[engine]);
       const ai = marks.picks.get(key);

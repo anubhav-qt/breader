@@ -1,6 +1,6 @@
 /* Character voices in the voice sheet (chrome/Cast.tsx). Each kind of voice has a colour: women and
    men in her and his colours from 2 voices, anyone neither in the book's. The people with most to
-   say have a colour of their own instead (--cast-0…), the one their lines are lit in. */
+   say have a colour of their own instead (voice/cast.ts colorsOf), the one their lines are lit in. */
 
 .rd {
   --cs-F: var(--her-mark);
@@ -31,6 +31,7 @@
 .cs-face.is-F { --k: var(--cs-F); }
 .cs-face.is-M { --k: var(--cs-M); }
 .cs-face.is-all { --k: var(--book-mark); }
+.cs-face.is-xs { width: 24px; height: 24px; border-radius: 6px; font-size: 9.5px; }
 .cs-face.is-s { width: 28px; height: 28px; border-radius: 7px; font-size: 10.5px; }
 .cs-face.is-m { width: 42px; height: 42px; }
 .cs-face.is-l { width: 56px; height: 56px; border-radius: 12px; font-size: 17px; }
@@ -45,6 +46,45 @@
 .cs-face-n { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; max-width: 100%; overflow: hidden; overflow-wrap: anywhere; text-align: center; font: var(--ui-w) 10.5px/1.2 var(--ui); color: var(--r-fg); }
 .cs-face-v { font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
 .cs-shuffle { justify-self: start; }
+
+/* A's card: someone's voice and colour, under their row, the width of the faces. */
+.cs-card {
+  grid-column: 1 / -1;
+  position: relative;
+  display: grid;
+  gap: 12px;
+  margin: 2px 0 6px;
+  padding: 12px;
+  border-radius: 14px;
+  /* Scrolled into sight clear of the sheet's Read aloud, stuck to its foot. */
+  scroll-margin: 12px 0 84px;
+  text-align: left;
+  background: var(--r-bg);
+  box-shadow: inset 0 0 0 1px var(--r-line), 0 8px 24px -14px rgb(0 0 0 / 0.4);
+}
+.cs-card .i3-x { top: 8px; right: 8px; }
+.cs-card-h { display: flex; align-items: center; gap: 12px; padding-right: 36px; }
+.cs-card-t { min-width: 0; display: grid; gap: 7px; }
+.cs-card-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 24px/1 var(--read); color: var(--r-fg); }
+.cs-card-t span { font: var(--ui-w) 10px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.cs-card-s { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--r-line); }
+.cs-card-l { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; margin: 0; }
+.cs-card-now { display: inline-flex; align-items: center; gap: 2px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-fg); }
+.cs-card-row { display: grid; gap: 6px; }
+.cs-card-k { font: var(--ui-w) 9.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--r-mu); }
+.cs-card-none { margin: 0; font: var(--ui-w) 11.5px/1.4 var(--ui); color: var(--r-mu); }
+.cs-card .cs-chips { padding: 0; }
+.cs-card .cs-chip { transition: background-color 140ms ease; }
+.cs-card .cs-chip:hover, .cs-swap:hover { background: var(--r-fill); }
+/* Swap with: whose voice it is, by their face, and the voice. */
+.cs-swap { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px 0 3px; border-radius: 8px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-fg); box-shadow: inset 0 0 0 1px var(--r-line); transition: background-color 140ms ease; }
+/* Colours, filled: someone's with their initials, the unused plain. */
+.cs-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.cs-swatch { --k: var(--r-mu); width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; font: var(--ui-w-strong) 10px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.02em; color: var(--r-bg); background: var(--k); transition: transform 140ms ease; }
+.cs-swatch:hover { transform: scale(1.08); }
+@media (prefers-reduced-motion: reduce) {
+  .cs-swatch:hover { transform: none; }
+}
 
 /* B: a list, each with their voice. */
 .cs-list { display: grid; gap: 1px; }

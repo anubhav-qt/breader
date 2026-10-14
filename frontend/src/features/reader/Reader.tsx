@@ -22,7 +22,7 @@ import { MangaView } from './MangaView';
 import { unlockMusic, useMusic } from './music';
 import { overlaps, usePacing, type Spot } from './pacing';
 import { PdfView } from './PdfView';
-import { castInSeries, castPalette } from './voice/cast';
+import { castInSeries } from './voice/cast';
 import { refreshVoices } from './voice/list';
 import { refreshSpeech } from './voice/server';
 import { setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
@@ -805,10 +805,6 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
     '--his-mark': `var(--bc-${tones.M})`,
     '--pw': `${pageW}px`,
   };
-  // Character voices' colours for the people with most to say: --cast-0, --cast-1…
-  for (const [i, c] of castPalette(tones).entries()) {
-    vars[`--cast-${i}`] = `var(--bc-${c})`;
-  }
 
   return (
     <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${bar.hidden ? ' is-barless' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}${hasPlay ? ` has-play play-${round.play}` : ''}`} style={vars as CSSProperties}>

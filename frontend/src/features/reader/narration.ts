@@ -8,7 +8,8 @@ import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePref
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { useSpeech } from './voice/server';
-import { castColors, castNow, castSig, castVoices, COLORED, useCast } from './voice/cast';
+import { castColors, castNow, castSig, castVoices, COLOR_ORDER, useCast } from './voice/cast';
+import type { BookColor } from '../../data/colors';
 import { failed, hold, letGoKeys, missingAll, play, prepare, release, retry, setLoudness, synth, unlock, type Clip, type Playing } from './voice/speaker';
 import { inTwo, type Marks, type Two } from './voice/two';
 
@@ -130,15 +131,15 @@ const HIGHLIGHT = 'narrate';
 const SAID = 'narrate-said';
 /** 2 voices lights her lines and his in their own colours: `narrate-her`, `narrate-said-his`… */
 const TONES = { F: '-her', M: '-his' } as const;
-/** Character voices light the people with most to say in a colour each: `narrate-0`, `narrate-said-0`… */
-const OWN = Array.from({ length: COLORED }, (_, i) => `-${i}`);
+/** Character voices light the people with a colour of their own in it: `narrate-ochre`, `narrate-said-ochre`… */
+const OWN = COLOR_ORDER.map((c) => `-${c}`);
 let tone = '';
 /**
  * The colour of the sentence lit next: whose voice it's in, hers or his, or null for one voice. Or
  * the speaker's own `color` (voice/cast.ts castColors), when they have one.
  */
-export const setTone = (g: Two | null, color = -1) => {
-  if (color >= 0) tone = OWN[color];
+export const setTone = (g: Two | null, color: BookColor | null = null) => {
+  if (color) tone = `-${color}`;
   else if (g) tone = TONES[g];
   else tone = '';
 };
@@ -326,7 +327,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     let cast = new Map<number, VoiceInfo>();
     let castKeys = '';
     /** The colours of the people with most to say, by key, as the voice sheet shows them. */
-    let colors = new Map<number, number>();
+    let colors = new Map<number, BookColor>();
     const voiceOf = (s: Sentence) => {
       if (s.who !== undefined && s.who >= 0) {
         const own = cast.get(s.who);
@@ -336,11 +337,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (voices.length > 1 && s.g === 'M') return voices[1];
       return voices[0];
     };
-    /** The speaker's own colour while it's their own voice reading, or -1 for hers or his. */
+    /** The speaker's own colour while it's their own voice reading, or null for hers or his. */
     const colorOf = (s: Sentence) => {
-      if (s.who === undefined || s.who < 0) return -1;
-      if (voiceOf(s) !== cast.get(s.who)) return -1;
-      return colors.get(s.who) ?? -1;
+      if (s.who === undefined || s.who < 0) return null;
+      if (voiceOf(s) !== cast.get(s.who)) return null;
+      return colors.get(s.who) ?? null;
     };
     /**
      * Character voices kept loaded beside hers and his, the last used first: only a couple on this

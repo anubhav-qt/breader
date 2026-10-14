@@ -1,19 +1,44 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { BOOK_COLORS, type BookColor } from '../../../data/colors';
 import { springs } from '../../../lib/springs';
 import type { CastDesign } from '../../design/round';
 import type { Engine, SamplePart, VoiceInfo } from '../voice/catalog';
-import { aiPicks, castOf, hearVoice, KIND_NAME, KIND_PLURAL, KINDS, pickVoice, reshuffle, reshuffled, useBookCast, useCast, useSpeaking, voicesOf, type Cast, type Character } from '../voice/cast';
+import {
+  aiPicks,
+  canSwapVoices,
+  castOf,
+  colorsOf,
+  freeColors,
+  freeVoices,
+  hearVoice,
+  KIND_NAME,
+  KIND_PLURAL,
+  KINDS,
+  pickColor,
+  pickVoice,
+  reshuffle,
+  reshuffled,
+  swapColors,
+  swapVoices,
+  useBookCast,
+  useCast,
+  useSpeaking,
+  voicesOf,
+  type Cast,
+  type Character,
+} from '../voice/cast';
 import { stopSample } from '../voice/speaker';
 import { BACK, PLAY, STOP } from './icons';
-import { DotIcon, Typed } from './parts';
+import { CloseDots, DotIcon, Typed } from './parts';
 import './cast.css';
 
 /*
  * Character voices in the voice sheet, once picked over 1 voice or 2: who reads whom. Each design of
  * this round (design/round.ts):
  *
- *   A Auto       handed out by themselves: the cast as faces, a tap to hear one, Reshuffle for another go
+ *   A Auto       handed out by themselves: the cast as faces, Reshuffle for another go, and a tap on
+ *                one for their card, to swap their voice or colour or change it for one nobody has
  *   B Cast list  everyone in a list, each with their voice to change and hear
  *   C Board      the cast grouped by kind, a tap on one opens the voices of their kind
  *   D Speaking   who's speaking now, big, with the rest below; the play row says who too
@@ -35,16 +60,22 @@ function initials(name: string) {
   return name.slice(0, 2);
 }
 
-/** A character's colour: their own, for the people with most to say, or else their kind's. */
-function tintOf(c: Character) {
-  if (c.color >= 0) return `var(--cast-${c.color})`;
+/** A character's colour: their own (voice/cast.ts colorsOf), or else their kind's. */
+function tintOf(c: Character, color: BookColor | null) {
+  if (color) return `var(--bc-${color})`;
   return `var(--cs-${c.kind})`;
 }
 
 /** A face: the character's initials, in their colour. */
-function Face({ c, size = 'm' }: { c: Character; size?: 's' | 'm' | 'l' }) {
-  return <span className={`cs-face is-${size}`} style={{ '--k': tintOf(c) } as CSSProperties} aria-hidden="true">{initials(c.name)}</span>;
+function Face({ c, color, size = 'm' }: { c: Character; color: BookColor | null; size?: 'xs' | 's' | 'm' | 'l' }) {
+  return <span className={`cs-face is-${size}`} style={{ '--k': tintOf(c, color) } as CSSProperties} aria-hidden="true">{initials(c.name)}</span>;
 }
+
+/** A book colour's name: "Lamp green". */
+const colorName = (c: BookColor) => BOOK_COLORS.find((x) => x.key === c)?.label ?? c;
+
+/** Whose colour someone without one of their own is lit in. */
+const KIND_COLOR: Record<Character['kind'], string> = { F: 'Her colour', M: 'His colour', N: 'The book’s colour' };
 
 /** Plays a voice's sample, and says which one is playing. */
 function useHear() {
@@ -125,10 +156,10 @@ function Faces({ again, onAgain, back, children }: { again: string; onAgain: () 
   );
 }
 
-/** One face: who it reads, and in whose voice; a tap to hear it. */
-function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode; name: string; voice: string; on: boolean; label: string; onClick: () => void }) {
+/** One face: who it reads, and in whose voice; a tap to hear it, or, with `open`, for their card. */
+function FaceButton({ face, name, voice, on, open, label, onClick }: { face: ReactNode; name: string; voice: string; on: boolean; open?: boolean; label: string; onClick: () => void }) {
   return (
-    <button type="button" className={`cs-face-b${on ? ' is-on' : ''}`} onClick={onClick} aria-label={label} title={label}>
+    <button type="button" className={`cs-face-b${on ? ' is-on' : ''}`} onClick={onClick} aria-label={label} title={label} aria-expanded={open}>
       {face}
       <span className="cs-face-n">{name}</span>
       <span className="cs-face-v">{voice}</span>
@@ -136,16 +167,168 @@ function FaceButton({ face, name, voice, on, label, onClick }: { face: ReactNode
   );
 }
 
-/** A: the AI's picks, or handed out, to be heard and shuffled, and back to the AI's picks once the series is shuffled. */
+/** As many faces to a row as .cs-faces has. */
+const ROW = 5;
+
+/**
+ * A: the AI's picks, or handed out, to be shuffled, and back to the AI's picks once the series is
+ * shuffled. A tap on someone opens their card under their row; a tap on someone else while it's
+ * open shows theirs in it instead.
+ */
 function Auto({ book, cast, canGoBack }: { book: string; cast: Cast[]; canGoBack: boolean }) {
   const { on, hear } = useHear();
+  const [open, setOpen] = useState<string | null>(null);
   const people = cast.map((x) => x.c);
+  const at = cast.findIndex((x) => x.c.id === open);
+  const shown = at >= 0;
+  // Escape closes the card, not the sheet under it.
+  useEffect(() => {
+    if (!shown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [shown]);
+  const faces: ReactNode[] = cast.map((x) => (
+    <FaceButton
+      key={x.c.id}
+      face={<Face c={x.c} color={x.color} />}
+      name={x.c.name}
+      voice={x.v.name}
+      on={open === x.c.id}
+      open={open === x.c.id}
+      label={`${x.c.name}, read by ${x.v.name}`}
+      onClick={() => setOpen(open === x.c.id ? null : x.c.id)}
+    />
+  ));
+  if (shown) {
+    const end = Math.min(cast.length, (Math.floor(at / ROW) + 1) * ROW);
+    faces.splice(end, 0, <Card key="card" book={book} who={cast[at]} cast={cast} on={on} hear={hear} onClose={() => setOpen(null)} />);
+  }
   return (
     <Faces again="Reshuffle the voices" onAgain={() => reshuffle(book, people)} back={canGoBack ? { label: 'Back to the AI’s picks', run: () => aiPicks(book) } : undefined}>
-      {cast.map((x) => (
-        <FaceButton key={x.c.id} face={<Face c={x.c} />} name={x.c.name} voice={x.v.name} on={on === x.c.id} label={`Hear ${x.c.name}, read by ${x.v.name}`} onClick={() => hear(x.c.id, x.v)} />
-      ))}
+      {faces}
     </Faces>
+  );
+}
+
+/**
+ * Someone's card: their voice and their colour, each to swap with someone else's or to change for
+ * one nobody here has. Voices swap only where each fits the other: a woman's for a woman's, say.
+ */
+function Card({ book, who, cast, on, hear, onClose }: {
+  book: string;
+  who: Cast;
+  cast: Cast[];
+  on: string | null;
+  hear: (who: string, v: VoiceInfo, part?: SamplePart) => void;
+  onClose: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const name = who.c.name;
+  const others = cast.filter((x) => x.c.id !== who.c.id);
+  const voiceSwaps = others.filter((x) => canSwapVoices(who, x));
+  const voicesFree = freeVoices(cast, who);
+  const colorSwaps = others.filter((x) => x.color && x.color !== who.color);
+  const colorsFree = freeColors(cast);
+  // Opened under a row near the foot of the sheet, it scrolls up into sight.
+  useEffect(() => {
+    box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [who.c.id]);
+  return (
+    <motion.div ref={box} className="cs-card" role="group" aria-label={`${name}’s voice and colour`} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={springs.snappy}>
+      <div className="cs-card-h">
+        <Face c={who.c} color={who.color} size="l" />
+        <span className="cs-card-t">
+          <b>{name}</b>
+          <span>{KIND_NAME[who.c.kind]} · {many(who.c.lines, 'line', 'lines')}</span>
+        </span>
+        <CloseDots onClick={onClose} />
+      </div>
+
+      <div className="cs-card-s">
+        <div className="clbl cs-card-l">
+          Voice
+          <span className="cs-card-now">
+            {who.v.name}
+            <HearButton playing={on === who.c.id} name={who.v.name} onClick={() => hear(who.c.id, who.v)} />
+          </span>
+        </div>
+        {voiceSwaps.length > 0 && (
+          <div className="cs-card-row">
+            <span className="cs-card-k">Swap with</span>
+            <div className="cs-chips">
+              {voiceSwaps.map((x) => {
+                const about = `Swap voices with ${x.c.name}, read by ${x.v.name}`;
+                return (
+                  <button key={x.c.id} type="button" className="cs-swap" onClick={() => swapVoices(book, who, x)} aria-label={about} title={about}>
+                    <Face c={x.c} color={x.color} size="xs" />
+                    <span>{x.v.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="cs-card-row">
+          <span className="cs-card-k">Unused</span>
+          {voicesFree.length > 0 ? (
+            <div className="cs-chips">
+              {voicesFree.map((v) => {
+                const key = `${who.c.id}:${v.key}`;
+                return (
+                  <span key={v.key} className="cs-chip">
+                    <button type="button" onClick={() => pickVoice(book, who.c.id, v.key)} aria-label={`Read ${name} in ${v.name}`} title={`${v.name}, ${v.accent}`}>{v.name}</button>
+                    <button type="button" className="cs-chip-hear" onClick={() => hear(key, v)} aria-label={on === key ? `Stop ${v.name}` : `Hear ${v.name}`}>
+                      <DotIcon rows={on === key ? STOP : PLAY} />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="cs-card-none">Every voice that fits is someone’s.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="cs-card-s">
+        <div className="clbl cs-card-l">
+          Colour
+          <span className="cs-card-now">{who.color ? colorName(who.color) : KIND_COLOR[who.c.kind]}</span>
+        </div>
+        {colorSwaps.length > 0 && (
+          <div className="cs-card-row">
+            <span className="cs-card-k">Swap with</span>
+            <div className="cs-swatches">
+              {colorSwaps.map((x) => {
+                const about = `Swap colours with ${x.c.name}, in ${colorName(x.color!)}`;
+                return (
+                  <button key={x.c.id} type="button" className="cs-swatch" style={{ '--k': `var(--bc-${x.color})` } as CSSProperties} onClick={() => swapColors(book, who, x)} aria-label={about} title={about}>
+                    {initials(x.c.name)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="cs-card-row">
+          <span className="cs-card-k">Unused</span>
+          {colorsFree.length > 0 ? (
+            <div className="cs-swatches">
+              {colorsFree.map((c) => (
+                <button key={c} type="button" className="cs-swatch" style={{ '--k': `var(--bc-${c})` } as CSSProperties} onClick={() => pickColor(book, who.c.id, c)} aria-label={`Light ${name} in ${colorName(c)}`} title={colorName(c)} />
+              ))}
+            </div>
+          ) : (
+            <p className="cs-card-none">Every colour is someone’s.</p>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -216,7 +399,7 @@ function List({ book, cast, engine }: { book: string; cast: Cast[]; engine: Engi
     <div className="cs-list" role="list">
       {cast.map((x) => (
         <div key={x.c.id} className="cs-row" role="listitem">
-          <Face c={x.c} size="s" />
+          <Face c={x.c} color={x.color} size="s" />
           <span className="cs-who">
             <b>{x.c.name}</b>
             <span>{KIND_NAME[x.c.kind]} · {many(x.c.lines, 'line', 'lines')}</span>
@@ -251,7 +434,7 @@ function Board({ book, cast, engine }: { book: string; cast: Cast[]; engine: Eng
           <div className="cs-tiles">
             {g.people.map((x) => (
               <button key={x.c.id} type="button" className={`cs-tile${open === x.c.id ? ' is-open' : ''}`} onClick={() => setOpen(open === x.c.id ? null : x.c.id)} aria-expanded={open === x.c.id}>
-                <Face c={x.c} size="s" />
+                <Face c={x.c} color={x.color} size="s" />
                 <span className="cs-tile-t">
                   <b>{x.c.name}</b>
                   <span>{x.v.name}</span>
@@ -298,8 +481,8 @@ function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
   return (
     <div className="cs-speaking">
       {now && (
-        <div className={`cs-now${playing ? ' is-live' : ''}`} style={{ '--k': tintOf(now.c) } as CSSProperties}>
-          <Face c={now.c} size="l" />
+        <div className={`cs-now${playing ? ' is-live' : ''}`} style={{ '--k': tintOf(now.c, now.color) } as CSSProperties}>
+          <Face c={now.c} color={now.color} size="l" />
           <span className="cs-now-t">
             <span className="cs-now-w">{playing ? 'Speaking now' : 'First to speak'}</span>
             <b><Typed text={now.c.name} /></b>
@@ -311,7 +494,7 @@ function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
       <div className="cs-strip">
         {cast.map((x) => (
           <button key={x.c.id} type="button" className={`cs-mini${now?.c.id === x.c.id ? ' is-now' : ''}${on === x.c.id ? ' is-on' : ''}`} onClick={() => hear(x.c.id, x.v)} aria-label={`Hear ${x.c.name}, read by ${x.v.name}`}>
-            <Face c={x.c} size="s" />
+            <Face c={x.c} color={x.color} size="s" />
             <span>{x.c.name}</span>
           </button>
         ))}
@@ -322,12 +505,14 @@ function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
 
 /** D, on the play row: who's speaking, while the voice reads with character voices. */
 export function SpeakerChip({ book, playing }: { book: string; playing: boolean }) {
+  const state = useCast();
   const { people } = useBookCast(book);
   const now = useSpeaking(people ?? [], playing);
   if (!playing || !now) return null;
+  const color = colorsOf(book, people ?? [], state).get(now.id) ?? null;
   return (
     <span className="cs-speaker" aria-live="polite">
-      <Face c={now} size="s" />
+      <Face c={now} color={color} size="s" />
       <Typed text={now.name} />
     </span>
   );
