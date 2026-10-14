@@ -21,7 +21,8 @@
         <button id="out" title="Zoom out (-)">−</button>
         <button id="fit" title="Fit (0)">Fit</button>
         <button id="in" title="Zoom in (+)">+</button>
-        <button id="reset" title="Put back what Breader found">Reset to found</button>
+        <button id="snap" aria-pressed="true" title="Snap a corner to the border when it's let go of">Snap: on</button>
+        <button id="reset" title="Put back what the page started from: the model's guess, or what Breader found">Start over</button>
         <button id="save" class="go" title="Save (Ctrl+S)">Save</button>
       </div>
     </header>
@@ -33,9 +34,10 @@
       </section>
     </main>
     <footer>
-      Drag a dot to move that corner. Arrows nudge it a pixel (Shift: ten), Tab picks the next corner.
-      Drag on bare page to draw a panel (Shift: anywhere). Delete removes a panel, [ and ] change its
-      place in the order. Ctrl+Z undoes, Ctrl+S saves.
+      Drag a dot to move that corner: let go and it snaps to the border, unless Snap is off (Ctrl+Z: where you let go).
+      Arrows nudge it a pixel (Shift: ten), Tab picks the next corner. Drag on bare page to draw a
+      panel (Shift: anywhere). Delete removes a panel, [ and ] change its place in the order. S snaps
+      every corner, B swaps in what Breader found. Ctrl+Z undoes, Ctrl+S saves.
     </footer>
     <canvas id="loupe" width="200" height="200"></canvas>
     <dialog id="list">

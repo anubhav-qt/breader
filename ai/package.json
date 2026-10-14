@@ -24,7 +24,9 @@
     "build": "node build.mjs",
     "panels": "vite --config panels/vite.config.ts",
     "panels-fetch": "tsx panels/fetch.ts",
-    "panels-export": "tsx panels/export.ts"
+    "panels-export": "tsx panels/export.ts",
+    "panels-train": "npm run panels-export && docker compose -f panels/model/compose.yml run --rm --build train",
+    "panels-guess": "docker compose -f panels/model/compose.yml run --rm --build guess"
   },
   "dependencies": {
     "@google/genai": "2.21.0",

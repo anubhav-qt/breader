@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
-import { pagesOf, samePanels, wrongIn, type Edit, type Label, type Page } from './labels.ts';
+import { pagesOf, samePanels, startOf, wrongIn, type Edit, type Guess, type Guessed, type Label, type Page } from './labels.ts';
 
 /*
  * The panel labeller (README.md), served on this machine only: the page, the pictures fetched into
@@ -18,6 +18,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const DATA = join(here, 'data');
 const PAGES = join(DATA, 'pages');
 const LABELS = join(DATA, 'labels');
+const GUESSES = join(DATA, 'guesses');
 const TYPES: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
 
 async function setOf(set: number): Promise<Page[]> {
@@ -39,6 +40,24 @@ async function labelOf(id: string): Promise<Label | null> {
   return JSON.parse(await readFile(labelFile(id), 'utf8')) as Label;
 }
 
+/** The model's guess for a page (model/guess.py), or null when there's none for its picture as fetched. */
+async function guessOf(page: Page): Promise<Guess | null> {
+  const file = join(GUESSES, `${page.id}.json`);
+  if (!existsSync(file)) return null;
+  const g = JSON.parse(await readFile(file, 'utf8')) as Guess;
+  const fits = g.page === page.id && g.sha256 === page.sha256 && g.width === page.width && g.height === page.height;
+  return fits && typeof g.model === 'string' && !wrongIn(g.panels, page.width, page.height) ? g : null;
+}
+
+/** Why a guess sent with a save can't be kept, or null when it can. */
+function wrongGuess(g: unknown, page: Page): string | null {
+  if (g === null) return null;
+  const guessed = g as Guessed;
+  if (typeof guessed !== 'object' || typeof guessed.model !== 'string') return 'the guess it started from has no model';
+  const wrong = wrongIn(guessed.panels, page.width, page.height);
+  return wrong && `the guess it started from: ${wrong}`;
+}
+
 function send(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
   res.setHeader('content-type', 'application/json');
@@ -54,8 +73,9 @@ async function bodyOf(req: IncomingMessage): Promise<string> {
 
 /** Saves a page's labels as sent, or says why it can't. */
 async function save(page: Page, edit: Edit): Promise<Label | string> {
-  const wrong = wrongIn(edit.panels, page.width, page.height) ?? wrongIn(edit.found, page.width, page.height);
+  const wrong = wrongIn(edit.panels, page.width, page.height) ?? wrongIn(edit.found, page.width, page.height) ?? wrongGuess(edit.guessed ?? null, page);
   if (wrong) return wrong;
+  const guessed = edit.guessed ? { model: edit.guessed.model, panels: edit.guessed.panels } : null;
   // The picture labelled has to be the one the labels will be trained with.
   const sha256 = createHash('sha256').update(await readFile(join(PAGES, page.file))).digest('hex');
   if (sha256 !== page.sha256) return `${page.file} isn't the picture that was fetched: fetch it again`;
@@ -68,6 +88,7 @@ async function save(page: Page, edit: Edit): Promise<Label | string> {
     height: page.height,
     panels: edit.panels,
     found: edit.found,
+    guessed,
     saved: new Date().toISOString(),
   };
   await mkdir(LABELS, { recursive: true });
@@ -75,7 +96,8 @@ async function save(page: Page, edit: Edit): Promise<Label | string> {
   await writeFile(tmp, `${JSON.stringify(label, null, 1)}\n`);
   await rename(tmp, labelFile(page.id));
   const back = await labelOf(page.id);
-  if (!back || !samePanels(back.panels, edit.panels) || !samePanels(back.found, edit.found)) return 'the saved file reads back different: nothing is trustworthy, tell Claude';
+  const same = back && samePanels(back.panels, edit.panels) && samePanels(back.found, edit.found) && JSON.stringify(back.guessed) === JSON.stringify(guessed);
+  if (!same) return 'the saved file reads back different: nothing is trustworthy, tell Claude';
   return back;
 }
 
@@ -89,12 +111,18 @@ const api = (): Plugin => ({
           const set = Number(url.searchParams.get('set') ?? 1);
           if (!Number.isInteger(set) || set < 1) return send(res, 400, { error: 'no such set' });
           const pages = await setOf(set);
-          const labels: Record<string, { panels: number; saved: string; edited: boolean }> = {};
+          const labels: Record<string, { panels: number; saved: string; edited: boolean; guessed: boolean }> = {};
           for (const p of pages) {
             const l = await labelOf(p.id);
-            if (l) labels[p.id] = { panels: l.panels.length, saved: l.saved, edited: !samePanels(l.panels, l.found) };
+            if (l) labels[p.id] = { panels: l.panels.length, saved: l.saved, edited: !samePanels(l.panels, startOf(l)), guessed: !!l.guessed };
           }
           return send(res, 200, { pages, labels });
+        }
+        const guess = url.pathname.match(/^\/api\/guesses\/([\w-]+)$/);
+        if (guess) {
+          const page = (await everyPage()).find((p) => p.id === guess[1]);
+          if (!page) return send(res, 404, { error: 'no such page' });
+          return send(res, 200, await guessOf(page));
         }
         const label = url.pathname.match(/^\/api\/labels\/([\w-]+)$/);
         if (label) {

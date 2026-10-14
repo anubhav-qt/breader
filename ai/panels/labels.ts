@@ -50,14 +50,43 @@ export interface Label {
   panels: Quad[];
   /** What Breader's own panel finder (frames.ts) found, as it found it, to measure a model against. */
   found: Quad[];
+  /**
+   * The model's guess the labelling started from, as it guessed it, or null when it started from
+   * what Breader found. Labels saved before there were guesses don't have it.
+   */
+  guessed?: Guessed | null;
   saved: string;
+}
+
+/** A guess at a page's panels by a round of the panel model (README.md, model/). */
+export interface Guessed {
+  /** Which round: round-1, round-2 and on. */
+  model: string;
+  panels: Quad[];
+}
+
+/** The model's guess for a page not labelled yet, as written to data/guesses/<page>.json. */
+export interface Guess extends Guessed {
+  v: 1;
+  page: string;
+  file: string;
+  sha256: string;
+  width: number;
+  height: number;
+  made: string;
+  /** How sure the model was of each panel, 0 to 1. */
+  sure: number[];
 }
 
 /** What the labeller sends to save. */
 export interface Edit {
   panels: Quad[];
   found: Quad[];
+  guessed: Guessed | null;
 }
+
+/** What the labelling of a page started from: the model's guess, or else what Breader found. */
+export const startOf = (l: { found: Quad[]; guessed?: Guessed | null }): Quad[] => l.guessed?.panels ?? l.found;
 
 /** Why some quads can't be saved for a page this size, or null when they can. */
 export function wrongIn(quads: unknown, width: number, height: number): string | null {

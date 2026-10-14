@@ -82,6 +82,11 @@ button:disabled {
   cursor: default;
 }
 
+button[aria-pressed='true'] {
+  background: #2d3a55;
+  border-color: var(--go);
+}
+
 button.go {
   background: var(--go);
   border-color: var(--go);
@@ -134,6 +139,7 @@ main {
 .stage {
   position: relative;
   margin: 0 auto;
+  user-select: none;
 }
 
 .stage img {

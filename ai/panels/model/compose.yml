@@ -1,0 +1,20 @@
+# The panel model's trainer, on this machine's GPU (README.md):
+#   npm --prefix ai run panels-train     train the next round on every label, then guess the rest
+#   npm --prefix ai run panels-guess     guess the unlabelled pages again with the latest round
+name: breader-panels
+
+x-model: &model
+  build: .
+  image: breader-panels-model
+  gpus: all
+  # Data loaders share pictures through it, and Docker's own 64 MB is too little.
+  shm_size: 4gb
+  volumes: ["../data:/data"]
+
+services:
+  train:
+    <<: *model
+    command: ["python", "train.py"]
+  guess:
+    <<: *model
+    command: ["python", "guess.py"]

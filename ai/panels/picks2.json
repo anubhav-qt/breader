@@ -1,0 +1,392 @@
+{
+  "series": [
+    {
+      "key": "yotsuba",
+      "title": "Yotsuba&!",
+      "manga": "58be6aa6-06cb-4ca5-bd20-f1392ce451fb",
+      "chapter": "46f96a8e-a648-43f4-b343-167a30071da6",
+      "number": "47",
+      "pages": [
+        { "page": 8, "note": "title page in grey, lettering only: no panels" },
+        { "page": 12, "note": "dense small panels, white gutters" },
+        { "page": 22, "note": "a figure leaping across panel borders" },
+        { "page": 28, "note": "last page, magazine text under the panels" }
+      ]
+    },
+    {
+      "key": "dorohedoro",
+      "title": "Dorohedoro",
+      "manga": "34f45c13-2b78-4900-8af2-d0bb551101f4",
+      "chapter": "3c8d2ec0-e8cd-4467-89db-b0a78a8d63ee",
+      "number": "40",
+      "pages": [
+        { "page": 1, "note": "a landscape page, one picture framed on grey" },
+        { "page": 9, "note": "black gutters with dripping edges" },
+        { "page": 12, "note": "dense gritty panels, thin borders" },
+        { "page": 15, "note": "rough brushed borders on black" }
+      ]
+    },
+    {
+      "key": "girlslast",
+      "title": "Girls' Last Tour",
+      "manga": "5b93fa0f-0640-49b8-974e-954b9959929b",
+      "chapter": "220bf63b-62af-4803-ae85-4cba66754a39",
+      "number": "26",
+      "pages": [
+        { "page": 1, "note": "a borderless scene fading over a panel below" },
+        { "page": 6, "note": "pale grey tones, thin borders" },
+        { "page": 8, "note": "a figure standing outside the panels" },
+        { "page": 14, "note": "a full page scene, no borders" }
+      ]
+    },
+    {
+      "key": "climber",
+      "title": "The Climber",
+      "manga": "bb8310e4-6050-4a43-984e-f7bbdfce23b1",
+      "chapter": "77ef70ed-205a-4711-b48a-01bece30c0f5",
+      "number": "26",
+      "pages": [
+        { "page": 5, "note": "slanted panels cutting across black" },
+        { "page": 8, "note": "black gutters, panels of every size" },
+        { "page": 12, "note": "thin eye strips on black" },
+        { "page": 20, "note": "a blank page with a small logo: no panels" }
+      ]
+    },
+    {
+      "key": "jojolion",
+      "title": "JoJolion, colour edition",
+      "manga": "7a9d76c3-42b9-4bcf-81d7-ad307d2ea971",
+      "chapter": "d4f9d332-2643-4183-a7fc-2a36542f8dc0",
+      "number": "51",
+      "pages": [
+        { "page": 2, "note": "a page of notes in text: no panels" },
+        { "page": 16, "note": "colour two page spread, panels across the fold" },
+        { "page": 20, "note": "colour, a figure over the panels" },
+        { "page": 23, "note": "colour spread, many panels" }
+      ]
+    },
+    {
+      "key": "umamusume",
+      "title": "Uma Musume: Cinderella Gray",
+      "manga": "a9dd451c-3c45-4d66-a818-4e1b78855838",
+      "chapter": "ff0b6ea1-4088-4a3a-9918-b8d90a9f7dee",
+      "number": "49",
+      "pages": [
+        { "page": 2, "note": "the chapter title in a column beside the panel" },
+        { "page": 9, "note": "a profile page: framed text boxes and pictures" },
+        { "page": 17, "note": "panels with black bands between" },
+        { "page": 19, "note": "a 4096 wide sketch sheet: no panels" }
+      ]
+    },
+    {
+      "key": "wotakoi",
+      "title": "Wotakoi: Love Is Hard for Otaku",
+      "manga": "65263bf9-4f87-4513-b72f-ad6436b3911c",
+      "chapter": "08a52972-54e5-4bed-897d-a085cbb4a15d",
+      "number": "55",
+      "pages": [
+        { "page": 5, "note": "a caption above each short gag" },
+        { "page": 9, "note": "figures crossing the panel borders" },
+        { "page": 12, "note": "overlapping panels on screentone" }
+      ]
+    },
+    {
+      "key": "yamadalv",
+      "title": "My Love Story with Yamada-kun at Lv999",
+      "manga": "643561e6-5c27-4382-95d3-8e84894a3fb6",
+      "chapter": "c7c03168-7333-48c3-be4e-30e93b329a76",
+      "number": "45",
+      "pages": [
+        { "page": 3, "note": "a game chat log in a black bar over the panels" },
+        { "page": 4, "note": "a game window drawn inside a panel" },
+        { "page": 8, "note": "soft edged panels fading into blossom" },
+        { "page": 14, "note": "a diagonal split, figures overlapping" }
+      ]
+    },
+    {
+      "key": "versailles",
+      "title": "The Rose of Versailles",
+      "manga": "fd9577a0-43a3-4610-835f-1cbf903b7e3f",
+      "chapter": "7adb632c-9327-4c42-a167-13d7107ce412",
+      "number": "33",
+      "pages": [
+        { "page": 9, "note": "a sword fight in jagged slanted panels" },
+        { "page": 16, "note": "sparse panels fading into white" },
+        { "page": 20, "note": "a full length figure standing over the panels" },
+        { "page": 24, "note": "a two page spread" }
+      ]
+    },
+    {
+      "key": "galaxy999",
+      "title": "Galaxy Express 999",
+      "manga": "6c5a3310-c4c7-4231-b34b-1124332a2236",
+      "chapter": "e543db61-7a8b-4f28-bac8-36edc04637bd",
+      "number": "51",
+      "pages": [
+        { "page": 3, "note": "chapter title on a blank page: no panels" },
+        { "page": 9, "note": "a slanted space panel over a white one" },
+        { "page": 14, "note": "black panels in a column beside others" },
+        { "page": 18, "note": "space scenes with no gutters, black on black" }
+      ]
+    },
+    {
+      "key": "tokimeki",
+      "title": "Tokimeki Tonight",
+      "manga": "efe14e44-b634-4042-b562-edd066b81b34",
+      "chapter": "68a4dd6e-23f1-4996-b016-ec1f8970e8cb",
+      "number": "51",
+      "pages": [
+        { "page": 2, "note": "figures on white, panels without borders" },
+        { "page": 14, "note": "slanted panels behind a huge sound effect" },
+        { "page": 20, "note": "panels tilted every which way" },
+        { "page": 24, "note": "borderless figures with a few framed panels" }
+      ]
+    },
+    {
+      "key": "aceaim",
+      "title": "Aim for the Ace!",
+      "manga": "fc25ce20-c979-4838-8674-b0a0718a3c0f",
+      "chapter": "da71c10b-35f8-4d7c-9b76-3bc0bd33869d",
+      "number": "49",
+      "pages": [
+        { "page": 3, "note": "a story so far page: text beside a framed picture" },
+        { "page": 10, "note": "a half height page, one wide picture" },
+        { "page": 12, "note": "a swirling black splash" },
+        { "page": 20, "note": "slanted sports panels with speed lines" }
+      ]
+    },
+    {
+      "key": "drifting",
+      "title": "The Drifting Classroom",
+      "manga": "0c3d5ecc-28a9-4317-9b87-50954737b1e5",
+      "chapter": "9c03725b-a14a-4d22-9381-c2a4df758986",
+      "number": "7",
+      "pages": [
+        { "page": 1, "note": "the chapter title in a black panel, credits under it" },
+        { "page": 4, "note": "a full page splash without borders" },
+        { "page": 17, "note": "many small panels, moons drawn in the gutters" },
+        { "page": 21, "note": "a dense grid of small panels" }
+      ]
+    },
+    {
+      "key": "initiald",
+      "title": "Initial D",
+      "manga": "21f54bc1-aefd-4be1-8284-5858b1df0e55",
+      "chapter": "110c5eac-8bdd-42fe-9188-eb1ee63dbe56",
+      "number": "44",
+      "pages": [
+        { "page": 2, "note": "a black contents page with one framed picture" },
+        { "page": 3, "note": "a chapter title over one wide picture" },
+        { "page": 12, "note": "a two page spread, sound effects across it" },
+        { "page": 20, "note": "slanted racing panels" }
+      ]
+    },
+    {
+      "key": "petshop",
+      "title": "Pet Shop of Horrors",
+      "manga": "3041720b-1f13-4aee-942c-d747ef0e2666",
+      "chapter": "91d1b7c2-365a-40ac-8dd6-f74b00796ee4",
+      "number": "22",
+      "pages": [
+        { "page": 2, "note": "a tiny 586x357 title banner: no panels" },
+        { "page": 4, "note": "a spread, one scene without borders" },
+        { "page": 15, "note": "tall strips beside a black bar" },
+        { "page": 16, "note": "panels overlapping a patterned figure" }
+      ]
+    },
+    {
+      "key": "cookingboy",
+      "title": "Cooking Master Boy",
+      "manga": "9b6ad267-f3ac-4fcd-a8fc-4afe52d868ea",
+      "chapter": "0085f1d3-4307-49b6-a012-f8e530ed63bf",
+      "number": "19",
+      "pages": [
+        { "page": 2, "note": "a title box sitting over the top panel" },
+        { "page": 11, "note": "crowded panels, huge lettering across them" },
+        { "page": 21, "note": "a blank page with one small panel low down" },
+        { "page": 22, "note": "a scanlators' omake page, loose sketches" }
+      ]
+    },
+    {
+      "key": "saiki",
+      "title": "The Disastrous Life of Saiki K.",
+      "manga": "ae163fec-29d0-42f9-9fac-b751fc0f9035",
+      "chapter": "e2df317d-1ab2-46af-bd13-48074aea53f3",
+      "number": "39",
+      "pages": [
+        { "page": 4, "note": "a chapter title page, one big picture over a title box" },
+        { "page": 10, "note": "an explosion through slanted panels" },
+        { "page": 13, "note": "a dense gag grid" },
+        { "page": 17, "note": "an author's note in text columns with small sketches" }
+      ]
+    },
+    {
+      "key": "komarasetai",
+      "title": "I Want to Trouble My Cute Boss",
+      "manga": "23b7cc7a-df89-4049-af28-1fa78f88713e",
+      "chapter": "30a6f1a3-bdba-4f28-a686-51b17cb1d4ab",
+      "number": "51",
+      "pages": [
+        { "page": 2, "note": "4-koma in two columns, a title cell on top" },
+        { "page": 9, "note": "4-koma with dark tones" }
+      ]
+    },
+    {
+      "key": "kanako",
+      "title": "Kanako's Life as an Assassin",
+      "manga": "0c697908-bafd-44ec-ae29-b8515becd506",
+      "chapter": "6e1106d3-6872-4014-9124-147c55ba4c11",
+      "number": "27",
+      "pages": [
+        { "page": 2, "note": "colour 4-koma, wide strips stacked" },
+        { "page": 3, "note": "colour 4-koma, a punch breaking out of its strip" }
+      ]
+    },
+    {
+      "key": "chikarawaza",
+      "title": "Chikarawaza no Sister",
+      "manga": "3c025255-1151-4da4-9724-c28aa70e5062",
+      "chapter": "42449e14-3918-4d3a-9341-4d6bdb498fde",
+      "number": "25",
+      "pages": [
+        { "page": 1, "note": "a short header panel over a tall one" },
+        { "page": 4, "note": "a huge sound effect over the panels" }
+      ]
+    },
+    {
+      "key": "breakblade",
+      "title": "Break Blade",
+      "manga": "cc70ba46-e0d4-4240-98ba-adb86c82ff6b",
+      "chapter": "99e253d2-7d58-4c3e-b9da-e66765b705eb",
+      "number": "49",
+      "pages": [
+        { "page": 11, "note": "slanted panels stacked like blades" },
+        { "page": 21, "note": "near black panels on white" },
+        { "page": 28, "note": "a shattered diagonal splash" }
+      ]
+    },
+    {
+      "key": "toutoi",
+      "title": "Toutoi. 4P Short Stories",
+      "manga": "11afa5c2-41dc-4cf3-8451-f306a3caf1ab",
+      "chapter": "419ee3fe-7802-403a-ad8a-7bd0abf52ddd",
+      "number": "13",
+      "pages": [
+        { "page": 2, "note": "gutters fading from black to white" },
+        { "page": 6, "note": "a black page with one small tilted picture" }
+      ]
+    },
+    {
+      "key": "breaker",
+      "title": "The Breaker",
+      "manga": "67c6df9e-280f-476c-b13c-cecf6b2eb3c7",
+      "chapter": "12ba2607-150f-45c6-ad34-9ccb90b48c1b",
+      "number": "37",
+      "pages": [
+        { "page": 2, "note": "a whole book jacket scan: no panels" },
+        { "page": 4, "note": "colour panels of sky and sea" },
+        { "page": 15, "note": "left to right, wide strips" },
+        { "page": 17, "note": "left to right, a car panel over others" }
+      ]
+    },
+    {
+      "key": "yeolhyeol",
+      "title": "Ruler of the Land",
+      "manga": "8d522601-dd9c-4f12-8cee-b918c8ae0539",
+      "chapter": "3a0cf9c5-21d4-42a9-8cc1-b3b4af88d646",
+      "number": "51",
+      "pages": [
+        { "page": 2, "note": "a tall glossary of framed portraits: no panels" },
+        { "page": 7, "note": "huge lettering across the panels" },
+        { "page": 12, "note": "black gutters" },
+        { "page": 17, "note": "a dense left to right grid" }
+      ]
+    },
+    {
+      "key": "yaoshenji",
+      "title": "Tales of Demons and Gods",
+      "manga": "812f9696-048f-496d-9ed4-84c99345d1fb",
+      "chapter": "69cc4f92-d267-4994-bc2d-0c04f657efaf",
+      "number": "42",
+      "pages": [
+        { "page": 8, "note": "dark colour panels, a sound effect off the edge" },
+        { "page": 11, "note": "a pencil sketch on beige paper: no panels" }
+      ]
+    },
+    {
+      "key": "heresy",
+      "title": "Heresy",
+      "manga": "a9e34370-8443-43f1-908e-d7bc86fa9408",
+      "chapter": "88399131-5e74-46f5-9e0f-67705621518b",
+      "number": "37",
+      "pages": [
+        { "page": 12, "note": "sketchy panels bleeding into one another" },
+        { "page": 24, "note": "a dark painted panel with soft edges" }
+      ]
+    },
+    {
+      "key": "ladybeast",
+      "title": "The Lady and the Beast",
+      "manga": "e959ee87-cae7-4903-82b3-fa8800bb8ce6",
+      "chapter": "a1b40634-1f44-4cad-811d-1c8e1c9e016e",
+      "number": "30",
+      "pages": [
+        { "page": 1, "note": "a 10173 tall strip, panels on black fading to white" },
+        { "page": 4, "note": "tilted panels staggered down white" }
+      ]
+    },
+    {
+      "key": "doupo",
+      "title": "Battle Through the Heavens",
+      "manga": "cee2ab81-2ab5-4c91-8715-92848ef5b2d4",
+      "chapter": "6f648638-cebf-48a7-97eb-dc35cece6ff9",
+      "number": "37",
+      "pages": [
+        { "page": 12, "note": "a colour spread, panels melting into one scene" },
+        { "page": 15, "note": "colour, a beast flying out of slanted panels" }
+      ]
+    },
+    {
+      "key": "clinic",
+      "title": "Clinic of Horrors",
+      "manga": "40aafcb8-2649-4f9c-94fe-a7b4ce9ebd9a",
+      "chapter": "deba2a36-ce23-4f99-9f62-f647cee7c149",
+      "number": "27",
+      "pages": [
+        { "page": 4, "note": "one panel to a picture, a siren breaking its border" },
+        { "page": 11, "note": "an 800x147 sign off strip: no panels" }
+      ]
+    },
+    {
+      "key": "crawling",
+      "title": "Crawling Dreams",
+      "manga": "3b83e8ce-d336-4164-bf2f-f1f20085b0ef",
+      "chapter": "9c7534de-2f9a-4849-8a7f-308533bcbe0b",
+      "number": "26",
+      "pages": [
+        { "page": 6, "note": "panels cut off by the top and bottom edges" }
+      ]
+    },
+    {
+      "key": "pastel",
+      "title": "Pastel Love",
+      "manga": "cccf4240-fff5-41c1-9298-e16d86860905",
+      "chapter": "d189844c-3b99-4f91-a1fe-4668582d23a6",
+      "number": "31",
+      "pages": [
+        { "page": 12, "note": "a group chat window drawn as a panel" }
+      ]
+    },
+    {
+      "key": "ramia",
+      "title": "Ramia-Yana",
+      "manga": "65512e8c-71c6-4143-ab88-1f62942e7dd2",
+      "chapter": "08bffa20-54fc-4369-b42f-e748604244e7",
+      "number": "6.4",
+      "pages": [
+        { "page": 6, "note": "slanted panels around a round one" },
+        { "page": 12, "note": "a caption bar across the page between panels" }
+      ]
+    }
+  ]
+}

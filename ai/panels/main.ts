@@ -1,11 +1,13 @@
 import { framesOf, type Box } from '../../frontend/src/features/reader/frames.ts';
-import { samePanels, type Label, type Page, type Point, type Quad } from './labels.ts';
+import { samePanels, startOf, type Guess, type Guessed, type Label, type Page, type Point, type Quad } from './labels.ts';
+import { greyOf, snapOf, type Grey } from './snap.ts';
 
 /*
  * The panel labeller (README.md): a page as it is on the left, and on the right its panels, first
- * as Breader's own panel finder (frames.ts) finds them, then as they're corrected. The panels are
- * drawn straight from the numbers that get saved, in the picture's own pixels, so what's on screen
- * is what's in the file, and after a save it's drawn from the file as read back.
+ * as the panel model guesses them (or, with no guess, as Breader's own panel finder, frames.ts,
+ * finds them), then as they're corrected. The panels are drawn straight from the numbers that get
+ * saved, in the picture's own pixels, so what's on screen is what's in the file, and after a save
+ * it's drawn from the file as read back.
  */
 
 /** Panels' colours, in turn, so two side by side are told apart. */
@@ -19,6 +21,8 @@ const SLOP = 3;
 const LEAST = 8;
 /** The loupe shows this many of the picture's pixels across. */
 const LOUPE = 50;
+/** A corner let go of snaps to a border this many screen pixels from it, at most. */
+const REACH = 10;
 
 const $ = <T extends Element>(s: string) => document.querySelector(s) as T;
 const raw = $<HTMLElement>('#raw');
@@ -34,11 +38,25 @@ const loupe = $<HTMLCanvasElement>('#loupe');
 const list = $<HTMLDialogElement>('#list');
 
 let pages: Page[] = [];
-let labelled: Record<string, { panels: number; saved: string; edited: boolean }> = {};
+let labelled: Record<string, { panels: number; saved: string; edited: boolean; guessed: boolean }> = {};
 let at = 0;
 let page: Page | null = null;
 let panels: Quad[] = [];
 let found: Quad[] = [];
+/** The model's guess this page started from, as it guessed it, if it started from one. */
+let guessed: Guessed | null = null;
+/** The page's picture, once loaded, and its darkness for snapping, once a corner's been let go of. */
+let picture: HTMLImageElement | null = null;
+let grey: Grey | null = null;
+/** What the last change did, when it was a snap, to say so until the next. */
+let snapped = '';
+/** Whether a corner let go of snaps (the Snap button), as last set in this browser. */
+let snapping = true;
+try {
+  snapping = localStorage.getItem('panels.snap') !== 'off';
+} catch {
+  // No storage here: snapping stays on.
+}
 /** The panels as last loaded or saved, to tell when there are changes. */
 let base: Quad[] = [];
 let saved: Label | null = null;
@@ -75,14 +93,16 @@ function tell() {
   if (!page) return;
   if (broken) return say(broken, 'bad');
   const n = `${panels.length} panel${panels.length === 1 ? '' : 's'}`;
-  if (dirty()) return say(`Changed, not saved: ${n}.`, 'dirty');
-  if (!saved) return say(`Not labelled yet: what Breader found, ${n}. Correct it, or save it as it is if it's right.`);
+  if (dirty()) return say(`Changed, not saved: ${n}.${snapped && ` ${snapped}`}`, 'dirty');
+  const from = guessed ? `the model's guess (${guessed.model.replace('-', ' ')})` : 'what Breader found';
+  if (!saved) return say(`Not labelled yet: ${from}, ${n}. Correct it, or save it as it is if it's right.`);
   const when = new Date(saved.saved).toLocaleString();
-  const as = samePanels(saved.panels, saved.found) ? 'as Breader found them' : 'corrected';
+  const as = !samePanels(saved.panels, startOf(saved)) ? 'corrected' : saved.guessed ? 'as the model guessed them' : 'as Breader found them';
   say(`Saved ${when}: ${n}, ${as}.`, 'good');
 }
 
 function remember() {
+  snapped = '';
   undo.push(JSON.stringify(panels));
   if (undo.length > 200) undo.shift();
   redo = [];
@@ -98,6 +118,7 @@ function change(f: () => void) {
 function back(from: string[], to: string[]) {
   const s = from.pop();
   if (s === undefined) return;
+  snapped = '';
   to.push(JSON.stringify(panels));
   panels = JSON.parse(s) as Quad[];
   if (picked && picked.panel >= panels.length) picked = null;
@@ -197,6 +218,9 @@ svg.addEventListener('pointerdown', (e) => {
   const t = e.target as SVGElement;
   const panel = t.dataset.panel === undefined ? null : Number(t.dataset.panel);
   const corner = t.dataset.corner === undefined ? null : Number(t.dataset.corner);
+  // No selecting the panels' numbers as text: the next press would land on the selection, and the
+  // browser would drag that instead, cancelling the corner's drag.
+  e.preventDefault();
   svg.setPointerCapture(e.pointerId);
   nudging = false;
   if (panel !== null && corner !== null && !e.shiftKey) {
@@ -242,16 +266,21 @@ svg.addEventListener('pointermove', (e) => {
   draw();
 });
 
-function endDrag() {
+function endDrag(e: PointerEvent) {
+  // Let go of, not lost to the browser: a corner moved, or a panel drawn, snaps to the borders.
+  const done = e.type === 'pointerup' && snapping;
   if (drag?.kind === 'draw') {
     const q = drawing;
     drawing = null;
     if (q && q[2][0] - q[0][0] >= LEAST && q[2][1] - q[0][1] >= LEAST) {
       change(() => panels.push(q));
       picked = { panel: panels.length - 1, corner: null };
+      if (done) snap([0, 1, 2, 3].map((c) => [panels.length - 1, c]));
     } else if (!drag.moved) {
       picked = null;
     }
+  } else if (drag?.kind === 'corner' && drag.moved && done) {
+    snap([[drag.panel, drag.corner]]);
   }
   drag = null;
   loupe.style.display = 'none';
@@ -259,6 +288,54 @@ function endDrag() {
 }
 svg.addEventListener('pointerup', endDrag);
 svg.addEventListener('pointercancel', endDrag);
+
+/* Snapping (snap.ts) */
+
+/** The page's darkness, worked out the first time a corner's snapped on it. */
+function greyNow(): Grey | null {
+  if (grey || !picture || !page) return grey;
+  const c = document.createElement('canvas');
+  c.width = page.width;
+  c.height = page.height;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  // On white, so a see-through picture reads as it shows.
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(picture, 0, 0);
+  grey = greyOf(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+  return grey;
+}
+
+/**
+ * Snaps corners, each [panel, corner], onto the borders nearest them, as a change of its own, so
+ * Ctrl+Z puts them back where they were. Several are gone over twice, as each moves its edges.
+ */
+function snap(which: Array<[number, number]>) {
+  const g = greyNow();
+  if (!g || broken) return;
+  const reach = Math.max(2, Math.min(40, Math.round(REACH / scale())));
+  const next = copy(panels);
+  const moved = new Set<string>();
+  let far = 0;
+  for (let pass = which.length > 1 ? 2 : 1; pass > 0; pass--) {
+    for (const [p, c] of which) {
+      const to = snapOf(g, next[p], c, reach);
+      if (!to || (to[0] === next[p][c][0] && to[1] === next[p][c][1])) continue;
+      far = Math.max(far, Math.hypot(to[0] - next[p][c][0], to[1] - next[p][c][1]));
+      next[p][c] = to;
+      moved.add(`${p} ${c}`);
+    }
+  }
+  if (!moved.size) return;
+  remember();
+  panels = next;
+  snapped =
+    which.length === 1
+      ? `Snapped ${Math.round(far)} px onto the border: Ctrl+Z puts it where you let go.`
+      : `Snapped ${moved.size} corner${moved.size === 1 ? '' : 's'} onto the borders: Ctrl+Z undoes it.`;
+  draw();
+}
 
 /** The loupe: the picture close up around a corner as it's moved, its panel's edges over it. */
 function peer(panel: number, corner: number, e: PointerEvent) {
@@ -365,6 +442,13 @@ document.addEventListener('keydown', (e) => {
     zoomTo(0);
   } else if (key.toLowerCase() === 'l') {
     showList();
+  } else if (key.toLowerCase() === 's') {
+    snap(panels.flatMap((_, p) => [0, 1, 2, 3].map((c): [number, number] => [p, c])));
+  } else if (key.toLowerCase() === 'b') {
+    // What Breader found instead of the model's guess, when it's nearer.
+    if (samePanels(panels, found)) return;
+    picked = null;
+    change(() => (panels = copy(found)));
   }
 });
 
@@ -376,7 +460,7 @@ async function save() {
   saveBtn.disabled = true;
   say('Saving…');
   try {
-    const res = await fetch(`/api/labels/${page.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ panels: sent, found }) });
+    const res = await fetch(`/api/labels/${page.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ panels: sent, found, guessed }) });
     const body = (await res.json()) as Label & { error?: string };
     if (!res.ok) throw new Error(body.error ?? res.statusText);
     // Drawn from here on as the file reads, and it has to read as what was on screen.
@@ -384,8 +468,9 @@ async function save() {
     saved = body;
     panels = copy(body.panels);
     found = copy(body.found);
+    guessed = body.guessed ? { model: body.guessed.model, panels: copy(body.guessed.panels) } : null;
     base = copy(body.panels);
-    labelled[page.id] = { panels: body.panels.length, saved: body.saved, edited: !samePanels(body.panels, body.found) };
+    labelled[page.id] = { panels: body.panels.length, saved: body.saved, edited: !samePanels(body.panels, startOf(body)), guessed: !!body.guessed };
     draw();
   } catch (err) {
     say(`Not saved: ${(err as Error).message}`, 'bad');
@@ -421,21 +506,31 @@ async function go(n: number) {
     pic.onload = pic.onerror = done;
   });
   pic.src = src;
-  const [label] = await Promise.all([fetch(`/api/labels/${page.id}`).then((r) => r.json() as Promise<Label | null>), loaded]);
+  const [label, guess] = await Promise.all([
+    fetch(`/api/labels/${page.id}`).then((r) => r.json() as Promise<Label | null>),
+    fetch(`/api/guesses/${page.id}`).then((r) => r.json() as Promise<Guess | null>),
+    loaded,
+  ]);
   if (mine !== loading) return;
   rawImg.src = src;
   img.src = src;
+  picture = pic;
+  grey = null;
+  snapped = '';
   if (pic.naturalWidth !== page.width || pic.naturalHeight !== page.height) {
     broken = `The picture shows as ${pic.naturalWidth}×${pic.naturalHeight}, not the ${page.width}×${page.height} fetched: fetch it again before labelling.`;
   }
   saved = label;
   if (label) {
     found = copy(label.found);
+    guessed = label.guessed ? { model: label.guessed.model, panels: copy(label.guessed.panels) } : null;
     panels = copy(label.panels);
   } else {
+    // Breader's finder runs either way, to measure the model against.
     const frames = framesOf(pic);
     found = frames.panels.map((b) => quadOf(b, page!.width, page!.height));
-    panels = copy(found);
+    guessed = guess ? { model: guess.model, panels: copy(guess.panels) } : null;
+    panels = copy(startOf({ found, guessed }));
   }
   base = copy(panels);
   loading = 0;
@@ -453,7 +548,7 @@ function showList() {
     if (i === at) tr.className = 'here';
     const l = labelled[p.id];
     let state = 'not yet';
-    if (l) state = `${l.panels} panel${l.panels === 1 ? '' : 's'}, ${l.edited ? 'corrected' : 'as found'}`;
+    if (l) state = `${l.panels} panel${l.panels === 1 ? '' : 's'}, ${l.edited ? 'corrected' : l.guessed ? 'as guessed' : 'as found'}`;
     const cells: Array<[string, string]> = [
       [String(i + 1), 'dim'],
       [`${p.title}, ch. ${p.number} p. ${p.page}`, ''],
@@ -497,11 +592,28 @@ $('#in').addEventListener('click', () => zoomTo(zoom + 1));
 $('#out').addEventListener('click', () => zoomTo(zoom - 1));
 $('#fit').addEventListener('click', () => zoomTo(0));
 $('#reset').addEventListener('click', () => {
-  if (samePanels(panels, found)) return;
+  const start = startOf({ found, guessed });
+  if (samePanels(panels, start)) return;
   picked = null;
-  change(() => (panels = copy(found)));
+  change(() => (panels = copy(start)));
 });
 saveBtn.addEventListener('click', () => void save());
+const snapBtn = $<HTMLButtonElement>('#snap');
+function showSnap() {
+  snapBtn.textContent = `Snap: ${snapping ? 'on' : 'off'}`;
+  snapBtn.setAttribute('aria-pressed', String(snapping));
+}
+snapBtn.addEventListener('click', () => {
+  snapping = !snapping;
+  try {
+    localStorage.setItem('panels.snap', snapping ? 'on' : 'off');
+  } catch {
+    // Not kept past this page, then.
+  }
+  showSnap();
+  snapBtn.blur();
+});
+showSnap();
 window.addEventListener('resize', layout);
 window.addEventListener('beforeunload', (e) => {
   if (page && dirty()) e.preventDefault();

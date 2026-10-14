@@ -39,6 +39,8 @@ const wrong: string[] = [];
 let corrected = 0;
 let empty = 0;
 let panels = 0;
+let guessed = 0;
+let asGuessed = 0;
 for (const page of pages) {
   const file = join(DATA, 'labels', `${page.id}.json`);
   if (!existsSync(file)) continue;
@@ -62,6 +64,10 @@ for (const page of pages) {
   panels += label.panels.length;
   if (!label.panels.length) empty++;
   if (!samePanels(label.panels, label.found)) corrected++;
+  if (label.guessed) {
+    guessed++;
+    if (samePanels(label.panels, label.guessed.panels)) asGuessed++;
+  }
 }
 
 if (wrong.length) {
@@ -83,3 +89,4 @@ for (const l of back) {
 
 console.log(`${lines.length} of ${pages.length} pages labelled, ${panels} panels, into data/dataset.jsonl.`);
 console.log(`${corrected} corrected, ${lines.length - corrected} as Breader found them, ${empty} with no panels.`);
+if (guessed) console.log(`${guessed} started from the model's guess, ${asGuessed} of them saved as it guessed.`);
