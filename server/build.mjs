@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 
 // One self-contained file per entry point, so the runtime image needs next to no node_modules.
 await build({
-  entryPoints: ['src/api.ts', 'src/worker.ts', 'src/migrate.ts', 'src/speech/worker.ts'],
+  entryPoints: ['src/api.ts', 'src/worker.ts', 'src/migrate.ts', 'src/speech/worker.ts', 'src/panels/worker.ts'],
   outdir: 'dist',
   bundle: true,
   platform: 'node',
@@ -21,7 +21,7 @@ await build({
   logLevel: 'info',
 });
 
-// The server voice's engine loads its WebAssembly from files, which can't be bundled (speech/worker.ts).
+// The server voice's and the panel model's engine loads its WebAssembly from files, which can't be bundled (speech/worker.ts, panels/worker.ts).
 const ort = dirname(createRequire(import.meta.url).resolve('onnxruntime-web'));
 await mkdir('dist/ort', { recursive: true });
 for (const f of ['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm']) await copyFile(join(ort, f), join('dist/ort', f));

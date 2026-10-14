@@ -1,6 +1,6 @@
-# The server image only needs the workspace manifests, shared/ and server/, and for the marker the
-# ai tools and pi's agent loop, the sealed NVIDIA key and the app's book parsers. Never ai/work,
-# ai/out or ai/.env: books and the key in the clear.
+# The server image only needs the workspace manifests, shared/ and server/, the panel model, and
+# for the marker the ai tools and pi's agent loop, the sealed NVIDIA key and the app's book parsers.
+# Never ai/work, ai/out, ai/panels/data or ai/.env: books, pages and the key in the clear.
 *
 !package.json
 !package-lock.json
@@ -18,6 +18,8 @@
 !frontend/src/lib/format.ts
 !frontend/src/features/reader/dom.ts
 !frontend/src/features/reader/search.ts
+!ai/panels/model/live.onnx
+!ai/panels/model/live.json
 **/node_modules
 server/dist
 server/.env

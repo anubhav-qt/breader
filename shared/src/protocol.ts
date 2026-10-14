@@ -300,6 +300,22 @@ export type ListedVoice = z.infer<typeof ListedVoice>;
 export const VoicesResponse = z.object({ voices: z.array(ListedVoice) });
 export type VoicesResponse = z.infer<typeof VoicesResponse>;
 
+/* ---- Manga panels from the panel model ---- */
+
+/** Whether this account may have the server find its manga pages' panels, and with which round of the model. */
+export const PanelsState = z.object({ allowed: z.boolean(), round: z.number().int() });
+export type PanelsState = z.infer<typeof PanelsState>;
+
+/** A page's panels: each one's four corners in the picture's pixels, top left first, in reading order. */
+export const PagePanels = z.object({
+  round: z.number().int(),
+  w: z.number().int(),
+  h: z.number().int(),
+  panels: z.array(z.array(z.tuple([z.number(), z.number()]))),
+  sure: z.array(z.number()),
+});
+export type PagePanels = z.infer<typeof PagePanels>;
+
 /* ---- The server voice ---- */
 
 /** Whether this account may read aloud with the server's voices, and which voices those are. */

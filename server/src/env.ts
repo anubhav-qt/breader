@@ -90,6 +90,12 @@ const Env = z.object({
   SPEECH_DIR: z.string().default('/data/voices'),
   /** Processor threads the voice may use. Defaults to 4, or fewer on a smaller machine. */
   SPEECH_THREADS: z.coerce.number().int().min(1).max(16).optional(),
+  /**
+   * Manga panels found with the panel model (src/panels/), for the same accounts as the server
+   * voice: where the model is, if not in the image, and the processor threads it may use.
+   */
+  PANEL_MODEL: z.string().optional(),
+  PANEL_THREADS: z.coerce.number().int().min(1).max(16).optional(),
 
   /**
    * Manga through the laptop (src/manga/): on unless this says false, and always off on the

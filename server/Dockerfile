@@ -65,6 +65,8 @@ ARG RELEASE=dev
 ENV RELEASE=$RELEASE
 COPY --from=build /app/server/dist ./dist
 COPY --from=build /app/server/drizzle ./drizzle
+# The panel model the laptop finds manga panels with (src/panels/), one round of ai/panels.
+COPY ai/panels/model/live.onnx ai/panels/model/live.json ./panels/
 # The server voice's MP3 encoder sits beside the bundle rather than in it (build.mjs), and the
 # cover encoder too, built for this platform.
 COPY --from=build /app/node_modules/@breezystack/lamejs ./node_modules/@breezystack/lamejs

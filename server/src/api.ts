@@ -12,6 +12,7 @@ import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
+import { makePanels } from './panels/index.ts';
 import { makeSpeech } from './speech/index.ts';
 
 const env = loadEnv();
@@ -31,7 +32,9 @@ if (mangaOn && env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024, store: redis };
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
 const manga = mangaOn ? makeManga(mangaOptions) : null;
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga };
+// Manga panels from the panel model, for the server voice's accounts, where manga is on.
+const panels = manga && speech ? makePanels(env) : null;
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga, panels };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.0.0.0' }, (info) =>
@@ -99,6 +102,7 @@ const stop = () => {
   clearInterval(commands);
   prefetching.abort();
   void speech?.close();
+  void panels?.close();
   void redis?.close();
   server.close(() => {
     void Promise.all([primary.pool.end(), mirror?.pool.end()]).finally(() => process.exit(0));

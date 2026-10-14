@@ -43,6 +43,18 @@ jobs:
       image: ${{ steps.name.outputs.image }}
     steps:
       - uses: actions/checkout@v5
+      # The panel model (server/src/panels/) is in Git LFS, whose downloads are metered: it's
+      # fetched once per round and cached by its hash, which its pointer file names.
+      - id: model
+        run: echo "oid=$(sed -n 's/^oid sha256://p' ai/panels/model/live.onnx)" >> "$GITHUB_OUTPUT"
+      - id: model-cache
+        uses: actions/cache@v4
+        with: { path: .panel-model, key: "panel-model-${{ steps.model.outputs.oid }}" }
+      - if: steps.model-cache.outputs.cache-hit != 'true'
+        run: git lfs pull --include ai/panels/model/live.onnx && mkdir -p .panel-model && cp ai/panels/model/live.onnx .panel-model/
+      - run: |
+          cp .panel-model/live.onnx ai/panels/model/live.onnx
+          test "$(sha256sum < ai/panels/model/live.onnx | cut -d' ' -f1)" = "${{ steps.model.outputs.oid }}"
       - id: name
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/breader-server" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v3
