@@ -5,14 +5,14 @@ import { censorName, censorText, nameIsCensored } from '../../../lib/censor';
 import { chapterName, type Chapter } from '../chapters';
 import { ago, BOOK_THREAD, checkName, openThread, postComment, removeComment, type BookComment, type Talk } from '../comments';
 import { DotIcon } from './parts';
-import { TALK } from './icons';
+import { SEND, TALK } from './icons';
 
 /*
  * Comments, after a chapter's last paragraph (the tail), or for a PDF, whose pages take no tail,
  * in the drop from the speech bubble up top. A thread starts with the box to write in, then what
  * readers said, newest first, each with its replies under it. What readers wrote is kept as
- * written, and shown censored (lib/censor.ts). The first time, a name goes beside the comment;
- * after that, the name sits there.
+ * written, and shown censored (lib/censor.ts). The first time, a name is asked for above the box;
+ * after that, the box says whose name it goes out under.
  */
 
 export interface TalkView {
@@ -159,9 +159,10 @@ function One({ thread, c, replying, onReply }: { thread: string; c: BookComment;
 type NameState = { name: string; free: boolean; message?: string } | null;
 
 /**
- * Writing a comment, or with `to`, a reply to one. Without a name yet, a name field sits beside
- * it, checked as it's typed: two readers can't share one. Once there is one, it takes the field's
- * place. A reply's box opens ready to type in, and goes once it's sent or Escape leaves it empty.
+ * Writing a comment, or with `to`, a reply to one: a box that grows as it's written in, with Send
+ * in its corner. Without a name yet, a name field sits above it, checked as it's typed: two readers
+ * can't share one. Once there is one, it takes the field's place. A reply's box opens ready to
+ * type in, and goes once it's sent or Escape leaves it empty.
  */
 function Composer({ view, section, to, onDone }: { view: TalkView; section: number; to?: BookComment; onDone?: (sent: boolean) => void }) {
   const { thread, talk, readTo } = view;
@@ -183,12 +184,18 @@ function Composer({ view, section, to, onDone }: { view: TalkView; section: numb
     return () => { live = false; window.clearTimeout(t); };
   }, [typed, needName]);
 
-  // The field grows with what's written, up to a few lines.
+  // The field grows a line at a time with what's written, up to five, and scrolls past that. By
+  // whole lines: a font's tall letters can reach a pixel or two past a line without making another.
   useLayoutEffect(() => {
     const el = area.current;
     if (!el) return;
+    const cs = getComputedStyle(el);
+    const line = parseFloat(cs.lineHeight) || 24;
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+    const lines = Math.max(1, Math.round((el.scrollHeight - pad) / line));
+    el.style.height = `${pad + Math.min(lines, 5) * line}px`;
+    el.style.overflowY = lines > 5 ? 'auto' : 'hidden';
   }, [body]);
 
   // A reply's box is asked for, so it's ready to type in. Paged, the page stays where it is.
@@ -240,24 +247,24 @@ function Composer({ view, section, to, onDone }: { view: TalkView; section: numb
 
   return (
     <div className={`cm-say${to ? ' is-reply' : ''}`}>
-      <div className={`cm-say-row${needName ? ' is-naming' : ''}`}>
-        {needName ? (
-          <input
-            className={`vs-input cm-name${check && check.name === typed ? (check.free ? ' is-free' : ' is-taken') : ''}`}
-            value={name}
-            onChange={(e) => setName(e.target.value.slice(0, NAME_CHARS.max))}
-            placeholder="Name"
-            autoComplete="nickname"
-            spellCheck={false}
-            aria-label="Your name for comments"
-            aria-invalid={check && check.name === typed && !check.free ? true : undefined}
-          />
-        ) : (
-          <span className="cm-me" title="Your name for comments">{censorName(talk.name!)}</span>
-        )}
+      {needName ? (
+        <input
+          className={`vs-input cm-name${check && check.name === typed ? (check.free ? ' is-free' : ' is-taken') : ''}`}
+          value={name}
+          onChange={(e) => setName(e.target.value.slice(0, NAME_CHARS.max))}
+          placeholder="Your name"
+          autoComplete="nickname"
+          spellCheck={false}
+          aria-label="Your name for comments"
+          aria-invalid={check && check.name === typed && !check.free ? true : undefined}
+        />
+      ) : (
+        !to && <p className="cm-me">As <b>{censorName(talk.name!)}</b></p>
+      )}
+      <div className="cm-box">
         <textarea
           ref={area}
-          className="vs-input cm-body"
+          className="cm-body"
           value={body}
           rows={1}
           maxLength={COMMENT_CHARS}
@@ -267,8 +274,8 @@ function Composer({ view, section, to, onDone }: { view: TalkView; section: numb
           enterKeyHint="send"
           aria-label={to ? `Your reply to ${censorName(to.name)}` : 'Your comment'}
         />
-        <button type="button" className="sa-hear cm-send" onClick={() => void send()} disabled={!canSend}>
-          {sending ? '…' : 'Send'}
+        <button type="button" className={`cm-send${sending ? ' is-sending' : ''}`} onClick={() => void send()} disabled={!canSend} aria-label={to ? 'Send reply' : 'Send'} title="Send">
+          <DotIcon rows={SEND} />
         </button>
       </div>
       {(note || error) && <p className={`p-note cm-note${error || (check && !check.free && check.name === typed) ? ' is-bad' : ''}`} role="status">{error || note}</p>}

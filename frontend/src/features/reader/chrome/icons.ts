@@ -18,6 +18,8 @@ export const VOICES = ['..x....', '..x.x..', 'x.x.x.x', 'x.x.x.x', 'x.x.x.x', '.
 export const SEARCH = ['.xxx...', 'x...x..', 'x...x..', 'x...x..', '.xxx...', '....xx.', '.....xx'];
 /** Comments: a speech bubble, with someone typing in it. */
 export const TALK = ['xxxxxxx', 'x.....x', 'x.x.x.x', 'x.....x', 'xxxxxxx', '.xx....', '.x.....'];
+/** Send: an arrow going up and out. */
+export const SEND = ['...x...', '..xxx..', '.x.x.x.', 'x..x..x', '...x...', '...x...', '...x...'];
 /** Back and on, as a player has them: two chevrons each way. */
 export const BACK = ['...x..x', '..x..x.', '.x..x..', 'x..x...', '.x..x..', '..x..x.', '...x..x'];
 export const ON = ['x..x...', '.x..x..', '..x..x.', '...x..x', '..x..x.', '.x..x..', 'x..x...'];

@@ -790,20 +790,60 @@
 .cm-ahead:hover { color: var(--r-fg); }
 .cm-list.is-ahead { opacity: 0.8; }
 
-/* Writing, at the top of the thread, or under a comment to answer it: the name beside it until
-   there is one, then the name itself. */
-.cm-say { padding: 4px 0 6px; }
+/* Writing, at the top of the thread, or under a comment to answer it: the name above it until
+   there is one, then whose name it goes out under, and a box with Send in its corner. */
+.cm-say { display: grid; gap: 6px; padding: 4px 0 8px; }
 .cm-say.is-reply { padding: 4px 0 2px; }
-.cm-say-row { display: flex; align-items: flex-end; gap: 6px; }
-.cm-say .vs-input { font-size: 20px; }
-.cm-name { flex: 0 1 26%; min-width: 72px; }
+.cm-name { height: 44px; font-size: 20px; line-height: 24px; }
 .cm-name.is-free { box-shadow: inset 0 0 0 1.5px var(--book-mark); }
 .cm-name.is-taken { box-shadow: inset 0 0 0 1.5px var(--r-fg); }
-.cm-me { flex: 0 1 auto; max-width: 34%; height: 40px; display: flex; align-items: center; padding: 0 2px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 20px/1 var(--read); color: var(--book-mark); }
-.cm-say.is-reply .cm-me { display: none; }
-.cm-body { flex: 1; min-width: 0; height: 40px; min-height: 40px; padding: 9px 12px; resize: none; line-height: 1.1; overflow-y: auto; scrollbar-width: thin; }
-.cm-send { flex: none; }
-.cm-note { margin: 8px 0 0; }
+.cm-me { margin: 0 0 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--ui-w) 11px/1.3 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); }
+.cm-me b { font-weight: inherit; color: var(--book-mark); }
+.cm-box {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  border-radius: 11px;
+  background: var(--r-fill);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  transition: box-shadow 140ms ease;
+}
+.cm-box:focus-within { box-shadow: inset 0 0 0 1.5px var(--book-mark); }
+.cm-body {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 4px 10px 12px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  font: 20px/24px var(--read);
+  color: var(--r-fg);
+  background: transparent;
+}
+.cm-body::placeholder, .cm-name::placeholder { color: var(--r-mu); opacity: 1; }
+/* Send sits in the box's corner, lit once there's something to send. */
+.cm-send {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--r-bg);
+  background: var(--book-mark);
+  transition: color 140ms ease, background-color 140ms ease, opacity 140ms ease;
+}
+.cm-send .i3-dots-icon { font-size: 13px; }
+.cm-send:disabled { color: var(--r-mu); background: transparent; cursor: default; }
+.cm-send.is-sending { color: var(--r-bg); background: var(--book-mark); opacity: 0.5; }
+.cm-send:focus-visible { outline: 2px solid var(--book-mark); outline-offset: 1px; }
+.cm-note { margin: 2px 0 0 2px; }
 .cm-note.is-bad { color: var(--r-fg); }
 
 /* The tail, after a chapter's text, in the page but not of it: none of the book's own styles
