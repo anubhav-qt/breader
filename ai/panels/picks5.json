@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "vagabond",
+      "title": "Vagabond",
+      "manga": "d1a9fdeb-f713-407f-960c-8326b586e6fd",
+      "chapter": "b368a705-13e6-48c6-9e3c-f74d57009f59",
+      "number": "225",
+      "pages": [
+        { "page": 2, "note": "a colour opener, a big picture over three small ones" },
+        { "page": 5, "note": "wide forest strips in ink wash, a small panel tucked in" },
+        { "page": 7, "note": "panels set into a forest that runs off the page" },
+        { "page": 12, "note": "a dense grid of faces and talk" },
+        { "page": 19, "note": "slanted cuts with the art running between them" }
+      ]
+    },
+    {
+      "key": "vagabond",
+      "title": "Vagabond",
+      "manga": "d1a9fdeb-f713-407f-960c-8326b586e6fd",
+      "chapter": "d757d104-1b75-49df-ba5f-b71c318f565a",
+      "number": "309",
+      "pages": [
+        { "page": 3, "note": "fields in grey wash, a grid with a slanted cut" },
+        { "page": 7, "note": "a wide landscape over a crowded grid" },
+        { "page": 12, "note": "pictures with no borders fading into the paper" },
+        { "page": 17, "note": "slanted panels around a shouting face" },
+        { "page": 22, "note": "sharp diagonal cuts, art breaking out of them" }
+      ]
+    },
+    {
+      "key": "abyss",
+      "title": "Made in Abyss",
+      "manga": "80422e14-b9ad-4fda-970f-de370d5fa4e5",
+      "chapter": "d606fdcb-031e-4696-b1da-e4bb17d8ced4",
+      "number": "21",
+      "pages": [
+        { "page": 2, "note": "a big shouting picture on grey paper, bled off the edges" },
+        { "page": 3, "note": "a dense grid on grey paper" },
+        { "page": 7, "note": "a borderless landscape over small panels" },
+        { "page": 10, "note": "uneven panels, a sound effect across the gutters" },
+        { "page": 15, "note": "a cooking page, labelled food among the panels" }
+      ]
+    },
+    {
+      "key": "abyss",
+      "title": "Made in Abyss",
+      "manga": "80422e14-b9ad-4fda-970f-de370d5fa4e5",
+      "chapter": "5568b01d-b280-4980-bc0d-bffd3bae9104",
+      "number": "56",
+      "pages": [
+        { "page": 4, "note": "slanted panels in grey, a roar across them" },
+        { "page": 9, "note": "a page split on a slant by an explosion" },
+        { "page": 13, "note": "wide grey strips stacked, faint borders" },
+        { "page": 23, "note": "panels like shattered glass" },
+        { "page": 30, "note": "steep slanted cuts, a blast filling them" }
+      ]
+    },
+    {
+      "key": "fruitsbasket",
+      "title": "Fruits Basket",
+      "manga": "e9b1d4ba-b8fb-48c3-8d52-5a4eefd05980",
+      "chapter": "cc9a9429-7e34-4883-9d9d-b3837e4f2ca1",
+      "number": "7",
+      "pages": [
+        { "page": 7, "note": "a figure standing over the panels, captions loose on the page" },
+        { "page": 13, "note": "overlapping panels with screentone, sound effects outside" },
+        { "page": 14, "note": "a book cover drawn inside, panels around it" },
+        { "page": 17, "note": "shojo layout, a borderless figure down one side" },
+        { "page": 27, "note": "faces in overlapping slanted panels" }
+      ]
+    },
+    {
+      "key": "fruitsbasket",
+      "title": "Fruits Basket",
+      "manga": "e9b1d4ba-b8fb-48c3-8d52-5a4eefd05980",
+      "chapter": "a14f3a3c-dfc8-43e9-93f0-3fc5ed9bc46e",
+      "number": "110",
+      "pages": [
+        { "page": 7, "note": "a borderless figure, black bubbles running down the side" },
+        { "page": 11, "note": "panels overlapping, a sound effect over the gutter" },
+        { "page": 12, "note": "a dressed-up girl breaking out of her panel" },
+        { "page": 14, "note": "a crowded page, figures over the borders" },
+        { "page": 20, "note": "dark panels mixed with open white ones" }
+      ]
+    },
+    {
+      "key": "azumanga",
+      "title": "Azumanga Daioh",
+      "manga": "107be290-6a4b-4974-a9c5-3761a2514823",
+      "chapter": "8545fd1f-dbea-480e-b88f-378370945bd6",
+      "number": "5",
+      "pages": [
+        { "page": 1, "note": "a four-panel strip beside a big standing figure" },
+        { "page": 3, "note": "two four-panel strips side by side" },
+        { "page": 13, "note": "two four-panel strips, one panel a seascape" },
+        { "page": 16, "note": "two four-panel strips with a photo-like panel" }
+      ]
+    },
+    {
+      "key": "azumanga",
+      "title": "Azumanga Daioh",
+      "manga": "107be290-6a4b-4974-a9c5-3761a2514823",
+      "chapter": "a2525a79-15d6-43ea-a7a1-84960182b159",
+      "number": "30",
+      "pages": [
+        { "page": 7, "note": "two four-panel strips, a dark panel among them" },
+        { "page": 9, "note": "a four-panel strip beside a big standing figure" },
+        { "page": 14, "note": "two four-panel strips, a sound effect across one" },
+        { "page": 15, "note": "two four-panel strips, splashes over the borders" }
+      ]
+    },
+    {
+      "key": "kamuycolor",
+      "title": "Golden Kamuy, official colour",
+      "manga": "738c875c-1a67-4365-862f-50ade14f8133",
+      "chapter": "3c79d7f6-e760-4029-ba05-3209bb41fd9b",
+      "number": "13",
+      "pages": [
+        { "page": 2, "note": "colour, wide panels stacked, a fish across the last" },
+        { "page": 5, "note": "colour, a dense grid with a pink panel" },
+        { "page": 6, "note": "colour, tall panels side by side, a river down one" },
+        { "page": 10, "note": "colour, a big pot over a row of faces" },
+        { "page": 16, "note": "colour, a close-up face over smaller panels" }
+      ]
+    },
+    {
+      "key": "kamuycolor",
+      "title": "Golden Kamuy, official colour",
+      "manga": "738c875c-1a67-4365-862f-50ade14f8133",
+      "chapter": "9c848585-d1f0-4989-a5e2-cb92531a5ef6",
+      "number": "97",
+      "pages": [
+        { "page": 4, "note": "colour, tall slanted strips with a face down the middle" },
+        { "page": 7, "note": "colour, a street scene with a map set in" },
+        { "page": 13, "note": "colour, a dense grid of masks and faces" },
+        { "page": 15, "note": "colour, slanted panels overlapping each other" },
+        { "page": 16, "note": "colour, banknotes over a slanted grid" }
+      ]
+    },
+    {
+      "key": "oshinoko",
+      "title": "Oshi no Ko",
+      "manga": "296cbc31-af1a-4b5b-a34b-fee2b4cad542",
+      "chapter": "f1eab481-e51c-406a-b9b8-7996be7eac11",
+      "number": "9",
+      "pages": [
+        { "page": 1, "note": "wide strips on a black page" },
+        { "page": 3, "note": "a title page cut into slanted panels" },
+        { "page": 5, "note": "black caption bands between the panels" },
+        { "page": 8, "note": "slanted panels, a hand reaching across them" },
+        { "page": 16, "note": "wide slanted strips, dark gutters" }
+      ]
+    },
+    {
+      "key": "oshinoko",
+      "title": "Oshi no Ko",
+      "manga": "296cbc31-af1a-4b5b-a34b-fee2b4cad542",
+      "chapter": "8e81da6e-2456-4b07-a136-135ce250d1b6",
+      "number": "77",
+      "pages": [
+        { "page": 4, "note": "slanted panels at night, a shout across them" },
+        { "page": 7, "note": "a big face with panels set around it" },
+        { "page": 12, "note": "a moon panel among night scenes" },
+        { "page": 16, "note": "night panels with black gutters, sound effects over them" },
+        { "page": 19, "note": "dark art bled off the page with panels on top" }
+      ]
+    },
+    {
+      "key": "ghoulre",
+      "title": "Tokyo Ghoul:re",
+      "manga": "59f47645-66a9-443e-8228-788313c3ae3c",
+      "chapter": "acb069f6-408c-4651-9743-eac887fb4dac",
+      "number": "16",
+      "pages": [
+        { "page": 3, "note": "a café scene stacked in wide panels" },
+        { "page": 5, "note": "a busy grid with small panels tucked in" },
+        { "page": 9, "note": "figures breaking out over the panels" },
+        { "page": 11, "note": "a smoky black panel over a small row" },
+        { "page": 17, "note": "wide thin strips with lots of white" },
+        { "page": 18, "note": "a crowd at the foot, panels above" }
+      ]
+    },
+    {
+      "key": "ghoulre",
+      "title": "Tokyo Ghoul:re",
+      "manga": "59f47645-66a9-443e-8228-788313c3ae3c",
+      "chapter": "79c06d73-92b3-4edf-b67a-c3d7d03dad6b",
+      "number": "130",
+      "pages": [
+        { "page": 2, "note": "a patterned floor panel over a city view" },
+        { "page": 7, "note": "a big figure down one side, small panels beside it" },
+        { "page": 10, "note": "a tall panel down the right, a stack on the left" },
+        { "page": 13, "note": "thin wide strips beside a tall one" },
+        { "page": 15, "note": "a dense mixed grid" },
+        { "page": 18, "note": "a figure lying across panels, legs in another" }
+      ]
+    },
+    {
+      "key": "eleceed",
+      "title": "Eleceed",
+      "manga": "7e544761-7d3d-4fce-8137-719814d7d138",
+      "chapter": "a581b76f-85c0-4f05-a699-fb5e19ac4131",
+      "number": "137",
+      "pages": [
+        { "page": 5, "note": "a colour webtoon strip, panels apart on white" },
+        { "page": 8, "note": "a webtoon strip, dark panels between light ones" },
+        { "page": 11, "note": "a webtoon strip going from white into black" },
+        { "page": 14, "note": "a webtoon strip, panels in white space" }
+      ]
+    },
+    {
+      "key": "eleceed",
+      "title": "Eleceed",
+      "manga": "7e544761-7d3d-4fce-8137-719814d7d138",
+      "chapter": "6eef9e2a-928a-4382-85e0-02544cfdd35c",
+      "number": "239",
+      "pages": [
+        { "page": 4, "note": "a webtoon strip, black bands between panels" },
+        { "page": 8, "note": "a webtoon strip on red and black" },
+        { "page": 12, "note": "a webtoon strip, a red burst between panels" },
+        { "page": 17, "note": "a webtoon strip of stacked panels" }
+      ]
+    },
+    {
+      "key": "witchhat",
+      "title": "Witch Hat Atelier",
+      "manga": "67e7453b-9ee5-4ae5-9316-215b03e4a71d",
+      "chapter": "cf71fb75-c9aa-452b-a1cd-d4cb5fccb3d8",
+      "number": "10",
+      "pages": [
+        { "page": 3, "note": "a slanted cut through a mixed grid" },
+        { "page": 8, "note": "a picture with text set in, panels around it" },
+        { "page": 13, "note": "a sound effect running off the corner" },
+        { "page": 16, "note": "a tall sword panel beside small ones" },
+        { "page": 21, "note": "black slanted streaks over the panels" },
+        { "page": 26, "note": "a black page with an ornate frame" }
+      ]
+    },
+    {
+      "key": "witchhat",
+      "title": "Witch Hat Atelier",
+      "manga": "67e7453b-9ee5-4ae5-9316-215b03e4a71d",
+      "chapter": "238b894f-590c-4568-813b-18cf279ee790",
+      "number": "68",
+      "pages": [
+        { "page": 1, "note": "panels inside an ornate border" },
+        { "page": 2, "note": "arched panels inside an ornate border" },
+        { "page": 6, "note": "a big black panel under a wide one" },
+        { "page": 11, "note": "slanted streaks breaking through the panels" },
+        { "page": 15, "note": "an arched panel among square ones" },
+        { "page": 16, "note": "a framed panel with an ornate edge" }
+      ]
+    },
+    {
+      "key": "tomie",
+      "title": "Tomie",
+      "manga": "9ad2d9a1-8e01-48f6-b979-a03b1050a2bd",
+      "chapter": "83aceb4a-ec7d-4087-ada8-634d4174c1fd",
+      "number": "1",
+      "pages": [
+        { "page": 4, "note": "a scanned page, a plain grid" },
+        { "page": 12, "note": "a grid over a wide bridge panel" },
+        { "page": 18, "note": "a fall breaking out over the panels" },
+        { "page": 24, "note": "a black slanted panel with a figure falling" },
+        { "page": 27, "note": "a crowded grid, a fight across it" }
+      ]
+    },
+    {
+      "key": "tomie",
+      "title": "Tomie",
+      "manga": "9ad2d9a1-8e01-48f6-b979-a03b1050a2bd",
+      "chapter": "90b002a8-2525-40b0-83ee-d28ca38a2cf6",
+      "number": "13",
+      "pages": [
+        { "page": 3, "note": "a dense grid of faces" },
+        { "page": 8, "note": "a door panel set in, a grid around it" },
+        { "page": 15, "note": "slanted panels and a crash over them" },
+        { "page": 23, "note": "a big tunnel picture under small panels" },
+        { "page": 26, "note": "a grid of dark tunnel panels" }
+      ]
+    }
+  ]
+}

@@ -45,6 +45,12 @@ One Punch-Man, Vinland Saga, Bocchi the Rock!, Fullmetal Alchemist, My Dress-Up 
 Family, Naruto and Bleach. MangaDex has Naruto only in colour and most of Bleach in colour, and just
 a few translated chapters of Vinland Saga, Dress-Up Darling and Spy x Family.
 
+The fifth, `picks5.json`, is 100 more from Vagabond, Made in Abyss, Fruits Basket, Azumanga Daioh,
+Golden Kamuy (in its official colour), Oshi no Ko, Tokyo Ghoul:re, Eleceed, Witch Hat Atelier and
+Tomie, for what the first four had little of: ink wash, grey paper, four-panel strips, ornate
+borders and a colour webtoon. MangaDex has Witch Hat Atelier only in other languages, so its pages
+are in Spanish.
+
 ```bash
 npm --prefix ai run panels-export
 ```
