@@ -60,11 +60,26 @@ const GLIDE = 0.42;
 const still = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pct = (n: number) => `${(Math.max(0, n) * 100).toFixed(3)}%`;
 
-/** The clip showing just a part of the page, a hair around it so its border shows. */
+/**
+ * The page shown around a part, each side, of the page: its border, and a little more, so a panel
+ * guessed a little inside its real edges isn't cut off.
+ */
+const AROUND = 0.014;
+
+/** A part with the page shown around it, as far as the page goes. */
+function aroundOf(b: Box): Box {
+  const x = Math.max(0, b.x - AROUND);
+  const y = Math.max(0, b.y - AROUND);
+  const right = Math.min(1, b.x + b.w + AROUND);
+  const bottom = Math.min(1, b.y + b.h + AROUND);
+  return { x, y, w: right - x, h: bottom - y };
+}
+
+/** The clip showing just a part of the page, and the page around it. */
 export function clipOf(b: Box | null): string {
   if (!b) return 'inset(0% 0% 0% 0%)';
-  const hair = 0.004;
-  return `inset(${pct(b.y - hair)} ${pct(1 - b.x - b.w - hair)} ${pct(1 - b.y - b.h - hair)} ${pct(b.x - hair)})`;
+  const a = aroundOf(b);
+  return `inset(${pct(a.y)} ${pct(1 - a.x - a.w)} ${pct(1 - a.y - a.h)} ${pct(a.x)})`;
 }
 
 /** The room kept around a part fitted to a screen this wide. */
@@ -74,10 +89,11 @@ export const padOf = (vw: number) => (vw < 640 ? 12 : 32);
 export const widestOf = (natural: number) => natural * SHARPEST;
 
 /**
- * Where a page goes so a part of it fits a screen (or an area) vw by vh, shown no wider than
- * `most`: its width there, and its top left corner.
+ * Where a page goes so a part of it, with the page around it, fits a screen (or an area) vw by vh,
+ * shown no wider than `most`: its width there, and its top left corner.
  */
-export function fitOf(box: Box, ratio: number, most: number, vw: number, vh: number): { s: number; left: number; top: number } {
+export function fitOf(part: Box, ratio: number, most: number, vw: number, vh: number): { s: number; left: number; top: number } {
+  const box = aroundOf(part);
   const pad = padOf(vw);
   const s = Math.min((vw - 2 * pad) / box.w, (vh - 2 * pad) / (box.h * ratio), most);
   const left = vw / 2 - s * (box.x + box.w / 2);
