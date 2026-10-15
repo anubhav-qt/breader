@@ -24,7 +24,8 @@ import { overlaps, usePacing, type Spot } from './pacing';
 import { PdfView } from './PdfView';
 import { castInSeries } from './voice/cast';
 import { refreshVoices } from './voice/list';
-import { refreshPanels } from './serverPanels';
+import { SeatOffer } from './Panels';
+import { useServerSeat } from './serverPanels';
 import { refreshSpeech } from './voice/server';
 import { setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
@@ -136,8 +137,8 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   useMusic(view, record.id, aiStatus, !closing, narration, pacing);
   // Voices readers uploaded, so the one picked last time is known, and whether the server reads for this account.
   useEffect(() => { if (canNarrate && !pictures) { void refreshVoices(); void refreshSpeech(); } }, [pictures]);
-  // A manga's panels from the server, for the accounts it's open to (serverPanels.ts).
-  useEffect(() => { if (pictures) void refreshPanels(); }, [pictures]);
+  // A seat at the server's panel model while a manga from Japan is open, for a reader who turned it on (serverPanels.ts).
+  useServerSeat(panels && !closing);
   const { busy: speaking, media } = narration;
   const { busy: lighting } = pacing;
   const busy = useCallback(() => speaking() || lighting(), [speaking, lighting]);
@@ -829,6 +830,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
         </div>
       </div>
       <Toast className="rd-toast" toast={closing ? null : awayToast} onDone={() => setAway(null)} />
+      {panels && <SeatOffer />}
     </div>
   );
 }

@@ -1,7 +1,9 @@
 /*
  * The panel model's answers made into a page's panels, the same way the labeller's guesser does
- * (ai/panels/model/guess.py), so a page reads alike here and in the labeller: what it's sure of,
- * each panel once, its four corners where they make sense, in the order the page is read.
+ * (ai/panels/model/guess.py), so a page reads alike on the laptop (server panels/), on a reader's
+ * device (the app's panelModel.ts) and in the labeller: what it's sure of, each panel once, its
+ * four corners where they make sense, in the order the page is read. And a picture made into what
+ * the model sees, the same way in both.
  */
 
 /** The side of the square the model sees a picture in, in pixels (ai/panels/model/pages.py). */
@@ -173,4 +175,48 @@ export function ordered(found: Found[], w: number, h: number): Found[] {
     return [...items].sort((a, b) => a.box[1] - b.box[1] || b.box[2] - a.box[2]);
   };
   return cut(found);
+}
+
+/**
+ * A window scaled into the model's square the way OpenCV's bilinear resize does it, as the model
+ * was trained and checked on: each pixel from the four nearest, with no smoothing first. Another
+ * resize moves the corners the model's less sure of by tens of pixels. `px` is the picture's pixels,
+ * `channels` to each (3 from the laptop's decoder, 4 from a canvas), red first.
+ */
+export function squareOf(px: ArrayLike<number>, w: number, channels: number, [top, bottom]: [number, number], fit: Fit): Float32Array {
+  const plane = SIZE * SIZE;
+  const input = new Float32Array(3 * plane).fill(PAD / 255);
+  const sx = w / fit.w;
+  const sy = (bottom - top) / fit.h;
+  const last = bottom - top - 1;
+  for (let y = 0; y < fit.h; y++) {
+    const fy = Math.min(Math.max((y + 0.5) * sy - 0.5, 0), last);
+    const y0 = Math.floor(fy);
+    const y1 = Math.min(y0 + 1, last);
+    const ay = fy - y0;
+    const r0 = (top + y0) * w * channels;
+    const r1 = (top + y1) * w * channels;
+    const to = (y + fit.top) * SIZE + fit.left;
+    for (let x = 0; x < fit.w; x++) {
+      const fx = Math.min(Math.max((x + 0.5) * sx - 0.5, 0), w - 1);
+      const x0 = Math.floor(fx);
+      const x1 = Math.min(x0 + 1, w - 1) * channels;
+      const ax = fx - x0;
+      const a = x0 * channels;
+      for (let c = 0; c < 3; c++) {
+        const v0 = px[r0 + a + c] * (1 - ax) + px[r0 + x1 + c] * ax;
+        const v1 = px[r1 + a + c] * (1 - ax) + px[r1 + x1 + c] * ax;
+        input[c * plane + to + x] = Math.round(v0 * (1 - ay) + v1 * ay) / 255;
+      }
+    }
+  }
+  return input;
+}
+
+/** A page's panels from the model's answer for each of its windows, `outs[k]` as it comes ([1, 17, n]). */
+export function pagePanels(outs: Array<{ out: Float32Array; n: number; fit: Fit; span: [number, number] }>, w: number, h: number): { panels: Pt[][]; sure: number[] } {
+  const found: Found[] = [];
+  for (const [k, o] of outs.entries()) found.push(...panelsIn(o.out, o.n, o.fit, o.span, k === outs.length - 1, k === 0, w, h));
+  const panels = ordered(outs.length > 1 ? merged(found) : found, w, h);
+  return { panels: panels.map((p) => p.quad), sure: panels.map((p) => Math.round(p.sure * 1000) / 1000) };
 }

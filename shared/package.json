@@ -14,6 +14,7 @@
     "./limits": "./src/limits.ts",
     "./manga": "./src/manga.ts",
     "./music": "./src/music.ts",
+    "./panels": "./src/panels.ts",
     "./protocol": "./src/protocol.ts",
     "./report": "./src/report.ts",
     "./speech": "./src/speech.ts",

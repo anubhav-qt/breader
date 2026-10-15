@@ -158,6 +158,14 @@ To bring a round back, `git lfs pull` its `best.pt`, copy it to `data/model/roun
 `data/model/latest.json` to `{"round": N}`. Then `npm --prefix ai run panels-guess` (or
 `panels-guess-mac`) guesses with it.
 
+To put a round live, in the app and on the laptop, export its `best.pt` to ONNX the way the live
+one is (`YOLO(best).export(format="onnx", imgsz=1024, batch=1, dynamic=False, simplify=True,
+opset=17)`: one 1024 × 1024 picture in, the raw answers out), save it as `model/live.onnx` and set
+`model/live.json` to `{"round": N}`. On the push, CI builds it into the laptop's server image and
+publishes it once as a release (`panels-<its hash>`), which Cloudflare Pages builds into the app for
+readers' devices (`frontend/scripts/panels.mjs`); `npm --prefix frontend run panels` does the same
+for the dev server.
+
 ## Labels
 
 A panel is four corners, in whole pixels of the page's own picture, counted from its top left:

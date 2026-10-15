@@ -2,12 +2,13 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { parentPort, workerData } from 'node:worker_threads';
 import * as ort from 'onnxruntime-web';
-import { SIZE, merged, ordered, panelsIn, type Fit } from './find.ts';
+import { SIZE, pagePanels, type Fit } from '@breader/shared/panels';
 
 /*
  * Finds a manga page's panels with the panel model on the laptop, in a thread of its own so the
- * API keeps answering. One page at a time, as the model can't run twice at once. It's about a
- * second a page on four threads of a laptop, and holds about 300 MB while it's open.
+ * API keeps answering. One page at a time, as the model can't run twice at once. It's about 0.4 s
+ * a page on four threads of a Ryzen 7 9800X3D, and about a second on the laptop's Ryzen 7 5800U,
+ * and holds about 300 MB while it's open.
  */
 
 export interface Request {
@@ -40,16 +41,14 @@ const open = () => (session ??= readFile(model).then((b) => ort.InferenceSession
 
 async function find(req: Request) {
   const s = await open();
-  const found = [];
-  for (const [k, win] of req.windows.entries()) {
+  const outs = [];
+  for (const win of req.windows) {
     const out = await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', win.input, [1, 3, SIZE, SIZE]) });
     const t = out[s.outputNames[0]];
-    const n = t.dims[2];
-    found.push(...panelsIn(t.data as Float32Array, n, win.fit, win.span, k === req.windows.length - 1, k === 0, req.w, req.h));
+    outs.push({ out: (t.data as Float32Array).slice(), n: t.dims[2], fit: win.fit, span: win.span });
     t.dispose();
   }
-  const panels = ordered(req.windows.length > 1 ? merged(found) : found, req.w, req.h);
-  return { panels: panels.map((p) => p.quad), sure: panels.map((p) => Math.round(p.sure * 1000) / 1000) };
+  return pagePanels(outs, req.w, req.h);
 }
 
 /** Pages one after another: the engine runs one at a time. */

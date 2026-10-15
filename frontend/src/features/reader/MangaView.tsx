@@ -536,13 +536,14 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     return () => { live = false; };
   }, [pics, wantFrom, wantTo, total, shaped]);
 
-  // The panels of the pages about the one read, found ahead, so a panel held or stepped to is there at once.
+  // The panels of the pages about the one read, found ahead, so a panel held or stepped to is there at
+  // once. Outside the Panels layout, the panel model on this device helps only where it's quick.
   useEffect(() => {
     for (const i of [at.page, at.page + 1, at.page - 1, at.page + 2]) {
       const img = pics.image(i);
-      if (srcs.get(i) && img) void pageFramesSoon(pics.book, i, img);
+      if (srcs.get(i) && img) void pageFramesSoon(pics.book, i, img, layout === 'panels');
     }
-  }, [srcs, at.page, pics]);
+  }, [srcs, at.page, pics, layout]);
 
   useEffect(() => {
     const shown = paged ? spread : [at.page];
@@ -803,7 +804,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     let steps: Box[] | undefined;
     let shown: { from: number; to: number } | undefined;
     if (what !== 'page') {
-      const frames = Number.isInteger(page) ? await pageFramesSoon(pics.book, page, img) : await framesSoon(img);
+      const frames = Number.isInteger(page) ? await pageFramesSoon(pics.book, page, img, layout === 'panels') : await framesSoon(img);
       steps = stepsOf(frames);
       const hit = frameAt(frames, x, y);
       if (hit) {

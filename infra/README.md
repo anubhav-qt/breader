@@ -166,13 +166,24 @@ series by its own genres: one marked Adult, Hentai, Smut, Erotica or Pornographi
 comic) comes from its type among those genres too; one whose site doesn't say shows only while
 every kind is on in Browse.
 
-**Manga panels.** The laptop finds the panels on manga pages with the panel model (`ai/panels`,
-the round in `ai/panels/model/live.onnx`) for the server voice's accounts (`SPEECH_EMAILS`), and
-the app reads a page a panel at a time, and zooms, by them instead of by its own finder. It's for
-manga from Japan only: a manhwa, manhua or comic is never read a panel at a time, nor its pages
-sent to the model; a series whose site doesn't say its kind is taken for manga. The model runs in a
-thread of its own on up to `PANEL_THREADS` processor threads (4, or one less than the laptop has),
-let go after ten quiet minutes, and a page's panels are kept once found. Render never has it.
+**Manga panels.** The panels on manga pages are found with the panel model (`ai/panels`, the
+round in `ai/panels/model/live.onnx`), and the app reads a page a panel at a time, and zooms, by
+them instead of by its own finder. It's for manga from Japan only: a manhwa, manhua or comic is
+never read a panel at a time, nor its pages sent to the model; a series whose site doesn't say its
+kind is taken for manga. Every reader's device runs the model itself, about 40 MB fetched the first
+time (a tenth of a second a page where the browser lends it the graphics chip, a second or more on
+the processor). Readers can also have the laptop find them, with Find panels on the server in the
+manga's look panel, while there's a seat: the laptop finds them for `PANEL_SEATS` readers at once
+(8), and the owner's accounts (`SPEECH_EMAILS`) always have one besides. When they're all taken, the
+app says how full it is, live, and can pop up when there's room. A reader's library takes a seat
+when it opens a manga from Japan with it on, and gives it back on closing it, or after 75 seconds
+without a word. The model runs in `PANEL_WORKERS` threads of its own (1), each on up to
+`PANEL_THREADS` processor threads (4, or one less than the laptop has), let go after ten quiet
+minutes, and readers' pages take turns; a page's panels are kept once found. On the laptop's Ryzen 7
+5800U that's about a page a second, for readers reading a page every ten seconds or so. A bigger
+machine does more with more workers, not more threads: a Ryzen 7 9800X3D finds 2.4 pages a second
+with one worker of four threads and 4.4 with four of two, so 4 workers of 2 and about 30 seats.
+Render never has it.
 
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
 **Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged

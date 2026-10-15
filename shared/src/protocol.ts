@@ -302,9 +302,21 @@ export type VoicesResponse = z.infer<typeof VoicesResponse>;
 
 /* ---- Manga panels from the panel model ---- */
 
-/** Whether this account may have the server find its manga pages' panels, and with which round of the model. */
-export const PanelsState = z.object({ allowed: z.boolean(), round: z.number().int() });
+/** How many readers the server is finding panels for (`used`), of how many it can at once (`seats`). */
+export const PanelSeats = z.object({ used: z.number().int(), seats: z.number().int() });
+export type PanelSeats = z.infer<typeof PanelSeats>;
+
+/** Whether the server finds manga pages' panels, with which round of the model, and how full it is. */
+export const PanelsState = PanelSeats.extend({ allowed: z.boolean(), round: z.number().int() });
 export type PanelsState = z.infer<typeof PanelsState>;
+
+/** A device asking for a seat, or keeping or leaving one, by an id it made up for itself. */
+export const PanelSeatAsk = z.object({ device: z.string().regex(/^[\w-]{8,64}$/) });
+export type PanelSeatAsk = z.infer<typeof PanelSeatAsk>;
+
+/** Whether the reader has a seat now. */
+export const PanelSeat = PanelSeats.extend({ seated: z.boolean() });
+export type PanelSeat = z.infer<typeof PanelSeat>;
 
 /** A page's panels: each one's four corners in the picture's pixels, top left first, in reading order. */
 export const PagePanels = z.object({

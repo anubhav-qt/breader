@@ -1,7 +1,8 @@
 # Every push and pull request: type checks, lint, the server tests against the local stand-ins.
 # Pushes to dev then publish the server image (arm64 for the Mac, amd64 for Render), migrate
 # Supabase, and redeploy Render. The laptop picks the image up itself (infra/update.sh), and
-# Cloudflare Pages builds the app from the same commit.
+# Cloudflare Pages builds the app from the same commit. A new round of the panel model is also
+# published as a release, for Pages to build into the app (frontend/scripts/panels.mjs).
 #
 # Repository secrets: SUPABASE_SESSION_URL (session pooler URL) and RENDER_DEPLOY_HOOK. Without
 # them the deploy steps are skipped.
@@ -33,8 +34,39 @@ jobs:
       - run: npm run lint -w frontend
       - run: npm test
 
+  # The panel model (server/src/panels/) is in Git LFS, whose downloads are metered: it's fetched
+  # once per round and cached by its hash, which its pointer file names. Each round is published
+  # once as a release, panels-<hash>, which Pages fetches for readers' devices; it doesn't wait for
+  # the tests, as Pages starts building at once.
+  model:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v5
+      - id: model
+        run: |
+          echo "oid=$(sed -n 's/^oid sha256://p' ai/panels/model/live.onnx)" >> "$GITHUB_OUTPUT"
+          echo "round=$(jq .round ai/panels/model/live.json)" >> "$GITHUB_OUTPUT"
+      - id: model-cache
+        uses: actions/cache@v4
+        with: { path: .panel-model, key: "panel-model-${{ steps.model.outputs.oid }}" }
+      - if: steps.model-cache.outputs.cache-hit != 'true'
+        run: git lfs pull --include ai/panels/model/live.onnx && mkdir -p .panel-model && cp ai/panels/model/live.onnx .panel-model/
+      - name: Publish it for readers' devices
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OID: ${{ steps.model.outputs.oid }}
+          ROUND: ${{ steps.model.outputs.round }}
+        run: |
+          test "$(sha256sum < .panel-model/live.onnx | cut -d' ' -f1)" = "$OID"
+          tag="panels-${OID:0:12}"
+          if gh release view "$tag" > /dev/null 2>&1; then echo "$tag is out already"; exit 0; fi
+          gh release create "$tag" .panel-model/live.onnx --target "$GITHUB_SHA" --latest=false             --title "Panel model, round $ROUND"             --notes "Round $ROUND of the manga panel model (ai/panels), for the app to run on readers' devices. SHA-256 $OID."
+
   image:
-    needs: test
+    needs: [test, model]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -43,8 +75,7 @@ jobs:
       image: ${{ steps.name.outputs.image }}
     steps:
       - uses: actions/checkout@v5
-      # The panel model (server/src/panels/) is in Git LFS, whose downloads are metered: it's
-      # fetched once per round and cached by its hash, which its pointer file names.
+      # The panel model, from the cache the model job filled.
       - id: model
         run: echo "oid=$(sed -n 's/^oid sha256://p' ai/panels/model/live.onnx)" >> "$GITHUB_OUTPUT"
       - id: model-cache

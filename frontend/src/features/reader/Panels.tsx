@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { keepChapters, letGo, stopKeeping, useKept } from '../../books/kept';
 import type { LoadedBook, MangaBook, TocItem } from '../../books/types';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
+import { Modal } from '../../components/Modal';
 import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
-import { setServerPanels, useServerPanels } from './serverPanels';
+import { usePanelModel } from './panelModel';
+import { answerSeatOffer, setPanelsNotify, setServerPanels, useServerPanels } from './serverPanels';
 import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -221,15 +224,63 @@ function DataSaver() {
   return <Segmented label="Quality" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
 }
 
-/** Panels found on Breader's own computer, for the accounts it's open to (serverPanels.ts): this device's choice. */
+/**
+ * Panels found on Breader's own computer (serverPanels.ts): this device's choice. It has a few
+ * seats; when they're all taken the switch stays off, and the reader sees how full it is, live,
+ * and can ask to be told when there's room.
+ */
 function ServerPanels() {
-  const { allowed, on } = useServerPanels();
-  if (!allowed) return null;
+  const s = useServerPanels();
+  if (!s.allowed) return null;
+  const on = s.on && !s.full;
   return (
-    <div className="ctl tgrow">
-      <span className="clbl">Find panels on the server</span>
-      <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Find panels on Breader’s own computer" onClick={() => setServerPanels(!on)} />
-    </div>
+    <>
+      <div className="ctl tgrow">
+        <span className="clbl">Find panels on the server</span>
+        <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Find panels on Breader’s own computer" onClick={() => setServerPanels(!on)} />
+      </div>
+      {s.on && s.full && (
+        <>
+          <p className="p-note p-seats" aria-live="polite">
+            {s.used < s.seats
+              ? `There’s room now: ${s.used}/${s.seats} readers are using it. Turn it on to take a seat.`
+              : `It’s full: ${s.used}/${s.seats} readers are using it. This device finds the panels meanwhile.`}
+          </p>
+          <div className="ctl tgrow">
+            <span className="clbl">Tell me when there’s room</span>
+            <button type="button" className="tg" role="switch" aria-checked={s.notify} aria-label="Tell me when there’s room on the server" onClick={() => setPanelsNotify(!s.notify)} />
+          </div>
+        </>
+      )}
+      {on && s.seated && <p className="p-note p-seats">{s.used}/{s.seats} readers are using it.</p>}
+    </>
+  );
+}
+
+/** The panel model coming to this device (panelModel.ts), the first time: it's about 40 MB. */
+function ModelComing() {
+  const m = usePanelModel();
+  if (m.state !== 'loading' || !m.size) return null;
+  return <p className="p-note" aria-live="polite">Fetching the panel model for this device: {Math.round(m.bytes / 1e6)} of {Math.round(m.size / 1e6)} MB.</p>;
+}
+
+/** The popup when a seat at the server's panel model frees up, for a reader who asked to be told. */
+export function SeatOffer() {
+  const s = useServerPanels();
+  return (
+    <AnimatePresence>
+      {s.offer && (
+        <Modal title="There’s room on the server" onClose={() => answerSeatOffer(false)} width={400}>
+          <div className="seat-offer">
+            <p>A seat is free: {s.used}/{s.seats} readers are using it now. Take it, and Breader’s own computer finds this manga’s panels.</p>
+            <div className="seat-offer-b">
+              <button type="button" className="btn btn-quiet" onClick={() => answerSeatOffer(false)}>Not now</button>
+              <button type="button" className="btn btn-primary" onClick={() => answerSeatOffer(true)}>Take the seat</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -250,6 +301,7 @@ function MangaLookControls({ look, pick, widen, saver, panels }: MangaControls) 
       )}
       {saver && <DataSaver />}
       {panels && <ServerPanels />}
+      {panels && <ModelComing />}
     </>
   );
 }

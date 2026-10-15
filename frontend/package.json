@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/voices.mjs --if-pages && tsc -b && vite build",
+    "build": "node scripts/voices.mjs --if-pages && node scripts/panels.mjs --if-pages && tsc -b && vite build",
     "voices": "node scripts/voices.mjs",
+    "panels": "node scripts/panels.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

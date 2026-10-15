@@ -91,11 +91,17 @@ const Env = z.object({
   /** Processor threads the voice may use. Defaults to 4, or fewer on a smaller machine. */
   SPEECH_THREADS: z.coerce.number().int().min(1).max(16).optional(),
   /**
-   * Manga panels found with the panel model (src/panels/), for the same accounts as the server
-   * voice: where the model is, if not in the image, and the processor threads it may use.
+   * Manga panels found with the panel model (src/panels/), for any reader while there's a seat:
+   * where the model is, if not in the image; the processor threads each worker may use (4, or
+   * fewer on a smaller machine); how many workers, each with the model; and how many readers it
+   * finds panels for at once. One worker of four threads finds about a page a second on the
+   * laptop's Ryzen 7 5800U, enough for 8. A bigger machine does more with more workers, not more
+   * threads: a Ryzen 7 9800X3D finds 2.4 pages a second with one of four, 4.4 with four of two.
    */
   PANEL_MODEL: z.string().optional(),
   PANEL_THREADS: z.coerce.number().int().min(1).max(16).optional(),
+  PANEL_WORKERS: z.coerce.number().int().min(1).max(8).default(1),
+  PANEL_SEATS: z.coerce.number().int().min(1).max(100).default(8),
 
   /**
    * Manga through the laptop (src/manga/): on unless this says false, and always off on the

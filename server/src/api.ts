@@ -32,8 +32,8 @@ if (mangaOn && env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024, store: redis };
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
 const manga = mangaOn ? makeManga(mangaOptions) : null;
-// Manga panels from the panel model, for the server voice's accounts, where manga is on.
-const panels = manga && speech ? makePanels(env) : null;
+// Manga panels from the panel model, for any reader with a seat, where manga is on.
+const panels = manga ? makePanels(env) : null;
 const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga, panels };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 

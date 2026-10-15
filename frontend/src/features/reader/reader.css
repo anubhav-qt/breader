@@ -324,3 +324,8 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-panels > img { position: absolute; left: 0; top: 0; display: block; max-width: none; transform-origin: 0 0; background: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .mg-panels > .mg-pg { margin: 0 auto; }
 .mgv.is-panels .fv-zone { width: max(56px, 20%); }
+
+/* Seats at the server's panel model (Panels.tsx ServerPanels, SeatOffer). */
+.tgrow + .p-seats { margin: -8px 0 16px; }
+.seat-offer p { margin: 0; font: var(--ui-w) 14px/1.5 var(--ui); }
+.seat-offer-b { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }

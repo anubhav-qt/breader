@@ -10,6 +10,7 @@ infra/update.log
 *.tsbuildinfo
 .claude/settings.local.json
 frontend/public/tts/
+frontend/public/panels/
 # Private: books, their text, notes and voice marks (ai/procedure.md).
 ai/work/
 ai/out/
