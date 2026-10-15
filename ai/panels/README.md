@@ -6,9 +6,10 @@ as the model trained so far guesses them, or, before there's a model, as Breader
 them (`frontend/src/features/reader/frames.ts`). Fix the boxes until they're right, save, and the
 right side is the label.
 
-The pages are private: `data/` is git ignored, since the repo is public, all but `data/labels/`. A
-label is only corners and its picture's size and sha256, so the labels go to GitHub, and a page can
-be labelled on one machine and trained on from another (below).
+The pages are private, since this repo is public: they're in a private repo of their own,
+anubhav-qt/breader-panels, cloned as `data/pages`. The rest of `data/` is git ignored too, all but the
+labels (`data/labels/`) and the page lists (`data/pagesN.json`), which are only corners, names and
+sizes. So a page can be labelled on one machine and trained on from another (below).
 
 ## Run it
 
@@ -97,10 +98,28 @@ Guesses again with the latest round, on the Mac.
 
 ### Labelled here, trained there
 
-Commit and push `data/labels/`. On the machine that trains, pull, fetch every set it doesn't have
-yet (`npm --prefix ai run panels-fetch -- 3`, and on), then `npm --prefix ai run panels-train`. A
-picture is kept exactly as MangaDex serves it, so the same picks fetch the same bytes, and the
-export refuses any label whose picture came back different.
+Commit and push the labels and page lists here, and the pictures in `data/pages`, which is a repo of
+its own. On the machine that trains, pull both, then `npm --prefix ai run panels-train`.
+
+The first time, bring the pictures in. Where there's no `data/pages` yet:
+
+```bash
+git clone https://github.com/anubhav-qt/breader-panels ai/panels/data/pages
+```
+
+Where `data/pages` has pictures already, make it the same repo, keeping them:
+
+```bash
+cd ai/panels/data/pages
+git init -b main
+git remote add origin https://github.com/anubhav-qt/breader-panels
+git pull origin main
+```
+
+The export checks every label against its picture, so a label whose picture isn't the one labelled
+is refused, never trained on. A set can also be fetched again from MangaDex instead
+(`npm --prefix ai run panels-fetch -- 3`): a picture is kept exactly as MangaDex serves it, so the
+same picks fetch the same bytes.
 
 The labeller says which round a page's guess is from. A page with no guess starts from what
 Breader found, as before, and B swaps that in on any page where it's nearer. A label keeps the

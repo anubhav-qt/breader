@@ -13,10 +13,12 @@ frontend/public/tts/
 # Private: books, their text, notes and voice marks (ai/procedure.md).
 ai/work/
 ai/out/
-# Private: the manga pages, the model's guesses and rounds (ai/panels/README.md). The labels go to
-# GitHub, only corners, so another machine can fetch the same pages and train on them.
+# Private: the manga pages, the model's guesses and rounds (ai/panels/README.md). The pages go to a
+# private repo of their own (anubhav-qt/breader-panels, cloned as data/pages). The labels and the
+# page lists come here: only corners, names and sizes.
 ai/panels/data/*
 !ai/panels/data/labels/
+!ai/panels/data/pages*.json
 ai/panels/data/labels/*.tmp
 # The Mac trainer's own Python (ai/panels/model/mac.sh), and YOLO's photo weights it fetches.
 ai/panels/model/.venv/
