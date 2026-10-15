@@ -4,14 +4,15 @@ not labelled yet with it, for the labeller to start from.
 
 It learns from data/dataset.jsonl, which the export writes after checking every label against its
 picture (npm runs it first), so the model sees the labels exactly as saved. Each round starts again
-from YOLO's weights trained on photos, and is kept in data/model/round-N: its weights, how training
-went, and the pages it learned from.
+from the same weights (BASE), and is kept in data/model/round-N: its weights, how training went, and
+the pages it learned from.
 
 The model finds each panel's box and its four corners, in the order they're labelled, so a slanted
 panel comes back slanted.
 """
 
 import json
+import os
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -22,11 +23,13 @@ import ultralytics
 from ultralytics import YOLO
 
 import guess
-from pages import DATA, MODELS, SIZE, windows, write
+from pages import DATA, DEVICE, MODELS, SIZE, windows, write
 
-# The pictures cut and listed the way YOLO reads them, inside the container only.
+# The pictures cut and listed the way YOLO reads them, in the container or the Mac's /tmp.
 WORK = Path("/tmp/yolo")
-BASE = "yolo11s-pose.pt"
+# The weights each round starts from: YOLO's trained on photos, or a kept round's (PANELS_BASE=round-6)
+# when the pages that round learned from aren't here to be learned from again.
+BASE = os.environ.get("PANELS_BASE", "yolo11s-pose.pt")
 EPOCHS = 200
 # A panel cut down to less than this, in pixels, by a strip's window isn't one in that window.
 LEAST = 8
@@ -91,14 +94,17 @@ def main():
     panels = sum(len(r["panels"]) for r in rows)
     print(f"Round {n}: {len(rows)} labelled pages, {panels} panels, as {pictures} pictures.", flush=True)
 
-    model = YOLO(BASE)
+    base = BASE
+    if BASE.startswith("round-"):
+        base = str(MODELS / BASE / "best.pt")
+    model = YOLO(base)
     model.train(
         data=str(WORK / "panels.yaml"),
         epochs=EPOCHS,
         patience=EPOCHS,
         imgsz=SIZE,
         batch=8,
-        device=0,
+        device=DEVICE,
         workers=4,
         project="/tmp/runs",
         name="round",

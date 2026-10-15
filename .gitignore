@@ -15,3 +15,6 @@ ai/work/
 ai/out/
 # Private: manga pages and their panel labels (ai/panels/README.md).
 ai/panels/data/
+# The Mac trainer's own Python (ai/panels/model/mac.sh), and YOLO's photo weights it fetches.
+ai/panels/model/.venv/
+ai/panels/model/yolo*.pt

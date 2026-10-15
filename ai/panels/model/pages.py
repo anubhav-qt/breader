@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 
 DATA = Path(os.environ.get("PANELS_DATA", "/data"))
+# The GPU: the first CUDA card in Docker, or "mps" on a Mac (mac.sh).
+DEVICE = os.environ.get("PANELS_DEVICE", "0")
 MODELS = DATA / "model"
 GUESSES = DATA / "guesses"
 # The side of the square the model sees a picture in, in pixels.
@@ -19,11 +21,20 @@ TALLEST = 2
 
 
 def pages():
-    """Every set's pages, in order: data/pages.json, then pages2.json, and on."""
-    out, n = [], 1
-    while (f := DATA / ("pages.json" if n == 1 else f"pages{n}.json")).exists():
+    """
+    Every set's pages, in order: data/pages.json, then pages2.json, and on. A set not fetched here
+    is skipped, so the later ones still count on a machine that only has those (labels.ts setsIn).
+    """
+    sets = []
+    for f in DATA.glob("pages*.json"):
+        number = f.stem.removeprefix("pages")
+        if number == "":
+            sets.append((1, f))
+        elif number.isdigit():
+            sets.append((int(number), f))
+    out = []
+    for _, f in sorted(sets):
         out += json.loads(f.read_text("utf8"))
-        n += 1
     return out
 
 

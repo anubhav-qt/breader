@@ -30,7 +30,12 @@ Pages are labelled a set at a time. The first is picked in `picks.json`, the sec
 `picks2.json`, and so on. Fetch the second with `npm --prefix ai run panels-fetch -- 2`.
 http://127.0.0.1:5180/ shows the pages not labelled yet from every set, and
 http://127.0.0.1:5180/?set=2 just the second's.
-A page belongs to one set only. The export takes every set.
+A page belongs to one set only. The export takes every set fetched here, and a set that isn't
+(say the first two, on a machine that only fetched the third) is skipped.
+
+The third, `picks3.json`, is 100 pages from series the first two left out: One Piece, Frieren,
+Oyasumi Punpun, Kaguya-sama, Mushoku Tensei, Slime, Jujutsu Kaisen, Demon Slayer and Chainsaw Man.
+Haikyuu!! was wanted too, but MangaDex only links out to MangaPlus for it.
 
 ```bash
 npm --prefix ai run panels-export
@@ -65,6 +70,24 @@ npm --prefix ai run panels-guess
 
 Guesses again with the latest round, say for a set fetched since.
 
+### On a Mac
+
+```bash
+npm --prefix ai run panels-train-mac
+```
+
+The same training on a Mac's GPU, without Docker: `model/mac.sh` makes the model a Python of its
+own in `model/.venv` with uv the first time (PyTorch and Ultralytics, about 800 MB), and runs
+`train.py` in it. It starts from round 6's weights (`PANELS_BASE=round-6`) instead of YOLO's, since
+the pages rounds 1 to 6 learned from stayed on the PC that trained them, so bring round 6 back
+first (below).
+
+```bash
+npm --prefix ai run panels-guess-mac
+```
+
+Guesses again with the latest round, on the Mac.
+
 The labeller says which round a page's guess is from. A page with no guess starts from what
 Breader found, as before, and B swaps that in on any page where it's nearer. A label keeps the
 guess it started from, as guessed, in `guessed` (and `found` still has what Breader found), so each
@@ -78,8 +101,9 @@ round learns from whatever's saved.
 `model/rounds/round-N/`: its `best.pt` (in Git LFS), `round.json` and `results.csv`. No pages or
 labels go with it. To keep a new round, copy those three files from `data/model/round-N/`.
 
-To bring a round back, copy its `best.pt` to `data/model/round-N/` and set `data/model/latest.json`
-to `{"round": N}`. Then `npm --prefix ai run panels-guess` guesses with it.
+To bring a round back, `git lfs pull` its `best.pt`, copy it to `data/model/round-N/` and set
+`data/model/latest.json` to `{"round": N}`. Then `npm --prefix ai run panels-guess` (or
+`panels-guess-mac`) guesses with it.
 
 ## Labels
 

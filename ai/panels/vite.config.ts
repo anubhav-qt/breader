@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
-import { pagesOf, samePanels, startOf, wrongIn, type Edit, type Guess, type Guessed, type Label, type Page } from './labels.ts';
+import { pagesOf, samePanels, setsIn, startOf, wrongIn, type Edit, type Guess, type Guessed, type Label, type Page } from './labels.ts';
 
 /*
  * The panel labeller (README.md), served on this machine only: the page, the pictures fetched into
@@ -29,7 +29,8 @@ async function setOf(set: number): Promise<Page[]> {
 
 async function everyPage(): Promise<Page[]> {
   const all: Page[] = [];
-  for (let set = 1; existsSync(join(DATA, pagesOf(set))); set++) all.push(...(await setOf(set)));
+  if (!existsSync(DATA)) return all;
+  for (const set of setsIn(await readdir(DATA))) all.push(...(await setOf(set)));
   return all;
 }
 

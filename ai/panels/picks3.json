@@ -1,0 +1,311 @@
+{
+  "series": [
+    {
+      "key": "onepiece",
+      "title": "One Piece",
+      "manga": "a1c7c817-4e59-43b7-9365-09675a149a6f",
+      "chapter": "9f7df325-7d13-4dd3-be30-54ab79f79f84",
+      "number": "1",
+      "pages": [
+        { "page": 2, "note": "a volume's contents page: a list and one small picture" },
+        { "page": 4, "note": "a landscape title spread, one picture" },
+        { "page": 12, "note": "a tall figure standing over the panels" },
+        { "page": 28, "note": "slanted panels, a long sound effect down the side" },
+        { "page": 41, "note": "slanted action panels bleeding off one edge" },
+        { "page": 45, "note": "a borderless scene with small framed captions at the foot" }
+      ]
+    },
+    {
+      "key": "onepiece",
+      "title": "One Piece",
+      "manga": "a1c7c817-4e59-43b7-9365-09675a149a6f",
+      "chapter": "e69147be-2e51-4e8d-a78a-cc505b1170d8",
+      "number": "1023",
+      "pages": [
+        { "page": 1, "note": "a full colour landscape cover, crowded: no gutters" },
+        { "page": 2, "note": "the chapter title over a framed cover story picture" },
+        { "page": 9, "note": "modern dense layout, panels slanted every which way" },
+        { "page": 17, "note": "a short page, the scan cut through the panels" }
+      ]
+    },
+    {
+      "key": "onepiececolor",
+      "title": "One Piece, colour edition",
+      "manga": "a2c1d849-af05-4bbc-b2a7-866ebb10331f",
+      "chapter": "0a57439e-1f81-43c5-853b-84da77cd8fc8",
+      "number": "451",
+      "pages": [
+        { "page": 15, "note": "colour two page spread, a wide scene over small panels" },
+        { "page": 17, "note": "colour, slanted panels and huge red lettering" }
+      ]
+    },
+    {
+      "key": "frieren",
+      "title": "Frieren: Beyond Journey's End",
+      "manga": "b0b721ff-c388-4486-aa0f-c2b0bb321512",
+      "chapter": "a1105d32-6fd4-4b42-bf29-3b69e6a6ffab",
+      "number": "1",
+      "pages": [
+        { "page": 1, "note": "a colour opening page, panels around a title box" },
+        { "page": 2, "note": "a colour landscape title spread, one picture" },
+        { "page": 10, "note": "a starry sky panel, the night filling most of the page" },
+        { "page": 14, "note": "falling snow in pale panels, thin borders" },
+        { "page": 27, "note": "a tall panel of light beside stacked ones" },
+        { "page": 30, "note": "a crowd panel bleeding off the top" }
+      ]
+    },
+    {
+      "key": "frieren",
+      "title": "Frieren: Beyond Journey's End",
+      "manga": "b0b721ff-c388-4486-aa0f-c2b0bb321512",
+      "chapter": "98dad46b-0ae1-4511-8df7-52d55abfa86d",
+      "number": "111",
+      "pages": [
+        { "page": 2, "note": "a chapter title page: a figure over a black band" },
+        { "page": 9, "note": "a sound effect breaking out of its panel" },
+        { "page": 12, "note": "a slanted cut through the panels, shields across it" },
+        { "page": 15, "note": "a speed line burst over the panels below" },
+        { "page": 17, "note": "a wide landscape strip at the foot" }
+      ]
+    },
+    {
+      "key": "punpun",
+      "title": "Goodnight Punpun",
+      "manga": "4301d363-ee02-43f4-ae24-4cbf29a74830",
+      "chapter": "3ca35a77-212b-4f8c-a4a1-67562dfa047c",
+      "number": "1",
+      "pages": [
+        { "page": 1, "note": "a near blank title page, a faint drawing: no panels" },
+        { "page": 3, "note": "a polka dot panel over a black caption bar" },
+        { "page": 13, "note": "black caption bars between photo-like panels" },
+        { "page": 17, "note": "radiating lines behind huge lettering, tilted panels" },
+        { "page": 20, "note": "a starry black sky behind the panels" },
+        { "page": 24, "note": "a doodle spilling out of the last panel" },
+        { "page": 26, "note": "one small picture low on a blank page" }
+      ]
+    },
+    {
+      "key": "punpun",
+      "title": "Goodnight Punpun",
+      "manga": "4301d363-ee02-43f4-ae24-4cbf29a74830",
+      "chapter": "c69381f4-ab72-4a02-867e-fe99c137fdf2",
+      "number": "102",
+      "pages": [
+        { "page": 6, "note": "a tall sound effect strip down the edge" },
+        { "page": 8, "note": "a black bar and dark panels around a tall figure" },
+        { "page": 10, "note": "a round mirror inside a panel, black bands" },
+        { "page": 12, "note": "a full bleed photo-real street: no borders" }
+      ]
+    },
+    {
+      "key": "kaguya",
+      "title": "Kaguya-sama: Love Is War",
+      "manga": "37f5cce0-8070-4ada-96e5-fa24b1bd4ff9",
+      "chapter": "3a7f485c-1aa3-4cd4-bc07-281541f62cda",
+      "number": "1",
+      "pages": [
+        { "page": 3, "note": "an inside cover in purple: lettering in framed boxes" },
+        { "page": 6, "note": "colour panels on red, lettering between them" },
+        { "page": 7, "note": "a colour spread with a black margin down one side" },
+        { "page": 20, "note": "a black panel cracked with lightning over the rest" },
+        { "page": 27, "note": "a burst panel on top, a diagram below" }
+      ]
+    },
+    {
+      "key": "kaguya",
+      "title": "Kaguya-sama: Love Is War",
+      "manga": "37f5cce0-8070-4ada-96e5-fa24b1bd4ff9",
+      "chapter": "42c910b9-0432-4a70-b455-bd10e366b47f",
+      "number": "205",
+      "pages": [
+        { "page": 1, "note": "the chapter title box over the opening panels" },
+        { "page": 16, "note": "slanted panels with a face cut by them" },
+        { "page": 18, "note": "the last page, lettering down the margin" }
+      ]
+    },
+    {
+      "key": "kaguyacolor",
+      "title": "Kaguya-sama: Love Is War, colour edition",
+      "manga": "9bbb9e67-aaf7-4c24-a24e-942f036996dd",
+      "chapter": "525c1700-4a3f-4fda-8b41-b59017cd5508",
+      "number": "21",
+      "pages": [
+        { "page": 4, "note": "a cast page in purple: framed portraits and text" },
+        { "page": 22, "note": "colour panels slanted every which way" },
+        { "page": 27, "note": "one small panel low down, balloons outside it" }
+      ]
+    },
+    {
+      "key": "mushoku",
+      "title": "Mushoku Tensei: Jobless Reincarnation",
+      "manga": "bd6d0982-0091-4945-ad70-c028ed3c0917",
+      "chapter": "de20ef70-7b70-4195-be95-2786a78751e7",
+      "number": "32",
+      "pages": [
+        { "page": 2, "note": "the chapter title over slanted panels, a figure bursting out" },
+        { "page": 3, "note": "a landscape spread, one picture in the rain" },
+        { "page": 13, "note": "figures over slanted panels, flames in the gutters" },
+        { "page": 27, "note": "two faces cut apart by a slanted gutter" },
+        { "page": 34, "note": "a tall panel beside a black band of lettering" },
+        { "page": 40, "note": "a black page with a jagged white splash" }
+      ]
+    },
+    {
+      "key": "mushoku",
+      "title": "Mushoku Tensei: Jobless Reincarnation",
+      "manga": "bd6d0982-0091-4945-ad70-c028ed3c0917",
+      "chapter": "88dc92dd-f785-4cb3-be3c-85dd570a3c2f",
+      "number": "110",
+      "pages": [
+        { "page": 12, "note": "a huge sound effect over a burst: no borders" },
+        { "page": 20, "note": "a half height page, panels with ragged edges" },
+        { "page": 23, "note": "slanted panels with a figure across them" },
+        { "page": 33, "note": "four wide strips stacked, the same face in each" },
+        { "page": 38, "note": "the last page, one borderless picture and lettering" }
+      ]
+    },
+    {
+      "key": "slime",
+      "title": "That Time I Got Reincarnated as a Slime",
+      "manga": "e78a489b-6632-4d61-b00b-5206f5b8b22b",
+      "chapter": "6615f52a-c825-45c2-8e7c-6f92151cd236",
+      "number": "83",
+      "pages": [
+        { "page": 2, "note": "a grey advert page, a figure beside a title column" },
+        { "page": 3, "note": "a black chapter title page, lettering over a figure" },
+        { "page": 12, "note": "a half height page, wide strips" },
+        { "page": 13, "note": "black slanted panels, a figure cut off by them" },
+        { "page": 20, "note": "huge lettering bursting over the panels" },
+        { "page": 43, "note": "a splash with debris and no borders" }
+      ]
+    },
+    {
+      "key": "slime",
+      "title": "That Time I Got Reincarnated as a Slime",
+      "manga": "e78a489b-6632-4d61-b00b-5206f5b8b22b",
+      "chapter": "03b6db63-c0fc-452a-8112-79b832721cfc",
+      "number": "140",
+      "pages": [
+        { "page": 9, "note": "the chapter title page, figures over the lettering" },
+        { "page": 12, "note": "slanted panels, a figure over the gutters" },
+        { "page": 22, "note": "speed lines in a black and white burst" },
+        { "page": 23, "note": "black lightning crossing the panels" },
+        { "page": 30, "note": "the series logo above tall panels side by side" }
+      ]
+    },
+    {
+      "key": "jjk",
+      "title": "Jujutsu Kaisen",
+      "manga": "c52b2ce3-7f95-469c-96b0-479524fb7a1a",
+      "chapter": "34e6778d-289d-4df4-8361-87237e77df4a",
+      "number": "1",
+      "pages": [
+        { "page": 1, "note": "a dark grey opening, a title box between panels" },
+        { "page": 2, "note": "a dark full page picture: no borders" },
+        { "page": 13, "note": "huge sound effects over a borderless scene" },
+        { "page": 32, "note": "black caption bars between small panels" },
+        { "page": 34, "note": "a dense fight, sound effects across the gutters" },
+        { "page": 49, "note": "a tall laughing figure down one side, panels beside it" }
+      ]
+    },
+    {
+      "key": "jjk",
+      "title": "Jujutsu Kaisen",
+      "manga": "c52b2ce3-7f95-469c-96b0-479524fb7a1a",
+      "chapter": "8b7dd020-d769-4f39-825b-946fded93439",
+      "number": "185",
+      "pages": [
+        { "page": 10, "note": "black panels around white ones" },
+        { "page": 14, "note": "a half height page, panels cut by its edge" }
+      ]
+    },
+    {
+      "key": "jjkcolor",
+      "title": "Jujutsu Kaisen, colour edition",
+      "manga": "35731f33-27fa-4794-b6ee-3b60da8b994d",
+      "chapter": "0a2eee54-ad6a-41e2-b212-bfd20584c08e",
+      "number": "109",
+      "pages": [
+        { "page": 1, "note": "colour title page, a whirl over the panels" },
+        { "page": 4, "note": "colour, slanted panels with splashes across them" },
+        { "page": 9, "note": "colour, a tilted panel with a figure leaving it" }
+      ]
+    },
+    {
+      "key": "demonslayer",
+      "title": "Demon Slayer: Kimetsu no Yaiba",
+      "manga": "789642f8-ca89-4e4e-8f7b-eee4d17ea08b",
+      "chapter": "ff56d0e5-7b60-42d6-8dc5-08461611bc8f",
+      "number": "50",
+      "pages": [
+        { "page": 2, "note": "a colour magazine opening, lettering over figures" },
+        { "page": 7, "note": "a moonlit sky panel over wide ones" },
+        { "page": 16, "note": "a figure leaping across slanted panels" },
+        { "page": 20, "note": "sound effects scattered over the panels" }
+      ]
+    },
+    {
+      "key": "demonslayer",
+      "title": "Demon Slayer: Kimetsu no Yaiba",
+      "manga": "789642f8-ca89-4e4e-8f7b-eee4d17ea08b",
+      "chapter": "a1cbdd48-a68f-436c-8946-03e2a6dbc365",
+      "number": "168",
+      "pages": [
+        { "page": 5, "note": "a sword's arc sweeping across the panels" },
+        { "page": 8, "note": "dark slanted panels with black between" },
+        { "page": 14, "note": "black gutters, a big face panel" },
+        { "page": 20, "note": "a figure in chains over lettering: no borders" }
+      ]
+    },
+    {
+      "key": "demonslayercolor",
+      "title": "Demon Slayer: Kimetsu no Yaiba, colour edition",
+      "manga": "62040a44-0935-46b7-a691-5ae5833af0ae",
+      "chapter": "4cd448c2-d048-4c44-8d65-2852e7e5752e",
+      "number": "175",
+      "pages": [
+        { "page": 3, "note": "a colour two page spread with title lettering" },
+        { "page": 13, "note": "colour, huge sound effects across slanted panels" },
+        { "page": 18, "note": "colour, slanted panels and lettering across them" }
+      ]
+    },
+    {
+      "key": "chainsaw",
+      "title": "Chainsaw Man",
+      "manga": "a77742b1-befd-49a4-bff5-1ad4e6b0ef7b",
+      "chapter": "c11d1634-8c2d-4225-8261-ca8f75194e4b",
+      "number": "70",
+      "pages": [
+        { "page": 1, "note": "the chapter title page, panels beside a figure" },
+        { "page": 11, "note": "a two page spread of bookshelves with a title strip" },
+        { "page": 12, "note": "an explosion over the panels" },
+        { "page": 16, "note": "a black panel over a grey one" }
+      ]
+    },
+    {
+      "key": "chainsaw",
+      "title": "Chainsaw Man",
+      "manga": "a77742b1-befd-49a4-bff5-1ad4e6b0ef7b",
+      "chapter": "6b1d3ed9-c8f7-4bf8-bd99-cadddc074ae4",
+      "number": "149",
+      "pages": [
+        { "page": 2, "note": "the chapter title beside a tower block" },
+        { "page": 9, "note": "a chain across the gutters, slanted panels" },
+        { "page": 15, "note": "tall thin panels side by side" }
+      ]
+    },
+    {
+      "key": "chainsawcolor",
+      "title": "Chainsaw Man, colour edition",
+      "manga": "e896c48c-3150-437d-ba57-d8567eb399ae",
+      "chapter": "171c8322-0108-495a-b16f-bc919dad4ff1",
+      "number": "52",
+      "pages": [
+        { "page": 5, "note": "colour, wide strips of a train stacked" },
+        { "page": 8, "note": "colour, a black silhouette panel among others" },
+        { "page": 12, "note": "colour, a tall panel with a cross beside another" },
+        { "page": 26, "note": "a volume's jacket flaps laid flat: no panels" }
+      ]
+    }
+  ]
+}

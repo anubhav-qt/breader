@@ -15,6 +15,21 @@
 export const picksOf = (set: number) => (set === 1 ? 'picks.json' : `picks${set}.json`);
 export const pagesOf = (set: number) => (set === 1 ? 'pages.json' : `pages${set}.json`);
 
+/**
+ * The sets fetched, in order, from the names of the files in data/. A set not fetched here is
+ * skipped, so the later ones still count on a machine that only has those.
+ */
+export function setsIn(files: string[]): number[] {
+  const sets: number[] = [];
+  for (const f of files) {
+    const m = f.match(/^pages(\d*)\.json$/);
+    if (!m) continue;
+    if (m[1] === '') sets.push(1);
+    else sets.push(Number(m[1]));
+  }
+  return sets.sort((a, b) => a - b);
+}
+
 /** A corner: whole pixels from the picture's top left edge, across then down. */
 export type Point = [number, number];
 /** A panel's four corners, in the order they were first placed. */

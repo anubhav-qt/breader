@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pagesOf, samePanels, wrongIn, type Label, type Page, type Quad } from './labels.ts';
+import { pagesOf, samePanels, setsIn, wrongIn, type Label, type Page, type Quad } from './labels.ts';
 
 /*
  * Gathers the labelled pages of every set into the training set, data/dataset.jsonl: a line for
@@ -31,7 +31,8 @@ const OUT = join(DATA, 'dataset.jsonl');
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
 const pages: Page[] = [];
-for (let set = 1; existsSync(join(DATA, pagesOf(set))); set++) pages.push(...(JSON.parse(await readFile(join(DATA, pagesOf(set)), 'utf8')) as Page[]));
+const files = existsSync(DATA) ? await readdir(DATA) : [];
+for (const set of setsIn(files)) pages.push(...(JSON.parse(await readFile(join(DATA, pagesOf(set)), 'utf8')) as Page[]));
 if (!pages.length) throw new Error('No pages yet: npm --prefix ai run panels-fetch');
 
 const lines: Line[] = [];

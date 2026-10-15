@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import cv2
 from ultralytics import YOLO
 
-from pages import DATA, GUESSES, MODELS, SIZE, pages, windows, write
+from pages import DATA, DEVICE, GUESSES, MODELS, SIZE, pages, windows, write
 
 # How sure the model has to be of a panel to guess it.
 SURE = 0.3
@@ -115,7 +115,7 @@ def guess(model, picture, w, h):
     found = []
     spans = windows(w, h)
     for k, (top, bottom) in enumerate(spans):
-        r = model.predict(picture[top:bottom], imgsz=SIZE, conf=SURE, device=0, verbose=False)[0]
+        r = model.predict(picture[top:bottom], imgsz=SIZE, conf=SURE, device=DEVICE, verbose=False)[0]
         boxes = r.boxes.xyxy.cpu().numpy()
         sure = r.boxes.conf.cpu().numpy()
         points = r.keypoints.data.cpu().numpy()
