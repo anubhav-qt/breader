@@ -1,0 +1,34 @@
+{
+ "v": 1,
+ "page": "demonslayer-c50-p02",
+ "file": "demonslayer-c50-p02.jpg",
+ "sha256": "f586b3cd5f7573e63a8929fe2ef0ebdc30272164f734bb3c28b7afe1eea91e34",
+ "width": 959,
+ "height": 1400,
+ "panels": [],
+ "found": [],
+ "guessed": {
+  "model": "round-6",
+  "panels": [
+   [
+    [
+     1,
+     26
+    ],
+    [
+     959,
+     26
+    ],
+    [
+     959,
+     1331
+    ],
+    [
+     1,
+     1331
+    ]
+   ]
+  ]
+ },
+ "saved": "2026-10-15T06:21:03.822Z"
+}
