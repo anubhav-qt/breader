@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "hellsing",
+      "title": "Hellsing",
+      "manga": "6fcfaa0e-6023-403e-97f9-5301dd3c258c",
+      "chapter": "b1ce65ee-e11a-4296-b0af-e706e8080415",
+      "number": "5",
+      "pages": [
+        { "page": 4, "note": "a crowded grid, a hand reaching across a gutter" },
+        { "page": 8, "note": "black strips of shadow around a moonlit window" },
+        { "page": 13, "note": "five stacked strips of feet and sound effects" },
+        { "page": 16, "note": "a gun breaking out over black panels" },
+        { "page": 22, "note": "a dense fight with sound effects over the gutters" }
+      ]
+    },
+    {
+      "key": "hellsing",
+      "title": "Hellsing",
+      "manga": "6fcfaa0e-6023-403e-97f9-5301dd3c258c",
+      "chapter": "3c0cbbb2-9aae-4798-af9b-4780b01c8e1e",
+      "number": "74",
+      "pages": [
+        { "page": 1, "note": "slanted strips of faces, sound effects across the cuts" },
+        { "page": 5, "note": "stacked strips with words set between them" },
+        { "page": 6, "note": "diagonal cuts through a fight" },
+        { "page": 10, "note": "a slanted fight, a swirl running over the cuts" },
+        { "page": 12, "note": "black panels, a figure standing out of them" }
+      ]
+    },
+    {
+      "key": "trigunmax",
+      "title": "Trigun Maximum",
+      "manga": "4644da00-8f23-44a8-aa99-e3661dcee901",
+      "chapter": "c4e6dcb1-50fa-4383-bd50-20a4179e618c",
+      "number": "11",
+      "pages": [
+        { "page": 2, "note": "a crowded page, art spilling out of its panels" },
+        { "page": 8, "note": "a busy fight, sound effects over the borders" },
+        { "page": 13, "note": "pictures with wide gaps of paper between them" },
+        { "page": 17, "note": "big sound effects breaking out down the side" },
+        { "page": 21, "note": "a dense grid with black panels" }
+      ]
+    },
+    {
+      "key": "trigunmax",
+      "title": "Trigun Maximum",
+      "manga": "4644da00-8f23-44a8-aa99-e3661dcee901",
+      "chapter": "9740d2a5-d90c-432b-a6b2-146d78201376",
+      "number": "70",
+      "pages": [
+        { "page": 2, "note": "a tall black strip beside a stack of small panels" },
+        { "page": 7, "note": "a crowded grid of small panels" },
+        { "page": 14, "note": "text boxes set out in the gutters" },
+        { "page": 16, "note": "crosses laid over the panels" },
+        { "page": 27, "note": "black title bars over wide strips" }
+      ]
+    },
+    {
+      "key": "joe",
+      "title": "Ashita no Joe",
+      "manga": "4ee5e960-6329-4e1d-b038-93e8e0d53589",
+      "chapter": "4e016798-6366-463d-8978-c9ef2498dbf7",
+      "number": "72",
+      "pages": [
+        { "page": 4, "note": "slanted panels around a punch" },
+        { "page": 11, "note": "a dense grid with a slanted cut" },
+        { "page": 14, "note": "a picture with no border fading into blank paper" },
+        { "page": 27, "note": "a big panel with a smaller one set into it" },
+        { "page": 37, "note": "a punch breaking across slanted cuts" }
+      ]
+    },
+    {
+      "key": "joe",
+      "title": "Ashita no Joe",
+      "manga": "4ee5e960-6329-4e1d-b038-93e8e0d53589",
+      "chapter": "5e295a40-18e1-4aa2-b095-240db1a511a6",
+      "number": "89",
+      "pages": [
+        { "page": 1, "note": "a tall ringside panel beside a crowd" },
+        { "page": 14, "note": "a ring seen from above, small panels around it" },
+        { "page": 18, "note": "a punch swinging out over the gutter" },
+        { "page": 23, "note": "slanted panels of a knockdown" },
+        { "page": 34, "note": "a crowd packed into panels, a sign over the cut" }
+      ]
+    },
+    {
+      "key": "blackjack",
+      "title": "Give My Regards to Black Jack",
+      "manga": "9fca3c19-ac41-4ebf-8735-f4e3becc2b3e",
+      "chapter": "206dce09-736b-46ae-b2f2-6eb2af33a03d",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "wide strips with a slanted cut" },
+        { "page": 7, "note": "a tight grid of faces in grey tone" },
+        { "page": 11, "note": "a dense grid with a tall panel down the side" },
+        { "page": 16, "note": "grey tone panels crowded together" },
+        { "page": 18, "note": "a picture bleeding off the page under slanted cuts" }
+      ]
+    },
+    {
+      "key": "blackjack",
+      "title": "Give My Regards to Black Jack",
+      "manga": "9fca3c19-ac41-4ebf-8735-f4e3becc2b3e",
+      "chapter": "feb30f0e-b3f8-4c48-bb6d-d54f2c392b2e",
+      "number": "85",
+      "pages": [
+        { "page": 3, "note": "a grid of rooms and faces in grey tone" },
+        { "page": 8, "note": "a picture bleeding off the page, small panels below" },
+        { "page": 13, "note": "a stack of panels with a face cut across" },
+        { "page": 17, "note": "a grid with a tall panel and a small inset" },
+        { "page": 19, "note": "slanted cuts, a small figure on bare paper" }
+      ]
+    },
+    {
+      "key": "nana",
+      "title": "NANA",
+      "manga": "7e2ddc4c-c07c-4163-bf48-2b7c45f7b7fb",
+      "chapter": "485a4b47-6766-4f71-89f3-46c0dbfe44f6",
+      "number": "8",
+      "pages": [
+        { "page": 4, "note": "tilted panels overlapping each other" },
+        { "page": 11, "note": "a newspaper laid over the panels" },
+        { "page": 15, "note": "big faces with no borders fading into the paper" },
+        { "page": 20, "note": "tall panels overlapping down the page" },
+        { "page": 33, "note": "loose panels with a figure standing out of them" }
+      ]
+    },
+    {
+      "key": "nana",
+      "title": "NANA",
+      "manga": "7e2ddc4c-c07c-4163-bf48-2b7c45f7b7fb",
+      "chapter": "f99c1fe8-573d-4cbf-ac00-c53d85673914",
+      "number": "46",
+      "pages": [
+        { "page": 9, "note": "small insets on a big picture, butterflies over the borders" },
+        { "page": 12, "note": "a crowded room with panels set into it" },
+        { "page": 16, "note": "a phone screen and small panels around a face" },
+        { "page": 18, "note": "a big picture with a tilted panel over it" },
+        { "page": 21, "note": "tall panels side by side, talk between them" }
+      ]
+    },
+    {
+      "key": "nausicaa",
+      "title": "Nausicaä of the Valley of the Wind",
+      "manga": "0c9e19cd-86cb-490c-93e9-955af41746ca",
+      "chapter": "8fea5125-c8dd-4482-8a5e-084abe99cbcc",
+      "number": "5",
+      "pages": [
+        { "page": 3, "note": "airships in wide strips" },
+        { "page": 6, "note": "a dense grid of small panels in pen hatching" },
+        { "page": 9, "note": "crowded panels of a fleet" },
+        { "page": 12, "note": "wide strips of a battle in fine linework" },
+        { "page": 15, "note": "a long run of wide panels" }
+      ]
+    },
+    {
+      "key": "nausicaa",
+      "title": "Nausicaä of the Valley of the Wind",
+      "manga": "0c9e19cd-86cb-490c-93e9-955af41746ca",
+      "chapter": "7f519455-674c-4827-9a3b-ad804fc74629",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "wide strips of explosions, sound effects over the cuts" },
+        { "page": 8, "note": "creatures crossing the panel borders" },
+        { "page": 12, "note": "a black panel under small pencilled ones" },
+        { "page": 15, "note": "a dense grid in fine hatching" },
+        { "page": 20, "note": "a crowded page of small panels" }
+      ]
+    },
+    {
+      "key": "bluelock",
+      "title": "Blue Lock",
+      "manga": "4141c5dc-c525-4df5-afd7-cc7d192a832f",
+      "chapter": "02bb0664-1ec9-422d-add0-b4e3ba7ae733",
+      "number": "150",
+      "pages": [
+        { "page": 5, "note": "a figure breaking out of the top, panels below" },
+        { "page": 10, "note": "a phone screen and a big sound effect at the bottom" },
+        { "page": 12, "note": "a crowded collage of faces" },
+        { "page": 16, "note": "characters over the borders, a credit in the gutter" },
+        { "page": 19, "note": "a bowling strike across slanted strips" }
+      ]
+    },
+    {
+      "key": "bluelock",
+      "title": "Blue Lock",
+      "manga": "4141c5dc-c525-4df5-afd7-cc7d192a832f",
+      "chapter": "7f50436c-e909-47b8-a27e-0f0c206c4465",
+      "number": "308",
+      "pages": [
+        { "page": 3, "note": "grey rain across a big panel" },
+        { "page": 8, "note": "a slanted split, a figure over the cut" },
+        { "page": 11, "note": "tall slanted strips side by side" },
+        { "page": 15, "note": "flags in panels, a tall picture down the side" },
+        { "page": 18, "note": "a face in the rain across slanted cuts" }
+      ]
+    },
+    {
+      "key": "sakamotocolor",
+      "title": "Sakamoto Days (Official Colored)",
+      "manga": "c3a410f3-6c1c-454c-93eb-8b995fd4cf56",
+      "chapter": "257a8fb2-d06e-46e8-b556-a29e5210791b",
+      "number": "5",
+      "pages": [
+        { "page": 1, "note": "a colour opener in wide strips, a crack across one" },
+        { "page": 4, "note": "slanted colour panels around a fight" },
+        { "page": 9, "note": "diagonal colour cuts with debris over them" },
+        { "page": 10, "note": "a colour grid with a wide fight at the bottom" },
+        { "page": 15, "note": "a body lying across the borders" }
+      ]
+    },
+    {
+      "key": "sakamotocolor",
+      "title": "Sakamoto Days (Official Colored)",
+      "manga": "c3a410f3-6c1c-454c-93eb-8b995fd4cf56",
+      "chapter": "c752f735-7e8a-4504-ad5c-441b9e348548",
+      "number": "25",
+      "pages": [
+        { "page": 4, "note": "a kick breaking through slanted colour panels" },
+        { "page": 7, "note": "a fight across diagonal colour cuts" },
+        { "page": 13, "note": "a big colour panel with figures stepping out" },
+        { "page": 16, "note": "a crowded colour grid" },
+        { "page": 21, "note": "a black and white extra of small panels" }
+      ]
+    },
+    {
+      "key": "touring",
+      "title": "Shuumatsu Touring",
+      "manga": "f5c031c8-a9ff-4be1-bb47-d12f3f688bb6",
+      "chapter": "b858dfde-5154-40e8-bece-5f17a16e4690",
+      "number": "4",
+      "pages": [
+        { "page": 2, "note": "a bike riding out of its panel" },
+        { "page": 9, "note": "a picture bleeding off the page, panels on top" },
+        { "page": 12, "note": "a jump across slanted panels" },
+        { "page": 17, "note": "panels bleeding off the edge of the page" },
+        { "page": 23, "note": "a crowded grid of signs and stalls" }
+      ]
+    },
+    {
+      "key": "touring",
+      "title": "Shuumatsu Touring",
+      "manga": "f5c031c8-a9ff-4be1-bb47-d12f3f688bb6",
+      "chapter": "89ede882-98f1-436c-97ba-0c8c20fb3f58",
+      "number": "18",
+      "pages": [
+        { "page": 2, "note": "a race across slanted cuts, sound effects over them" },
+        { "page": 4, "note": "a sound effect spanning the page over slanted panels" },
+        { "page": 7, "note": "a bleed with speech floating in it" },
+        { "page": 16, "note": "a crowded grid in screentone" },
+        { "page": 22, "note": "black panels beside a wide grey one" }
+      ]
+    },
+    {
+      "key": "gantze",
+      "title": "Gantz:E",
+      "manga": "c37d93a8-9c50-49b3-bd71-143937f4288e",
+      "chapter": "a31d5d96-24e0-4d5c-870f-90efba2a8717",
+      "number": "9",
+      "pages": [
+        { "page": 3, "note": "a splash with the title, small panels below" },
+        { "page": 5, "note": "slanted cuts across a face" },
+        { "page": 9, "note": "a dense fight, sound effects over the borders" },
+        { "page": 13, "note": "an eye panel over a grid in dark tone" },
+        { "page": 20, "note": "a monster spilling across slanted panels" }
+      ]
+    },
+    {
+      "key": "gantze",
+      "title": "Gantz:E",
+      "manga": "c37d93a8-9c50-49b3-bd71-143937f4288e",
+      "chapter": "3937d96b-0c38-47cb-94dd-e163741932b9",
+      "number": "57",
+      "pages": [
+        { "page": 2, "note": "a leap with sound effects over a split" },
+        { "page": 5, "note": "slanted cuts through a fight in dark tone" },
+        { "page": 8, "note": "a close-up over slanted strips" },
+        { "page": 13, "note": "a crowded slanted page with sound effects" },
+        { "page": 16, "note": "water panels with sound effects over them" }
+      ]
+    }
+  ]
+}

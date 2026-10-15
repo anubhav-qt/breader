@@ -51,6 +51,13 @@ Tomie, for what the first four had little of: ink wash, grey paper, four-panel s
 borders and a colour webtoon. MangaDex has Witch Hat Atelier only in other languages, so its pages
 are in Spanish.
 
+The sixth, `picks6.json`, is 100 more from Hellsing, Trigun Maximum, Ashita no Joe, Give My Regards
+to Black Jack, NANA, Nausicaä of the Valley of the Wind, Blue Lock, Sakamoto Days (in its official
+colour), Shuumatsu Touring and Gantz:E, for old hand-drawn pages, heavy blacks, grey tone, shoujo
+panels laid over each other and dense pen work. MangaDex has NANA only in Spanish, Nausicaä in
+Turkish and Polish and the colour Sakamoto Days in Vietnamese and Italian, and the later Blue Lock
+chapter is in Spanish.
+
 ```bash
 npm --prefix ai run panels-export
 ```
