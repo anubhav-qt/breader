@@ -197,32 +197,6 @@
       ]
     },
     {
-      "key": "eleceed",
-      "title": "Eleceed",
-      "manga": "7e544761-7d3d-4fce-8137-719814d7d138",
-      "chapter": "a581b76f-85c0-4f05-a699-fb5e19ac4131",
-      "number": "137",
-      "pages": [
-        { "page": 5, "note": "a colour webtoon strip, panels apart on white" },
-        { "page": 8, "note": "a webtoon strip, dark panels between light ones" },
-        { "page": 11, "note": "a webtoon strip going from white into black" },
-        { "page": 14, "note": "a webtoon strip, panels in white space" }
-      ]
-    },
-    {
-      "key": "eleceed",
-      "title": "Eleceed",
-      "manga": "7e544761-7d3d-4fce-8137-719814d7d138",
-      "chapter": "6eef9e2a-928a-4382-85e0-02544cfdd35c",
-      "number": "239",
-      "pages": [
-        { "page": 4, "note": "a webtoon strip, black bands between panels" },
-        { "page": 8, "note": "a webtoon strip on red and black" },
-        { "page": 12, "note": "a webtoon strip, a red burst between panels" },
-        { "page": 17, "note": "a webtoon strip of stacked panels" }
-      ]
-    },
-    {
       "key": "witchhat",
       "title": "Witch Hat Atelier",
       "manga": "67e7453b-9ee5-4ae5-9316-215b03e4a71d",

@@ -11,13 +11,21 @@ anubhav-qt/breader-panels, cloned as `data/pages`. The rest of `data/` is git ig
 labels (`data/labels/`) and the page lists (`data/pagesN.json`), which are only corners, names and
 sizes. So a page can be labelled on one machine and trained on from another (below).
 
+## Manga only
+
+Panel mode is for manga only, so the pages here are too: Japanese manga, read a page at a time. No
+webtoons (a long strip read top to bottom), and no manhwa, manhua or other comics in pages either,
+so pick nothing else. Sets 1, 2 and 5 had some, since taken out of their picks. A machine that
+fetched any of those sets before should fetch it again: its page list is written afresh from its
+picks, so the export leaves out the pages taken out, labelled or not.
+
 ## Run it
 
 ```bash
 npm --prefix ai run panels-fetch
 ```
 
-Fetches the 81 pages picked in `picks.json` (22 series, a few pages each) from MangaDex into
+Fetches the 63 pages picked in `picks.json` (17 series, a few pages each) from MangaDex into
 `data/pages`, listed in `data/pages.json`. A page fetched already is kept.
 
 ```bash
@@ -45,11 +53,10 @@ One Punch-Man, Vinland Saga, Bocchi the Rock!, Fullmetal Alchemist, My Dress-Up 
 Family, Naruto and Bleach. MangaDex has Naruto only in colour and most of Bleach in colour, and just
 a few translated chapters of Vinland Saga, Dress-Up Darling and Spy x Family.
 
-The fifth, `picks5.json`, is 100 more from Vagabond, Made in Abyss, Fruits Basket, Azumanga Daioh,
-Golden Kamuy (in its official colour), Oshi no Ko, Tokyo Ghoul:re, Eleceed, Witch Hat Atelier and
-Tomie, for what the first four had little of: ink wash, grey paper, four-panel strips, ornate
-borders and a colour webtoon. MangaDex has Witch Hat Atelier only in other languages, so its pages
-are in Spanish.
+The fifth, `picks5.json`, is 92 more from Vagabond, Made in Abyss, Fruits Basket, Azumanga Daioh,
+Golden Kamuy (in its official colour), Oshi no Ko, Tokyo Ghoul:re, Witch Hat Atelier and Tomie, for
+what the first four had little of: ink wash, grey paper, four-panel strips and ornate borders.
+MangaDex has Witch Hat Atelier only in other languages, so its pages are in Spanish.
 
 The sixth, `picks6.json`, is 100 more from Hellsing, Trigun Maximum, Ashita no Joe, Give My Regards
 to Black Jack, NANA, Nausicaä of the Valley of the Wind, Blue Lock, Sakamoto Days (in its official

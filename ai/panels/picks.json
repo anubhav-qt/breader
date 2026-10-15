@@ -154,43 +154,6 @@
       ]
     },
     {
-      "key": "princess",
-      "title": "Who Made Me a Princess",
-      "manga": "722a45c0-5e55-40f2-929b-ff69b0989edb",
-      "chapter": "6f194018-828b-4d21-926d-5d070bec8ddb",
-      "number": "66",
-      "pages": [
-        { "page": 5, "note": "colour webtoon strip with black bands" },
-        { "page": 7, "note": "colour webtoon strip, tall panels overlapping" },
-        { "page": 13, "note": "colour webtoon strip, slanted panels" }
-      ]
-    },
-    {
-      "key": "orv",
-      "title": "Omniscient Reader's Viewpoint",
-      "manga": "9a414441-bbad-43f1-a3a7-dc262ca790a3",
-      "chapter": "151886b7-a7a7-4907-bdce-d66ee479e049",
-      "number": "256",
-      "pages": [
-        { "page": 12, "note": "dark webtoon strip, panels apart on white" },
-        { "page": 14, "note": "webtoon strip, panels overlapping" },
-        { "page": 24, "note": "webtoon strip, slanted panels with lightning" },
-        { "page": 29, "note": "webtoon strip fading into black" }
-      ]
-    },
-    {
-      "key": "tieji",
-      "title": "Iron Ladies",
-      "manga": "4a4786cf-c185-4ad3-89a9-294a1ec0bfc9",
-      "chapter": "94eecf71-5c03-4852-bdbb-2745fd860bca",
-      "number": "34",
-      "pages": [
-        { "page": 1, "note": "colour manhua page, dark gutters" },
-        { "page": 4, "note": "colour manhua page, slanted panels" },
-        { "page": 7, "note": "colour manhua page, figures over panels" }
-      ]
-    },
-    {
       "key": "dbcolor",
       "title": "Dragon Ball, coloured",
       "manga": "af0527c1-8734-4498-b128-7090340bc10d",
@@ -200,32 +163,6 @@
         { "page": 2, "note": "colour, a wide panel over a small one" },
         { "page": 7, "note": "colour, a panel bleeding off the top" },
         { "page": 13, "note": "colour, a big crowd panel at the foot" }
-      ]
-    },
-    {
-      "key": "radiant",
-      "title": "Radiant",
-      "manga": "8de2456c-95ef-4958-8f27-af7a4cc275b7",
-      "chapter": "551126bd-80b8-4bd5-a22c-7ad98884e0a9",
-      "number": "19",
-      "pages": [
-        { "page": 3, "note": "French manga, slanted panels" },
-        { "page": 5, "note": "a two page spread in one picture" },
-        { "page": 16, "note": "slanted panels with black" },
-        { "page": 18, "note": "sound effects breaking the panels" }
-      ]
-    },
-    {
-      "key": "legendaries",
-      "title": "The Legendaries",
-      "manga": "5e418660-a917-47f5-8402-e6ee0089ebf1",
-      "chapter": "93660649-0f82-4c6f-95ff-d39551d2cc20",
-      "number": "2",
-      "pages": [
-        { "page": 5, "note": "Franco-Belgian album, very large colour page" },
-        { "page": 9, "note": "Franco-Belgian, many panels, read left to right" },
-        { "page": 21, "note": "Franco-Belgian, dark panels" },
-        { "page": 23, "note": "Franco-Belgian, a wide strip panel" }
       ]
     },
     {
