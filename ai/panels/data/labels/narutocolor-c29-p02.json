@@ -1,0 +1,53 @@
+{
+ "v": 1,
+ "page": "narutocolor-c29-p02",
+ "file": "narutocolor-c29-p02.png",
+ "sha256": "eae6f7df5df506e28e1c2af116fcac43cfe0ee0bd90f019ae2f9ef3766962e75",
+ "width": 584,
+ "height": 966,
+ "panels": [
+  [
+   [
+    45,
+    0
+   ],
+   [
+    584,
+    0
+   ],
+   [
+    584,
+    966
+   ],
+   [
+    45,
+    966
+   ]
+  ]
+ ],
+ "found": [],
+ "guessed": {
+  "model": "round-6",
+  "panels": [
+   [
+    [
+     45,
+     48
+    ],
+    [
+     582,
+     48
+    ],
+    [
+     582,
+     949
+    ],
+    [
+     45,
+     949
+    ]
+   ]
+  ]
+ },
+ "saved": "2026-10-15T09:53:17.389Z"
+}
