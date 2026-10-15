@@ -6,7 +6,9 @@ as the model trained so far guesses them, or, before there's a model, as Breader
 them (`frontend/src/features/reader/frames.ts`). Fix the boxes until they're right, save, and the
 right side is the label.
 
-The pages and labels are private: `data/` is git ignored, since the repo is public.
+The pages are private: `data/` is git ignored, since the repo is public, all but `data/labels/`. A
+label is only corners and its picture's size and sha256, so the labels go to GitHub, and a page can
+be labelled on one machine and trained on from another (below).
 
 ## Run it
 
@@ -36,6 +38,11 @@ A page belongs to one set only. The export takes every set fetched here, and a s
 The third, `picks3.json`, is 100 pages from series the first two left out: One Piece, Frieren,
 Oyasumi Punpun, Kaguya-sama, Mushoku Tensei, Slime, Jujutsu Kaisen, Demon Slayer and Chainsaw Man.
 Haikyuu!! was wanted too, but MangaDex only links out to MangaPlus for it.
+
+The fourth, `picks4.json`, is 100 more, ten pages each from Berserk, March Comes in Like a Lion,
+One Punch-Man, Vinland Saga, Bocchi the Rock!, Fullmetal Alchemist, My Dress-Up Darling, Spy x
+Family, Naruto and Bleach. MangaDex has Naruto only in colour and most of Bleach in colour, and just
+a few translated chapters of Vinland Saga, Dress-Up Darling and Spy x Family.
 
 ```bash
 npm --prefix ai run panels-export
@@ -87,6 +94,13 @@ npm --prefix ai run panels-guess-mac
 ```
 
 Guesses again with the latest round, on the Mac.
+
+### Labelled here, trained there
+
+Commit and push `data/labels/`. On the machine that trains, pull, fetch every set it doesn't have
+yet (`npm --prefix ai run panels-fetch -- 3`, and on), then `npm --prefix ai run panels-train`. A
+picture is kept exactly as MangaDex serves it, so the same picks fetch the same bytes, and the
+export refuses any label whose picture came back different.
 
 The labeller says which round a page's guess is from. A page with no guess starts from what
 Breader found, as before, and B swaps that in on any page where it's nearer. A label keeps the

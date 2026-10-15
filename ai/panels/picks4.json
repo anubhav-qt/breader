@@ -1,0 +1,302 @@
+{
+  "series": [
+    {
+      "key": "berserk",
+      "title": "Berserk",
+      "manga": "801513ba-a712-498c-8f57-cae55b38cc92",
+      "chapter": "ccc9488c-244f-4fd6-a6b9-c8d113c5da96",
+      "number": "72",
+      "pages": [
+        { "page": 2, "note": "wide strips stacked, a title tucked in the last" },
+        { "page": 5, "note": "a mixed grid, panels of every size" },
+        { "page": 9, "note": "dense action, panels overlapping each other" },
+        { "page": 11, "note": "a busy panel over a black one with tiny captions" },
+        { "page": 16, "note": "a huge face pushed across the panels" },
+        { "page": 19, "note": "a landscape spread, one picture across the fold" }
+      ]
+    },
+    {
+      "key": "berserk",
+      "title": "Berserk",
+      "manga": "801513ba-a712-498c-8f57-cae55b38cc92",
+      "chapter": "8f57490d-53ee-441d-b8cf-748c64b13937",
+      "number": "302",
+      "pages": [
+        { "page": 4, "note": "tall slanted strips side by side on black" },
+        { "page": 6, "note": "a spread with a band of panels across its middle" },
+        { "page": 9, "note": "a spread cut into wide panels, a face across the top" },
+        { "page": 12, "note": "a tall figure over a row of small panels at the foot" }
+      ]
+    },
+    {
+      "key": "lion",
+      "title": "March Comes in Like a Lion",
+      "manga": "0ca1627e-95dd-4118-892a-f144adf02256",
+      "chapter": "02a6d9f4-d81f-43a0-ab09-3b58e4ba2bab",
+      "number": "18",
+      "pages": [
+        { "page": 2, "note": "a borderless title page, one picture" },
+        { "page": 3, "note": "panels with open sides, a figure between them" },
+        { "page": 9, "note": "a shogi board panel among talking heads" },
+        { "page": 11, "note": "a small figure in white space between panels" },
+        { "page": 14, "note": "open panels down a flight of stairs" }
+      ]
+    },
+    {
+      "key": "lion",
+      "title": "March Comes in Like a Lion",
+      "manga": "0ca1627e-95dd-4118-892a-f144adf02256",
+      "chapter": "582fc07f-419e-4dd3-84e0-02be19f4b735",
+      "number": "148",
+      "pages": [
+        { "page": 3, "note": "dense panels, a crowded classroom" },
+        { "page": 4, "note": "on black, round pictures floating under a wide panel" },
+        { "page": 7, "note": "panels on a black page, gutters in black" },
+        { "page": 9, "note": "a collage of figures with no frames at all" },
+        { "page": 12, "note": "soft panels fading into a borderless face" }
+      ]
+    },
+    {
+      "key": "opm",
+      "title": "One Punch-Man",
+      "manga": "d8a959f7-648e-4c8d-8f23-f1f3f8e129f3",
+      "chapter": "957b9441-517e-4d2e-8032-cd5e23e7aa22",
+      "number": "61",
+      "pages": [
+        { "page": 3, "note": "slanted action panels, a crowd below" },
+        { "page": 8, "note": "a whip cutting across slanted panels" },
+        { "page": 14, "note": "a landscape spread, one picture across the fold" },
+        { "page": 17, "note": "tall slanted panels of a fight" },
+        { "page": 22, "note": "a giant creature bursting over the panels" }
+      ]
+    },
+    {
+      "key": "opm",
+      "title": "One Punch-Man",
+      "manga": "d8a959f7-648e-4c8d-8f23-f1f3f8e129f3",
+      "chapter": "4a50374a-1238-4106-a1fb-9fdae22eab62",
+      "number": "296",
+      "pages": [
+        { "page": 4, "note": "wide panels of rows of figures" },
+        { "page": 8, "note": "a tall figure standing down the page beside panels" },
+        { "page": 12, "note": "a big picture over a small panel and a wide view" },
+        { "page": 16, "note": "a huge face breaking out of its panel" },
+        { "page": 19, "note": "a full page leap, sound effects down the side" }
+      ]
+    },
+    {
+      "key": "vinland",
+      "title": "Vinland Saga",
+      "manga": "5d1fc77e-706a-4fc5-bea8-486c9be0145d",
+      "chapter": "a0615620-b01f-4124-85c8-93a7ba68f327",
+      "number": "218",
+      "pages": [
+        { "page": 2, "note": "a big snowy picture over a strip of small panels" },
+        { "page": 11, "note": "many small panels, a crowd in each" },
+        { "page": 15, "note": "a busy page, a face panel among action" },
+        { "page": 17, "note": "a borderless figure slashing across the page" },
+        { "page": 19, "note": "slanted panels around a struggle" }
+      ]
+    },
+    {
+      "key": "vinlandcolor",
+      "title": "Vinland Saga, fan coloured",
+      "manga": "b8fb0553-79d8-4f0d-a0dc-9fa9d452b986",
+      "chapter": "2653d47f-e44a-4882-a2d5-ab73dc75ce86",
+      "number": "71",
+      "pages": [
+        { "page": 7, "note": "colour, a grid with black gutters" },
+        { "page": 12, "note": "colour, a tall panel beside a column of shouting" },
+        { "page": 14, "note": "colour, a landscape spread cut in three" },
+        { "page": 23, "note": "colour, snow, tall panels side by side" },
+        { "page": 34, "note": "colour, a grid of talking heads indoors" }
+      ]
+    },
+    {
+      "key": "bocchi",
+      "title": "Bocchi the Rock!",
+      "manga": "2e0fdb3b-632c-4f8f-a311-5b56952db647",
+      "chapter": "84f633d7-8e9b-4eb3-bfbc-b43de4f9b726",
+      "number": "15",
+      "pages": [
+        { "page": 1, "note": "a colour cover over a row of colour 4-koma" },
+        { "page": 4, "note": "4-koma with a shape breaking between strips" },
+        { "page": 8, "note": "4-koma with a black box spilling out of a strip" }
+      ]
+    },
+    {
+      "key": "bocchi",
+      "title": "Bocchi the Rock!",
+      "manga": "2e0fdb3b-632c-4f8f-a311-5b56952db647",
+      "chapter": "8669a559-1ff6-477e-a978-abbb963a748c",
+      "number": "58",
+      "pages": [
+        { "page": 5, "note": "colour, uneven panels, a big word across one" },
+        { "page": 6, "note": "colour, figures standing over the panels" },
+        { "page": 7, "note": "colour, panels crowded with lettering" },
+        { "page": 8, "note": "colour, a collage of figures and small panels" },
+        { "page": 10, "note": "a wide picture in a frame over 4-koma" },
+        { "page": 18, "note": "one column of 4-koma and an empty half page" },
+        { "page": 20, "note": "a page of notes in text with two small pictures" }
+      ]
+    },
+    {
+      "key": "fma",
+      "title": "Fullmetal Alchemist",
+      "manga": "dd8a907a-3850-4f95-ba03-ba201a8399e3",
+      "chapter": "21ff5cd7-44df-4ea4-85a7-53f875832635",
+      "number": "10",
+      "pages": [
+        { "page": 2, "note": "a spread, panels across the fold" },
+        { "page": 6, "note": "wide panels of buildings and a ruin" },
+        { "page": 11, "note": "a black panel with a caption among others" },
+        { "page": 14, "note": "an explosion between slanted panels" },
+        { "page": 16, "note": "panels with objects drawn across their borders" }
+      ]
+    },
+    {
+      "key": "fma",
+      "title": "Fullmetal Alchemist",
+      "manga": "dd8a907a-3850-4f95-ba03-ba201a8399e3",
+      "chapter": "be2333b5-4dfd-4d40-8688-91b0dd1cb85a",
+      "number": "91",
+      "pages": [
+        { "page": 5, "note": "a big sound effect across the panels" },
+        { "page": 10, "note": "a burst of lines across a borderless half page" },
+        { "page": 13, "note": "a title page on black, one picture" },
+        { "page": 15, "note": "crowded slanted panels of a chase" },
+        { "page": 18, "note": "a figure lunging out of its panel" }
+      ]
+    },
+    {
+      "key": "dressup",
+      "title": "My Dress-Up Darling",
+      "manga": "aa6c76f7-5f5f-46b6-a800-911145f81b9b",
+      "chapter": "6f57614b-6f26-4498-b1bc-8c93b1d9daba",
+      "number": "114",
+      "pages": [
+        { "page": 3, "note": "wide toned strips stacked" },
+        { "page": 4, "note": "a half height page, a picture and a few panels" },
+        { "page": 7, "note": "wide panels with a figure across two of them" },
+        { "page": 11, "note": "a tall borderless picture beside small panels" },
+        { "page": 16, "note": "a borderless face filling the page under soft panels" }
+      ]
+    },
+    {
+      "key": "dressup",
+      "title": "My Dress-Up Darling",
+      "manga": "aa6c76f7-5f5f-46b6-a800-911145f81b9b",
+      "chapter": "0604440a-014b-4cd9-9d67-ffda9e8783f8",
+      "number": "115.5",
+      "pages": [
+        { "page": 2, "note": "phone screens drawn as small boxes among panels" },
+        { "page": 8, "note": "panels on a black page" },
+        { "page": 14, "note": "panels cut on a slant" },
+        { "page": 20, "note": "a borderless page, speed lines and big lettering" },
+        { "page": 23, "note": "a nearly blank page with one small panel" }
+      ]
+    },
+    {
+      "key": "spy",
+      "title": "Spy x Family",
+      "manga": "6b958848-c885-4735-9201-12ee77abcb3c",
+      "chapter": "f2953367-acd7-40f7-a4d1-5ef72aaa6ef0",
+      "number": "6",
+      "pages": [
+        { "page": 3, "note": "a title page: a tall picture and the title down one side" },
+        { "page": 9, "note": "slanted panels, a figure breaking out of one" },
+        { "page": 19, "note": "a figure leaping over a crowd panel" },
+        { "page": 22, "note": "a black figure across slanted panels" }
+      ]
+    },
+    {
+      "key": "spy",
+      "title": "Spy x Family",
+      "manga": "6b958848-c885-4735-9201-12ee77abcb3c",
+      "chapter": "f19cc7d5-4c8d-49d6-a684-8ea67245ba1e",
+      "number": "124",
+      "pages": [
+        { "page": 3, "note": "a newspaper page drawn as boxes inside a panel" },
+        { "page": 14, "note": "thin black strips between panels" },
+        { "page": 24, "note": "a big face and a burst with no frame" }
+      ]
+    },
+    {
+      "key": "spycolor",
+      "title": "Spy x Family, colour edition",
+      "manga": "76eb5273-5869-4f5a-8b43-853f55efd6cd",
+      "chapter": "394374e8-6dc3-4b5c-94a9-f6f5f0a025a6",
+      "number": "3",
+      "pages": [
+        { "page": 3, "note": "colour, three tall panels side by side over a wide one" },
+        { "page": 10, "note": "colour, a dark hall over a grid of faces" },
+        { "page": 22, "note": "colour, a slash cutting diagonally through the page" }
+      ]
+    },
+    {
+      "key": "narutocolor",
+      "title": "Naruto, colour edition",
+      "manga": "a787b10a-02d0-46c0-8236-0d01d69ad4a3",
+      "chapter": "10109617-0e83-4597-989c-b1d74ab00fce",
+      "number": "29",
+      "pages": [
+        { "page": 2, "note": "colour, a title page, one picture" },
+        { "page": 5, "note": "colour, slanted action panels" },
+        { "page": 11, "note": "colour, dark panels among light ones" },
+        { "page": 17, "note": "colour, big lettering over a burst of action" },
+        { "page": 19, "note": "colour, a busy fight with no clear borders" }
+      ]
+    },
+    {
+      "key": "narutocolor",
+      "title": "Naruto, colour edition",
+      "manga": "a787b10a-02d0-46c0-8236-0d01d69ad4a3",
+      "chapter": "554d6640-1d6e-4fb9-b7f7-499442ae99b3",
+      "number": "552",
+      "pages": [
+        { "page": 2, "note": "colour, a title over a grid of panels" },
+        { "page": 4, "note": "colour, slanted strips across the page" },
+        { "page": 9, "note": "colour, a figure standing over several panels" },
+        { "page": 15, "note": "colour, wide panels cut on a slant" },
+        { "page": 17, "note": "colour, a blast tearing across slanted panels" }
+      ]
+    },
+    {
+      "key": "bleach",
+      "title": "Bleach",
+      "manga": "239d6260-d71f-43b0-afff-074e3619e3de",
+      "chapter": "1bc48c3e-2e99-4c71-9ddd-cc9e8650b8bf",
+      "number": "3",
+      "pages": [
+        { "page": 2, "note": "slanted panels with sound effects crossing them" },
+        { "page": 17, "note": "dense panels, lettering across their borders" },
+        { "page": 18, "note": "a figure jumping across the panels" }
+      ]
+    },
+    {
+      "key": "bleachcolor",
+      "title": "Bleach, colour edition",
+      "manga": "a460ab18-22c1-47eb-a08a-9ee85fe37ec8",
+      "chapter": "af76147e-05ca-4412-9e55-ef20c5d6e2e1",
+      "number": "250",
+      "pages": [
+        { "page": 3, "note": "colour, a figure bursting over slanted panels" },
+        { "page": 11, "note": "colour, a tall figure across the page" },
+        { "page": 15, "note": "colour, black and white panels stacked" },
+        { "page": 21, "note": "colour, tall slanted panels" }
+      ]
+    },
+    {
+      "key": "bleachcolor",
+      "title": "Bleach, colour edition",
+      "manga": "a460ab18-22c1-47eb-a08a-9ee85fe37ec8",
+      "chapter": "25618343-461d-4429-8ea9-98c471c7b020",
+      "number": "541",
+      "pages": [
+        { "page": 3, "note": "a black page of text with thin panels between" },
+        { "page": 8, "note": "colour, panels with wide white gaps between" },
+        { "page": 16, "note": "colour, a figure over the panels" }
+      ]
+    }
+  ]
+}
