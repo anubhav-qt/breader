@@ -175,7 +175,7 @@ the gutter and the panel. That's where snapping puts it.
 - The boxes are drawn in the picture's own pixels, so the numbers drawn are the numbers saved.
 - Every corner is a whole pixel while it's dragged, and nothing rounds, sorts, squares off or clips it after.
 - A click doesn't move a corner: a drag starts only past 3 pixels, and moves the corner by how far the pointer went.
-- A corner let go of snaps onto the border nearest it, within 10 screen pixels (`snap.ts`). It looks along both of the corner's edges, so a slanted panel snaps along its slant, a neighbour's border facing the other way across the gutter never pulls it over, and the page's own edge counts as a border. The snap is a move of its own, shown on screen before anything's saved, and Ctrl+Z puts the corner back where it was let go. Arrow nudges never snap.
+- A corner let go of snaps onto the border nearest it, within 10 screen pixels (`snap.ts`), unless Command is held as it's let go. It looks along both of the corner's edges, so a slanted panel snaps along its slant, a neighbour's border facing the other way across the gutter never pulls it over, and the page's own edge counts as a border. The snap is a move of its own, shown on screen before anything's saved, and Ctrl+Z puts the corner back where it was let go. Arrow nudges never snap.
 - The server checks a save and refuses a bad one, but never changes it. It writes the file whole, reads it back, and the labeller then shows what's on disk.
 - Each label keeps its picture's sha256. The labeller refuses to save on a picture of the wrong size, and the export refuses a label whose picture changed.
 
@@ -183,19 +183,20 @@ the gutter and the panel. That's where snapping puts it.
 
 | | |
 | --- | --- |
-| Drag a dot | Move that corner only, snapped to the border where it's let go |
+| Drag a dot | Move that corner only, snapped to the border where it's let go (⌘: not snapped) |
 | Arrows | Nudge the picked corner a pixel (Shift: ten) |
 | Tab, Shift+Tab | Pick the next or last corner |
-| Drag on bare page | Draw a new panel (Shift+drag: anywhere) |
+| Drag on bare page | Draw a new panel, snapped to the borders (Shift+drag: anywhere, ⌘: not snapped) |
+| Double-click a panel | Box it from there out to the gutter on every side (`grow.ts`), in place of the panel it mostly covers, or as a new one |
 | Click a panel | Pick it |
-| Delete | Remove the picked panel |
+| X, Delete | Remove the picked panel |
+| ⌘X | Remove every panel |
 | `[` `]` | Move the picked panel earlier or later in the reading order |
 | Escape | Pick nothing |
-| S | Snap every corner on the page |
 | B | Swap in what Breader found, instead of the model's guess |
 | Start over | Put back what the page started from |
 | Ctrl+Z, Ctrl+Shift+Z | Undo, redo |
-| Ctrl+S | Save |
-| `,` `.` | Last or next page |
+| S, Ctrl+S | Save |
+| A, D, `,` `.` | Last or next page |
 | `+` `-` `0` | Zoom in, out, fit |
 | L | All pages, and which are saved |

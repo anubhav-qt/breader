@@ -1,6 +1,7 @@
 import { framesOf, type Box } from '../../frontend/src/features/reader/frames.ts';
 import { samePanels, startOf, type Guess, type Guessed, type Label, type Page, type Point, type Quad } from './labels.ts';
 import { greyOf, snapOf, type Grey } from './snap.ts';
+import { grownOf, gutterOf } from './grow.ts';
 
 /*
  * The panel labeller (README.md): a page as it is on the left, and on the right its panels, first
@@ -48,15 +49,10 @@ let guessed: Guessed | null = null;
 /** The page's picture, once loaded, and its darkness for snapping, once a corner's been let go of. */
 let picture: HTMLImageElement | null = null;
 let grey: Grey | null = null;
+/** The page's gutter, for growing a panel, once one's been double-clicked. */
+let gutter: Uint8Array | null = null;
 /** What the last change did, when it was a snap, to say so until the next. */
 let snapped = '';
-/** Whether a corner let go of snaps (the Snap button), as last set in this browser. */
-let snapping = true;
-try {
-  snapping = localStorage.getItem('panels.snap') !== 'off';
-} catch {
-  // No storage here: snapping stays on.
-}
 /** The panels as last loaded or saved, to tell when there are changes. */
 let base: Quad[] = [];
 let saved: Label | null = null;
@@ -201,7 +197,7 @@ function draw() {
 /* Pointing */
 
 /** Where a pointer is on the picture, in its pixels, unrounded. */
-function onPicture(e: PointerEvent): Point {
+function onPicture(e: MouseEvent): Point {
   const r = svg.getBoundingClientRect();
   return [((e.clientX - r.left) * page!.width) / r.width, ((e.clientY - r.top) * page!.height) / r.height];
 }
@@ -267,8 +263,9 @@ svg.addEventListener('pointermove', (e) => {
 });
 
 function endDrag(e: PointerEvent) {
-  // Let go of, not lost to the browser: a corner moved, or a panel drawn, snaps to the borders.
-  const done = e.type === 'pointerup' && snapping;
+  // Let go of, not lost to the browser: a corner moved, or a panel drawn, snaps to the borders,
+  // unless Command is held as it's let go.
+  const done = e.type === 'pointerup' && !e.metaKey;
   if (drag?.kind === 'draw') {
     const q = drawing;
     drawing = null;
@@ -337,6 +334,72 @@ function snap(which: Array<[number, number]>) {
   draw();
 }
 
+/* Growing (grow.ts) */
+
+/** The page's gutter, worked out the first time a panel's grown on it. */
+function gutterNow(): Uint8Array | null {
+  if (gutter) return gutter;
+  const g = greyNow();
+  if (!g) return null;
+  gutter = gutterOf(g);
+  return gutter;
+}
+
+/** How much two panels' boxes overlap, as a share of both together. */
+function overlapOf(a: Quad, b: Quad): number {
+  const boxOf = (q: Quad) => {
+    const xs = q.map((c) => c[0]);
+    const ys = q.map((c) => c[1]);
+    return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+  };
+  const p = boxOf(a);
+  const q = boxOf(b);
+  const w = Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0);
+  const h = Math.min(p.y1, q.y1) - Math.max(p.y0, q.y0);
+  if (w <= 0 || h <= 0) return 0;
+  const both = (p.x1 - p.x0) * (p.y1 - p.y0) + (q.x1 - q.x0) * (q.y1 - q.y0) - w * h;
+  return (w * h) / both;
+}
+
+// A double-click grows a box from where it lands out to the gutter. It takes the place of the
+// panel it mostly covers, if there's one, or else it's a new panel.
+svg.addEventListener('dblclick', (e) => {
+  if (!page || broken) return;
+  const g = gutterNow();
+  if (!g) return;
+  const [px, py] = onPicture(e);
+  const x = Math.min(page.width - 1, Math.max(0, Math.floor(px)));
+  const y = Math.min(page.height - 1, Math.max(0, Math.floor(py)));
+  const q = grownOf(g, page.width, page.height, x, y);
+  if (!q || q[2][0] - q[0][0] < LEAST || q[2][1] - q[0][1] < LEAST) {
+    say("Nothing to grow from there: that's gutter. Double-click on the panel's drawing.");
+    return;
+  }
+  let covered = -1;
+  let most = 0.5;
+  panels.forEach((p, i) => {
+    const o = overlapOf(p, q);
+    if (o >= most) {
+      most = o;
+      covered = i;
+    }
+  });
+  if (covered >= 0 && samePanels([panels[covered]], [q])) {
+    picked = { panel: covered, corner: null };
+    draw();
+    return;
+  }
+  if (covered >= 0) {
+    change(() => (panels[covered] = q));
+    picked = { panel: covered, corner: null };
+  } else {
+    change(() => panels.push(q));
+    picked = { panel: panels.length - 1, corner: null };
+  }
+  snapped = 'Grown out to the gutter: Ctrl+Z undoes it.';
+  draw();
+});
+
 /** The loupe: the picture close up around a corner as it's moved, its panel's edges over it. */
 function peer(panel: number, corner: number, e: PointerEvent) {
   const ctx = loupe.getContext('2d');
@@ -403,6 +466,11 @@ document.addEventListener('keydown', (e) => {
   } else if (ctrl && key.toLowerCase() === 'y') {
     e.preventDefault();
     back(redo, undo);
+  } else if (ctrl && key.toLowerCase() === 'x') {
+    e.preventDefault();
+    if (panels.length === 0) return;
+    picked = null;
+    change(() => (panels = []));
   } else if (ctrl) {
     return;
   } else if (key.startsWith('Arrow') && picked?.corner != null) {
@@ -415,7 +483,7 @@ document.addEventListener('keydown', (e) => {
     const c = picked.corner === null ? 0 : (picked.corner + (e.shiftKey ? 3 : 1)) % 4;
     picked = { panel: picked.panel, corner: c };
     draw();
-  } else if ((key === 'Delete' || key === 'Backspace') && picked) {
+  } else if ((key === 'Delete' || key === 'Backspace' || key.toLowerCase() === 'x') && picked) {
     e.preventDefault();
     const i = picked.panel;
     picked = null;
@@ -430,9 +498,9 @@ document.addEventListener('keydown', (e) => {
   } else if (key === 'Escape') {
     picked = null;
     draw();
-  } else if (key === ',' || key === 'PageUp') {
+  } else if (key === ',' || key === 'PageUp' || key.toLowerCase() === 'a') {
     void go(at - 1);
-  } else if (key === '.' || key === 'PageDown') {
+  } else if (key === '.' || key === 'PageDown' || key.toLowerCase() === 'd') {
     void go(at + 1);
   } else if (key === '+' || key === '=') {
     zoomTo(zoom + 1);
@@ -443,7 +511,7 @@ document.addEventListener('keydown', (e) => {
   } else if (key.toLowerCase() === 'l') {
     showList();
   } else if (key.toLowerCase() === 's') {
-    snap(panels.flatMap((_, p) => [0, 1, 2, 3].map((c): [number, number] => [p, c])));
+    void save();
   } else if (key.toLowerCase() === 'b') {
     // What Breader found instead of the model's guess, when it's nearer.
     if (samePanels(panels, found)) return;
@@ -516,6 +584,7 @@ async function go(n: number) {
   img.src = src;
   picture = pic;
   grey = null;
+  gutter = null;
   snapped = '';
   if (pic.naturalWidth !== page.width || pic.naturalHeight !== page.height) {
     broken = `The picture shows as ${pic.naturalWidth}×${pic.naturalHeight}, not the ${page.width}×${page.height} fetched: fetch it again before labelling.`;
@@ -598,22 +667,6 @@ $('#reset').addEventListener('click', () => {
   change(() => (panels = copy(start)));
 });
 saveBtn.addEventListener('click', () => void save());
-const snapBtn = $<HTMLButtonElement>('#snap');
-function showSnap() {
-  snapBtn.textContent = `Snap: ${snapping ? 'on' : 'off'}`;
-  snapBtn.setAttribute('aria-pressed', String(snapping));
-}
-snapBtn.addEventListener('click', () => {
-  snapping = !snapping;
-  try {
-    localStorage.setItem('panels.snap', snapping ? 'on' : 'off');
-  } catch {
-    // Not kept past this page, then.
-  }
-  showSnap();
-  snapBtn.blur();
-});
-showSnap();
 window.addEventListener('resize', layout);
 window.addEventListener('beforeunload', (e) => {
   if (page && dirty()) e.preventDefault();
