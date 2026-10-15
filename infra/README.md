@@ -174,14 +174,29 @@ kind is taken for manga. Every reader's device runs the model itself, about 40 M
 time (a tenth of a second a page where the browser lends it the graphics chip, a second or more on
 the processor), all but iPhones, iPads and devices with under 4 GB, which can't hold it (it crashed
 Safari on an iPhone 13). Nothing else finds a manga's panels: until the model's ready, and on those
-devices without a seat on the server, its pages show whole. Readers can also have the laptop find them, with Find panels on the server in the
+devices without a seat on the server, a page nobody's read before shows whole.
+
+A page's panels, once anyone has them, are kept in Supabase for every reader (`page_panels`, by
+chapter and page, either size of it), and the app asks for a chapter's as it opens, with no seat
+and from Render too, before its own model runs: a page someone's read is a lookup, on any device,
+iPhones included. What the laptop finds is kept at once, and so is what the owner's devices find;
+what any other device finds waits in `page_panel_offers` until a second library's device finds the
+same (as many panels, each overlapping its match by 90%), so no one reader can put wrong panels on
+everyone's page, and is let go of after 30 days unmatched. Readers on the same page at once share
+the one finding. A new round of the model replaces a page's panels as it finds them again: the
+laptop for a reader with a seat, or two devices. Pages from Suwayomi are kept by its chapter
+numbers, so a Suwayomi started afresh needs its rows cleared:
+`DELETE FROM page_panels WHERE chapter LIKE 'sw:%'`. A page takes a few hundred bytes. The tables
+aren't fed to the laptop's copy or its backups: lost, a page's panels are only found again.
+
+Readers can also have the laptop find them, with Find panels on the server in the
 manga's look panel, while there's a seat: the laptop finds them for `PANEL_SEATS` readers at once
 (8), and the owner's accounts (`SPEECH_EMAILS`) always have one besides. When they're all taken, the
 app says how full it is, live, and can pop up when there's room. A reader's library takes a seat
 when it opens a manga from Japan with it on, and gives it back on closing it, or after 75 seconds
 without a word. The model runs in `PANEL_WORKERS` threads of its own (1), each on up to
 `PANEL_THREADS` processor threads (4, or one less than the laptop has), let go after ten quiet
-minutes, and readers' pages take turns; a page's panels are kept once found. On the laptop's Ryzen 7
+minutes, and readers' pages take turns. On the laptop's Ryzen 7
 5800U that's about a page a second, for readers reading a page every ten seconds or so. A bigger
 machine does more with more workers, not more threads: a Ryzen 7 9800X3D finds 2.4 pages a second
 with one worker of four threads and 4.4 with four of two, so 4 workers of 2 and about 30 seats.

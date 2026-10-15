@@ -18,7 +18,7 @@ export type PanelsWork =
 export type PanelsAsk = PanelsWork & { id: number };
 
 export type PanelsReply =
-  | { id: number; ok: true; gpu?: boolean; w?: number; h?: number; panels?: Array<Array<[number, number]>> }
+  | { id: number; ok: true; gpu?: boolean; w?: number; h?: number; panels?: Array<Array<[number, number]>>; sure?: number[] }
   | { id: number; ok: false; error: string }
   | { id: number; bytes: number };
 

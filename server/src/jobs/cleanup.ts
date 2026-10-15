@@ -12,6 +12,7 @@ import { log } from '../log.ts';
  *               finished, after a day; rows of deleted files, after 30 days
  *   libraries   key libraries unused for a year, with their files
  *   logins      expired login sessions and email links
+ *   offers      manga pages' panels one device sent that no other library's agreed with, after 30 days
  *
  * Each step takes a bounded bite per run, so a backlog clears over a few hours rather than in one
  * long transaction. Locks are taken in the same order a push takes them (the library, then its
@@ -191,12 +192,20 @@ export async function purgeLogins(pool: pg.Pool): Promise<number> {
   return (sessions.rowCount ?? 0) + (links.rowCount ?? 0);
 }
 
+/** Panels a device found for a page that no other library's agreed with in 30 days (panels/kept.ts). */
+export async function purgeOffers(pool: pg.Pool): Promise<number> {
+  const r = await pool.query(`DELETE FROM page_panel_offers WHERE (chapter, n, library_id) IN (
+    SELECT chapter, n, library_id FROM page_panel_offers WHERE at < now() - interval '30 days' LIMIT 5000)`);
+  return r.rowCount ?? 0;
+}
+
 export async function cleanUp(pool: pg.Pool, storage: Storage) {
   const tombstones = await purgeTombstones(pool);
   const files = await cleanFiles(pool, storage);
   const libraries = await expireLibraries(pool, storage);
   const logins = await purgeLogins(pool);
-  const detail = { tombstones, ...files, libraries, logins };
-  if (tombstones || files.files || files.rows || libraries || logins) log.info(detail, 'cleaned up');
+  const offers = await purgeOffers(pool);
+  const detail = { tombstones, ...files, libraries, logins, offers };
+  if (tombstones || files.files || files.rows || libraries || logins || offers) log.info(detail, 'cleaned up');
   return detail;
 }

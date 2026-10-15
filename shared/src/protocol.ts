@@ -328,6 +328,26 @@ export const PagePanels = z.object({
 });
 export type PagePanels = z.infer<typeof PagePanels>;
 
+/** A chapter's pages' panels kept for every reader, by page (server panels/kept.ts). */
+export const ChapterPanels = z.object({ pages: z.record(z.string(), PagePanels) });
+export type ChapterPanels = z.infer<typeof ChapterPanels>;
+
+/** A page's panels as a reader's device found them, to be kept for everyone once another's agree. */
+export const PanelsOffer = PagePanels.extend({
+  w: z.number().int().min(1).max(20_000),
+  h: z.number().int().min(1).max(20_000),
+  panels: z.array(z.array(z.tuple([z.number(), z.number()])).length(4)).max(64),
+  sure: z.array(z.number().min(0).max(1)).max(64),
+}).refine(
+  (p) => p.sure.length === p.panels.length && p.panels.every((q) => q.every(([x, y]) => x >= -p.w / 20 && x <= p.w * 1.05 && y >= -p.h / 20 && y <= p.h * 1.05)),
+  'Those panels aren’t on the page.',
+);
+export type PanelsOffer = z.infer<typeof PanelsOffer>;
+
+/** Whether a device's panels for a page are kept for everyone now. */
+export const PanelsOffered = z.object({ kept: z.boolean() });
+export type PanelsOffered = z.infer<typeof PanelsOffered>;
+
 /* ---- The server voice ---- */
 
 /** Whether this account may read aloud with the server's voices, and which voices those are. */

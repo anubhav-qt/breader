@@ -14,8 +14,8 @@ import type { Reply, Request } from './worker.ts';
  * Manga panels found on the laptop with the panel model trained on the owner's labels
  * (ai/panels), for any reader who takes one of its seats (seats.ts): the app asks for a page's
  * panels as it fetches the page, and zooms on them itself. The model runs in worker threads
- * (worker.ts), started when they're first needed and let go after ten quiet minutes. A page's
- * panels are kept once found, as its picture doesn't change.
+ * (worker.ts), started when they're first needed and let go after ten quiet minutes. What it finds
+ * is kept for every reader after (kept.ts).
  *
  * Readers take turns: each one's pages wait in a line of their own, and the workers take the next
  * page from each line in turn, so a chapter opened by one doesn't hold up a page another is on.
@@ -25,7 +25,7 @@ export interface Panels {
   /** The model's round (ai/panels/model/live.json). */
   round: number;
   seats: Seats;
-  /** A page's panels: found once, by its key, from its picture, in `who`'s turn. */
+  /** A page's panels, by its key, from its picture, in `who`'s turn: found once while it's being found. */
   find(key: string, picture: () => Promise<Picture>, who?: string): Promise<PagePanels>;
   close(): Promise<void>;
 }
@@ -33,8 +33,6 @@ export interface Panels {
 const IDLE_MS = 10 * 60_000;
 /** A reader's pages waiting beyond this many are turned away: the app finds those itself. */
 const MOST_WAITING = 32;
-/** Pages' panels kept, a few hundred bytes each. */
-const KEPT = 5000;
 /** Pages each worker has at once: one it's on, and the next made ready meanwhile. */
 const DEPTH = 2;
 
@@ -87,7 +85,6 @@ export function makePanels(env: Env): Panels | null {
   let next = 1;
   const pending = new Map<number, { w: Worker; resolve: (r: Extract<Reply, { ok: true }>) => void; reject: (e: Error) => void }>();
   let idle: NodeJS.Timeout | undefined;
-  const kept = new Map<string, PagePanels>();
   const finding = new Map<string, Promise<PagePanels>>();
 
   function start(slot: Slot) {
@@ -144,10 +141,7 @@ export function makePanels(env: Env): Panels | null {
       sharp ??= import('sharp').then((m) => m.default);
       const req = await windowsOf(await sharp, pic.data);
       const r = await call(slot, req);
-      const found: PagePanels = { round: model!.round, w: req.w, h: req.h, panels: r.panels, sure: r.sure };
-      kept.set(job.key, found);
-      if (kept.size > KEPT) kept.delete(kept.keys().next().value!);
-      job.resolve(found);
+      job.resolve({ round: model!.round, w: req.w, h: req.h, panels: r.panels, sure: r.sure });
     } catch (err) {
       job.reject(err instanceof Error ? err : new Error(String(err)));
     }
@@ -179,13 +173,6 @@ export function makePanels(env: Env): Panels | null {
     round: model.round,
     seats,
     find(key, picture, who = '') {
-      const had = kept.get(key);
-      if (had) {
-        // Used again, it's kept longest.
-        kept.delete(key);
-        kept.set(key, had);
-        return Promise.resolve(had);
-      }
       let p = finding.get(key);
       if (p) return p;
       const line = lines.get(who) ?? [];

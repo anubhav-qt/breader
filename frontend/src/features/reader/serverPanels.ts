@@ -1,11 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import type { PagePanels, PanelSeat, PanelSeats, PanelsState } from '@breader/shared/protocol';
+import type { ChapterPanels, PagePanels, PanelSeat, PanelSeats, PanelsOffered, PanelsState } from '@breader/shared/protocol';
 import type { MangaBook } from '../../books/types';
 import { api, ApiError } from '../../lib/api';
 import { readMangaPrefs } from '../../lib/mangadex';
 import { readLocal, writeLocal } from '../../lib/store';
 import { framesKnown, framesSoon, type Frames } from './frames';
-import { framesOfPanels, gpuHere, modelFramesKnown, modelFramesSoon, panelModelReady, startPanelModel } from './panelModel';
+import { framesOfPanels, gpuHere, modelFramesKnown, modelFramesSoon, modelPanelsOf, panelModelReady, panelModelRound, startPanelModel } from './panelModel';
 import { panelled } from './settings';
 
 /*
@@ -21,9 +21,12 @@ import { panelled } from './settings';
  * when a manga opens, and remembered for when it can't be reached.
  *
  * A page's panels are asked for as its picture arrives, so they're there when it's zoomed into.
- * Where the server can't say, the same model on this device finds them (panelModel.ts). Nothing
- * else does: until the model's here, a page has no panels, and shows whole. The page's own finder
- * (frames.ts) is for the books the model never learned from, a webtoon or a comic's tap to zoom.
+ * First of what the server keeps for every reader (server panels/kept.ts), a chapter's at once, with
+ * no seat: any page someone's read before. Then of the server, with a seat. Then the same model on
+ * this device finds them (panelModel.ts), and sends them to be kept for the next reader, once
+ * another library's device finds the same. Nothing else does: until the model's here, a page no
+ * one's read has no panels, and shows whole. The page's own finder (frames.ts) is for the books the
+ * model never learned from, a webtoon or a comic's tap to zoom.
  */
 
 const STATE = 'breader.panels.v2';
@@ -263,9 +266,87 @@ function ask(book: MangaBook, i: number): Promise<Frames | null> | null {
   return p;
 }
 
+/** Page i's chapter and its page there, for a manga read from MangaDex or a source. */
+function pageOf(book: MangaBook, i: number): { chapter: string; n: number } | null {
+  if (!Number.isInteger(i)) return null;
+  const at = book.where?.(i);
+  return at ? { chapter: at.chapter, n: at.n } : null;
+}
+
+/** A page's panels the server keeps, and from which round of the model. */
+interface KeptPage { frames: Frames; round: number }
+/** Chapters' kept pages, asked for once each, and those known. */
+const chapters = new Map<string, Promise<Map<number, KeptPage> | null>>();
+const chaptersKnown = new Map<string, Map<number, KeptPage>>();
+/** Asked again this long after it couldn't be (offline, say), not on every page. */
+const KEPT_AGAIN_MS = 30_000;
+
+function keptChapter(chapter: string): Promise<Map<number, KeptPage> | null> {
+  let p = chapters.get(chapter);
+  if (!p) {
+    const asking: Promise<Map<number, KeptPage> | null> = api.get<ChapterPanels>(`/v1/panels/${chapter}/kept`, 8_000).then(
+      (r) => {
+        const pages = new Map(Object.entries(r.pages).map(([n, x]) => [Number(n), { frames: framesOfPanels(x.w, x.h, x.panels), round: x.round }]));
+        if (chapters.get(chapter) === asking) chaptersKnown.set(chapter, pages);
+        return pages;
+      },
+      () => {
+        window.setTimeout(() => { if (chapters.get(chapter) === asking) chapters.delete(chapter); }, KEPT_AGAIN_MS);
+        return null;
+      },
+    );
+    p = asking;
+    chapters.set(chapter, p);
+    if (chapters.size > 30) {
+      const old = chapters.keys().next().value!;
+      chapters.delete(old);
+      chaptersKnown.delete(old);
+    }
+  }
+  return p;
+}
+
+/** Page i's panels as the server keeps them; null where it doesn't, or can't say. */
+async function keptPage(book: MangaBook, i: number): Promise<KeptPage | null> {
+  const at = pageOf(book, i);
+  if (!at) return null;
+  return (await keptChapter(at.chapter))?.get(at.n) ?? null;
+}
+
+/** The model's newest round, as the server or this device knows it. */
+const roundNow = () => Math.max(state.round, panelModelRound());
+
+/** Pages whose panels this device found and sent, once each. */
+const offered = new Set<string>();
+
+/** Sends what the model here found on page i, to be kept for every reader once another device agrees. */
+function offer(book: MangaBook, i: number, img: HTMLImageElement) {
+  const at = pageOf(book, i);
+  const found = modelPanelsOf(img);
+  if (!at || !found || !found.round) return;
+  const key = `${at.chapter}/${at.n}`;
+  if (offered.has(key)) return;
+  offered.add(key);
+  if (offered.size > 2000) offered.delete(offered.values().next().value!);
+  // The laptop's alone: it says which round it keeps. Off, it's only one reader's less.
+  api.laptop.post<PanelsOffered>(`/v1/panels/${at.chapter}/${at.n}`, found).then(
+    (r) => {
+      if (r.kept) chaptersKnown.get(at.chapter)?.set(at.n, { frames: framesOfPanels(found.w, found.h, found.panels), round: found.round });
+    },
+    () => {},
+  );
+}
+
 /** Asks for page i's panels ahead of their being wanted, as its picture arrives. */
 export function panelsAhead(book: MangaBook, i: number) {
-  void ask(book, i);
+  if (!panelled(book)) return;
+  const at = pageOf(book, i);
+  if (!at) return;
+  // Only where the server doesn't keep them already.
+  void keptChapter(at.chapter).then((pages) => {
+    const k = pages?.get(at.n);
+    if (!k || k.round < roundNow()) void ask(book, i);
+  });
 }
 
 /** No panels: the page is read whole. */
@@ -281,26 +362,40 @@ const NONE: Frames = { groups: [], panels: [] };
 export type FramesFor = 'panels' | 'ahead' | 'tap';
 
 /**
- * Page i's frames: the server's, or the model's on this device. For manga from Japan that's all; a
- * page has none until one of them says (and for good where neither can). Other books' come from the
- * page's own finder.
+ * Page i's frames: kept on the server, found there, or found by the model on this device and sent
+ * to be kept. For manga from Japan that's all; a page has none until one of them says (and for good
+ * where none can). One kept from an earlier round of the model stands in while the newer one here
+ * isn't ready. Other books' come from the page's own finder.
  */
 export async function pageFramesSoon(book: MangaBook, i: number, img: HTMLImageElement, want: FramesFor): Promise<Frames> {
   if (!panelled(book)) return framesSoon(img);
+  const k = await keptPage(book, i);
+  if (k && (k.round >= roundNow() || !panelModelReady())) return k.frames;
   const f = await ask(book, i);
   if (f) return f;
   const had = modelFramesKnown(img);
   if (had) return had;
-  if (want === 'ahead' && !(await gpuHere())) return NONE;
+  const meanwhile = k?.frames ?? NONE;
+  if (want === 'ahead' && !(await gpuHere())) return meanwhile;
   const ready = startPanelModel();
-  if (want === 'tap' && !panelModelReady()) return NONE;
-  if (!(await ready)) return NONE;
-  return (await modelFramesSoon(img)) ?? NONE;
+  if (want === 'tap' && !panelModelReady()) return meanwhile;
+  if (!(await ready)) return meanwhile;
+  const found = await modelFramesSoon(img);
+  if (found) offer(book, i, img);
+  return found ?? meanwhile;
 }
 
 /** Page i's frames, when they're known already; null while they're still being found. */
 export function pageFramesKnown(book: MangaBook, i: number, img: HTMLImageElement): Frames | null {
   if (!panelled(book)) return framesKnown(img);
+  const at = pageOf(book, i);
+  if (at) {
+    const pages = chaptersKnown.get(at.chapter);
+    // Still asking what's kept.
+    if (!pages && chapters.has(at.chapter)) return null;
+    const k = pages?.get(at.n);
+    if (k && (k.round >= roundNow() || !panelModelReady())) return k.frames;
+  }
   if (onServer()) {
     const a = addressOf(book, i);
     const f = a && known.get(a.key);

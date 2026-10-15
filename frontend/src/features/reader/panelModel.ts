@@ -6,8 +6,9 @@ import { forget, type Want } from './voice/store';
 
 /*
  * The panel model trained on the owner's labels, on this device: the same one the laptop runs
- * (server panels/), for every reader of a manga from Japan, where the laptop isn't finding the
- * panels for them. It's about 40 MB, fetched the first time it's wanted (serverPanels.ts says when)
+ * (server panels/), for every reader of a manga from Japan, for the pages the server hasn't kept
+ * the panels of, where the laptop isn't finding them for this reader; what it finds is sent to be
+ * kept for everyone. It's about 40 MB, fetched the first time it's wanted (serverPanels.ts says when)
  * and kept with the voices' files (voice/store.ts), so it works offline after. Pages build it into
  * /panels (scripts/panels.mjs), with model.json saying which round it is.
  *
@@ -173,16 +174,35 @@ export function framesOfPanels(w: number, h: number, quads: Array<Array<[number,
   return { groups: panels.map((b) => ({ box: b, panels: [b] })), panels };
 }
 
-/** Pages' frames found here, by their picture, once each, and those found already. */
+/** The model's own answer for a page: its corners in the picture's pixels, and how sure of each. */
+export interface ModelPanels {
+  round: number;
+  w: number;
+  h: number;
+  panels: Array<Array<[number, number]>>;
+  sure: number[];
+}
+
+/** Pages' frames found here, by their picture, once each, and those found already, with the model's answers. */
 const seen = new Map<string, Promise<Frames | null>>();
 const known = new Map<string, Frames>();
+const answers = new Map<string, ModelPanels>();
 
-async function find(img: HTMLImageElement): Promise<Frames | null> {
+async function find(img: HTMLImageElement, key: string): Promise<Frames | null> {
   if (!img.naturalWidth) await img.decode().catch(() => {});
   if (!img.naturalWidth || !worker) return null;
   const pic = await createImageBitmap(img);
   const r = await call({ type: 'find', pic }, [pic]);
+  answers.set(key, { round: status.round, w: r.w!, h: r.h!, panels: r.panels!, sure: r.sure ?? [] });
   return framesOfPanels(r.w!, r.h!, r.panels!);
+}
+
+/** The round of the model here, once it's known which (0 until then). */
+export const panelModelRound = () => status.round;
+
+/** What the model here found on the page, as it found it, to send to be kept (serverPanels.ts). */
+export function modelPanelsOf(img: HTMLImageElement): ModelPanels | undefined {
+  return answers.get(img.currentSrc || img.src);
 }
 
 /** The page's frames from the model here, once it's ready; null until then, or where it can't say. */
@@ -191,7 +211,7 @@ export function modelFramesSoon(img: HTMLImageElement): Promise<Frames | null> |
   const key = img.currentSrc || img.src;
   let found = seen.get(key);
   if (!found) {
-    found = find(img).then(
+    found = find(img, key).then(
       (f) => {
         if (f && seen.has(key)) known.set(key, f);
         return f;
@@ -207,6 +227,7 @@ export function modelFramesSoon(img: HTMLImageElement): Promise<Frames | null> |
       const old = seen.keys().next().value!;
       seen.delete(old);
       known.delete(old);
+      answers.delete(old);
     }
   }
   return found;

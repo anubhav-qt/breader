@@ -438,6 +438,44 @@ export const jobRuns = pgTable('job_runs', {
   runningSince: at('running_since'),
 });
 
+/**
+ * Manga pages' panels, kept for every reader once anyone's are known (panels/kept.ts): found on the
+ * laptop, sent by the owner's device, or sent alike by two libraries' devices. `chapter` is
+ * `md:<MangaDex chapter>` or a source's `sw:<chapter>`, and `n` the page, whichever size of it was
+ * read; `data` is {w, h, panels, sure} (shared PagePanels) in the pixels of the one found. `by` says
+ * who: server, owner or agreed. A later round replaces an earlier one. Not fed: any page's are found
+ * again.
+ */
+export const pagePanels = pgTable(
+  'page_panels',
+  {
+    chapter: text('chapter').notNull(),
+    n: integer('n').notNull(),
+    round: integer('round').notNull(),
+    data: jsonb('data').notNull(),
+    by: text('by').notNull(),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.chapter, t.n] })],
+);
+
+/**
+ * A page's panels as one library's device found them, until another library's agree (panels/kept.ts).
+ * Let go of after 30 days unmatched (jobs/cleanup.ts).
+ */
+export const pagePanelOffers = pgTable(
+  'page_panel_offers',
+  {
+    chapter: text('chapter').notNull(),
+    n: integer('n').notNull(),
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    round: integer('round').notNull(),
+    data: jsonb('data').notNull(),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.chapter, t.n, t.libraryId] }), index('page_panel_offers_at_idx').on(t.at)],
+);
+
 /** What the admin page changes: one row, id 1 (shared/src/admin.ts, AdminState). */
 export const adminState = pgTable('admin_state', {
   id: integer('id').primaryKey(),

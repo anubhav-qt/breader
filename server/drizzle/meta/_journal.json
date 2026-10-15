@@ -141,6 +141,13 @@
       "when": 1791792056180,
       "tag": "0019_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792080064913,
+      "tag": "0020_page_panels",
+      "breakpoints": true
     }
   ]
 }
