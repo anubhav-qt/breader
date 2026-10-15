@@ -106,9 +106,9 @@ npm --prefix ai run panels-train-mac
 
 The same training on a Mac's GPU, without Docker: `model/mac.sh` makes the model a Python of its
 own in `model/.venv` with uv the first time (PyTorch and Ultralytics, about 800 MB), and runs
-`train.py` in it. It starts from round 6's weights (`PANELS_BASE=round-6`) instead of YOLO's, since
-the pages rounds 1 to 6 learned from stayed on the PC that trained them, so bring round 6 back
-first (below).
+`train.py` in it. Like the PC, it starts from YOLO's weights and learns from every set, whose
+pictures are all in the private repo now (below). `PANELS_BASE=round-N` starts it from a kept
+round's weights instead (bring that round back first, below).
 
 ```bash
 npm --prefix ai run panels-guess-mac
