@@ -11,7 +11,7 @@ import type { Reply, Request } from './worker.ts';
 
 /*
  * Manga panels found on the laptop with the panel model trained on the owner's labels
- * (ai/panels), for the accounts the server voice is open to: the app asks for a page's panels as
+ * (ai/panels), for every browser signed in to a library: the app asks for a manga page's panels as
  * it fetches the page, and zooms on them itself. The model runs in a worker thread (worker.ts),
  * started when it's first needed and let go after ten quiet minutes. A page's panels are kept
  * once found, as its picture doesn't change.

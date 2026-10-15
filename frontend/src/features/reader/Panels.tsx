@@ -161,12 +161,13 @@ interface LookProps {
   manga?: MangaControls;
 }
 
-/** `saver`: read from MangaDex, whose pages can come smaller. */
+/** `saver`: read from MangaDex, whose pages can come smaller. `panels`: it can be read a panel at a time (settings.ts panelled). */
 export interface MangaControls {
   look: MangaLook;
   pick: (patch: { layout?: MangaLayout; dir?: MangaDir }) => void;
   widen: (width: number) => void;
   saver: boolean;
+  panels: boolean;
 }
 
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
@@ -220,7 +221,7 @@ function DataSaver() {
   return <Segmented label="Quality" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
 }
 
-/** Panels found on Breader's own computer, for the accounts it's open to (serverPanels.ts): this device's choice. */
+/** Panels found on Breader's own computer, for browsers signed in to a library (serverPanels.ts): this device's choice. */
 function ServerPanels() {
   const { allowed, on } = useServerPanels();
   if (!allowed) return null;
@@ -235,17 +236,20 @@ function ServerPanels() {
 /**
  * A manga's layout, the way its pages turn, and how wide they scroll. On a narrow screen it opens
  * scrolled, and keeps a layout there apart from wider ones; the column of pages is as wide as the screen.
+ * Panels, and finding them on the server, are for manga from Japan only.
  */
-function MangaLookControls({ look, pick, widen, saver }: MangaControls) {
+function MangaLookControls({ look, pick, widen, saver, panels }: MangaControls) {
+  const layouts: Array<{ v: MangaLayout; label: string }> = [{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }];
+  if (panels) layouts.push({ v: 'panels', label: 'Panels' });
   return (
     <>
-      <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }, { v: 'panels', label: 'Panels' }]} />
+      <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={layouts} />
       <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
       {!look.narrow && look.layout === 'scroll' && (
         <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
       )}
       {saver && <DataSaver />}
-      <ServerPanels />
+      {panels && <ServerPanels />}
     </>
   );
 }

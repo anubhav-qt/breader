@@ -1,4 +1,4 @@
-import type { MangaChapter, SourceSeries } from '@breader/shared/manga';
+import type { MangaChapter, MangaKind, MangaSeries, SourceSeries } from '@breader/shared/manga';
 import { ApiError, OfflineError } from '../lib/api';
 import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
@@ -278,14 +278,33 @@ function bookOf(rec: BookRecord, remote: NonNullable<MangaBook['remote']>, total
   };
 }
 
-async function openMangaDex(rec: BookRecord, series: string, picked: MangaChapter[]): Promise<MangaBook> {
+/** A series' catalogue: its name, the series' page there, and where the series is from (null when it doesn't say). */
+interface About {
+  name: string;
+  page: string | null;
+  origin: MangaKind | null;
+}
+
+/** A MangaDex series' page there, and where it's from. Not reached, it's still read, of no known kind. */
+async function aboutMangaDex(series: string): Promise<About> {
+  const page = `https://mangadex.org/title/${series}`;
+  try {
+    // In the library already, it opens whatever 18+ says.
+    const s = await kept<MangaSeries>(`mdseries:${series}`, () => mangadex.series(series, true));
+    return { name: 'MangaDex', page, origin: s.kind };
+  } catch {
+    return { name: 'MangaDex', page, origin: null };
+  }
+}
+
+async function openMangaDex(rec: BookRecord, series: string, about: About, picked: MangaChapter[]): Promise<MangaBook> {
   const { chapters, total } = laidOut(picked);
   if (!total) {
     throw new Error(chapters.length
       ? 'Every chapter of this manga in this language is read on its publisher’s own site. The links are in its chapter list.'
       : 'MangaDex has no chapters of this manga in this language yet.');
   }
-  return bookOf(rec, { name: 'MangaDex', series, page: `https://mangadex.org/title/${series}`, chapters }, total, (c, n) => pageFor(c.id, n));
+  return bookOf(rec, { name: about.name, series, page: about.page, origin: about.origin, chapters }, total, (c, n) => pageFor(c.id, n));
 }
 
 /**
@@ -310,14 +329,14 @@ async function each<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
   return out;
 }
 
-/** Where a source's series is from, and its page there. Not reached, it's still read, under a plainer name. */
-async function aboutSource(id: string): Promise<{ name: string; page: string | null }> {
+/** Which source a series is on, its page there, and where it's from. Not reached, it's still read, under a plainer name. */
+async function aboutSource(id: string): Promise<About> {
   try {
     // In the library already, it opens whatever 18+ says.
     const s = await kept<SourceSeries>(`srcseries:${id}`, () => sources.series(id, true));
-    return { name: s.source, page: s.link };
+    return { name: s.source, page: s.link, origin: s.kind };
   } catch {
-    return { name: 'its source', page: null };
+    return { name: 'its source', page: null, origin: null };
   }
 }
 
@@ -332,7 +351,7 @@ function inARow(counts: number[]): number {
  * A series a few chapters at a time: a source's, or MangaDex's with chapters filled in from one.
  * `id` names it for what's kept offline.
  */
-async function openWindowed(rec: BookRecord, id: string, about: { name: string; page: string | null }, picked: MangaChapter[], at?: Position): Promise<MangaBook> {
+async function openWindowed(rec: BookRecord, id: string, about: About, picked: MangaChapter[], at?: Position): Promise<MangaBook> {
   if (!picked.length) throw new Error('There are no chapters of this series yet.');
 
   // Suwayomi learns a chapter's pages by asking its source, so a few chapters around the place open.
@@ -383,6 +402,7 @@ async function openWindowed(rec: BookRecord, id: string, about: { name: string; 
       name: about.name,
       series: id,
       page: about.page,
+      origin: about.origin,
       chapters,
       ...(before ? { prev: { label: before.label, at: startOf(before) } } : {}),
       ...(after ? { next: { label: after.label, at: startOf(after) } } : {}),
@@ -462,14 +482,13 @@ export async function wholeSeries(url: string | undefined): Promise<{ key: strin
 export async function openRemote(rec: BookRecord, at?: Position): Promise<MangaBook> {
   const where = remoteOf(rec.url);
   if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
-  // The chapters its copy hasn't got, from the next best copies elsewhere, asked alongside.
-  const [list, fills] = await Promise.all([listOf(where), fillsOf(where.also)]);
+  // The chapters its copy hasn't got, from the next best copies elsewhere, and where it's from, asked alongside.
+  const [list, fills, about] = await Promise.all([listOf(where), fillsOf(where.also), where.kind === 'mangadex' ? aboutMangaDex(where.series) : aboutSource(where.id)]);
   let picked = filledIn(pickChapters(list, where.group), fills);
   if (where.kind === 'mangadex') {
     // Every page counted already, the whole series opens; with a source's chapters, a few at a time.
-    if (!picked.some((c) => onSource(c.id))) return openMangaDex(rec, where.series, picked);
+    if (!picked.some((c) => onSource(c.id))) return openMangaDex(rec, where.series, about, picked);
     picked = picked.filter((c) => !c.external);
-    return openWindowed(rec, where.key, { name: 'MangaDex', page: `https://mangadex.org/title/${where.series}` }, picked, at);
   }
-  return openWindowed(rec, where.key, await aboutSource(where.id), picked, at);
+  return openWindowed(rec, where.key, about, picked, at);
 }

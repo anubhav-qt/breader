@@ -166,6 +166,14 @@ series by its own genres: one marked Adult, Hentai, Smut, Erotica or Pornographi
 comic) comes from its type among those genres too; one whose site doesn't say shows only while
 every kind is on in Browse.
 
+**Manga panels.** The laptop finds the panels on manga pages with the panel model (`ai/panels`,
+the round in `ai/panels/model/live.onnx`), for every browser signed in to a library, and the app
+reads a page a panel at a time, and zooms, by them instead of by its own finder. It's for manga from
+Japan only: a manhwa, manhua or comic is never read a panel at a time, nor its pages sent to the
+model; a series whose site doesn't say its kind is taken for manga. The model runs in a thread of
+its own on up to `PANEL_THREADS` processor threads (4, or one less than the laptop has), let go
+after ten quiet minutes, and a page's panels are kept once found. Render never has it.
+
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
 **Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged
 by `component`), then copy Project settings › Client keys › DSN → `SENTRY_DSN` (laptop and

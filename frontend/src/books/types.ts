@@ -1,4 +1,5 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { MangaKind } from '@breader/shared/manga';
 
 /** CBZ: a manga or comic, its pages as pictures in a zip. */
 export type Format = 'EPUB' | 'PDF' | 'TXT' | 'MD' | 'Text' | 'CBZ';
@@ -79,12 +80,14 @@ export interface MangaBook {
   subjects?: string[];
   /**
    * Read from a catalogue: its name, the series' id and page there, and its chapters. Opened a few
-   * chapters at a time, the chapters just before and after these, to open it again at.
+   * chapters at a time, the chapters just before and after these, to open it again at. `origin`:
+   * where the series is from (manga, manhwa, manhua or comics), or null when its catalogue doesn't say.
    */
   remote?: {
     name: string;
     series: string;
     page: string | null;
+    origin?: MangaKind | null;
     chapters: RemoteChapter[];
     prev?: { label: string; at: Position };
     next?: { label: string; at: Position };

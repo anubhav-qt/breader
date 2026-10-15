@@ -28,7 +28,7 @@ import { refreshPanels } from './serverPanels';
 import { refreshSpeech } from './voice/server';
 import { setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
-import { SIZE_MAX, SIZE_MIN, TWO_COLORS, mangaLookOf, useNarrow, useReaderSettings, withMangaLook, type ThemeName } from './settings';
+import { SIZE_MAX, SIZE_MIN, TWO_COLORS, mangaLookOf, panelled, useNarrow, useReaderSettings, withMangaLook, type ThemeName } from './settings';
 import { flash, readBook, type Found } from './search';
 import { useSleepWatch } from './sleep';
 import { keepStop, stopIn, type Stop } from './stops';
@@ -74,14 +74,16 @@ const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause
 export function Reader({ record, title, color, book, initial, latest, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, aiElsewhere = false, onAi, onBook, series }: Props) {
   const [settings, update] = useReaderSettings();
   // Each manga keeps its own layout and direction, a layout for narrow screens (scrolled, until
-  // another's picked) apart from wide ones. Opened, it keeps the one it opened in.
+  // another's picked) apart from wide ones. Opened, it keeps the one it opened in. Only manga from
+  // Japan is read a panel at a time.
   const narrow = useNarrow();
-  const mangaLook = mangaLookOf(settings, record.id, narrow);
+  const panels = book.kind === 'manga' && panelled(book);
+  const mangaLook = mangaLookOf(settings, record.id, narrow, panels);
   const own = settings.mangaOwn?.[record.id];
   const ownLook = narrow ? !!own?.narrow : !!own;
   useEffect(() => {
-    if (book.kind === 'manga' && !ownLook) update((s) => withMangaLook(s, record.id, { layout: mangaLookOf(s, record.id, narrow).layout }, narrow));
-  }, [book.kind, narrow, ownLook, record.id, update]);
+    if (book.kind === 'manga' && !ownLook) update((s) => withMangaLook(s, record.id, { layout: mangaLookOf(s, record.id, narrow, panels).layout }, narrow));
+  }, [book.kind, narrow, ownLook, panels, record.id, update]);
   const [panel, setPanel] = useState<PanelName | null>(null);
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
   const [loc, setLoc] = useState<Loc | null>(null);
@@ -747,6 +749,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       pick: (patch) => update((s) => withMangaLook(s, record.id, patch, narrow)),
       widen: (width) => update((s) => ({ ...s, mangaWidth: width })),
       saver: remoteOf(record.url)?.kind === 'mangadex',
+      panels,
     } : null,
     panel, lastPanel, openPanel, pageW, canRemove: !!onRemove, onBack, onRemove: () => onRemove?.(),
     onGo, onPick, body, closing,

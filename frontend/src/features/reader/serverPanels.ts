@@ -5,12 +5,14 @@ import { api } from '../../lib/api';
 import { readMangaPrefs } from '../../lib/mangadex';
 import { readLocal, writeLocal } from '../../lib/store';
 import { framesKnown, framesSoon, type Box, type Frames } from './frames';
+import { panelled } from './settings';
 
 /*
  * Panels found on Breader's own computer with the panel model trained on the owner's labels
- * (server panels/), instead of by this device's finder (frames.ts). It's open to the accounts the
- * server voice is, so whether this one may, is asked of the server when a manga opens, and
- * remembered for when it can't be reached. It's on unless turned off in the manga's look panel.
+ * (server panels/), instead of by this device's finder (frames.ts). It's open to every browser
+ * signed in to a library, for manga from Japan only (settings.ts panelled), as the model learned
+ * from no other. Whether it's open here is asked of the server when a manga opens, and remembered
+ * for when it can't be reached. It's on unless turned off in the manga's look panel.
  * A page's panels are asked for as its picture arrives, so they're there when it's zoomed into,
  * and where the server can't say, this device finds them as before.
  */
@@ -79,7 +81,7 @@ function framesOf(p: PagePanels): Frames {
 
 /** Asks the server for page i's panels, once, when they're to come from it. */
 function ask(book: MangaBook, i: number): Promise<Frames | null> | null {
-  if (!onServer()) return null;
+  if (!onServer() || !panelled(book)) return null;
   const a = addressOf(book, i);
   if (!a) return null;
   let p = asked.get(a.key);
@@ -120,7 +122,7 @@ export async function pageFramesSoon(book: MangaBook, i: number, img: HTMLImageE
 
 /** Page i's frames, when they're known already. */
 export function pageFramesKnown(book: MangaBook, i: number, img: HTMLImageElement): Frames | null {
-  if (onServer()) {
+  if (onServer() && panelled(book)) {
     const a = addressOf(book, i);
     const f = a && known.get(a.key);
     if (f) return f;

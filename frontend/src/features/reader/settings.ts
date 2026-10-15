@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { record } from '../../data/sync';
 import type { BookColor } from '../../data/colors';
+import type { MangaBook } from '../../books/types';
 import { readLocal, writeLocal } from '../../lib/store';
 
 export type Style = 'book' | 'modern';
@@ -9,6 +10,11 @@ export type FontKey = 'dongle' | 'oxanium' | 'literata' | 'garamond' | 'atkinson
 export type Layout = 'pages' | 'scroll';
 /** A manga can be read a panel at a time too, each fitted to the screen (MangaView.tsx). */
 export type MangaLayout = Layout | 'panels';
+/**
+ * Whether a manga can be read a panel at a time: manga from Japan only, as the panel model learned
+ * from (ai/panels), never a manhwa, manhua or comic. One whose catalogue doesn't say, or a file, can.
+ */
+export const panelled = (book: MangaBook) => (book.remote?.origin ?? 'manga') === 'manga';
 /** Which way a manga's pages turn: right to left as manga is read, or left to right as comics are. */
 export type MangaDir = 'rtl' | 'ltr';
 
@@ -215,11 +221,15 @@ export interface MangaLook {
   narrow: boolean;
 }
 
-/** As this manga was last read on a screen this wide or narrow, or as the last one picked there; on a narrow screen, scrolled until one is. */
-export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean): MangaLook {
+/**
+ * As this manga was last read on a screen this wide or narrow, or as the last one picked there; on a
+ * narrow screen, scrolled until one is. One that can't be read in `panels` (panelled) scrolls instead.
+ */
+export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean, panels = true): MangaLook {
   const own = s.mangaOwn?.[id];
   let layout = own?.layout ?? s.mangaLayout;
   if (narrow) layout = own?.narrow ?? s.mangaNarrow ?? 'scroll';
+  if (layout === 'panels' && !panels) layout = 'scroll';
   return { layout, dir: own?.dir ?? s.mangaDir, width: s.mangaWidth ?? MANGA_WIDTH, narrow };
 }
 
