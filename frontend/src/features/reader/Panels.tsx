@@ -221,7 +221,7 @@ function DataSaver() {
   return <Segmented label="Quality" value={saver ? 'saver' : 'full'} onChange={(v) => pick(v === 'saver')} options={[{ v: 'full', label: 'Full quality' }, { v: 'saver', label: 'Data saver' }]} />;
 }
 
-/** Panels found on Breader's own computer, for browsers signed in to a library (serverPanels.ts): this device's choice. */
+/** Panels found on Breader's own computer, for the accounts it's open to (serverPanels.ts): this device's choice. */
 function ServerPanels() {
   const { allowed, on } = useServerPanels();
   if (!allowed) return null;

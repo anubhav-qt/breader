@@ -9,10 +9,10 @@ import { panelled } from './settings';
 
 /*
  * Panels found on Breader's own computer with the panel model trained on the owner's labels
- * (server panels/), instead of by this device's finder (frames.ts). It's open to every browser
- * signed in to a library, for manga from Japan only (settings.ts panelled), as the model learned
- * from no other. Whether it's open here is asked of the server when a manga opens, and remembered
- * for when it can't be reached. It's on unless turned off in the manga's look panel.
+ * (server panels/), instead of by this device's finder (frames.ts). It's open to the accounts the
+ * server voice is, for manga from Japan only (settings.ts panelled), as the model learned from no
+ * other. Whether this one may, is asked of the server when a manga opens, and remembered for when
+ * it can't be reached. It's on unless turned off in the manga's look panel.
  * A page's panels are asked for as its picture arrives, so they're there when it's zoomed into,
  * and where the server can't say, this device finds them as before.
  */
