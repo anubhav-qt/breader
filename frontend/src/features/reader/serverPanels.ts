@@ -5,7 +5,7 @@ import { api, ApiError } from '../../lib/api';
 import { readMangaPrefs } from '../../lib/mangadex';
 import { readLocal, writeLocal } from '../../lib/store';
 import { framesKnown, framesSoon, type Frames } from './frames';
-import { framesOfPanels, gpuHere, modelFramesKnown, modelFramesSoon, startPanelModel } from './panelModel';
+import { framesOfPanels, gpuHere, modelFramesKnown, modelFramesSoon, panelModelReady, startPanelModel } from './panelModel';
 import { panelled } from './settings';
 
 /*
@@ -21,8 +21,9 @@ import { panelled } from './settings';
  * when a manga opens, and remembered for when it can't be reached.
  *
  * A page's panels are asked for as its picture arrives, so they're there when it's zoomed into.
- * Where the server can't say, the same model on this device finds them (panelModel.ts), and until
- * that's here, the page's own finder (frames.ts).
+ * Where the server can't say, the same model on this device finds them (panelModel.ts). Nothing
+ * else does: until the model's here, a page has no panels, and shows whole. The page's own finder
+ * (frames.ts) is for the books the model never learned from, a webtoon or a comic's tap to zoom.
  */
 
 const STATE = 'breader.panels.v2';
@@ -220,6 +221,7 @@ const known = new Map<string, Frames>();
 
 /** Where page i is on the server, for a manga read from MangaDex or a source; null for one from a file. */
 function addressOf(book: MangaBook, i: number): { key: string; path: string } | null {
+  if (!Number.isInteger(i)) return null;
   const at = book.where?.(i);
   if (!at) return null;
   const saver = !at.chapter.startsWith('sw:') && readMangaPrefs().saver;
@@ -266,25 +268,34 @@ export function panelsAhead(book: MangaBook, i: number) {
   void ask(book, i);
 }
 
+/** No panels: the page is read whole. */
+const NONE: Frames = { groups: [], panels: [] };
+
 /**
- * Page i's frames: the server's, the model's on this device, or this device's own finder's, in that
- * order. The model here is waited for where `wait` says (the Panels layout), and otherwise only
- * where the browser lends it a graphics chip and it's quick; on the processor alone a page takes it
- * a second or more, which a tap to zoom shouldn't wait for, nor a phone's battery spend on every page.
+ * What page i's frames are wanted for: the Panels layout, which waits for the model to arrive the
+ * first time; a page coming up in another layout, found ahead only where the browser lends the model
+ * a graphics chip, as on the processor alone a page takes it a second or more, which a phone's
+ * battery shouldn't spend on every page; or a tap to zoom, which uses the model once it's here but
+ * doesn't wait for its 40 MB, zooming to the page meanwhile.
  */
-export async function pageFramesSoon(book: MangaBook, i: number, img: HTMLImageElement, wait = true): Promise<Frames> {
+export type FramesFor = 'panels' | 'ahead' | 'tap';
+
+/**
+ * Page i's frames: the server's, or the model's on this device. For manga from Japan that's all; a
+ * page has none until one of them says (and for good where neither can). Other books' come from the
+ * page's own finder.
+ */
+export async function pageFramesSoon(book: MangaBook, i: number, img: HTMLImageElement, want: FramesFor): Promise<Frames> {
+  if (!panelled(book)) return framesSoon(img);
   const f = await ask(book, i);
   if (f) return f;
-  if (panelled(book)) {
-    const had = modelFramesKnown(img);
-    if (had) return had;
-    if (wait || (await gpuHere())) {
-      void startPanelModel();
-      const m = await modelFramesSoon(img);
-      if (m) return m;
-    }
-  }
-  return framesSoon(img);
+  const had = modelFramesKnown(img);
+  if (had) return had;
+  if (want === 'ahead' && !(await gpuHere())) return NONE;
+  const ready = startPanelModel();
+  if (want === 'tap' && !panelModelReady()) return NONE;
+  if (!(await ready)) return NONE;
+  return (await modelFramesSoon(img)) ?? NONE;
 }
 
 /** Page i's frames, when they're known already; null while they're still being found. */
@@ -296,7 +307,5 @@ export function pageFramesKnown(book: MangaBook, i: number, img: HTMLImageElemen
     if (f) return f;
     if (a && asked.has(a.key)) return null;
   }
-  const m = modelFramesKnown(img);
-  if (m !== null) return m ?? null;
-  return framesKnown(img);
+  return modelFramesKnown(img) ?? null;
 }

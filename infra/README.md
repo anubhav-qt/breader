@@ -172,7 +172,9 @@ them instead of by its own finder. It's for manga from Japan only: a manhwa, man
 never read a panel at a time, nor its pages sent to the model; a series whose site doesn't say its
 kind is taken for manga. Every reader's device runs the model itself, about 40 MB fetched the first
 time (a tenth of a second a page where the browser lends it the graphics chip, a second or more on
-the processor). Readers can also have the laptop find them, with Find panels on the server in the
+the processor), all but iPhones, iPads and devices with under 4 GB, which can't hold it (it crashed
+Safari on an iPhone 13). Nothing else finds a manga's panels: until the model's ready, and on those
+devices without a seat on the server, its pages show whole. Readers can also have the laptop find them, with Find panels on the server in the
 manga's look panel, while there's a seat: the laptop finds them for `PANEL_SEATS` readers at once
 (8), and the owner's accounts (`SPEECH_EMAILS`) always have one besides. When they're all taken, the
 app says how full it is, live, and can pop up when there's room. A reader's library takes a seat

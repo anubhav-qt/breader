@@ -2,6 +2,8 @@ import { animate, motion, useMotionValue, useTransform } from 'motion/react';
 import { useLayoutEffect, useRef } from 'react';
 import type { Box } from './frames';
 import { clipOf, fitOf, widestOf } from './MangaZoom';
+import { usePanelModel } from './panelModel';
+import { useServerPanels } from './serverPanels';
 
 /*
  * Panels: a page read a panel at a time, each fitted to the screen with the rest of the page out of
@@ -68,4 +70,20 @@ export function PanelPicture({ src, ratio, natural, box, steps, width, height }:
   }, [box, wide, width, height, at.left, at.top, at.s, w, x, y, scale, clip]);
 
   return <motion.img src={src} alt="" draggable={false} style={{ width: w, height: h, x, y, scale, clipPath: clip }} />;
+}
+
+/**
+ * Why a page shows whole in the Panels layout, where its panels aren't coming from the server: the
+ * model on its way to this device, or a device that can't run it, or it couldn't start.
+ */
+export function PanelsNote() {
+  const m = usePanelModel();
+  const s = useServerPanels();
+  if (s.allowed && s.seated) return null;
+  let say = '';
+  if (m.state === 'loading' && m.size) say = `Getting panels ready on this device: ${Math.round(m.bytes / 1e6)} of ${Math.round(m.size / 1e6)} MB`;
+  else if (m.state === 'unfit') say = s.allowed ? 'This device can’t find panels itself. Turn on Find panels on the server in Look.' : 'This device can’t find panels itself, so pages show whole.';
+  else if (m.state === 'failed') say = 'Panels couldn’t be found on this device, so pages show whole.';
+  if (!say) return null;
+  return <p className="mg-note" aria-live="polite">{say}</p>;
 }

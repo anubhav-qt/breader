@@ -11,9 +11,9 @@ import { forget, type Want } from './voice/store';
  * and kept with the voices' files (voice/store.ts), so it works offline after. Pages build it into
  * /panels (scripts/panels.mjs), with model.json saying which round it is.
  *
- * Until it's here and started, and where it can't start at all, the page's own finder looks
- * (frames.ts). It runs in a worker (panels.worker.ts), a page at a time: about a tenth of a second
- * on a graphics chip, a second or more on the processor.
+ * Until it's here and started, a page has no panels and is read whole; the page's own finder
+ * (frames.ts) doesn't stand in. It runs in a worker (panels.worker.ts), a page at a time: about a
+ * tenth of a second on a graphics chip, a second or more on the processor.
  */
 
 export interface PanelModelFile {
@@ -25,7 +25,8 @@ export interface PanelModelFile {
 }
 
 export interface PanelModelStatus {
-  state: 'off' | 'loading' | 'ready' | 'failed';
+  /** `unfit`: this device can't hold it (modelFits). */
+  state: 'off' | 'loading' | 'ready' | 'failed' | 'unfit';
   round: number;
   /** Bytes here so far, of how many. */
   bytes: number;
@@ -88,7 +89,26 @@ function call(ask: PanelsWork, transfer: Transferable[] = [], onBytes?: (n: numb
 }
 
 let starting: Promise<boolean> | null = null;
+/** When it last couldn't start, so it's tried again a while after (offline, say), not on every page. */
+let failedAt = 0;
+const AGAIN_MS = 30_000;
 let gpu: Promise<boolean> | null = null;
+
+/** It's here and started. */
+export const panelModelReady = () => status.state === 'ready';
+
+/**
+ * Whether this device can hold the model. Not a phone or tablet with Safari underneath (every browser
+ * on an iPhone or iPad is), which lets a tab go at about a gigabyte and a half: the model working
+ * through 1024-pixel squares on top of a manga's pictures took it past that on an iPhone 13, and the
+ * tab crashed every time the manga opened again. Nor a device that says it has under 4 GB.
+ */
+export function modelFits(): boolean {
+  const ua = navigator.userAgent;
+  const apple = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return !apple && !(memory !== undefined && memory < 4);
+}
 
 /** Whether the browser lends a graphics chip (WebGPU), where the model takes a tenth of a second a page. */
 export const gpuHere = () => (gpu ??= (async () => {
@@ -98,10 +118,15 @@ export const gpuHere = () => (gpu ??= (async () => {
 
 /** Fetches the model and starts it, once; true when it's ready. */
 export function startPanelModel(): Promise<boolean> {
+  if (!modelFits()) {
+    if (status.state !== 'unfit') set({ state: 'unfit' });
+    return Promise.resolve(false);
+  }
+  if (starting === null && Date.now() - failedAt < AGAIN_MS) return Promise.resolve(false);
   starting ??= (async () => {
     const file = await fileOf();
     if (!file) {
-      set({ state: 'failed' });
+      failed();
       return false;
     }
     set({ state: 'loading', round: file.round, size: file.size, bytes: 0 });
@@ -113,7 +138,7 @@ export function startPanelModel(): Promise<boolean> {
         waiting.clear();
         worker?.terminate();
         worker = null;
-        set({ state: 'failed' });
+        failed();
       };
       const r = await call({ type: 'start', model: wantOf(file) }, [], (bytes) => set({ bytes }));
       set({ state: 'ready', bytes: file.size, gpu: !!r.gpu });
@@ -122,11 +147,18 @@ export function startPanelModel(): Promise<boolean> {
       console.warn('The panel model couldn’t start here:', e);
       worker?.terminate();
       worker = null;
-      set({ state: 'failed' });
+      failed();
       return false;
     }
   })();
   return starting;
+}
+
+/** It couldn't start, or stopped: tried again once it's wanted after a while. */
+function failed() {
+  failedAt = Date.now();
+  starting = null;
+  set({ state: 'failed' });
 }
 
 /** The model's corners as the reader's boxes: each panel's box, as a group of its own. */

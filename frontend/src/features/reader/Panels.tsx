@@ -257,9 +257,10 @@ function ServerPanels() {
   );
 }
 
-/** The panel model coming to this device (panelModel.ts), the first time: it's about 40 MB. */
+/** The panel model coming to this device (panelModel.ts), the first time: it's about 40 MB. Or not, where it can't run. */
 function ModelComing() {
   const m = usePanelModel();
+  if (m.state === 'unfit') return <p className="p-note">This device can’t find panels itself, so they come from the server only.</p>;
   if (m.state !== 'loading' || !m.size) return null;
   return <p className="p-note" aria-live="polite">Fetching the panel model for this device: {Math.round(m.bytes / 1e6)} of {Math.round(m.size / 1e6)} MB.</p>;
 }

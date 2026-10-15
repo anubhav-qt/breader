@@ -4,9 +4,9 @@ import { WORDS_PER_MANGA_PAGE } from '../../books/manga';
 import type { MangaBook, Position, RemoteChapter } from '../../books/types';
 import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
-import { frameAt, framesSoon, type Box } from './frames';
+import { frameAt, type Box } from './frames';
 import { pageFramesKnown, pageFramesSoon, panelsAhead } from './serverPanels';
-import { PanelPicture } from './MangaPanels';
+import { PanelPicture, PanelsNote } from './MangaPanels';
 import { MangaZoom, type Look } from './MangaZoom';
 import type { MangaDir, MangaLayout } from './settings';
 import { WHOLE, shownOf, stepsOf } from './steps';
@@ -537,11 +537,11 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   }, [pics, wantFrom, wantTo, total, shaped]);
 
   // The panels of the pages about the one read, found ahead, so a panel held or stepped to is there at
-  // once. Outside the Panels layout, the panel model on this device helps only where it's quick.
+  // once. Outside the Panels layout, the panel model on this device finds them ahead only where it's quick.
   useEffect(() => {
     for (const i of [at.page, at.page + 1, at.page - 1, at.page + 2]) {
       const img = pics.image(i);
-      if (srcs.get(i) && img) void pageFramesSoon(pics.book, i, img, layout === 'panels');
+      if (srcs.get(i) && img) void pageFramesSoon(pics.book, i, img, layout === 'panels' ? 'panels' : 'ahead');
     }
   }, [srcs, at.page, pics, layout]);
 
@@ -643,7 +643,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const url = await pics.get(i);
     const img = pics.image(i);
     if (!url || !img) return null;
-    const frames = await pageFramesSoon(pics.book, i, img);
+    const frames = await pageFramesSoon(pics.book, i, img, 'panels');
     return stepsOf(frames);
   }, [pics]);
 
@@ -804,7 +804,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     let steps: Box[] | undefined;
     let shown: { from: number; to: number } | undefined;
     if (what !== 'page') {
-      const frames = Number.isInteger(page) ? await pageFramesSoon(pics.book, page, img, layout === 'panels') : await framesSoon(img);
+      const frames = await pageFramesSoon(pics.book, page, img, layout === 'panels' ? 'panels' : 'tap');
       steps = stepsOf(frames);
       const hit = frameAt(frames, x, y);
       if (hit) {
@@ -1041,6 +1041,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
           <div className="mg-panels" style={{ left: side, right: side }}>
             {size.w > 0 && panelOf(at.page)}
           </div>
+          <PanelsNote />
           {moreAt}
           {zones('panel')}
         </>

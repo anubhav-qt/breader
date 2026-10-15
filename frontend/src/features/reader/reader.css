@@ -303,6 +303,7 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-band.is-more button, .mg-more { height: 36px; padding: 0 16px; border-radius: 10px; background: var(--r-fill); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
 .mg-band.is-more button:hover, .mg-more:hover { background: var(--r-line); }
 .mg-more { position: absolute; left: 50%; bottom: 88px; z-index: 3; transform: translateX(-50%); box-shadow: 0 0 0 1px var(--r-line); }
+.mg-note { position: absolute; left: 50%; top: 84px; z-index: 3; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 8px 14px; border-radius: 10px; background: var(--r-fill); box-shadow: 0 0 0 1px var(--r-line); font: var(--ui-w) 13px/1.35 var(--ui); color: var(--r-fg); text-align: center; pointer-events: none; }
 
 /* A page looked at closely (MangaZoom.tsx): over the controls, the rest of the page faded away. */
 .mg-zoom { position: fixed; inset: 0; z-index: 20; overflow: hidden; touch-action: none; cursor: zoom-out; }
