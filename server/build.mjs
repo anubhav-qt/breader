@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 
 // One self-contained file per entry point, so the runtime image needs next to no node_modules.
 await build({
-  entryPoints: ['src/api.ts', 'src/worker.ts', 'src/migrate.ts', 'src/speech/worker.ts', 'src/panels/worker.ts'],
+  entryPoints: ['src/api.ts', 'src/worker.ts', 'src/migrate.ts', 'src/speech/worker.ts', 'src/panels/worker.ts', 'src/novels/host.ts'],
   outdir: 'dist',
   bundle: true,
   platform: 'node',

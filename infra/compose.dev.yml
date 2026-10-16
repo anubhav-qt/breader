@@ -54,6 +54,24 @@ services:
     ports: ["127.0.0.1:4567:4567"]
     volumes: ["suwayomi:/home/suwayomi/.local/share/Tachidesk"]
 
+  # The novel sites' plugins, in a container of their own on a network apart (compose.yml).
+  novels:
+    build: { context: .., dockerfile: server/Dockerfile }
+    image: breader-server:dev
+    command: ["node", "--enable-source-maps", "dist/novels/host.js"]
+    environment:
+      NOVELS_DIR: /data/novels
+      FLARESOLVERR_URL: "http://flaresolverr:8191/v1"
+    volumes: ["novels:/data/novels"]
+    networks: [novels]
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4568/health"], interval: 10s }
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    environment: { LOG_LEVEL: info }
+    networks: [novels]
+
   # Brings both databases to the latest schema (and makes the buckets), then exits.
   migrate:
     <<: *server
@@ -80,8 +98,11 @@ services:
       REDIS_URL: "redis://redis:6379"
       # A manga search looks in Suwayomi's sources too.
       SUWAYOMI_URL: "http://suwayomi:4567"
+      # A book search looks on the novel sites too.
+      NOVELS_URL: "http://novels:4568"
     ports: ["8787:8787"]
-    volumes: ["voices:/data/voices", "manga:/data/manga"]
+    volumes: ["voices:/data/voices", "manga:/data/manga", "books:/data/books"]
+    networks: [default, novels]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
   # The Render copy: same image, no mirror. Stop "api" to watch the app fail over to it.
@@ -102,9 +123,11 @@ services:
       TZ: Asia/Kolkata
       # Public half of infra/dev-backup.agekey (a throwaway key for local backups).
       BACKUP_RECIPIENT: "age1kfm3c08tag4t3z8hrpfp8sd2rqd0qm08sl4mpw2sudayay7h4ffqgwwud5"
-      # Suwayomi's extensions are updated once a day.
+      # Suwayomi's extensions and the novel sites' plugins are updated once a day.
       SUWAYOMI_URL: "http://suwayomi:4567"
+      NOVELS_URL: "http://novels:4568"
     volumes: ["files:/data/files", "backups:/data/backups"]
+    networks: [default, novels]
 
 volumes:
   primary: {}
@@ -116,3 +139,9 @@ volumes:
   manga: {}
   redis: {}
   suwayomi: {}
+  books: {}
+  novels: {}
+
+networks:
+  default: {}
+  novels: {}

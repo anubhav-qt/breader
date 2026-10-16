@@ -46,6 +46,26 @@ services:
     volumes: ["suwayomi:/home/suwayomi/.local/share/Tachidesk"]
     restart: unless-stopped
 
+  # The novel sites' plugins (LNReader's), each site's own code, run in a container of their own: no
+  # .env, no database, and a network apart that only the API and the worker share with it. Sites
+  # behind Cloudflare's check are asked through FlareSolverr, a browser beside it.
+  novels:
+    image: ${IMAGE}
+    command: ["node", "--enable-source-maps", "dist/novels/host.js"]
+    environment:
+      NOVELS_DIR: /data/novels
+      FLARESOLVERR_URL: "http://flaresolverr:8191/v1"
+    volumes: ["novels:/data/novels"]
+    networks: [novels]
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4568/health"], interval: 10s }
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    environment: { LOG_LEVEL: info, TZ: Asia/Kolkata }
+    networks: [novels]
+    restart: unless-stopped
+
   # Brings Supabase and the copy to the image's schema before the new version starts, then exits.
   migrate:
     <<: *server
@@ -67,9 +87,13 @@ services:
       REDIS_URL: "redis://redis:6379"
       # A manga search looks in Suwayomi's sources too.
       SUWAYOMI_URL: "http://suwayomi:4567"
-    # The server voice's files (SPEECH_EMAILS in .env turns it on), downloaded once, and the manga
-    # pages MangaDex sent lately (MANGA_CACHE_MB).
-    volumes: ["voices:/data/voices", "manga:/data/manga"]
+      # A book search looks on the novel sites too.
+      NOVELS_URL: "http://novels:4568"
+    # The server voice's files (SPEECH_EMAILS in .env turns it on), downloaded once, the manga
+    # pages MangaDex sent lately (MANGA_CACHE_MB), the books' volumes made lately (BOOKS_CACHE_MB),
+    # and every chapter and volume of what's in a library, kept for good.
+    volumes: ["voices:/data/voices", "manga:/data/manga", "books:/data/books"]
+    networks: [default, novels]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
   worker:
@@ -81,10 +105,12 @@ services:
       MIRROR_URL: *mirror-url
       # Backups run after 03:00 here.
       TZ: Asia/Kolkata
-      # Suwayomi's extensions are updated once a day.
+      # Suwayomi's extensions and the novel sites' plugins are updated once a day.
       SUWAYOMI_URL: "http://suwayomi:4567"
+      NOVELS_URL: "http://novels:4568"
     # The AI marker runs inside it too (server/src/jobs/marker.ts), keeping its work in files/ai.
     volumes: ["files:/data/files", "backups:/data/backups"]
+    networks: [default, novels]
 
   # api.breader.example → http://api:8787, set on the tunnel's Public Hostname page in Cloudflare.
   tunnel:
@@ -103,3 +129,9 @@ volumes:
   manga: {}
   redis: {}
   suwayomi: {}
+  books: {}
+  novels: {}
+
+networks:
+  default: {}
+  novels: {}

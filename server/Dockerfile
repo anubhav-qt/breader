@@ -1,7 +1,8 @@
-# One image, four commands (build context: the repository root):
+# One image, five commands (build context: the repository root):
 #   node dist/api.js         the API (default), as ROLE=laptop or ROLE=fallback
 #   node dist/worker.js      the laptop's feed, file copy and backups
 #   node dist/migrate.js     schema migrations for Supabase and the copy
+#   node dist/novels/host.js the novel sites' plugins, for the API's books (src/novels/host.ts)
 #   node ai/dist/marker.js   voice marks, music and Revisit notes for books with AI on (ai/tools/marker.ts)
 # The bundles are plain JavaScript, so they are built once on the CI machine's own platform.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build
@@ -55,7 +56,7 @@ FROM node:24-alpine
 RUN apk add --no-cache postgresql17-client tini tzdata ffmpeg python3 \
   && python3 -m venv /opt/yt-dlp \
   && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]" \
-  && mkdir -p /data/files /data/backups /data/voices /data/manga && chown -R node:node /data /opt/yt-dlp
+  && mkdir -p /data/files /data/backups /data/voices /data/manga /data/books /data/novels && chown -R node:node /data /opt/yt-dlp
 ENV YT_DLP=/opt/yt-dlp/bin/yt-dlp
 COPY --from=cliproxy /cliproxy/cli-proxy-api /usr/local/bin/cli-proxy-api
 WORKDIR /app

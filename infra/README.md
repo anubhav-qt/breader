@@ -202,6 +202,36 @@ machine does more with more workers, not more threads: a Ryzen 7 9800X3D finds 2
 with one worker of four threads and 4.4 with four of two, so 4 workers of 2 and about 30 seats.
 Render never has it.
 
+**Books.** Add › Browse catalogue › Books finds novels, light novels and other books in three
+places, all read through the laptop as EPUBs: the novel sites (below), Project Gutenberg (through
+Gutendex, gutendex.com) and Open Library's books that are free to read, each from Standard Ebooks
+or else the Internet Archive's own scan when anyone may download it. Only books that can be read
+show. RanobeDB (ranobedb.org, free for non-commercial use) tells a light novel from a web novel and
+gives each its other names, so one novel on several sites shows once, each site a copy of it; its
+whole list is read once a week. A novel is read a volume at a time: the laptop fetches the volume's
+chapters from its site and makes them one EPUB, which joins the reader's library like a book from
+their device. Volumes made lately are kept in the `books` volume, up to `BOOKS_CACHE_MB` (2048 by
+default), the ones used longest ago going first, and the places' answers in Redis, as MangaDex's
+are. The API keeps each place's first popular page and its covers ready ahead of readers.
+`BOOKS=false` turns it all off. Render never has it.
+
+**Novel sites: LNReader's plugins.** The `novels` service runs LNReader's plugins
+(github.com/LNReader/lnreader-plugins), one for each novel site, every one in its list. Each is the
+site's own code, so they run in a container of their own: no `.env`, no database, and a network
+only the API and the worker share with it (`NOVELS_URL`). Sites behind Cloudflare's "Just a moment"
+page are asked through `flaresolverr`, a browser beside it. The plugins are kept in the `novels`
+volume, and the worker brings them up to date once a day (**Novel plugins** on the status page), as
+a site that moves is mostly mended by its plugin's next version.
+
+**Kept for good.** Every hour, and five minutes after a start, the API downloads every chapter of
+each manga in anyone's library, and makes every volume of each book from Browse catalogue in one,
+and keeps them for good, outside `MANGA_CACHE_MB` and `BOOKS_CACHE_MB`: a series read again asks
+its site for nothing, and only new chapters and volumes are fetched, as they come out. One that's
+left no library is let go of at the next run. **Library keeper** on the status page shows it, and
+runs it at once. The room it takes grows with the libraries: about 1.2 GB for a manga of 200
+chapters, a few megabytes for a novel's volume. The first runs, with whole libraries to fetch, can
+take hours.
+
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
 **Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged
 by `component`), then copy Project settings › Client keys › DSN → `SENTRY_DSN` (laptop and
