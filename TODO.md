@@ -27,3 +27,9 @@
 - [ ] MangaDex: picking a chapter's group by hand; whether a series for adults in My manga hides while 18+ is off; covers on another device need the laptop on.
 - [ ] Your own servers: how many chapters a Suwayomi series opens at a time (now the one before and seven after); its UI login (only no login or a basic one now); reading an OPDS book page by page (its page streaming) before or instead of downloading it; the catalog on the Books shelf too.
 - [ ] Limits: a key library's 100 MB a file, and the header wrapping on the narrowest phones (320px).
+
+## Trackers
+- [ ] AniList: log in with AniList (OAuth), then keep manga and light novels' progress there as they're read (chapters and volumes read, status, score). Its GraphQL API is free; light novels are `type: MANGA, format: NOVEL`.
+- [ ] MyAnimeList: the same through MAL's API v2 (OAuth with PKCE), manga and light novels (`media_type` light_novel and novel).
+- [ ] Goodreads: books read and reading. Goodreads closed its public API in 2020, so likely an import and export of its CSV library file rather than a live sync.
+- [ ] Which tracker a series or book matches: by its ids where the catalogue gives them (MangaDex and RanobeDB link to AniList and MAL), otherwise picked once by the reader.
