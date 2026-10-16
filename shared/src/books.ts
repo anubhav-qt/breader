@@ -98,7 +98,7 @@ export interface BooksState {
 export interface BookCard {
   id: string;
   title: string;
-  /** Its cover through the laptop (/v1/books/item/:id/cover), or null when it has none. */
+  /** Its cover through the laptop (/v1/catalogue/item/:id/cover), or null when it has none. */
   cover: string | null;
   authors: string[];
   status: 'ongoing' | 'completed' | 'hiatus' | 'cancelled' | null;

@@ -8,6 +8,7 @@ import { log } from './log.ts';
 import { accountRoutes } from './routes/account.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { aiRoutes } from './routes/ai.ts';
+import { bookRoutes } from './routes/books.ts';
 import { commentRoutes } from './routes/comments.ts';
 import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
@@ -39,7 +40,7 @@ export function makeApp(deps: Deps) {
       allowMethods: ['GET', 'POST', 'DELETE'],
       allowHeaders: ['content-type', 'authorization'],
       // The server voice's sound says how long it is (routes/speech.ts).
-      exposeHeaders: ['x-samples', 'x-rate'],
+      exposeHeaders: ['x-samples', 'x-rate', 'x-chapters'],
       maxAge: 600,
     }),
   );
@@ -67,6 +68,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', speechRoutes(deps));
   app.route('/v1', panelRoutes(deps));
   app.route('/v1', mangaRoutes(deps));
+  app.route('/v1', bookRoutes(deps));
 
   app.notFound((c) => c.json({ code: 'not_found', message: 'No such endpoint.' }, 404));
   app.onError(onError);

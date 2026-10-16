@@ -118,7 +118,7 @@ export function makeRanobe(opts: { store: Store; fetch?: typeof fetch; gap?: num
         }
         if (titles.length > 0) series.push([s.id, titles]);
       }
-      await sleep(gap, signal);
+      if (n < total) await sleep(gap, signal);
     }
     const kept: Kept = { at: Date.now(), series };
     use(kept);

@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import type { Auth } from './auth.ts';
+import type { Books } from './books/index.ts';
 import type { Db } from './db/client.ts';
 import type { libraries } from './db/schema.ts';
 import type { Env } from './env.ts';
@@ -21,6 +22,8 @@ export interface Deps {
   speech: Speech | null;
   /** Manga: MangaDex, and Suwayomi when set up (manga/); null where it's off, as on the fallback. */
   manga: Manga | null;
+  /** Books: the novel sites, Project Gutenberg and Open Library (books/); null or missing where it's off, as on the fallback. */
+  books?: Books | null;
   /** Manga panels found with the panel model (panels/); null or missing where it's off, as on the fallback. */
   panels?: Panels | null;
 }

@@ -153,13 +153,13 @@ export class Disk {
   /** Kept, or kept again; one kept for good stays so. series: kept for good with that series' files. */
   async put(key: string, data: Uint8Array, series?: string): Promise<void> {
     await this.ready;
-    // Nothing near the whole budget is worth keeping.
-    if (data.byteLength > this.budget / 4) return;
     const name = this.nameOf(key);
     const had = this.index.get(name);
     let group: string | null = null;
     if (had && had.group !== null) group = had.group;
     else if (series !== undefined) group = this.groupOf(series);
+    // Nothing near the whole budget is worth keeping, unless it's kept for good.
+    if (group === null && data.byteLength > this.budget / 4) return;
     const path = this.pathOf(name, group);
     const part = `${path}.${randomBytes(4).toString('hex')}.part`;
     try {
@@ -168,7 +168,7 @@ export class Disk {
       await rename(part, path);
     } catch (err) {
       await rm(part, { force: true }).catch(() => {});
-      log.warn({ err }, 'couldn’t keep a manga page');
+      log.warn({ err }, 'couldn’t keep a file');
       return;
     }
     if (had) {

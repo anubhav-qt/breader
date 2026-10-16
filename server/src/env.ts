@@ -121,6 +121,16 @@ const Env = z.object({
    * It's off without its address.
    */
   SUWAYOMI_URL: z.string().url().optional(),
+
+  /**
+   * Books through the laptop (src/books/): on unless this says false, and always off on the
+   * fallback. Volumes made and chapters read are kept in BOOKS_CACHE_DIR, up to BOOKS_CACHE_MB.
+   */
+  BOOKS: bool.default(true),
+  BOOKS_CACHE_DIR: z.string().default('/data/books'),
+  BOOKS_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).default(2048),
+  /** The novel host (http://novels:4568), LNReader's plugins for novel sites. Without it, books have no novels. */
+  NOVELS_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof Env>;
