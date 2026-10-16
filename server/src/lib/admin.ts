@@ -73,7 +73,7 @@ export async function markRunning(pool: pg.Pool, name: string, running: boolean)
 
 /** The worker's jobs the admin page knows, by name, and who runs them. */
 export const WORKER_JOBS = ['backup', 'restore-drill', 'clean-up', 'storage-check', 'extensions', 'yt-dlp'] as const;
-export const API_JOBS = ['manga-prefetch'] as const;
+export const API_JOBS = ['manga-prefetch', 'keep-library'] as const;
 export const ADMIN_JOBS: readonly string[] = [...WORKER_JOBS, ...API_JOBS];
 /** A job's "run now" command. */
 export const runKind = (name: string) => `run:${name}`;

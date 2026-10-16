@@ -474,7 +474,8 @@ describe('MangaDex through the laptop', () => {
     const again = await b.get(`/v1/manga/chapter/${ch(7)}/1`);
     expect(again.status).toBe(200);
     expect(dex.asked('node1.mangadex.network', /./)).toHaveLength(1);
-    expect((await readdir(dir)).length).toBe(1);
+    // The page, and the folder of what's kept for good.
+    expect(await readdir(dir)).toHaveLength(2);
 
     const saver = await b.get(`/v1/manga/chapter/${ch(7)}/0?saver=1`);
     expect(saver.status).toBe(200);
@@ -651,7 +652,7 @@ describe('pages on disk', () => {
     expect(await disk.get('p2')).toBeNull();
     expect(await disk.get('p3')).toBeNull();
     expect((await disk.get('p1'))?.type).toBe('image/png');
-    expect(disk.size).toEqual({ files: 3, bytes: 3 * 24 * 1024 });
+    expect(disk.size).toEqual({ files: 3, bytes: 3 * 24 * 1024, kept: { files: 0, bytes: 0 } });
     // Too big a part of the whole to be worth keeping.
     await disk.put('big', new Uint8Array(30 * 1024));
     expect(disk.size.files).toBe(3);
@@ -669,7 +670,33 @@ describe('pages on disk', () => {
     await writeFile(join(dir, name), 'not a picture at all');
     const again = new Disk(dir, 1024 * 1024);
     expect(await again.get('p')).toBeNull();
-    expect(await readdir(dir)).toEqual([]);
+    expect(await readdir(dir)).toEqual(['kept']);
+  });
+
+  it('keeps a library series’ pages for good, out of the size, until it leaves every library', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'breader-disk-'));
+    const disk = new Disk(dir, 100 * 1024);
+    const page = (n: number) => { const b = new Uint8Array(24 * 1024); b.set(png(n)); return b; };
+    expect(await disk.pin('a1', 'A')).toBe(false);
+    for (const n of [1, 2, 3]) await disk.put(`a${n}`, page(n));
+    for (const n of [1, 2, 3]) expect(await disk.pin(`a${n}`, 'A')).toBe(true);
+    // The rest fill the size on their own, the oldest of them going.
+    for (const n of [4, 5, 6, 7, 8]) await disk.put(`p${n}`, page(n));
+    expect(disk.size.kept).toEqual({ files: 3, bytes: 3 * 24 * 1024 });
+    for (const n of [1, 2, 3]) expect((await disk.get(`a${n}`))?.data[12]).toBe(n);
+    expect(await disk.get('p4')).toBeNull();
+    // Fetched again, it stays kept for good.
+    await disk.put('a1', page(9));
+    expect(disk.size.kept.files).toBe(3);
+    // Kept across a restart.
+    const again = new Disk(dir, 100 * 1024);
+    expect((await again.get('a1'))?.data[12]).toBe(9);
+    expect(again.size.kept.files).toBe(3);
+    // Its series out of every library: back with the rest, trimmed in turn.
+    expect(await again.keepOnly(['B'])).toBe(3);
+    expect(again.size.kept.files).toBe(0);
+    expect(await readdir(join(dir, 'kept'))).toEqual([]);
+    expect(again.size.bytes).toBeLessThanOrEqual(100 * 1024);
   });
 });
 

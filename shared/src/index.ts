@@ -8,4 +8,5 @@ export * from './limits.ts';
 export * from './manga.ts';
 export * from './music.ts';
 export * from './protocol.ts';
+export * from './remote.ts';
 export * from './report.ts';

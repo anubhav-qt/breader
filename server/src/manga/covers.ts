@@ -120,6 +120,16 @@ export class Covers {
     return this.disk.has(this.nameOf(key, COVER_WIDTHS[COVER_WIDTHS.length - 1]));
   }
 
+  /** Kept for good at every width, with its series' files (disk.ts pin). False when it isn't kept yet. */
+  async pin(key: string, series: string): Promise<boolean> {
+    let all = true;
+    for (const w of COVER_WIDTHS) {
+      const kept = await this.disk.pin(this.nameOf(key, w), series);
+      if (!kept) all = false;
+    }
+    return all;
+  }
+
   /** The prefetch says which list a series is in, the one fetched most often when it's in several. */
   async listed(series: string, freshFor: number): Promise<void> {
     await this.store.set(this.listOf(series), freshFor, LIST_KEPT);

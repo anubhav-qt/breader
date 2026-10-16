@@ -6,8 +6,8 @@ import { copiesOf, measure } from './copies.ts';
 import { Covers, type Cover, type CoverWidth } from './covers.ts';
 import { Disk, type Picture } from './disk.ts';
 import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
-import { makeMangaDex } from './mangadex.ts';
-import { makeSuwayomi, type Suwayomi } from './suwayomi.ts';
+import { coverKey, makeMangaDex, pageKey } from './mangadex.ts';
+import { inTurn, makeSuwayomi, sourceCoverKey, sourcePageKey, type Suwayomi } from './suwayomi.ts';
 
 /*
  * Manga through the laptop: one search across MangaDex and the sources of Breader's Suwayomi server
@@ -39,6 +39,18 @@ export interface Manga {
   copies(id: string, lang: string): Promise<MangaCopies>;
   /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi. */
   warm(): Promise<void>;
+  /**
+   * A chapter of a series in a library, every page of it kept for good with its series' files
+   * (keeper.ts; `series` names them, a MangaDex id or sw:12). Pages kept already cost no call.
+   * Returns how many pages were fetched.
+   */
+  keepChapter(chapter: MangaChapter, series: string): Promise<number>;
+  /** A series' cover kept for good (a MangaDex id, or sw:12), fetched again as any cover is. */
+  keepCover(id: string, series: string): Promise<void>;
+  /** Only these series' files kept for good (disk.ts keepOnly). Returns how many files went back. */
+  keepOnly(series: string[]): Promise<number>;
+  /** What's kept on disk, and of that, what's kept for good. */
+  kept(): Disk['size'];
 }
 
 export interface MangaOptions {
@@ -58,6 +70,11 @@ export interface MangaOptions {
 
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
 const unmeasured = () => new ApiError(503, 'manga_unreachable', 'Its pages couldn’t be measured just now. Try again in a minute.');
+
+/** Each page of a chapter at a time, as it's kept for good. */
+const KEEPING = 3;
+/** How long a source's chapter's pages are counted for, as it's kept: it's asked of its site otherwise. */
+const COUNTED_FOR = 365 * 24 * 3_600_000;
 
 /** How long a series' copies are fresh: groups come and go slowly, and a page's size never changes. */
 const COPIES_FOR = 24 * 3_600_000;
@@ -82,6 +99,33 @@ export function makeManga(opts: MangaOptions): Manga {
   let copyStore: Store = new MemoryStore(500);
   if (store) copyStore = store;
   const copyMemo = new Memo<MangaCopies>(copyStore, 'manga:v1:copies', COPIES_FOR, COPIES_KEPT);
+  const counted = new Memo<number>(copyStore, 'manga:v1:kept-pages', COUNTED_FOR);
+
+  /** A page kept for good, from what's kept already or else fetched. True when it was fetched. */
+  async function keepPage(chapterId: string, n: number, series: string): Promise<boolean> {
+    let key = pageKey(chapterId, n, false);
+    if (chapterId.startsWith('sw:')) key = sourcePageKey(Number(chapterId.slice(3)), n);
+    if (await disk.pin(key, series)) return false;
+    if (chapterId.startsWith('sw:')) {
+      const { suwayomi, n: id } = onSuwayomi(chapterId);
+      await suwayomi.page(id, n);
+    } else {
+      await dex.page(chapterId, n, false);
+    }
+    await disk.pin(key, series);
+    return true;
+  }
+
+  /** How many pages a chapter has: MangaDex says with it, a source's are counted once and remembered. */
+  async function pagesIn(c: MangaChapter): Promise<number> {
+    if (!c.id.startsWith('sw:')) return c.pages;
+    const { suwayomi, n } = onSuwayomi(c.id);
+    return counted.get(c.id, async () => {
+      const pages = await suwayomi.pages(n);
+      if (pages === 0) throw unmeasured();
+      return pages;
+    });
+  }
 
   /** A series' chapters, and how to count and fetch a chapter's pages, wherever it is. */
   async function readFrom(id: string, lang: string) {
@@ -198,5 +242,33 @@ export function makeManga(opts: MangaOptions): Manga {
     },
 
     copies: (id, lang) => copyMemo.get(`${id}:${lang}`, () => measureCopies(id, lang)),
+
+    async keepChapter(chapter, series) {
+      const pages = await pagesIn(chapter);
+      const all: number[] = [];
+      for (let n = 0; n < pages; n++) all.push(n);
+      let fetched = 0;
+      await inTurn(all, KEEPING, async (n) => {
+        const got = await keepPage(chapter.id, n, series);
+        if (got) fetched += 1;
+      });
+      return fetched;
+    },
+
+    async keepCover(id, series) {
+      if (id.startsWith('sw:')) {
+        const { suwayomi, n } = onSuwayomi(id);
+        await suwayomi.cover(n, 512);
+        await covers.pin(sourceCoverKey(n), series);
+        return;
+      }
+      const s = await dex.series(id, true);
+      if (!s.cover) return;
+      await dex.cover(id, s.cover, '512');
+      await covers.pin(coverKey(id, s.cover), series);
+    },
+
+    keepOnly: (series) => disk.keepOnly(series),
+    kept: () => disk.size,
   };
 }

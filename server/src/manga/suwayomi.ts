@@ -154,6 +154,16 @@ export interface SuwayomiOptions {
   browseWithin?: number;
 }
 
+/** What a page of a chapter on a source is kept on disk under. */
+export function sourcePageKey(chapterId: number, n: number): string {
+  return `sw-page:${chapterId}:${n}`;
+}
+
+/** What a series' cover is kept under (covers.ts): its id, sw:12. */
+export function sourceCoverKey(id: number): string {
+  return `sw:${id}`;
+}
+
 const notFound = () => new ApiError(404, 'manga_not_found', 'That series isn’t there any more.');
 const noPage = () => new ApiError(404, 'manga_not_found', 'That chapter has no page there.');
 const busy = () => new ApiError(503, 'manga_busy', 'That source is busy just now. Try again in a minute.');
@@ -286,7 +296,7 @@ function wants(card: SourceCard, w: Wanted): boolean {
 }
 
 /** fn for each of these, `n` at a time, the answers in their order. */
-async function inTurn<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+export async function inTurn<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   const one = async () => {
@@ -573,7 +583,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       }
     }
     for (const id of covers) {
-      if (await opts.covers.has(`sw:${id}`)) continue;
+      if (await opts.covers.has(sourceCoverKey(id))) continue;
       try {
         await coverOf(id, 512);
       } catch {
@@ -714,7 +724,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
   async function coverOf(id: number, width: CoverWidth, early?: number): Promise<Cover> {
     await allowed(id);
-    return opts.covers.get(`sw:${id}`, `sw:${id}`, width, () => picture(`/api/v1/manga/${id}/thumbnail`), early);
+    return opts.covers.get(sourceCoverKey(id), sourceCoverKey(id), width, () => picture(`/api/v1/manga/${id}/thumbnail`), early);
   }
 
   return {
@@ -779,7 +789,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
     async page(chapterId, n) {
       const { source } = await allowed(await seriesOf(chapterId));
-      return opts.disk.keep(`sw-page:${chapterId}:${n}`, async () => {
+      return opts.disk.keep(sourcePageKey(chapterId, n), async () => {
         const paths = await pageList(chapterId, source);
         try {
           if (n >= paths.length) throw noPage();

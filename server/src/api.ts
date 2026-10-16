@@ -4,13 +4,15 @@ import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
 import { loadEnv } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
-import { due, recordError, recordOk } from './jobs/runs.ts';
+import { KEEP_EVERY, libraryUrls } from './jobs/keep.ts';
+import { due, recordError, recordLive, recordOk } from './jobs/runs.ts';
 import { asJob, runKind, takeCommands } from './lib/admin.ts';
 import { connectRedis, type Redis } from './lib/cache.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
+import { keepManga, type KeptManga } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makePanels } from './panels/index.ts';
 import { makeSpeech } from './speech/index.ts';
@@ -87,11 +89,51 @@ if (manga) {
   prefetching.signal.addEventListener('abort', () => clearTimeout(soon));
   // Run now, from the admin page.
   commands = setInterval(() => {
-    void takeCommands(primary.pool, [runKind('manga-prefetch')]).then(
-      (cs) => { if (cs.length) void run(true); },
+    void takeCommands(primary.pool, [runKind('manga-prefetch'), runKind('keep-library')]).then(
+      (cs) => {
+        if (cs.some((c) => c.kind === runKind('manga-prefetch'))) void run(true);
+        if (cs.some((c) => c.kind === runKind('keep-library'))) void keep(true);
+      },
       (err) => log.warn({ err }, 'admin commands check failed'),
     );
   }, 5_000);
+}
+
+// Every manga in any library, kept on the laptop for good, and each new chapter as it comes out
+// (manga/keeper.ts): soon after a start, then an hour after each run ends. The first runs are long,
+// so the admin page is told how far it's got once a minute.
+const keeping = new AbortController();
+let keepAt: NodeJS.Timeout | undefined;
+let keepRunning = false;
+async function keep(now = false) {
+  if (!manga || keepRunning) return;
+  keepRunning = true;
+  let toldAt = 0;
+  const tell = (sofar: KeptManga) => {
+    if (Date.now() - toldAt < 60_000) return;
+    toldAt = Date.now();
+    void recordLive(primary.pool, 'keep-library', sofar).catch(() => {});
+  };
+  try {
+    const keepAll = async () => keepManga(manga, await libraryUrls(primary.pool), keeping.signal, tell);
+    const r = await asJob(primary.pool, 'keep-library', keepAll, { evenIfOff: now });
+    if (!r) return;
+    log.info(r, 'kept every library’s manga');
+    if (!keeping.signal.aborted) await recordOk(primary.pool, 'keep-library', r);
+  } catch (err) {
+    log.error({ err }, 'keeping the libraries’ manga failed');
+    report(err, { job: 'keep-library' });
+    await recordError(primary.pool, 'keep-library', err).catch(() => {});
+  } finally {
+    keepRunning = false;
+  }
+}
+if (manga) {
+  const again = () => {
+    if (keeping.signal.aborted) return;
+    keepAt = setTimeout(() => void keep().finally(again), KEEP_EVERY);
+  };
+  keepAt = setTimeout(() => void keep().finally(again), 5 * 60_000);
 }
 
 const stop = () => {
@@ -101,6 +143,8 @@ const stop = () => {
   clearTimeout(prefetchAt);
   clearInterval(commands);
   prefetching.abort();
+  clearTimeout(keepAt);
+  keeping.abort();
   void speech?.close();
   void panels?.close();
   void redis?.close();

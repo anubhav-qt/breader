@@ -114,6 +114,10 @@ describe('the daily prefetch', () => {
       sourcePages: vi.fn(async (id: string) => { asked.push(`pages ${id}`); return 3; }),
       sourcePage: say('page'),
       warm: async () => {},
+      keepChapter: say('keep'),
+      keepCover: say('keep'),
+      keepOnly: say('keep'),
+      kept: () => ({ files: 0, bytes: 0, kept: { files: 0, bytes: 0 } }),
     } satisfies Manga;
     return { manga, asked };
   }

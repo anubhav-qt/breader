@@ -126,6 +126,7 @@ const JOBS: Record<string, { name: string; about: string }> = {
   'storage-check': { name: 'R2 check', about: 'Once a day, puts back any file missing from R2, from the ThinkPad’s copy.' },
   'extensions': { name: 'Manga extensions', about: 'Once a day, updates the manga sites’ extensions to their newest versions.' },
   'manga-prefetch': { name: 'Manga prefetch', about: 'At 4 am, fetches Browse’s lists ahead, so they open at once.' },
+  'keep-library': { name: 'Library keeper', about: 'Every hour, downloads every chapter of the manga in any library, and keeps it for good.' },
   'yt-dlp': { name: 'yt-dlp update', about: 'Keeps the downloader the music finds its tracks with up to date.' },
 };
 

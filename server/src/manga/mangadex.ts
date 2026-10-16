@@ -156,6 +156,18 @@ export interface MangaDexOptions {
   store?: Store | null;
 }
 
+/** What a page is kept on disk under: its data saver's copy apart. */
+export function pageKey(chapterId: string, n: number, saver: boolean): string {
+  let copy = 'd';
+  if (saver) copy = 's';
+  return `page:${chapterId}:${copy}:${n}`;
+}
+
+/** What a series' cover is kept under (covers.ts), by its file. */
+export function coverKey(mangaId: string, file: string): string {
+  return `md:${mangaId}:${file}`;
+}
+
 const notFound = () => new ApiError(404, 'manga_not_found', 'MangaDex doesn’t have that, or it’s been taken down.');
 const busy = () => new ApiError(503, 'manga_busy', 'MangaDex is busy just now. Try again in a minute.');
 const unreachable = () => new ApiError(503, 'manga_unreachable', 'Breader can’t reach MangaDex just now. Try again in a minute.');
@@ -687,7 +699,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
 
     async page(chapterId, n, saver) {
       await allowChapter(chapterId);
-      return disk.keep(`page:${chapterId}:${saver ? 's' : 'd'}:${n}`, async () => {
+      return disk.keep(pageKey(chapterId, n, saver), async () => {
         const from = async (fresh: boolean) => {
           const home = await atHome(chapterId, fresh);
           const files = saver ? home.chapter.dataSaver : home.chapter.data;
@@ -709,7 +721,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       await allowed(mangaId);
       // Both widths are made from MangaDex's 512 (covers.ts): one fetch, and a 256 as sharp as its own.
       const original = () => picture(`${UPLOADS}/covers/${mangaId}/${file}.512.jpg`, false);
-      return opts.covers.get(`md:${mangaId}:${file}`, mangaId, Number(size) as CoverWidth, original, early);
+      return opts.covers.get(coverKey(mangaId, file), mangaId, Number(size) as CoverWidth, original, early);
     },
 
     async warm() {

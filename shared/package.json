@@ -16,6 +16,7 @@
     "./music": "./src/music.ts",
     "./panels": "./src/panels.ts",
     "./protocol": "./src/protocol.ts",
+    "./remote": "./src/remote.ts",
     "./report": "./src/report.ts",
     "./speech": "./src/speech.ts",
     "./voices": "./src/voices.ts",
