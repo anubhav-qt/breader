@@ -1,4 +1,4 @@
-import { MANGA_KINDS, namesOf, sameKind, seriesName, type MangaFound, type MangaFoundIn, type MangaKind, type MangaSearchResult, type MangaSort } from '@breader/shared';
+import { MANGA_KINDS, namesOf, sameKind, seriesName, type MangaFoundIn, type MangaKind, type MangaSort, type SeriesNames } from '@breader/shared';
 import { log } from '../log.ts';
 
 /*
@@ -7,7 +7,8 @@ import { log } from '../log.ts';
  * together. The same series found in three places comes three times, side by side, each with the
  * names it goes by keyed (seriesName), so the app shows it as one: those whose title is what was
  * searched for first, then those found in more places, then the places taken in turn. No place
- * goes first because of what it is.
+ * goes first because of what it is. Books are found the same way (books/index.ts), as their own
+ * cards.
  */
 
 /** How long a search waits for each place. One slower is asked again with the next lot, by when what it found is kept. */
@@ -47,7 +48,7 @@ export function wantedKind(kind: MangaKind | null, w: Wanted): boolean {
 }
 
 /** A series going by these names is one a search wants: any, unless it asked for some names only. */
-export function wantedName(titles: string[], w: Wanted): boolean {
+export function wantedName(titles: string[], w: { names?: string[] }): boolean {
   if (!w.names) return true;
   for (const t of titles) {
     if (w.names.includes(seriesName(t).key)) return true;
@@ -90,37 +91,48 @@ export function namedLike(q: string, names: Iterable<string>): boolean {
   return false;
 }
 
+/** What a place finds: a card of some kind, or of none known, and set aside (a doujinshi) or not. */
+export interface Findable {
+  card: { side: boolean; kind: string | null };
+}
+
 /** A series a place found, and the names it goes by there, to tell the same series in another place. */
-export interface Found {
-  item: MangaFoundIn;
+export interface Found<T extends Findable = MangaFoundIn> {
+  item: T;
   names: string[];
 }
 
-export interface Lot {
-  found: Found[];
+export interface Lot<T extends Findable = MangaFoundIn> {
+  found: Found<T>[];
   /** Where that place carries on, or null when it has nothing more. */
   next: string | null;
 }
 
 /** One place a search looks. */
-export interface Place {
+export interface Place<T extends Findable = MangaFoundIn> {
   /** Its part of where a search carries on: md, or sw and the source's id. */
   key: string;
   /** Shown under the title of each series it found. */
   name: string;
   /** Its next lot, from where it had got to ('0' at the start). */
-  lot(at: string): Promise<Lot>;
+  lot(at: string): Promise<Lot<T>>;
 }
 
-interface Answer {
-  lot: Lot | null;
+/** What a search found, and where it carries on, or null once every place is done. */
+export interface Result<T extends Findable = MangaFoundIn> {
+  items: Array<T & SeriesNames>;
+  next: string | null;
+}
+
+interface Answer<T extends Findable> {
+  lot: Lot<T> | null;
   /** Didn't answer in time. */
   late: boolean;
   error: unknown;
 }
 
 /** A place's lot, or that it was late or failed. */
-function within(going: Promise<Lot>, ms: number): Promise<Answer> {
+function within<T extends Findable>(going: Promise<Lot<T>>, ms: number): Promise<Answer<T>> {
   return new Promise((done) => {
     const timer = setTimeout(() => done({ lot: null, late: true, error: null }), ms);
     going.then(
@@ -140,9 +152,9 @@ function within(going: Promise<Lot>, ms: number): Promise<Answer> {
  * Each place's lot, or that it was late or failed: each waited for up to `deadline`, and once one
  * has brought something, the rest only `grace` longer. onLot: each lot as it comes, in time.
  */
-function answersOf(going: Promise<Lot>[], deadline: number, grace: number | null, onLot?: (i: number, lot: Lot) => void): Promise<Answer[]> {
+function answersOf<T extends Findable>(going: Promise<Lot<T>>[], deadline: number, grace: number | null, onLot?: (i: number, lot: Lot<T>) => void): Promise<Answer<T>[]> {
   return new Promise((done) => {
-    const answers: Array<Answer | undefined> = going.map(() => undefined);
+    const answers: Array<Answer<T> | undefined> = going.map(() => undefined);
     const timers: Array<ReturnType<typeof setTimeout>> = [];
     let left = going.length;
     let over = false;
@@ -183,7 +195,7 @@ function answersOf(going: Promise<Lot>[], deadline: number, grace: number | null
 }
 
 /** Waits until the first of these lots comes or fails, or ms pass. */
-function firstOf(going: Promise<Lot>[], ms: number): Promise<void> {
+function firstOf(going: Promise<unknown>[], ms: number): Promise<void> {
   return new Promise((done) => {
     const timer = setTimeout(done, ms);
     const stop = () => {
@@ -197,7 +209,7 @@ function firstOf(going: Promise<Lot>[], ms: number): Promise<void> {
 }
 
 /** Whether every place asked was late. */
-function allLate(answers: Answer[]): boolean {
+function allLate(answers: Answer<Findable>[]): boolean {
   if (answers.length === 0) return false;
   for (const a of answers) {
     if (!a.late) return false;
@@ -206,7 +218,7 @@ function allLate(answers: Answer[]): boolean {
 }
 
 /** Where each place had got to, by its key. Without next, every place from the start. */
-function startsAt(places: Place[], next: string | undefined): Map<string, string> {
+function startsAt(places: Array<{ key: string }>, next: string | undefined): Map<string, string> {
   const at = new Map<string, string>();
   if (!next) {
     for (const p of places) at.set(p.key, '0');
@@ -220,15 +232,15 @@ function startsAt(places: Place[], next: string | undefined): Map<string, string
 }
 
 /** Series that go by the same name, found in one place or several. */
-interface Group {
+interface Group<T extends Findable> {
   side: boolean;
   /** The first known kind of its series: one of another kind is another series. */
-  kind: MangaKind | null;
+  kind: string | null;
   names: Set<string>;
   places: Set<string>;
   /** Its first series' turn. */
   first: number;
-  items: MangaFound[];
+  items: Array<T & SeriesNames>;
 }
 
 /**
@@ -236,18 +248,18 @@ interface Group {
  * cards side by side. Doujinshi and anthologies go last, and make groups of their own. strict: a
  * search by name keeps only series that go by it (namedLike), any of a group's names will do.
  */
-export function rank(q: string | undefined, lots: Array<{ place: Place; found: Found[] }>, strict = false): MangaFound[] {
+export function rank<T extends Findable = MangaFoundIn>(q: string | undefined, lots: Array<{ place: Place<T>; found: Found<T>[] }>, strict = false): Array<T & SeriesNames> {
   // Each place's series take turns: every place's first, then every place's second, and so on.
-  const turns: Array<{ found: Found; place: string; at: number }> = [];
+  const turns: Array<{ found: Found<T>; place: string; at: number }> = [];
   for (let p = 0; p < lots.length; p++) {
     const { place, found } = lots[p];
     for (let i = 0; i < found.length; i++) turns.push({ found: found[i], place: place.key, at: i * lots.length + p });
   }
   turns.sort((a, b) => a.at - b.at);
 
-  const groups: Group[] = [];
+  const groups: Group<T>[] = [];
   for (const turn of turns) {
-    const item: MangaFound = { ...turn.found.item, ...namesOf(turn.found.names) };
+    const item: T & SeriesNames = { ...turn.found.item, ...namesOf(turn.found.names) };
     const side = item.card.side;
     const kind = item.card.kind;
     const names = item.keys;
@@ -263,7 +275,7 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
   }
 
   const wanted = seriesName(q ?? '').key;
-  const exact = (g: Group) => wanted !== '' && g.names.has(wanted);
+  const exact = (g: Group<T>) => wanted !== '' && g.names.has(wanted);
   groups.sort((a, b) => {
     if (a.side !== b.side) {
       if (a.side) return 1;
@@ -287,17 +299,26 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
  * the answer. When every place is late, a lot with nothing in it would only be asked for again, so
  * it waits a while longer for the first to come. grace: null waits out the deadline for every place.
  * strict: only series going by what was searched for (rank). onSome: what's come so far, as each
- * place brings something, before the lot's whole.
+ * place brings something, before the lot's whole. most: the most places asked, the first by name.
  */
-export async function find(places: Place[], q: string | undefined, next: string | undefined, deadline = DEADLINE, grace: number | null = GRACE, strict = false, onSome?: (items: MangaFound[]) => void): Promise<MangaSearchResult> {
+export async function find<T extends Findable = MangaFoundIn>(
+  places: Place<T>[],
+  q: string | undefined,
+  next: string | undefined,
+  deadline = DEADLINE,
+  grace: number | null = GRACE,
+  strict = false,
+  onSome?: (items: Array<T & SeriesNames>) => void,
+  most = MOST_PLACES,
+): Promise<Result<T>> {
   const byName = [...places].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
-  const known = byName.slice(0, MOST_PLACES);
+  const known = byName.slice(0, most);
   const at = startsAt(known, next);
   const asked = known.filter((p) => at.has(p.key));
   const going = asked.map((p) => p.lot(at.get(p.key)!));
   // What's come so far, ranked as the whole lot will be, each time a place brings something.
-  const come: Array<{ place: Place; found: Found[] } | null> = asked.map(() => null);
-  let onLot: ((i: number, lot: Lot) => void) | undefined;
+  const come: Array<{ place: Place<T>; found: Found<T>[] } | null> = asked.map(() => null);
+  let onLot: ((i: number, lot: Lot<T>) => void) | undefined;
   if (onSome) {
     onLot = (i, lot) => {
       if (lot.found.length === 0) return;
@@ -313,7 +334,7 @@ export async function find(places: Place[], q: string | undefined, next: string 
     answers = await Promise.all(going.map((g) => within(g, 0)));
   }
 
-  const lots: Array<{ place: Place; found: Found[] }> = [];
+  const lots: Array<{ place: Place<T>; found: Found<T>[] }> = [];
   const carry: string[] = [];
   let answered = false;
   let failed: unknown = null;

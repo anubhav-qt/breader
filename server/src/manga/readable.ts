@@ -10,7 +10,7 @@ import type { MangaCard, MangaChapter } from '@breader/shared';
 const SPARE = 2;
 
 /** The first chapter from 1 that none of these is, or is part of. */
-export function firstMissing(chapters: MangaChapter[]): number {
+export function firstMissing(chapters: Array<Pick<MangaChapter, 'chapter'>>): number {
   const have = new Set<number>();
   for (const c of chapters) {
     if (c.chapter === null) continue;
@@ -23,7 +23,7 @@ export function firstMissing(chapters: MangaChapter[]): number {
 }
 
 /** The newest whole number among these chapters: 0 when none is numbered. */
-export function highest(chapters: MangaChapter[]): number {
+export function highest(chapters: Array<Pick<MangaChapter, 'chapter'>>): number {
   let top = 0;
   for (const c of chapters) {
     if (c.chapter === null) continue;

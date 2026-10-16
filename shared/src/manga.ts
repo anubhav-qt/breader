@@ -215,8 +215,8 @@ export function seriesName(title: string): { key: string; edition: string | null
   return { key, edition };
 }
 
-/** Two kinds one series could have: the same, or either not known. */
-export function sameKind(a: MangaKind | null, b: MangaKind | null): boolean {
+/** Two kinds one series (or book) could have: the same, or either not known. */
+export function sameKind<K extends string>(a: K | null, b: K | null): boolean {
   if (a === null || b === null) return true;
   return a === b;
 }

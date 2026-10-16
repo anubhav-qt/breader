@@ -265,7 +265,7 @@ describe('the novel host', () => {
 
   it('gives a novel with its chapters, and the pages of chapters after', async () => {
     const { app } = hostFor({});
-    const novel = await (await app.request('/novel?plugin=fake&path=n%2Fone')).json();
+    const novel = (await (await app.request('/novel?plugin=fake&path=n%2Fone')).json()) as { chapters: unknown[] };
     expect(novel).toMatchObject({ name: 'The Novel', path: 'n/one', author: 'Someone', status: 'Ongoing', totalPages: 3, link: 'https://fake.test/n/one' });
     expect(novel.chapters).toEqual([
       { name: 'Chapter 1', path: 'n/one/1', number: 1, page: null, at: null },

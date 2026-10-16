@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CATALOGUE_URL } from './books.ts';
 import { GenreList } from './genres.ts';
 import { PREFS_CHARS, SPEECH_CHARS, SYNC } from './limits.ts';
 
@@ -48,8 +49,11 @@ export const Book = z.object({
   author: z.string().max(300),
   format: Format,
   source: Source,
-  /** Samples: the bundled file, e.g. /samples/alice.epub. Remote books: where they're read (REMOTE_URL). */
-  url: z.union([z.string().regex(/^\/samples\/[\w.-]+$/), z.string().regex(REMOTE_URL)]).optional(),
+  /**
+   * Samples: the bundled file, e.g. /samples/alice.epub. Remote books: where they're read
+   * (REMOTE_URL). A file book added from the catalogue: which of its volumes it is (CATALOGUE_URL).
+   */
+  url: z.union([z.string().regex(/^\/samples\/[\w.-]+$/), z.string().regex(REMOTE_URL), z.string().regex(CATALOGUE_URL)]).optional(),
   shared: z.boolean(),
   /** Taken out of the reader's own books but left on the Shared Library. */
   sharedOnly: z.boolean().optional(),

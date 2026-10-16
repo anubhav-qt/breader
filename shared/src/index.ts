@@ -1,6 +1,7 @@
 export * from './accounts.ts';
 export * from './admin.ts';
 export * from './ai.ts';
+export * from './books.ts';
 export * from './comments.ts';
 export * from './genres.ts';
 export * from './key.ts';
