@@ -60,3 +60,17 @@ export async function updateExtensions(url: string, fetchFn: typeof fetch = fetc
   if (failed.length > 0 && updated.length === 0) throw new Error(`No extension could be updated: ${failed.join(', ')}`);
   return { updated, failed };
 }
+
+/**
+ * The novel host's plugins brought up to date (novels/plugins.ts update), as Suwayomi's extensions
+ * are, once a day. Says which were updated and which couldn't be, or null when none had a newer version.
+ */
+export async function updateNovelPlugins(url: string, fetchFn: typeof fetch = fetch): Promise<{ updated: string[]; failed: string[] } | null> {
+  const res = await fetchFn(`${url.replace(/\/+$/, '')}/update`, { method: 'POST', signal: AbortSignal.timeout(300_000) });
+  if (!res.ok) throw new Error(`The novel host said ${res.status}.`);
+  const r = (await res.json()) as { updated: string[]; failed: string[] } | null;
+  if (!r) return null;
+  if (r.updated.length > 0) log.info({ updated: r.updated }, 'updated the novel plugins');
+  if (r.failed.length > 0 && r.updated.length === 0) throw new Error(`No novel plugin could be updated: ${r.failed.join(', ')}`);
+  return r;
+}

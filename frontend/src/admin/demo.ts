@@ -137,6 +137,7 @@ function statusFor(scene: Scene): Status {
       job('clean-up', 7 * 3600),
       job('storage-check', 40 * 60),
       job('extensions', 9 * 3600),
+      job('novel-plugins', 9 * 3600 + 300),
       job('manga-prefetch', 20 * 60),
       job('keep-library', 35 * 60),
       job('ai-marker', 10),

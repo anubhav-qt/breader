@@ -4,7 +4,7 @@ import { backupIfDue } from './jobs/backup.ts';
 import { pruneReadFeed } from './jobs/chores.ts';
 import { cleanUp } from './jobs/cleanup.ts';
 import { restoreDrill } from './jobs/drill.ts';
-import { updateExtensions } from './jobs/extensions.ts';
+import { updateExtensions, updateNovelPlugins } from './jobs/extensions.ts';
 import { startCliproxy } from './jobs/cliproxy.ts';
 import { startMarker } from './jobs/marker.ts';
 import { repairStorage } from './jobs/repair.ts';
@@ -98,6 +98,15 @@ if (env.SUWAYOMI_URL) {
   const soon = setTimeout(() => void extensions?.(), 15 * 60_000);
   stop.signal.addEventListener('abort', () => clearTimeout(soon));
 }
+// And the novel host's plugins, the first time twenty minutes after start.
+let novelPlugins: ((now?: boolean) => Promise<void>) | null = null;
+if (env.NOVELS_URL) {
+  const url = env.NOVELS_URL;
+  novelPlugins = job('novel-plugins', () => updateNovelPlugins(url));
+  every(24 * 3_600_000, 'novel plugin update', novelPlugins);
+  const soon = setTimeout(() => void novelPlugins?.(), 20 * 60_000);
+  stop.signal.addEventListener('abort', () => clearTimeout(soon));
+}
 // The monitor alerts when this goes quiet: the worker stopped, or the copy fell a minute behind.
 if (env.HEARTBEAT_URL) {
   const url = env.HEARTBEAT_URL;
@@ -118,6 +127,7 @@ const runNow: Record<string, ((now?: boolean) => Promise<void>) | null> = {
   'clean-up': cleanUpJob,
   'storage-check': repair,
   'extensions': extensions,
+  'novel-plugins': novelPlugins,
   'yt-dlp': ytDlp,
 };
 const mine = WORKER_JOBS.filter((n) => runNow[n]).map(runKind);
