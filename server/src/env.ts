@@ -109,8 +109,8 @@ const Env = z.object({
   PANEL_SEATS: z.coerce.number().int().min(1).max(100).default(8),
 
   /**
-   * Manga through the laptop (src/manga/): on unless this says false, and always off on the
-   * fallback. Pages read are kept in MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used longest
+   * Manga through the server (src/manga/): on unless this says false. The fallback reads MangaDex
+   * alone, as SUWAYOMI_URL is the laptop's. Pages read are kept in MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used longest
    * ago going first.
    */
   MANGADEX: bool.default(true),

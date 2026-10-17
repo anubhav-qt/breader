@@ -138,7 +138,8 @@ ago), the API fetches the first 50 series of each of Browse's orders, with every
 each kind alone, and everything their sheets ask for: other places, copies, chapters and covers.
 The status page shows it as **Manga prefetch**. Series for adults show only to readers who turn on
 **Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
-Render never has it: its free plan hasn't the bandwidth for pages.
+Render has it too, from MangaDex alone (no Suwayomi there, so series from its sites open only from
+the laptop), without the panel model: readers' devices find panels there, and panels kept serve all.
 
 **Manga sources: Suwayomi.** One more service holds manga for every reader: `suwayomi` runs
 Mihon's extensions, from the Keiyoushi store. The API asks it itself, so a manga search looks in

@@ -1,11 +1,11 @@
 import { MANGA_KINDS, type MangaChapters, type MangaCopies, type MangaFound, type MangaKind, type MangaSearchEvent, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
-import { api, ApiError, laptopUrl } from './api';
+import { api, ApiError, mangaUrl } from './api';
 import { readLocal, writeLocal } from './store';
 
 /*
- * Manga, through Breader's own computer (server routes/manga.ts): MangaDex lets only its own site
- * fetch its pages in a browser, and Breader's Suwayomi isn't open to readers. The laptop alone has
- * them, so it's asked and nothing else.
+ * Manga, through Breader's own server (server routes/manga.ts): MangaDex lets only its own site
+ * fetch its pages in a browser, and Breader's Suwayomi isn't open to readers. The laptop has both;
+ * the fallback, asked when the laptop is away, has MangaDex alone (lib/api.ts).
  */
 
 const OFF = 'Breader’s computer can’t be reached right now. Offline chapters still open.';
@@ -72,11 +72,11 @@ async function* eventsOf(res: Response): AsyncGenerator<MangaSearchEvent> {
 }
 
 export const mangadex = {
-  state: () => ask(() => api.laptop.get<MangaState>('/v1/manga')),
-  search: (s: MangaSearch) => ask(() => api.laptop.get<MangaSearchResult>(searchPath(s), 20_000)),
+  state: () => ask(() => api.manga.get<MangaState>('/v1/manga')),
+  search: (s: MangaSearch) => ask(() => api.manga.get<MangaSearchResult>(searchPath(s), 20_000)),
   /** The same lot, with what's found so far given to onSome each time a place brings something. */
   async searchAsItComes(s: MangaSearch, onSome: (items: MangaFound[]) => void): Promise<MangaSearchResult> {
-    const res = await ask(() => api.laptop.raw(searchPath(s, true), undefined, 20_000));
+    const res = await ask(() => api.manga.raw(searchPath(s, true), undefined, 20_000));
     // A server from before streaming answers with the whole lot at once.
     if (!res.body || !res.headers.get('content-type')?.includes('text/event-stream')) return res.json() as Promise<MangaSearchResult>;
     for await (const e of eventsOf(res)) {
@@ -86,15 +86,15 @@ export const mangadex = {
     }
     throw new ApiError(503, 'manga_cut', 'The search was cut off. Try again.');
   },
-  series: (id: string, adult: boolean) => ask(() => api.laptop.get<MangaSeries>(`/v1/manga/series/${id}${adult ? '?adult=1' : ''}`, 20_000)),
+  series: (id: string, adult: boolean) => ask(() => api.manga.get<MangaSeries>(`/v1/manga/series/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter in a language. A long series is several calls to MangaDex, so it can take a while. */
-  chapters: (id: string, lang: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),
+  chapters: (id: string, lang: string) => ask(() => api.manga.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),
   /** Its copies in a language, each group's pages measured: a few pages fetched the first time. */
-  copies: (id: string, lang: string) => ask(() => api.laptop.get<MangaCopies>(`/v1/manga/series/${id}/copies?lang=${lang}`, 90_000)),
+  copies: (id: string, lang: string) => ask(() => api.manga.get<MangaCopies>(`/v1/manga/series/${id}/copies?lang=${lang}`, 90_000)),
   /** A page's picture; the data saver's copy is smaller. */
   page: async (chapterId: string, n: number, saver: boolean) =>
-    (await ask(() => api.laptop.raw(`/v1/manga/chapter/${chapterId}/${n}${saver ? '?saver=1' : ''}`, undefined, 45_000))).blob(),
-  coverUrl: (id: string, file: string, size: 256 | 512) => laptopUrl(`/v1/manga/cover/${id}/${encodeURIComponent(file)}?size=${size}`),
+    (await ask(() => api.manga.raw(`/v1/manga/chapter/${chapterId}/${n}${saver ? '?saver=1' : ''}`, undefined, 45_000))).blob(),
+  coverUrl: (id: string, file: string, size: 256 | 512) => mangaUrl(`/v1/manga/cover/${id}/${encodeURIComponent(file)}?size=${size}`),
   async cover(id: string, file: string, size: 256 | 512): Promise<Blob | undefined> {
     try {
       const res = await fetch(mangadex.coverUrl(id, file, size));
@@ -110,23 +110,23 @@ export const mangadex = {
  * its pages.
  */
 export const sources = {
-  series: (id: string, adult: boolean) => ask(() => api.laptop.get<SourceSeries>(`/v1/manga/source/${id}${adult ? '?adult=1' : ''}`, 20_000)),
+  series: (id: string, adult: boolean) => ask(() => api.manga.get<SourceSeries>(`/v1/manga/source/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   /** Every chapter. Suwayomi asks its source for them, so it can take a while. */
-  chapters: (id: string) => ask(() => api.laptop.get<MangaChapters>(`/v1/manga/source/${id}/chapters`, 60_000)),
+  chapters: (id: string) => ask(() => api.manga.get<MangaChapters>(`/v1/manga/source/${id}/chapters`, 60_000)),
   /** Its copies, each group's pages measured: a few pages fetched the first time. */
-  copies: (id: string) => ask(() => api.laptop.get<MangaCopies>(`/v1/manga/source/${id}/copies`, 90_000)),
+  copies: (id: string) => ask(() => api.manga.get<MangaCopies>(`/v1/manga/source/${id}/copies`, 90_000)),
   /** How many pages a chapter has. Suwayomi learns it from its source, a chapter at a time. */
   async pages(chapterId: string): Promise<number> {
-    const r = await ask(() => api.laptop.get<{ pages: number }>(`/v1/manga/source/chapter/${chapterId}`, 45_000));
+    const r = await ask(() => api.manga.get<{ pages: number }>(`/v1/manga/source/chapter/${chapterId}`, 45_000));
     return r.pages;
   },
   /** Page n of a chapter (from 0), as a picture. */
   async page(chapterId: string, n: number): Promise<Blob> {
-    const res = await ask(() => api.laptop.raw(`/v1/manga/source/chapter/${chapterId}/${n}`, undefined, 45_000));
+    const res = await ask(() => api.manga.raw(`/v1/manga/source/chapter/${chapterId}/${n}`, undefined, 45_000));
     return res.blob();
   },
-  /** A cover's address on the laptop, from its path in a card (/v1/manga/source/sw:44/cover). */
-  coverUrl: (path: string) => laptopUrl(path),
+  /** A cover's address on the server, from its path in a card (/v1/manga/source/sw:44/cover). */
+  coverUrl: (path: string) => mangaUrl(path),
   async cover(path: string): Promise<Blob | undefined> {
     try {
       const res = await fetch(sources.coverUrl(path));

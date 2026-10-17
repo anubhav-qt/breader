@@ -24,16 +24,18 @@ const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // The server voice runs on the laptop only: Render's free plan hasn't the processor for it.
 const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(env) : null;
-// Manga too: its pages go through here, and the fallback's free plan hasn't the bandwidth.
-const mangaOn = env.ROLE === 'laptop' && env.MANGADEX;
+// Manga on both: the fallback reads MangaDex alone, as it has no Suwayomi of its own.
+const mangaOn = env.MANGADEX;
 // Its answers are kept in Redis when there's one, so they outlast a restart.
 let redis: Redis | null = null;
 if (mangaOn && env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: env.MANGA_CACHE_MB * 1024 * 1024, store: redis };
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
 const manga = mangaOn ? makeManga(mangaOptions) : null;
-// Manga panels from the panel model, for any reader with a seat, where manga is on.
-const panels = manga ? makePanels(env) : null;
+// Manga panels from the panel model, for any reader with a seat, on the laptop only: the fallback's
+// free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
+let panels: ReturnType<typeof makePanels> = null;
+if (manga && env.ROLE === 'laptop') panels = makePanels(env);
 const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga, panels };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
