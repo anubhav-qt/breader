@@ -346,7 +346,12 @@ tunnel of its own; panels aren't found there.
    ~/breader/infra/aws/extensions.sh     # installs MangaFire, Weeb Central and Asura Scans
    ```
 5. Render › Environment: `SUWAYOMI_URL=https://breader:<the password>@sw.breader.example`, then
-   Manual Deploy. A series from MangaFire opens at `fb.breader.example`.
+   Manual Deploy. A series from Weeb Central opens at `fb.breader.example`.
+
+MangaFire turns AWS's addresses away (Cloudflare), so it's read through the laptop alone. While the
+laptop's away, the app reads a MangaFire series from its Weeb Central copy (the one after it in its
+url) and tells readers who have one, and goes back to MangaFire once the laptop is back
+(`frontend/src/books/remote.ts` readFrom).
 
 Its web page: `ssh -L 4567:localhost:4567 ubuntu@<its address>`, then http://localhost:4567 with
 the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull` and the `up -d` again.

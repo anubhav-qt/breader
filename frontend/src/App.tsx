@@ -12,7 +12,7 @@ import { CATEGORIES, categoryOf, countOf, type Category } from './books/category
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
-import { placeChapter, remoteCover, remoteOf, withAlso } from './books/remote';
+import { placeChapter, readOnLaptop, remoteCover, remoteOf, withAlso } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
@@ -361,6 +361,25 @@ export default function App() {
     swept.current = true;
     void sweepKept(haveSeries);
   }, [lib.ready, haveSeries]);
+  /** Which copy of the server the app is on: the laptop, or the fallback while the laptop's away. */
+  const [via, setVia] = useState(api.via);
+  useEffect(() => {
+    setVia(api.via);
+    return api.onVia(setVia);
+  }, []);
+  /** Series in the library read from a site only the laptop reaches (books/remote.ts readFrom). */
+  const onLaptopSite = useMemo(() => lib.records.some((r) => r.source === 'remote' && readOnLaptop(r.url)), [lib.records]);
+  // While the laptop's away, those are read from Weeb Central: the reader's told once each time.
+  const toldAway = useRef(false);
+  useEffect(() => {
+    if (via === 'primary') {
+      toldAway.current = false;
+      return;
+    }
+    if (!onLaptopSite || toldAway.current) return;
+    toldAway.current = true;
+    say('Breader’s home computer is down, so your MangaFire series read from Weeb Central until it’s back.', { stay: true });
+  }, [via, onLaptopSite, say]);
   const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...everything.mine, ...everything.shelf], b), [everything]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
