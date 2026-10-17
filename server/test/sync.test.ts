@@ -169,23 +169,39 @@ describe('sync', () => {
     expect(books.map((x: { id: string; url: string }) => [x.id, x.url]).sort()).toEqual([['md-also', url], ['sw-long', long]]);
   });
 
-  it('syncs a series on Breader’s Suwayomi server by its id there', async () => {
+  it('syncs a series on one of Breader’s Suwayomi sources by its site and address there, or its old number', async () => {
     const { b } = await registered();
+    const id = 'sw:6084907896154116083:L3RpdGxlL2Rrdy1vbmUtcGllY2U';
     const r = await b.post(
       '/v1/sync/push',
       push(
         'c',
+        { type: 'book.put', book: book({ id: 'sw-op', format: 'CBZ', source: 'remote', url: `${id}#official` }) },
         { type: 'book.put', book: book({ id: 'sw-42', format: 'CBZ', source: 'remote', url: 'sw:42' }) },
-        { type: 'book.put', book: book({ url: 'sw:42' }) },
+        { type: 'book.put', book: book({ url: id }) },
       ),
     );
     expect(r.body.rejected.map((x: { code: string }) => x.code)).toEqual(['bad_book']);
     const urls = (await b.get('/v1/sync/pull?since=0')).body.books.map((x: { url: string }) => x.url);
-    expect(urls).toEqual(['sw:42']);
-    for (const url of ['suwayomi:42', 'sw:0', 'sw:abc', 'sw:12345678901', 'sw:', 'kg:0RVCY8NST343X']) {
-      const bad = await b.post('/v1/sync/push', push('c3', { type: 'book.put', book: book({ source: 'remote', url }) }));
-      expect(bad.body.rejected.map((x: { code: string }) => x.code), url).toEqual(['bad_change']);
+    expect(urls.sort()).toEqual(['sw:42', `${id}#official`]);
+    const bad = ['suwayomi:42', 'sw:0', 'sw:abc', 'sw:12345678901', 'sw:', 'kg:0RVCY8NST343X', 'sw:1:a/b', 'sw:x:abc', `${id}:`, `${id}:L2NoYXB0ZXIvMQ`];
+    for (const url of bad) {
+      const no = await b.post('/v1/sync/push', push('c3', { type: 'book.put', book: book({ source: 'remote', url }) }));
+      expect(no.body.rejected.map((x: { code: string }) => x.code), url).toEqual(['bad_change']);
     }
+  });
+
+  it('never takes a source’s series named the old way back over one named by its site and address', async () => {
+    const { b } = await registered();
+    const moved = 'sw:6084907896154116083:L3RpdGxlL2Rrdy1vbmUtcGllY2U#official';
+    const op = book({ format: 'CBZ', source: 'remote', url: 'sw:511#official' });
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: op }));
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: { ...op, url: moved } }));
+    // A device that hasn't pulled since the move pushes the old one back, renamed.
+    const r = await b.post('/v1/sync/push', push('d', { type: 'book.put', book: { ...op, title: 'One Piece!' } }));
+    expect(r.body.rejected).toEqual([]);
+    const [one] = (await b.get('/v1/sync/pull?since=0')).body.books;
+    expect([one.url, one.title]).toEqual([moved, 'One Piece!']);
   });
 
   it('keeps libraries apart, even for the same sample ids', async () => {

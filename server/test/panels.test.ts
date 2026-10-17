@@ -5,6 +5,7 @@ import { makeApp } from '../src/app.ts';
 import { users } from '../src/db/schema.ts';
 import { purgeOffers } from '../src/jobs/cleanup.ts';
 import type { Manga } from '../src/manga/index.ts';
+import { chapterId, seriesId } from '../src/manga/suwayomi.ts';
 import type { Panels } from '../src/panels/index.ts';
 import { HOLD_MS, makeSeats } from '../src/panels/seats.ts';
 import { browser, deps, primary } from './helpers.ts';
@@ -173,7 +174,8 @@ describe('panels kept for every reader', () => {
 
     expect((await two.get(`/v1/panels/${id}/kept`)).body).toEqual({ pages: { 3: { round: 7, ...WHOLE } } });
     expect((await two.get(`/v1/panels/${chapter()}/kept`)).body).toEqual({ pages: {} });
-    expect((await two.get('/v1/panels/sw:12/kept')).body).toEqual({ pages: {} });
+    const other = chapterId(seriesId('11', '/series/12'), '/chapter/1');
+    expect((await two.get(`/v1/panels/${other}/kept`)).body).toEqual({ pages: {} });
     expect((await browser(undefined, app).get(`/v1/panels/${id}/kept`)).status).toBe(401);
   });
 
@@ -254,10 +256,11 @@ describe('panels kept for every reader', () => {
     const owner = await owned(app);
     const id = chapter();
     expect((await owner.post(pageOf(id), HALVES)).body).toEqual({ kept: true });
-    expect((await owner.post('/v1/panels/sw:4242/2', HALVES)).body).toEqual({ kept: true });
+    const onSource = chapterId(seriesId('11', '/series/42'), '/chapter/4242');
+    expect((await owner.post(`/v1/panels/${onSource}/2`, HALVES)).body).toEqual({ kept: true });
     const other = (await reader(app)).b;
     expect((await other.get(pageOf(id))).body.panels).toHaveLength(2);
-    expect(Object.keys((await other.get('/v1/panels/sw:4242/kept')).body.pages)).toEqual(['2']);
+    expect(Object.keys((await other.get(`/v1/panels/${onSource}/kept`)).body.pages)).toEqual(['2']);
   });
 
   it('turns away panels from another round, or that aren’t on the page', async () => {

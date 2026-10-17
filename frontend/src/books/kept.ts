@@ -38,7 +38,7 @@ export async function keptPage(chapter: string, n: number): Promise<Blob | undef
   }
 }
 
-/** A chapter on Breader's Suwayomi (sw:22), not on MangaDex. */
+/** A chapter on one of Breader's Suwayomi sources (sw:…), not on MangaDex. */
 const onSource = (chapter: string) => chapter.startsWith('sw:');
 
 /** A page through the laptop: from a source as it is, or from MangaDex, smaller with data saver on. */

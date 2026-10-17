@@ -106,8 +106,8 @@ export const mangadex = {
 };
 
 /**
- * A series on Breader's Suwayomi, by its id there (sw:44), and its chapters (ids like that too) and
- * its pages.
+ * A series on one of Breader's Suwayomi sources, by its id (sw:<source>:<address>), and its chapters
+ * (their ids that and their own address) and its pages.
  */
 export const sources = {
   series: (id: string, adult: boolean) => ask(() => api.manga.get<SourceSeries>(`/v1/manga/source/${id}${adult ? '?adult=1' : ''}`, 20_000)),
@@ -125,7 +125,7 @@ export const sources = {
     const res = await ask(() => api.manga.raw(`/v1/manga/source/chapter/${chapterId}/${n}`, undefined, 45_000));
     return res.blob();
   },
-  /** A cover's address on the server, from its path in a card (/v1/manga/source/sw:44/cover). */
+  /** A cover's address on the server, from its path in a card (/v1/manga/source/<id>/cover). */
   coverUrl: (path: string) => mangaUrl(path),
   async cover(path: string): Promise<Blob | undefined> {
     try {

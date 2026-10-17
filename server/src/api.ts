@@ -24,7 +24,7 @@ const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // The server voice runs on the laptop only: Render's free plan hasn't the processor for it.
 const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(env) : null;
-// Manga on both: the fallback reads MangaDex alone, as it has no Suwayomi of its own.
+// Manga on both: the fallback reads Suwayomi's sources through the one on AWS (SUWAYOMI_URL), or MangaDex alone without it.
 const mangaOn = env.MANGADEX;
 // Its answers are kept in Redis when there's one, so they outlast a restart.
 let redis: Redis | null = null;

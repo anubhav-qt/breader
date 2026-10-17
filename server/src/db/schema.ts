@@ -441,8 +441,8 @@ export const jobRuns = pgTable('job_runs', {
 /**
  * Manga pages' panels, kept for every reader once anyone's are known (panels/kept.ts): found on the
  * laptop, sent by the owner's device, or sent alike by two libraries' devices. `chapter` is
- * `md:<MangaDex chapter>` or a source's `sw:<chapter>`, and `n` the page, whichever size of it was
- * read; `data` is {w, h, panels, sure} (shared PagePanels) in the pixels of the one found. `by` says
+ * `md:<MangaDex chapter>` or a source's chapter id (sw:<source>:<address>:<its address>), and `n`
+ * the page, whichever size of it was read; `data` is {w, h, panels, sure} (shared PagePanels) in the pixels of the one found. `by` says
  * who: server, owner or agreed. A later round replaces an earlier one. Not fed: any page's are found
  * again.
  */

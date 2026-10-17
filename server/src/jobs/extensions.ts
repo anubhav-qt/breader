@@ -1,4 +1,5 @@
 import { log } from '../log.ts';
+import { suwayomiAddress } from '../manga/suwayomi.ts';
 
 /*
  * Keeps the extensions of Breader's Suwayomi server current (manga/suwayomi.ts reads through
@@ -19,9 +20,10 @@ interface Extension {
 }
 
 async function ask<T>(url: string, fetchFn: typeof fetch, query: string, variables: Record<string, unknown>): Promise<T> {
-  const res = await fetchFn(`${url.replace(/\/+$/, '')}/api/graphql`, {
+  const { base, login } = suwayomiAddress(url);
+  const res = await fetchFn(`${base}/api/graphql`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: { 'content-type': 'application/json', accept: 'application/json', ...login },
     body: JSON.stringify({ query, variables }),
     // Fetching the store's list, or a new version, can take a while.
     signal: AbortSignal.timeout(120_000),

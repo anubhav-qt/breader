@@ -34,8 +34,12 @@ export const MANGA_PAGE = 10;
 /** The furthest into MangaDex's results a search can ask, as it stops at 10,000. */
 export const MANGA_LAST_OFFSET = 9_900;
 
-/** A series on Breader's Suwayomi (sw:12), or one of its chapters. */
-export const SourceId = z.string().regex(/^sw:[1-9]\d{0,9}$/, 'Not a series or chapter of a source');
+/**
+ * A series on one of Breader's Suwayomi sources, by the source and its address on the site, the
+ * same on every Suwayomi: sw:<source>:<address>, the address in base64url so it's safe in a path.
+ * One of its chapters adds its own address after another colon.
+ */
+export const SourceId = z.string().regex(/^sw:\d{1,20}:[\w-]{1,400}(:[\w-]{1,400})?$/, 'Not a series or chapter of a source');
 /**
  * Where a search carries on, place by place: md:30 (MangaDex's offset), sw<source>:3.10 (a
  * Suwayomi source's page, and how many of it were looked at), sw<source>:s40 (past the first 40 on
@@ -151,7 +155,7 @@ export interface MangaChapter {
 
 /** A series on one of Breader's Suwayomi sources, as a search lists it. */
 export interface SourceCard {
-  /** sw:12. */
+  /** sw:<source>:<address> (SourceId). */
   id: string;
   title: string;
   /** Its cover through the laptop (/v1/manga/source/:id/cover), or null when it has none. */

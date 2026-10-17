@@ -12,7 +12,7 @@ import { sameSeries } from './found';
 
 /** One way to read the series: a group's uploads in one place, or the place's as they come. */
 export interface Copy {
-  /** Its place's id and its group's: sw:44#official. */
+  /** Its place's id and its group's: sw:<source>:<address>#official. */
   key: string;
   found: MangaFound;
   group: MangaGroup | null;

@@ -45,6 +45,21 @@ const voiceGone = () => new ApiError(404, 'not_found', 'That voice isn’t avail
 
 const item = (libraryId: string, bookId: string) => and(eq(libraryItems.libraryId, libraryId), eq(libraryItems.bookId, bookId));
 
+/** A series on a source named the old way, by its number on the laptop's own Suwayomi (sw:42), not by its site and address. */
+const OLD_SOURCE_ID = /(^|\|)sw:\d+(#|\||$)/;
+
+/**
+ * The url a remote book keeps: never one naming a source's series the old way over one naming it
+ * by its site and address, which a device that hasn't pulled since the move would push back.
+ */
+async function urlToKeep(tx: Tx, libraryId: string, bookId: string, url: string | undefined): Promise<string | null> {
+  if (!url) return null;
+  if (!OLD_SOURCE_ID.test(url)) return url;
+  const [had] = await tx.select({ url: libraryItems.url }).from(libraryItems).where(item(libraryId, bookId));
+  if (had?.url && !OLD_SOURCE_ID.test(had.url)) return had.url;
+  return url;
+}
+
 /**
  * Applies one queued change inside the push transaction. Every row it touches is stamped with
  * `rev`, the library's new revision, so the next pull from any browser picks it up. A book whose
@@ -65,6 +80,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
       if (b.source === 'remote' && b.fileId) throw new ApiError(400, 'bad_book', 'A remote book has no file.');
       await checkFile(tx, libraryId, b.fileId);
       await checkFile(tx, libraryId, b.coverId);
+      const url = await urlToKeep(tx, libraryId, b.id, b.url);
       await tx
         .insert(libraryItems)
         .values({
@@ -74,7 +90,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           author: b.author,
           format: b.format,
           source: b.source,
-          url: b.url ?? null,
+          url,
           shared: b.shared,
           sharedOnly: !!b.sharedOnly,
           addedAt: new Date(b.addedAt),

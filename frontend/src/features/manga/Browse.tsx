@@ -21,7 +21,7 @@ import './manga.css';
 
 interface Props {
   hidden: boolean;
-  /** Series already in My manga: MangaDex ids, and source ids (sw:44). */
+  /** Series already in My manga: MangaDex ids, and source ids (sw:<source>:<address>). */
   have: ReadonlySet<string>;
   prefs: MangaPrefs;
   onPrefs: (p: MangaPrefs) => void;

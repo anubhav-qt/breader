@@ -26,7 +26,7 @@ export interface Manga {
   page(chapterId: string, n: number, saver: boolean): Promise<Picture>;
   /** early: fetched again that much before it's due, and waited for (covers.ts). */
   cover(mangaId: string, file: string, size: '256' | '512', early?: number): Promise<Cover>;
-  /** A series on Suwayomi (sw:12), and the like. */
+  /** A series on one of Suwayomi's sources (SourceId: sw:<source>:<address>), and the like. */
   sourceSeries(id: string, adult: boolean): Promise<SourceSeries>;
   sourceChapters(id: string): Promise<MangaChapters>;
   sourceCover(id: string, size: '256' | '512', early?: number): Promise<Cover>;
@@ -35,7 +35,7 @@ export interface Manga {
   /** How many pages a chapter of a source has. */
   sourcePages(chapterId: string): Promise<number>;
   sourcePage(chapterId: string, n: number): Promise<Picture>;
-  /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:12) in its own. */
+  /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:…) in its own. */
   copies(id: string, lang: string): Promise<MangaCopies>;
   /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi. */
   warm(): Promise<void>;
@@ -73,10 +73,10 @@ export function makeManga(opts: MangaOptions): Manga {
   let suwayomi: Suwayomi | null = null;
   if (opts.suwayomi) suwayomi = makeSuwayomi({ url: opts.suwayomi, disk, covers, fetch: opts.fetch, pace, store, browseWithin: opts.browseWithin });
 
-  /** Suwayomi, and its series or chapter number in an id like sw:12. */
-  function onSuwayomi(id: string): { suwayomi: Suwayomi; n: number } {
+  /** Suwayomi, when this server has one. */
+  function onSuwayomi(): Suwayomi {
     if (!suwayomi) throw off();
-    return { suwayomi, n: Number(id.slice(3)) };
+    return suwayomi;
   }
 
   let copyStore: Store = new MemoryStore(500);
@@ -89,10 +89,10 @@ export function makeManga(opts: MangaOptions): Manga {
     let count: (c: MangaChapter) => Promise<number>;
     let page: (c: MangaChapter, n: number) => Promise<Picture>;
     if (id.startsWith('sw:')) {
-      const { suwayomi, n } = onSuwayomi(id);
-      chapters = (await suwayomi.chapters(n)).chapters;
-      count = (c) => suwayomi.pages(Number(c.id.slice(3)));
-      page = (c, i) => suwayomi.page(Number(c.id.slice(3)), i);
+      const suwayomi = onSuwayomi();
+      chapters = (await suwayomi.chapters(id)).chapters;
+      count = (c) => suwayomi.pages(c.id);
+      page = (c, i) => suwayomi.page(c.id, i);
     } else {
       chapters = (await dex.chapters(id, lang)).chapters;
       count = async (c) => c.pages;
@@ -172,30 +172,11 @@ export function makeManga(opts: MangaOptions): Manga {
       else await dex.warm();
     },
 
-    async sourceSeries(id, adult) {
-      const { suwayomi, n } = onSuwayomi(id);
-      return suwayomi.series(n, adult);
-    },
-
-    async sourceChapters(id) {
-      const { suwayomi, n } = onSuwayomi(id);
-      return suwayomi.chapters(n);
-    },
-
-    async sourceCover(id, size, early) {
-      const { suwayomi, n } = onSuwayomi(id);
-      return suwayomi.cover(n, Number(size) as CoverWidth, early);
-    },
-
-    async sourcePages(chapterId) {
-      const { suwayomi, n } = onSuwayomi(chapterId);
-      return suwayomi.pages(n);
-    },
-
-    async sourcePage(chapterId, page) {
-      const { suwayomi, n } = onSuwayomi(chapterId);
-      return suwayomi.page(n, page);
-    },
+    sourceSeries: (id, adult) => onSuwayomi().series(id, adult),
+    sourceChapters: (id) => onSuwayomi().chapters(id),
+    sourceCover: (id, size, early) => onSuwayomi().cover(id, Number(size) as CoverWidth, early),
+    sourcePages: (chapterId) => onSuwayomi().pages(chapterId),
+    sourcePage: (chapterId, page) => onSuwayomi().page(chapterId, page),
 
     copies: (id, lang) => copyMemo.get(`${id}:${lang}`, () => measureCopies(id, lang)),
   };

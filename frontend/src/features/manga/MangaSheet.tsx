@@ -61,7 +61,7 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 const dateText = (at: number) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
-/** The place a copy key is in: sw:44 of sw:44#official. */
+/** The place a copy key is in: sw:<source>:<address> of sw:<source>:<address>#official. */
 function placeIdOf(key: string): string {
   const hash = key.indexOf('#');
   if (hash < 0) return key;

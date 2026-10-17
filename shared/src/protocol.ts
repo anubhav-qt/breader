@@ -20,11 +20,14 @@ export const Source = z.enum(['file', 'sample', 'remote']);
 
 /**
  * One copy of a remote book: a MangaDex series by its id, with the language its chapters are read
- * in after a colon when it isn't English (mangadex:<id>:pt-br), or a series on Breader's Suwayomi
- * server by its id there (sw:42, as SourceId in manga.ts). Either may end with the group whose
- * uploads it's read in, after a #, as encodeURIComponent writes it (sw:42#Official).
+ * in after a colon when it isn't English (mangadex:<id>:pt-br), or a series on one of Breader's
+ * Suwayomi sources by the source and its address there (sw:<source>:<address>, as SourceId in
+ * manga.ts). Either may end with the group whose uploads it's read in, after a #, as
+ * encodeURIComponent writes it (sw:<source>:<address>#Official). sw:42, a series by its number on
+ * the laptop's own Suwayomi, is how they were named before, still let through so an app that
+ * hasn't heard of the change can push.
  */
-const REMOTE_COPY = String.raw`(mangadex:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[a-z]{2,3}(-[a-z]{2,3})?)?|sw:[1-9]\d{0,9})(#[\w%.~!*'()-]{1,1000})?`;
+const REMOTE_COPY = String.raw`(mangadex:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[a-z]{2,3}(-[a-z]{2,3})?)?|sw:\d{1,20}:[\w-]{1,400}|sw:[1-9]\d{0,9})(#[\w%.~!*'()-]{1,1000})?`;
 
 /**
  * A remote book's url: its copy, then up to seven more after a | each, for the chapters it hasn't

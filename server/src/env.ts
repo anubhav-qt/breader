@@ -109,9 +109,8 @@ const Env = z.object({
   PANEL_SEATS: z.coerce.number().int().min(1).max(100).default(8),
 
   /**
-   * Manga through the server (src/manga/): on unless this says false. The fallback reads MangaDex
-   * alone, as SUWAYOMI_URL is the laptop's. Pages read are kept in MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used longest
-   * ago going first.
+   * Manga through the server (src/manga/): on unless this says false. Pages read are kept in
+   * MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used longest ago going first.
    */
   MANGADEX: bool.default(true),
   MANGA_CACHE_DIR: z.string().default('/data/manga'),
@@ -122,8 +121,9 @@ const Env = z.object({
    */
   REDIS_URL: z.string().url().optional(),
   /**
-   * Breader's own Suwayomi server (http://suwayomi:4567), whose sources a manga search looks in too.
-   * It's off without its address.
+   * Breader's own Suwayomi server, whose sources a manga search looks in too: the laptop's
+   * (http://suwayomi:4567), or for the fallback the one on AWS, through its tunnel and with its
+   * login (https://user:password@sw.breader.site, infra/aws/). It's off without its address.
    */
   SUWAYOMI_URL: z.string().url().optional(),
 });

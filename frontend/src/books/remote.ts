@@ -38,8 +38,8 @@ function groupOf(part: string | undefined): string | null {
 function oneRemote(url: string): Remote | null {
   const md = /^mangadex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?::([a-z]{2,3}(?:-[a-z]{2,3})?))?(?:#(.+))?$/.exec(url);
   if (md) return { kind: 'mangadex', series: md[1], lang: md[2] ?? 'en', group: groupOf(md[3]), key: md[1], also: [] };
-  // A series on Breader's Suwayomi: its url is its id there.
-  const source = /^(sw:[1-9]\d{0,9})(?:#(.+))?$/.exec(url);
+  // A series on one of Breader's Suwayomi sources: its url is its id, by its site and address there.
+  const source = /^(sw:[\w:-]{1,1000})(?:#(.+))?$/.exec(url);
   if (source) return { kind: 'source', id: source[1], group: groupOf(source[2]), key: source[1], also: [] };
   return null;
 }
@@ -75,7 +75,7 @@ export function remoteUrl(series: string, lang: string, group: string | null = n
   return url + groupPart(group);
 }
 
-/** A source's series' url (sw:44), in a group's uploads when one's given. */
+/** A source's series' url (its id, sw:<source>:<address>), in a group's uploads when one's given. */
 export function sourceUrl(id: string, group: string | null = null): string {
   return id + groupPart(group);
 }
@@ -191,7 +191,7 @@ async function kept<T>(key: string, get: () => Promise<T>): Promise<T> {
   }
 }
 
-/** A chapter on a Suwayomi source, by its id (sw:12), rather than MangaDex's. */
+/** A chapter on a Suwayomi source, by its id (sw:…), rather than MangaDex's. */
 const onSource = (id: string) => id.startsWith('sw:');
 
 /** A place's block: its chapter's number and its page in it (books/types.ts MangaBook.anchor). */

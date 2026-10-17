@@ -1,0 +1,35 @@
+# Breader's second Suwayomi, for Render (the fallback), on a t4g.small in AWS Mumbai: Render has no
+# room to run one, and the laptop's is away whenever the laptop is. Render reaches it through this
+# tunnel at sw.breader.example, logging in as breader (README.md › Suwayomi on AWS for Render).
+#
+#   docker compose -f infra/aws/compose.yml up -d
+
+services:
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:v2.4.2366
+    environment:
+      EXTENSION_STORES: '["https://raw.githubusercontent.com/keiyoushi/extensions/repo/repo.json"]'
+      WEB_UI_CHANNEL: bundled
+      WEB_UI_UPDATE_INTERVAL: "0"
+      KCEF_ENABLED: "false"
+      # It's open to the internet through the tunnel, so nothing answers without the login.
+      AUTH_MODE: basic_auth
+      AUTH_USERNAME: breader
+      AUTH_PASSWORD: "${SUWAYOMI_PASSWORD:?set SUWAYOMI_PASSWORD in infra/aws/.env}"
+      # Half of the machine's 2 GB, the rest left to the system and the tunnel.
+      JAVA_TOOL_OPTIONS: "-Xmx1g"
+    # Its web page answers on this machine only, for extensions.sh and an SSH tunnel.
+    ports: ["127.0.0.1:4567:4567"]
+    volumes: ["suwayomi:/home/suwayomi/.local/share/Tachidesk"]
+    restart: unless-stopped
+
+  # sw.breader.example → http://suwayomi:4567, set on the tunnel's Public Hostname page in Cloudflare.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment: { TUNNEL_TOKEN: "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in infra/aws/.env}" }
+    depends_on: [suwayomi]
+    restart: unless-stopped
+
+volumes:
+  suwayomi: {}

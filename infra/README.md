@@ -138,8 +138,8 @@ ago), the API fetches the first 50 series of each of Browse's orders, with every
 each kind alone, and everything their sheets ask for: other places, copies, chapters and covers.
 The status page shows it as **Manga prefetch**. Series for adults show only to readers who turn on
 **Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
-Render has it too, from MangaDex alone (no Suwayomi there, so series from its sites open only from
-the laptop), without the panel model: readers' devices find panels there, and panels kept serve all.
+Render has it too, with Suwayomi's sources through the one on AWS (*Suwayomi on AWS for Render*),
+without the panel model: readers' devices find panels there, and panels kept serve all.
 
 **Manga sources: Suwayomi.** One more service holds manga for every reader: `suwayomi` runs
 Mihon's extensions, from the Keiyoushi store. The API asks it itself, so a manga search looks in
@@ -160,6 +160,14 @@ from:
 
 The worker updates the installed extensions once a day, as a site that moves to a new address is
 mostly mended by its extension's next version (**Manga extensions** on the status page).
+
+A series from a source is known by the source and its address on the site
+(`sw:<source>:<address>`, the address in base64url), the same on every Suwayomi, so the laptop's
+and the one on AWS read the same libraries. One a Suwayomi hasn't seen yet is taken in by its
+address the first time it's asked for: a backup holding that one series is restored, then it's
+taken out of Suwayomi's library again. Libraries from before this kept Suwayomi's own number for a
+series (`sw:353`), which only the laptop's knew; a device still sending one never writes it over
+the new id.
 
 Keiyoushi marks most big sites 18+, as each has some series for adults, but Breader judges each
 series by its own genres: one marked Adult, Hentai, Smut, Erotica or Pornographic shows only with
@@ -312,6 +320,36 @@ curl -s -H "authorization: Bearer $ADMIN_TOKEN" -H 'x-forwarded-for: 6.6.6.6' \
 
 Settings › Custom Domains: add `fb.breader.example`, then in Cloudflare DNS add the CNAME it shows,
 **DNS only** (grey cloud). Settings › Deploy Hook → GitHub secret `RENDER_DEPLOY_HOOK`.
+
+### Suwayomi on AWS for Render
+
+Render has no room for Suwayomi, so a second one runs on AWS for it, and series from its sources
+open while the laptop is away too (`infra/aws/`). It's Suwayomi alone, with a login, behind a
+tunnel of its own; panels aren't found there.
+
+1. AWS, on the Free plan, region **Asia Pacific (Mumbai)**. EC2 › Launch instance: Ubuntu Server
+   24.04 LTS, **64-bit (Arm)**, **t4g.small** (2 vCPU, 2 GB), your SSH key, 30 GB gp3, a public
+   IPv4 address, and a security group with SSH only (the tunnel needs no open port). The plan's
+   credits pay for it; upgrade the account before they or its six months run out, or AWS closes it.
+2. Cloudflare › Zero Trust › Networks › Tunnels › Create a tunnel (cloudflared), named
+   `breader-sw`. Public hostname `sw.breader.example` → `http://suwayomi:4567`. Keep its token.
+3. On the machine, as `ubuntu`:
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/anubhav-qt/breader/dev/infra/aws/setup.sh | sh
+   ```
+   It adds 2 GB of swap, installs Docker, checks out `infra/`, and sets a timer that runs
+   `extensions.sh` once a day.
+4. Write `~/breader/infra/aws/.env` from `.env.example` (the tunnel's token, and a password from
+   `openssl rand -hex 24`), log in again so Docker lets you in, then:
+   ```sh
+   docker compose -f ~/breader/infra/aws/compose.yml up -d
+   ~/breader/infra/aws/extensions.sh     # installs MangaFire, Weeb Central and Asura Scans
+   ```
+5. Render › Environment: `SUWAYOMI_URL=https://breader:<the password>@sw.breader.example`, then
+   Manual Deploy. A series from MangaFire opens at `fb.breader.example`.
+
+Its web page: `ssh -L 4567:localhost:4567 ubuntu@<its address>`, then http://localhost:4567 with
+the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull` and the `up -d` again.
 
 ### 9. Cloudflare Pages
 
