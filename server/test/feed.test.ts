@@ -79,6 +79,17 @@ describe('change feed', () => {
     expect(await snapshot(mirror.pool)).toEqual(await snapshot(primary.pool));
   });
 
+  it('reloads after nearly an hour away, when the other machine may have pruned what it hadn’t read', async () => {
+    const { b } = await registered();
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book() }));
+    await drain();
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book() }));
+    await primary.pool.query('DELETE FROM change_log');
+    await mirror.pool.query(`UPDATE mirror_state SET updated_at = now() - interval '2 hours'`);
+    await drain();
+    expect(await snapshot(mirror.pool)).toEqual(await snapshot(primary.pool));
+  });
+
   it('prunes records the laptop has read once they are an hour old', async () => {
     const { b } = await registered();
     await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book() }));

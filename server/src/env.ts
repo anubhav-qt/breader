@@ -10,6 +10,11 @@ const Env = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** laptop: the home server, with the mirror. fallback: the free-tier copy that only knows Supabase. */
   ROLE: z.enum(['laptop', 'fallback']).default('laptop'),
+  /**
+   * This machine's name, where more than one runs the laptop's stack (the ThinkPad, and the backup
+   * on Oracle Cloud): the jobs that must happen once go to one of them at a time.
+   */
+  MACHINE: z.string().min(1).default('laptop'),
   PORT: z.coerce.number().int().default(8787),
   RELEASE: z.string().default('dev'),
 

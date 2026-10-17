@@ -219,7 +219,8 @@ Render) and `VITE_SENTRY_DSN` (Pages). Without them, errors are only logged.
 
 ### 7. The laptop
 
-Only one laptop runs the stack at a time (see *Moving the laptop* below).
+Only one laptop runs the stack at a time (see *Moving the laptop* below). A backup machine may run
+it too, the same way (see *The backup on Oracle Cloud* below).
 
 On a Mac:
 
@@ -257,6 +258,22 @@ Then, on either:
    `--install` adds a LaunchAgent on a Mac, or a systemd user timer on Linux, with lingering on so
    it runs before you log in. If it asks, run the `sudo loginctl enable-linger` line it prints.
 5. `curl https://api.breader.example/ready` shows `"role":"laptop"` and the copy's lag.
+
+### The backup on Oracle Cloud
+
+An Always Free Ampere (arm64) machine runs the very same stack, so api.breader.example answers
+whenever either machine is up. Set it up like the laptop on Linux (Ubuntu: `apt install
+docker.io docker-compose-v2 git`), with a copy of the laptop's `infra/.env` and these changes:
+
+- `MACHINE=oracle`. Each worker keeps its own copy, file mirror and Suwayomi, but the jobs that
+  must happen once (the backup, clean-up, the storage check, pruning the feed, the AI marker) go to
+  one machine at a time, whichever took them first (server/src/jobs/lease.ts).
+- `HEARTBEAT_URL=` left empty, so the monitor still tells you when the laptop's worker stops.
+- The same `TUNNEL_TOKEN`: both machines connect to one tunnel, and Cloudflare sends readers to
+  whichever is up.
+
+Then `docker compose -f infra/compose.yml up -d`, `infra/update.sh --install`, and install
+Suwayomi's extensions as in *Manga sources: Suwayomi* (MangaFire, Weeb Central, Asura Scans).
 
 ### 8. Render
 

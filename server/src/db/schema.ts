@@ -530,6 +530,16 @@ export const feedState = pgTable('feed_state', {
   lostTxid: big('lost_txid').notNull().default(0),
 });
 
+/**
+ * Which machine's worker does the jobs that must happen once (backups, clean-up, the AI marker),
+ * when the laptop and the backup both run the stack, and till when unless it renews (jobs/lease.ts).
+ */
+export const workerLease = pgTable('worker_lease', {
+  id: integer('id').primaryKey().default(1),
+  holder: text('holder').notNull(),
+  until: at('until').notNull(),
+});
+
 /** Laptop copy only: its read position in the feed. */
 export const mirrorState = pgTable('mirror_state', {
   id: integer('id').primaryKey().default(1),

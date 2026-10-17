@@ -25,7 +25,16 @@ const XMIN = 'pg_snapshot_xmin(pg_current_snapshot())::text::bigint';
  * appear behind the cursor. Each row carries a version, and the copy only takes a write that is
  * newer than what it has, so replaying a record twice, or out of commit order, is harmless.
  */
-export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: { blob?: (row: Row) => void } = {}) {
+export interface FeedHooks {
+  blob?: (row: Row) => void;
+  /**
+   * Whether this machine tells Supabase how far it has read. Where the laptop and the backup both
+   * run, only the one doing the once-only jobs does (jobs/lease.ts), as those include pruning.
+   */
+  acks?: () => boolean;
+}
+
+export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: FeedHooks = {}) {
   const columns = new Map<string, string[]>();
 
   async function loadColumns() {
@@ -114,13 +123,16 @@ export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: { blob?: (row
   /** One poll. Returns how many records it applied. */
   async function step(): Promise<number> {
     if (!columns.size) await loadColumns();
-    const { rows: st } = await mirror.query<{ cursor_txid: number; cursor_id: number; loaded_at: Date | null }>(
-      'SELECT cursor_txid, cursor_id, loaded_at FROM mirror_state WHERE id = 1',
+    const { rows: st } = await mirror.query<{ cursor_txid: number; cursor_id: number; loaded_at: Date | null; away: boolean }>(
+      `SELECT cursor_txid, cursor_id, loaded_at, updated_at < now() - interval '50 minutes' AS away FROM mirror_state WHERE id = 1`,
     );
     const cur = st[0];
     const { rows: fs } = await primary.query<{ lost_txid: number }>('SELECT lost_txid FROM feed_state WHERE id = 1');
-    // First start, or away so long that unread records were pruned: start from a fresh copy.
-    if (!cur.loaded_at || (fs[0].lost_txid > 0 && fs[0].lost_txid >= cur.cursor_txid)) {
+    // First start, or away so long that unread records were pruned: start from a fresh copy. Also
+    // after nearly an hour away, when the other machine may have pruned records it read and this
+    // one hadn't (pruneReadFeed keeps them an hour).
+    const lost = fs[0].lost_txid > 0 && fs[0].lost_txid >= cur.cursor_txid;
+    if (!cur.loaded_at || cur.away || lost) {
       await reload();
       return 1;
     }
@@ -155,6 +167,7 @@ export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: { blob?: (row
 
   /** Tells Supabase how far the copy has read, so read records can be pruned. */
   async function ack(txid: number, id: number) {
+    if (hooks.acks && !hooks.acks()) return;
     await primary.query('UPDATE feed_state SET ack_txid = $1, ack_id = $2, ack_at = now() WHERE id = 1', [txid, id]);
     lastAck = Date.now();
   }
