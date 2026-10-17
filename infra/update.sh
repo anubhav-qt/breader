@@ -6,8 +6,8 @@
 #   infra/update.sh               check once now
 # It pulls the image and restarts the stack only when the running API is on an older one, so a
 # stack you stopped yourself stays stopped. Migrations run first (the migrate service); if they
-# fail, the old version keeps running and the next check tries again. While the API runs, it also
-# starts whatever else in the stack isn't running.
+# fail, the next check tries again. While the API is meant to run, it also starts whatever in the
+# stack isn't running.
 set -eu
 cd "$(dirname "$0")"
 DIR=$(pwd)
@@ -99,20 +99,22 @@ IMAGE=$(sed -n 's/^IMAGE=//p' .env)
 
 compose pull --quiet api
 want=$(docker image inspect --format '{{.Id}}' "$IMAGE")
-running=$(compose ps --quiet api) # running only
-have=$(test -n "$running" && docker inspect --format '{{.Image}}' "$running" || true)
+# The API is meant to run while its container runs, restarts, or was created and never started (an
+# update whose start failed part way). One you stopped has exited, and `compose down` leaves none.
+api=$(compose ps --quiet --status running --status restarting --status created api)
+have=$(test -n "$api" && docker inspect --format '{{.Image}}' "$api" || true)
 
-if [ -n "$running" ] && [ "$want" != "$have" ]; then
+if [ -n "$api" ] && [ "$want" != "$have" ]; then
   echo "$(date '+%F %T') updating to $want"
   compose pull --quiet
   compose up -d --remove-orphans
   docker image prune -f >/dev/null
 fi
 
-# While the API runs, the rest of the stack runs too: a service left stopped (the tunnel, after an
-# update whose API was slow to start) is started again. migrate exits once it's done, and Docker
-# itself restarts a service that keeps crashing.
-if [ -n "$running" ]; then
+# While the API is meant to run, the whole stack runs: a service left stopped or never started (the
+# tunnel after a slow API, everything after a failed migration) is started again, every check until
+# it stays up. migrate exits once it's done, and Docker itself restarts a service that keeps crashing.
+if [ -n "$api" ]; then
   up=$(compose ps --services --status running --status restarting)
   for service in $(compose config --services); do
     if [ "$service" = migrate ]; then continue; fi

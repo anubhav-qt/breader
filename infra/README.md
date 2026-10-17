@@ -268,8 +268,9 @@ Then, on either:
    ```
    `--install` adds a LaunchAgent on a Mac, or a systemd user timer on Linux, with lingering on so
    it runs before you log in. If it asks, run the `sudo loginctl enable-linger` line it prints.
-   Each check also starts whatever in the stack isn't running while the API runs, so a tunnel left
-   stopped after an update is back within 5 minutes. A service you stop yourself stays stopped
+   Each check also starts whatever in the stack isn't running while the API runs, or was left
+   created and never started by an update that failed part way, so a tunnel left stopped or a
+   failed migration is tried again every 5 minutes. A service you stop yourself stays stopped
    only while the API is stopped too.
    The tunnel starts with the API without waiting for it to be healthy: until the API answers,
    Cloudflare gets a 502 and the app asks Render.
