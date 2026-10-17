@@ -369,17 +369,19 @@ export default function App() {
   }, []);
   /** Series in the library read from a site only the laptop reaches (books/remote.ts readFrom). */
   const onLaptopSite = useMemo(() => lib.records.some((r) => r.source === 'remote' && readOnLaptop(r.url)), [lib.records]);
-  // While the laptop's away, those are read from Weeb Central: the reader's told once each time.
-  const toldAway = useRef(false);
+  // While the laptop's away, those are read from Weeb Central: the reader's told once each time, and
+  // the message goes as soon as it's back.
+  const awayToast = useRef<number | null>(null);
   useEffect(() => {
     if (via === 'primary') {
-      toldAway.current = false;
+      if (awayToast.current !== null) dismissToast(awayToast.current);
+      awayToast.current = null;
       return;
     }
-    if (!onLaptopSite || toldAway.current) return;
-    toldAway.current = true;
+    if (!onLaptopSite || awayToast.current !== null) return;
     say('Breader’s home computer is down, so your MangaFire series read from Weeb Central until it’s back.', { stay: true });
-  }, [via, onLaptopSite, say]);
+    awayToast.current = toastId.current;
+  }, [via, onLaptopSite, say, dismissToast]);
   const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...everything.mine, ...everything.shelf], b), [everything]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
