@@ -6,7 +6,8 @@
 #   infra/update.sh               check once now
 # It pulls the image and restarts the stack only when the running API is on an older one, so a
 # stack you stopped yourself stays stopped. Migrations run first (the migrate service); if they
-# fail, the old version keeps running and the next check tries again.
+# fail, the old version keeps running and the next check tries again. While the API runs, it also
+# starts whatever else in the stack isn't running.
 set -eu
 cd "$(dirname "$0")"
 DIR=$(pwd)
@@ -106,4 +107,18 @@ if [ -n "$running" ] && [ "$want" != "$have" ]; then
   compose pull --quiet
   compose up -d --remove-orphans
   docker image prune -f >/dev/null
+fi
+
+# While the API runs, the rest of the stack runs too: a service left stopped (the tunnel, after an
+# update whose API was slow to start) is started again. migrate exits once it's done, and Docker
+# itself restarts a service that keeps crashing.
+if [ -n "$running" ]; then
+  up=$(compose ps --services --status running --status restarting)
+  for service in $(compose config --services); do
+    if [ "$service" = migrate ]; then continue; fi
+    if echo "$up" | grep -qx "$service"; then continue; fi
+    echo "$(date '+%F %T') $service isn't running, starting the stack again"
+    compose up -d
+    break
+  done
 fi

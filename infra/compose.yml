@@ -87,12 +87,15 @@ services:
     volumes: ["files:/data/files", "backups:/data/backups"]
 
   # api.breader.example → http://api:8787, set on the tunnel's Public Hostname page in Cloudflare.
+  # It starts with the API, not once it's healthy: waiting for that left it never started when an
+  # update's API was slow to come up. Until the API answers, Cloudflare gets a 502 and the app asks
+  # Render.
   tunnel:
     image: cloudflare/cloudflared:latest
     command: ["tunnel", "--no-autoupdate", "run"]
     environment: { TUNNEL_TOKEN: "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in infra/.env}" }
     depends_on:
-      api: { condition: service_healthy }
+      api: { condition: service_started }
     restart: unless-stopped
 
 volumes:

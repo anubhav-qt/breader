@@ -212,9 +212,11 @@ with one worker of four threads and 4.4 with four of two, so 4 workers of 2 and 
 Render never has it.
 
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
-**Browser JavaScript** platform (one project takes the app, the API and the worker, each tagged
-by `component`), then copy Project settings › Client keys › DSN → `SENTRY_DSN` (laptop and
-Render) and `VITE_SENTRY_DSN` (Pages). Without them, errors are only logged.
+**Browser JavaScript** platform (one project takes the app, the API, the worker and migrations,
+each tagged by `component`, and the server's by `role` and `release` too), then copy Project
+settings › Client keys › DSN → `SENTRY_DSN` (laptop and Render) and `VITE_SENTRY_DSN` (Pages).
+Without them, errors are only logged. The server's are sent from its first line on, so a start
+that fails (bad settings, a migration that can't run) shows there too.
 
 ### 6. GitHub
 
@@ -266,7 +268,16 @@ Then, on either:
    ```
    `--install` adds a LaunchAgent on a Mac, or a systemd user timer on Linux, with lingering on so
    it runs before you log in. If it asks, run the `sudo loginctl enable-linger` line it prints.
+   Each check also starts whatever in the stack isn't running while the API runs, so a tunnel left
+   stopped after an update is back within 5 minutes. A service you stop yourself stays stopped
+   only while the API is stopped too.
+   The tunnel starts with the API without waiting for it to be healthy: until the API answers,
+   Cloudflare gets a 502 and the app asks Render.
 5. `curl https://api.breader.example/ready` shows `"role":"laptop"` and the copy's lag.
+
+The update check pulls images, not this repository: after a change to `infra/compose.yml` or
+`infra/update.sh`, run `git pull` in the laptop's checkout, then `docker compose -f
+infra/compose.yml up -d`.
 
 ### The backup on Oracle Cloud
 

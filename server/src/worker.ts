@@ -29,8 +29,8 @@ import { makeFileMirror } from './mirror/files.ts';
  * mirror, Suwayomi and yt-dlp current, but the jobs that must happen once (the backup, clean-up,
  * the storage check, pruning the feed, the AI marker) go to whichever holds the lease (jobs/lease.ts).
  */
+startReporting('worker');
 const env = loadEnv();
-startReporting(env, 'worker');
 const primary = connectPrimary(env, 2);
 const mirror = connectMirror(env, 3);
 if (!mirror) throw new Error('The worker needs MIRROR_URL (the laptop’s copy).');

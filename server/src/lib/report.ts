@@ -1,19 +1,22 @@
 import { makeReporter, type Reporter } from '@breader/shared';
-import type { Env } from '../env.ts';
 import { log } from '../log.ts';
 
 let reporter: Reporter | null = null;
 
-/** Sends errors to Sentry when SENTRY_DSN is set. Call once at start. */
-export function startReporting(env: Env, component: 'api' | 'worker') {
-  if (!env.SENTRY_DSN) return;
+/**
+ * Sends errors to Sentry when SENTRY_DSN is set. Call once, first thing: it reads process.env
+ * itself, so a start that fails on its settings is sent too.
+ */
+export function startReporting(component: 'api' | 'worker' | 'migrate') {
+  const { SENTRY_DSN, RELEASE, ROLE, NODE_ENV } = process.env;
+  if (!SENTRY_DSN) return;
   reporter = makeReporter({
-    dsn: env.SENTRY_DSN,
+    dsn: SENTRY_DSN,
     component,
-    release: env.RELEASE,
-    environment: env.NODE_ENV,
+    release: RELEASE ?? 'dev',
+    environment: NODE_ENV ?? 'production',
     platform: 'node',
-    tags: { role: env.ROLE },
+    tags: { role: ROLE ?? 'laptop' },
   });
   // Node stops on these anyway; send them first. Docker starts the process again.
   const crash = (err: unknown) => {

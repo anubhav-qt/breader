@@ -15,8 +15,8 @@ import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makePanels } from './panels/index.ts';
 import { makeSpeech } from './speech/index.ts';
 
+startReporting('api');
 const env = loadEnv();
-startReporting(env, 'api');
 if (env.NODE_ENV === 'production' && env.CLIENT_IP_HEADER === 'none') {
   log.warn('CLIENT_IP_HEADER is not set, so every reader shares one rate limit (the proxy’s address)');
 }
