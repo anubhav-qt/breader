@@ -499,9 +499,12 @@ export default function App() {
 
   /* Opening a book: the reader grows out of the card, then takes over. */
   const finishOpen = useCallback((id: string) => {
-    // Read from a series' page, the page stays under the reader, for coming back to.
-    goTo({ name: 'read', id }, seriesNow(parseHash()));
     setOpening(null);
+    // Open there already, it's no step on in the history, or Back would only come back to it.
+    const at = parseHash();
+    if (at.name === 'read' && at.id === id) return;
+    // Read from a series' page, the page stays under the reader, for coming back to.
+    goTo({ name: 'read', id }, seriesNow(at));
   }, [goTo]);
 
   /** A series in My manga: its page, from what the card knows until the rest comes. Its other copies are looked for by its name. */
@@ -1388,6 +1391,8 @@ export default function App() {
             exit={{ opacity: 0, transition: { duration: 0.16 } }}
             transition={springs.snappy}
             onAnimationComplete={() => {
+              // Its fading out ends too, once the reader's open: that isn't the card having grown.
+              if (openAnimDone.current) return;
               openAnimDone.current = true;
               if (loadedId.current === opening.id) finishOpen(opening.id);
             }}
