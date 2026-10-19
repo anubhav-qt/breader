@@ -30,7 +30,7 @@ export interface MangaSearch {
   doujinshi?: boolean;
   /** Only these kinds; every kind when left out. */
   kinds?: MangaKind[];
-  /** Only series going by one of these names (seriesName keys): a sheet looking for a series' other copies. */
+  /** Only series going by one of these names (seriesName keys): a page looking for a series' other copies. */
   names?: string[];
   /** Where the search carries on, as the last answer said. */
   next?: string;

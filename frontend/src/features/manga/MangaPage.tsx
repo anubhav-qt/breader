@@ -1,24 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { motion } from 'motion/react';
 import type { MangaChapter, MangaFound, MangaSeries, SourceSeries } from '@breader/shared/manga';
-import { Modal } from '../../components/Modal';
-import { IconCheck, IconChevron, IconOut } from '../../components/icons';
+import { IconBack, IconCheck, IconChevron, IconOrder, IconOut } from '../../components/icons';
 import { useLabels } from '../../data/labels';
 import { keptNote } from '../../books/kept';
 import { filledIn, laidOut, listOf, madeBy, pickChapters, remoteOf, startOf, type Fill } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
 import { byLang, KIND_NAME, langName, mangadex, RATING_NAME, sources, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
+import { springs } from '../../lib/springs';
+import { readLocal, writeLocal } from '../../lib/store';
 import { alsoOf, alsoUrls, copyKey, inOrder, sharpest, urlOf, useCopies, type Copy, type Place } from './copies';
+import './manga.css';
 
 /*
- * A series: what it is, its copies, and its chapters in the copy it's read in, each with the group
+ * A series' page, with an address of its own (#/manga/<id>), so a chapter read from it comes back
+ * to it: what it is, its copies, and its chapters in the copy it's read in, each with the group
  * that made it. Found in several places (found.ts), each place, and each group that made most of
  * it there, is a copy (copies.ts). The sharpest is read unless the reader picks another; one in My
  * manga stays in its copy until the reader moves it, its place kept. Read starts it (or carries
  * on) in the reader, adding it to My manga; a chapter tapped starts there. A MangaDex chapter its
- * publisher puts up itself opens on their site.
+ * publisher puts up itself opens on their site. The chapters go oldest or newest first, as the
+ * reader last had them on this device.
  */
+
+/** Whether a series' chapters go newest first, on this device. */
+const NEWEST_FIRST = 'breader.manga.newestFirst.v1';
 
 /** What the series is, from where it was picked: for its card in My manga. */
 export type About = { kind: 'mangadex'; series: MangaSeries } | { kind: 'source'; series: SourceSeries };
@@ -46,7 +53,11 @@ interface Props {
   onAdd: (about: About, picked: Picked) => Promise<void> | void;
   /** A series in My manga, read from another copy from now on. site: where that is, for saying so. */
   onMove: (rec: BookRecord, picked: Picked, site: string) => void;
-  onClose: () => void;
+  /** What its Back goes back to: Browse, or My manga. */
+  from: string;
+  /** Under the reader, a chapter read from it open over it. */
+  covered: boolean;
+  onBack: () => void;
 }
 
 type Load<T> = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; value: T };
@@ -132,9 +143,14 @@ function chaptersText(c: Copy): string {
   return `${c.chapters} of ${c.of} ch`;
 }
 
-export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onAdd, onMove, onClose }: Props) {
+export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, onMove, from, covered, onBack }: Props) {
   const labels = useLabels();
   const main = start[0];
+  const pageRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  /** Its title is up in the bar, once the page's own has scrolled under it. */
+  const [scrolled, setScrolled] = useState(false);
+  const [newest, setNewest] = useState(() => readLocal<unknown>(NEWEST_FIRST, false) === true);
   const [about, setAbout] = useState<Load<About>>({ state: 'loading' });
   const [lang, setLang] = useState(() => startLang(start, recordOf, prefs));
   const [list, setList] = useState<Load<MangaChapter[]>>({ state: 'loading' });
@@ -147,6 +163,41 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
   const coverRef = useRef<HTMLDivElement>(null);
   const hereRef = useRef<HTMLLIElement>(null);
   const { places, settled } = useCopies(main.card.title, start, prefs, lang);
+
+  // The page has the keys while it's up, and gives them back to the card it was opened from.
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    return () => { prev?.focus?.({ preventScroll: true }); };
+  }, []);
+  useEffect(() => {
+    if (!covered) pageRef.current?.focus({ preventScroll: true });
+  }, [covered]);
+
+  // Escape closes the copies open, or the question about moving, before it leaves the page.
+  const backRef = useRef(onBack);
+  backRef.current = onBack;
+  useEffect(() => {
+    if (covered) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // A dialog over the page closes on its own.
+      if (document.querySelector('[role="dialog"]')) return;
+      if (listOpen) setListOpen(false);
+      else if (asking) setAsking(null);
+      else backRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [covered, listOpen, asking]);
+
+  useEffect(() => {
+    const root = pageRef.current;
+    const title = titleRef.current;
+    if (!root || !title) return;
+    const io = new IntersectionObserver(([e]) => setScrolled(!e.isIntersecting), { root, rootMargin: '-64px 0px 0px 0px' });
+    io.observe(title);
+    return () => io.disconnect();
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -415,132 +466,167 @@ export function MangaSheet({ found: start, prefs, recordOf, placeOf, onRead, onA
   let credit = `From ${siteOf(shown)}.`;
   if (shown.kind === 'mangadex') credit = 'From MangaDex.';
 
-  return createPortal(
-    <Modal title={main.card.title} onClose={onClose} width={860} className="mds">
-      <div className="mds-top">
-        <div className="mds-cover" ref={coverRef}>
-          {cover ? <img src={cover} alt="" draggable={false} /> : <span className="mdx-nocover">{main.card.title}</span>}
+  // Oldest first, as they're read; newest first, the numbered ones turned round, the extras after them still.
+  const order = chapters.map((_, i) => i);
+  if (newest) {
+    const numbered = order.filter((i) => chapters[i].number !== null).reverse();
+    order.splice(0, order.length, ...numbered, ...order.filter((i) => chapters[i].number === null));
+  }
+  const flipOrder = () => {
+    setNewest(!newest);
+    writeLocal(NEWEST_FIRST, !newest);
+  };
+
+  return (
+    <motion.div
+      className="mdp"
+      ref={pageRef}
+      role="main"
+      aria-label={main.card.title}
+      tabIndex={-1}
+      inert={covered}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8, transition: { duration: 0.15 } }}
+      transition={springs.snappy}
+    >
+      <header className={`mdp-bar${scrolled ? ' is-scrolled' : ''}`}>
+        <button type="button" className="mdp-back" onClick={onBack}><IconBack /> {from}</button>
+        <span className="mdp-name" aria-hidden="true">{main.card.title}</span>
+      </header>
+      <div className="mdp-in">
+        <div className="mds-top">
+          <div className="mds-cover" ref={coverRef}>
+            {cover ? <img src={cover} alt="" draggable={false} /> : <span className="mdx-nocover">{main.card.title}</span>}
+          </div>
+          <div className="mds-info">
+            <h1 className="mds-title" ref={titleRef}>{main.card.title}</h1>
+            {alt && <p className="mds-alt">{alt}</p>}
+            {people.length > 0 && <p className="mds-by">{people.join(', ')}</p>}
+            <p className="mds-meta">{meta.join(' · ')}</p>
+            {chips.length > 0 && (
+              <div className="mds-tags">
+                {chips.slice(0, 15).map((c) => <span key={c.name} className={c.rating ? 'chip is-rating' : 'chip'}>{c.name}</span>)}
+              </div>
+            )}
+          </div>
+          <div className="mds-actions">
+            <button type="button" className="btn btn-primary" disabled={!canRead || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, undefined, rect()))}>{readLabel}</button>
+            {had ? (
+              <span className="mds-in"><IconCheck /> In {labels.mine}</span>
+            ) : (
+              <button type="button" className="btn btn-quiet" disabled={!a || busy} onClick={() => a && once(() => onAdd(a, pickedNow))}>
+                {busy ? 'Adding…' : `Add to ${labels.mine}`}
+              </button>
+            )}
+          </div>
         </div>
-        <div className="mds-info">
-          {alt && <p className="mds-alt">{alt}</p>}
-          {people.length > 0 && <p className="mds-by">{people.join(', ')}</p>}
-          <p className="mds-meta">{meta.join(' · ')}</p>
-          {chips.length > 0 && (
-            <div className="mds-tags">
-              {chips.slice(0, 15).map((c) => <span key={c.name} className={c.rating ? 'chip is-rating' : 'chip'}>{c.name}</span>)}
+
+        <section className="mdc" aria-label="Copies">
+          <div className="mds-ch-head">
+            <span>{copiesTitle}</span>
+            {!settled && <span className="mdc-note"><span className="add-spinner" /> Measuring pages</span>}
+          </div>
+          <div className={`mdc-pick${listOpen ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="mdc-row is-current"
+              aria-expanded={listOpen}
+              aria-controls="mdc-others"
+              disabled={others.length === 0}
+              onClick={() => setListOpen(!listOpen)}
+            >
+              <RowBody row={current} />
+              {others.length > 0 && <IconChevron className="mdc-go" aria-hidden="true" />}
+            </button>
+            {listOpen && (
+              <ol className="mdc-list" id="mdc-others">
+                {others.map((r) => (
+                  <li key={r.key}>
+                    <button type="button" className="mdc-row" disabled={r.waiting && !had} onClick={() => pick(r.key)}>
+                      <RowBody row={r} />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          {asking && (
+            <div className="mdc-ask" role="group" aria-label="Move it">
+              <p>{askText}</p>
+              <button type="button" className="btn btn-primary" onClick={move}>Move</button>
+              <button type="button" className="btn btn-quiet" onClick={() => setAsking(null)}>Cancel</button>
             </div>
           )}
-        </div>
-        <div className="mds-actions">
-          <button type="button" className="btn btn-primary" disabled={!canRead || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, undefined, rect()))}>{readLabel}</button>
-          {had ? (
-            <span className="mds-in"><IconCheck /> In {labels.mine}</span>
-          ) : (
-            <button type="button" className="btn btn-quiet" disabled={!a || busy} onClick={() => a && once(() => onAdd(a, pickedNow))}>
-              {busy ? 'Adding…' : `Add to ${labels.mine}`}
-            </button>
-          )}
-        </div>
-      </div>
+        </section>
 
-      <section className="mdc" aria-label="Copies">
-        <div className="mds-ch-head">
-          <span>{copiesTitle}</span>
-          {!settled && <span className="mdc-note"><span className="add-spinner" /> Measuring pages</span>}
-        </div>
-        <div className={`mdc-pick${listOpen ? ' is-open' : ''}`}>
-          <button
-            type="button"
-            className="mdc-row is-current"
-            aria-expanded={listOpen}
-            aria-controls="mdc-others"
-            disabled={others.length === 0}
-            onClick={() => setListOpen(!listOpen)}
-          >
-            <RowBody row={current} />
-            {others.length > 0 && <IconChevron className="mdc-go" aria-hidden="true" />}
-          </button>
-          {listOpen && (
-            <ol className="mdc-list" id="mdc-others">
-              {others.map((r) => (
-                <li key={r.key}>
-                  <button type="button" className="mdc-row" disabled={r.waiting && !had} onClick={() => pick(r.key)}>
-                    <RowBody row={r} />
-                  </button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-        {asking && (
-          <div className="mdc-ask" role="group" aria-label="Move it">
-            <p>{askText}</p>
-            <button type="button" className="btn btn-primary" onClick={move}>Move</button>
-            <button type="button" className="btn btn-quiet" onClick={() => setAsking(null)}>Cancel</button>
+        {about.state === 'error' && <p className="mds-error">{about.message}</p>}
+        {description && (
+          <div className={`mds-desc${more ? ' is-open' : ''}`}>
+            <p>{description}</p>
+            {description.length > 320 && <button type="button" className="mds-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}
           </div>
         )}
-      </section>
+        <Links about={a} />
 
-      {about.state === 'error' && <p className="mds-error">{about.message}</p>}
-      {description && (
-        <div className={`mds-desc${more ? ' is-open' : ''}`}>
-          <p>{description}</p>
-          {description.length > 320 && <button type="button" className="mds-more" onClick={() => setMore(!more)}>{more ? 'Less' : 'More'}</button>}
+        <div className="mds-ch-head is-chapters">
+          <span>{count}</span>
+          <span className="mds-ch-tools">
+            {hereAt >= 0 && <button type="button" className="mds-here" onClick={toHere}>You’re on Ch. {here}</button>}
+            {chapters.length > 1 && (
+              <button type="button" className="mds-order" onClick={flipOrder} title={newest ? 'Show the first chapter first' : 'Show the latest chapter first'}>
+                <IconOrder />
+                {newest ? 'Newest first' : 'Oldest first'}
+              </button>
+            )}
+            {shown.kind === 'mangadex' && (
+              <label className="mdx-lang">
+                <span className="sr-only">Chapters in</span>
+                <select value={lang} onChange={(e) => setLang(e.target.value)}>
+                  {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+                </select>
+              </label>
+            )}
+          </span>
         </div>
-      )}
-      <Links about={a} />
-
-      <div className="mds-ch-head">
-        <span>{count}</span>
-        <span className="mds-ch-tools">
-          {hereAt >= 0 && <button type="button" className="mds-here" onClick={toHere}>You’re on Ch. {here}</button>}
-          {shown.kind === 'mangadex' && (
-            <label className="mdx-lang">
-              <span className="sr-only">Chapters in</span>
-              <select value={lang} onChange={(e) => setLang(e.target.value)}>
-                {langs.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
-              </select>
-            </label>
-          )}
-        </span>
-      </div>
-      {list.state === 'loading' && <p className="mds-wait"><span className="add-spinner" /> Finding its chapters…</p>}
-      {list.state === 'error' && <p className="mds-error">{list.message}</p>}
-      {list.state === 'ready' && chapters.length === 0 && <p className="mds-wait">No chapters here yet.</p>}
-      {chapters.length > 0 && (
-        <ol className="mds-chapters">
-          {chapters.map((c, i) => {
-            let made = madeBy(c);
-            if (c.external) made = 'On its publisher’s site';
-            const body = (
-              <>
-                <span className="mds-ch-n">{c.label}</span>
-                <span className="mds-ch-t">{c.number !== null && c.title ? c.title : ''}</span>
-                <span className="mds-ch-g">{made}</span>
-                <span className="mds-ch-d">{c.external ? <IconOut /> : dateText(picked[i].at)}</span>
-              </>
-            );
-            if (c.external) {
+        {list.state === 'loading' && <p className="mds-wait"><span className="add-spinner" /> Finding its chapters…</p>}
+        {list.state === 'error' && <p className="mds-error">{list.message}</p>}
+        {list.state === 'ready' && chapters.length === 0 && <p className="mds-wait">No chapters here yet.</p>}
+        {chapters.length > 0 && (
+          <ol className="mds-chapters">
+            {order.map((i) => {
+              const c = chapters[i];
+              let made = madeBy(c);
+              if (c.external) made = 'On its publisher’s site';
+              const body = (
+                <>
+                  <span className="mds-ch-n">{c.label}</span>
+                  <span className="mds-ch-t">{c.number !== null && c.title ? c.title : ''}</span>
+                  <span className="mds-ch-g">{made}</span>
+                  <span className="mds-ch-d">{c.external ? <IconOut /> : dateText(picked[i].at)}</span>
+                </>
+              );
+              if (c.external) {
+                return (
+                  <li key={c.id}>
+                    <a className="mds-ch is-out" href={c.external} target="_blank" rel="noopener noreferrer">{body}</a>
+                  </li>
+                );
+              }
+              let cls = 'mds-ch';
+              if (i === hereAt) cls += ' is-here';
+              else if (i < hereAt) cls += ' is-read';
               return (
-                <li key={c.id}>
-                  <a className="mds-ch is-out" href={c.external} target="_blank" rel="noopener noreferrer">{body}</a>
+                <li key={c.id} ref={i === hereAt ? hereRef : undefined}>
+                  <button type="button" className={cls} aria-current={i === hereAt ? 'step' : undefined} disabled={!a || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, startOf(c), rect()))}>{body}</button>
                 </li>
               );
-            }
-            let cls = 'mds-ch';
-            if (i === hereAt) cls += ' is-here';
-            else if (i < hereAt) cls += ' is-read';
-            return (
-              <li key={c.id} ref={i === hereAt ? hereRef : undefined}>
-                <button type="button" className={cls} aria-current={i === hereAt ? 'step' : undefined} disabled={!a || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, startOf(c), rect()))}>{body}</button>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-      <p className="mds-credit">{credit}</p>
-    </Modal>,
-    document.body,
+            })}
+          </ol>
+        )}
+        <p className="mds-credit">{credit}</p>
+      </div>
+    </motion.div>
   );
 }
 

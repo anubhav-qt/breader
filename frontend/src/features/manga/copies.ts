@@ -5,7 +5,7 @@ import { mangadex, sources, type MangaPrefs } from '../../lib/mangadex';
 import { sameSeries } from './found';
 
 /*
- * A series' copies, for its sheet (MangaSheet.tsx): everywhere it's found, by the same name looked
+ * A series' copies, for its page (MangaPage.tsx): everywhere it's found, by the same name looked
  * for again, and in each place each group that made most of it, its pages measured by the laptop.
  * The sharpest is read unless the reader picks another. A place's copies are asked once a visit.
  */

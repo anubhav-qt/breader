@@ -1,4 +1,4 @@
-/* Browse (Browse.tsx) and a series' sheet (MangaSheet.tsx), in the library's own look. */
+/* Browse (Browse.tsx) and a series' page (MangaPage.tsx), in the library's own look. */
 /* The search on a line of its own; under it, one line with the order, the dots and the language. */
 .mdx-bar {
   position: sticky;
@@ -97,7 +97,20 @@
 .mdx-credit { margin: 24px auto 0; max-width: 640px; text-align: center; font: var(--ui-w) 11.5px/1.5 var(--ui); color: var(--ink-2); }
 .mdx-credit a { color: inherit; text-underline-offset: 2px; }
 
-/* A series' sheet */
+/* A series' page: over the library, the height of the screen and scrolling on its own, its Back
+   stuck at the top, with its title too once the page's own has gone under it. */
+.mdp { position: fixed; inset: 0; z-index: 30; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; background: var(--canvas); outline: none; scrollbar-width: thin; --mdp-bar: 64px; }
+/* Under the reader it isn't drawn, but stays scrolled where it was for coming back to. */
+.mdp[inert] { visibility: hidden; }
+.mdp-bar { position: sticky; top: 0; z-index: 7; display: flex; align-items: center; gap: 12px; height: var(--mdp-bar); padding: 0 36px; background: linear-gradient(var(--canvas) 72%, transparent); }
+.mdp-bar.is-scrolled { background: var(--canvas); box-shadow: 0 1px 0 var(--line); }
+.mdp-back { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 38px; padding: 0 12px 0 6px; border-radius: 10px; font: var(--ui-w) 14px/1 var(--ui); color: var(--ink-2); transition: background-color 140ms ease, color 140ms ease; }
+.mdp-back:hover { background: var(--fill); color: var(--ink); }
+.mdp-back svg { width: 20px; height: 20px; }
+.mdp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--read); font-size: 28px; line-height: 1; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; }
+.mdp-bar.is-scrolled .mdp-name { opacity: 1; transform: none; }
+.mdp-in { max-width: 920px; margin: 0 auto; padding: 8px 36px 96px; }
+.mds-title { margin: 0 0 4px; font-family: var(--read); font-size: 56px; font-weight: 400; line-height: 0.8; overflow-wrap: anywhere; }
 .mds-top { display: grid; grid-template-columns: 196px minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "cover info" "cover actions"; column-gap: 22px; }
 .mds-cover { grid-area: cover; position: relative; align-self: start; aspect-ratio: 1 / 1.42; border-radius: 6px 14px 14px 6px; overflow: hidden; background: var(--fill); }
 .mds-cover::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--tile-border); pointer-events: none; }
@@ -121,7 +134,7 @@
 .mds-links .btn svg { width: 15px; height: 15px; }
 .mds-link { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); text-underline-offset: 2px; }
 .mds-link:hover { color: var(--ink); }
-/* Copies (MangaSheet.tsx): the one it's read in, its dot lit, and every other way to read it dropping down under it. */
+/* Copies (MangaPage.tsx): the one it's read in, its dot lit, and every other way to read it dropping down under it. */
 .mdc-note { display: inline-flex; align-items: center; gap: 8px; font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); }
 .mdc-pick { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .mdc-list { list-style: none; margin: 0; padding: 4px; border-top: 1px solid var(--line); }
@@ -188,6 +201,12 @@
 .mds-ch-head > span:first-child { white-space: nowrap; }
 .mds-here { font: var(--ui-w) 12.5px/1 var(--ui); color: var(--accent); white-space: nowrap; text-decoration: underline; text-underline-offset: 3px; }
 .mds-here:hover { color: var(--ink); }
+/* The chapters' head stays in reach under the bar, however long the list. */
+.mds-ch-head.is-chapters { position: sticky; top: var(--mdp-bar); z-index: 6; padding-top: 10px; margin-top: 14px; background: var(--canvas); }
+/* Oldest or newest first: which it is now, turned round with a tap. */
+.mds-order { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 12px 0 10px; border: 1px solid var(--line); border-radius: 10px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink); white-space: nowrap; transition: background-color 140ms ease; }
+.mds-order:hover { background: var(--fill); }
+.mds-order svg { width: 16px; height: 16px; color: var(--ink-2); }
 .mds-wait, .mds-error { display: flex; align-items: center; gap: 10px; margin: 14px 0; font: var(--ui-w) 13px/1.4 var(--ui); color: var(--ink-2); }
 .mds-error { color: var(--danger); }
 .mds-credit { margin: 18px 0 0; font: var(--ui-w) 11.5px/1.5 var(--ui); color: var(--ink-2); }
@@ -201,6 +220,11 @@
   .mdx-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 18px 10px; }
   .mdx-title { font-size: 20px; }
   .mdx-meta { font-size: 10.5px; }
+  .mdp { --mdp-bar: 56px; }
+  .mdp-bar { padding: 0 10px; gap: 6px; }
+  .mdp-name { font-size: 25px; }
+  .mdp-in { padding: 4px 16px 72px; }
+  .mds-title { font-size: 40px; }
   .mds-top { grid-template-columns: 116px minmax(0, 1fr); grid-template-rows: auto auto; grid-template-areas: "cover info" "actions actions"; column-gap: 14px; }
   .mds-actions .btn { flex: 1; }
   .mds-alt { font-size: 22px; }

@@ -15,7 +15,7 @@ import { runTurn } from './turn';
 /*
  * A manga's pages. Scrolled, they're a column read downwards, with no gaps between them, each
  * drawn a few screens before it's reached. In pages, they turn one at a time, or two side by side as the book prints them once the
- * screen is wide enough, right to left as manga is read (or left to right, as comics are). A page's
+ * screen is wide enough (unless the reader keeps to one), right to left as manga is read (or left to right, as comics are). A page's
  * picture comes out of the file as it nears the screen, and is let go once it's well behind.
  * A series read from MangaDex is its chapters one after another: scrolled, each starts under a line
  * crediting who made it, and in pages, a chapter starts on a page of its own. One opened a few
@@ -36,6 +36,8 @@ interface Props {
   dir: MangaDir;
   /** Scrolled: the column at its widest. */
   width: number;
+  /** In pages: two side by side where the screen has room for them, or always one. */
+  pages: 1 | 2;
   start: Start;
   onLocation: (l: Loc) => void;
   onWidth: (w: number) => void;
@@ -272,7 +274,7 @@ function chapterOf(ch: RemoteChapter, all: RemoteChapter[]): string {
   return `${ch.label} of ${last}`;
 }
 
-export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book, layout, dir, width, start, onLocation, onWidth, onTurn, onTap, onGrow }, ref) {
+export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book, layout, dir, width, pages, start, onLocation, onWidth, onTurn, onTap, onGrow }, ref) {
   const total = book.pages;
   // A series opened a few chapters at a time counts the words of all of it, not those open.
   const per = WORDS_PER_MANGA_PAGE;
@@ -374,8 +376,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const side = sideOf(size.w);
   const areaW = Math.max(0, size.w - 2 * side);
   const areaH = Math.max(0, size.h - 2 * BAR);
-  // Two side by side when each can be nearly as tall as one alone.
-  const two = layout === 'pages' && !strip && areaW / 2 >= 0.85 * (areaH / typical);
+  // Two side by side when each can be nearly as tall as one alone, unless the reader keeps to one.
+  const two = layout === 'pages' && pages === 2 && !strip && areaW / 2 >= 0.85 * (areaH / typical);
 
   /** A series' chapters by the page each starts on; those read on their publisher's site too, and at the end, past the last page. */
   const bands = useMemo(() => {

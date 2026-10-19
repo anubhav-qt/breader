@@ -46,6 +46,8 @@ export interface ReaderSettings {
   mangaNarrow?: MangaLayout;
   /** Manga scrolled on a wide screen: how wide the column of pages is (MANGA_WIDTHS). */
   mangaWidth?: number;
+  /** Manga in pages on a wide screen: one at a time, or two side by side where they fit (the default). */
+  mangaPages?: 1 | 2;
   /** 2 voices: the colour her lines light in, and his (book colours, data/colors.ts). */
   twoColors?: { F: BookColor; M: BookColor };
   /** Which of the changes below (loadSettings) these have been through. */
@@ -218,6 +220,8 @@ export interface MangaLook {
   layout: MangaLayout;
   dir: MangaDir;
   width: number;
+  /** In pages, two side by side where the screen has room for them, or always one. */
+  pages: 1 | 2;
   narrow: boolean;
 }
 
@@ -230,7 +234,7 @@ export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean, pane
   let layout = own?.layout ?? s.mangaLayout;
   if (narrow) layout = own?.narrow ?? s.mangaNarrow ?? 'scroll';
   if (layout === 'panels' && !panels) layout = 'scroll';
-  return { layout, dir: own?.dir ?? s.mangaDir, width: s.mangaWidth ?? MANGA_WIDTH, narrow };
+  return { layout, dir: own?.dir ?? s.mangaDir, width: s.mangaWidth ?? MANGA_WIDTH, pages: s.mangaPages === 1 ? 1 : 2, narrow };
 }
 
 /**

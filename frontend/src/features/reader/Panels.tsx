@@ -169,6 +169,8 @@ export interface MangaControls {
   look: MangaLook;
   pick: (patch: { layout?: MangaLayout; dir?: MangaDir }) => void;
   widen: (width: number) => void;
+  /** One page at a time, or two side by side where they fit. */
+  pair: (pages: 1 | 2) => void;
   saver: boolean;
   panels: boolean;
 }
@@ -286,11 +288,12 @@ export function SeatOffer() {
 }
 
 /**
- * A manga's layout, the way its pages turn, and how wide they scroll. On a narrow screen it opens
- * scrolled, and keeps a layout there apart from wider ones; the column of pages is as wide as the screen.
+ * A manga's layout, the way its pages turn, how wide they scroll, and whether they turn two at a
+ * time on a wide screen. On a narrow screen it opens scrolled, and keeps a layout there apart from
+ * wider ones; the column of pages is as wide as the screen, and pages turn one at a time.
  * Panels, and finding them on the server, are for manga from Japan only.
  */
-function MangaLookControls({ look, pick, widen, saver, panels }: MangaControls) {
+function MangaLookControls({ look, pick, widen, pair, saver, panels }: MangaControls) {
   const layouts: Array<{ v: MangaLayout; label: string }> = [{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }];
   if (panels) layouts.push({ v: 'panels', label: 'Panels' });
   return (
@@ -299,6 +302,9 @@ function MangaLookControls({ look, pick, widen, saver, panels }: MangaControls) 
       <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
       {!look.narrow && look.layout === 'scroll' && (
         <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
+      )}
+      {!look.narrow && look.layout === 'pages' && (
+        <Segmented label="Pages" value={look.pages} onChange={pair} options={[{ v: 1, label: 'One at a time' }, { v: 2, label: 'Two side by side' }]} />
       )}
       {saver && <DataSaver />}
       {panels && <ServerPanels />}

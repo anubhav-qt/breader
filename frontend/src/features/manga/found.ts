@@ -3,7 +3,7 @@ import { KIND_NAME, mangadex, RATING_NAME, sources, STATUS_NAME } from '../../li
 
 /*
  * The same series found in several places, or twice in one, is one entry: one card in Browse, its
- * copies listed in its sheet (MangaSheet.tsx). Series are the same by name (the server keys them,
+ * copies listed on its page (MangaPage.tsx). Series are the same by name (the server keys them,
  * shared seriesName), when both are doujinshi or neither, and their kinds don't clash.
  */
 

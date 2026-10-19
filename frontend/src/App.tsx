@@ -31,7 +31,7 @@ import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesKey, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
 import { urlOf } from './features/manga/copies';
-import type { About, Picked } from './features/manga/MangaSheet';
+import type { About, Picked } from './features/manga/MangaPage';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { OwnLibraryMenu } from './features/shared/OwnLibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
@@ -42,11 +42,65 @@ import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
 
-type Route = { name: 'library' } | { name: 'read'; id: string };
+/** The library; a book open (#/read/<id>); or a series' page (#/manga/<id>, by the id of the place it was picked in). */
+type Route = { name: 'library' } | { name: 'read'; id: string } | { name: 'series'; id: string };
 
 function parseHash(): Route {
-  const m = window.location.hash.match(/^#\/read\/(.+)$/);
-  return m ? { name: 'read', id: decodeURIComponent(m[1]) } : { name: 'library' };
+  const read = window.location.hash.match(/^#\/read\/(.+)$/);
+  if (read) return { name: 'read', id: decodeURIComponent(read[1]) };
+  const series = window.location.hash.match(/^#\/manga\/(.+)$/);
+  if (series) return { name: 'series', id: decodeURIComponent(series[1]) };
+  return { name: 'library' };
+}
+
+function sameRoute(a: Route, b: Route): boolean {
+  if (a.name === 'library' || b.name === 'library') return a.name === b.name;
+  return a.name === b.name && a.id === b.id;
+}
+
+function hashOf(route: Route): string {
+  if (route.name === 'read') return `#/read/${encodeURIComponent(route.id)}`;
+  if (route.name === 'series') return `#/manga/${encodeURIComponent(route.id)}`;
+  return window.location.pathname + window.location.search;
+}
+
+/** A series' page: everywhere the series was found, the first the one picked, and what its Back says. */
+type SeriesAt = { found: MangaFound[]; from: string };
+
+/**
+ * What the app keeps with a place in the browser's history, so Back and Forward, and a reload, find
+ * it as it was. inApp: it was gone to from another of the app's places, so the app's own Back steps
+ * back there. series: the series' page it is, or that a chapter open was read from, over the library.
+ */
+interface Kept { inApp?: boolean; series?: SeriesAt }
+
+function keptNow(): Kept {
+  const s: unknown = window.history.state;
+  if (!s || typeof s !== 'object') return {};
+  return s as Kept;
+}
+
+/** The series' page the place in the history has, where it has one. */
+function seriesNow(route: Route): SeriesAt | null {
+  if (route.name === 'library') return null;
+  return keptNow().series ?? null;
+}
+
+const seriesId = (s: SeriesAt) => s.found[0].card.id;
+
+/** A series in My manga, as found where it's read from: what its card knows, until its page has the rest. */
+function foundOf(b: BookRecord): MangaFound[] | null {
+  const w = remoteOf(b.url);
+  const names = namesOf([b.title]);
+  if (w?.kind === 'mangadex') {
+    const card = { id: w.series, title: b.title, cover: null, rating: 'safe' as const, status: null, year: null, langs: [], original: '', kind: 'manga' as const, authors: b.author ? [b.author] : [], side: false };
+    return [{ kind: 'mangadex', source: 'MangaDex', card, ...names }];
+  }
+  if (w?.kind === 'source') {
+    const card = { id: w.id, title: b.title, cover: `/v1/manga/source/${w.id}/cover`, status: null, adult: false, side: false, kind: null };
+    return [{ kind: 'source', source: '', card, ...names }];
+  }
+  return null;
 }
 
 /**
@@ -66,7 +120,7 @@ function writeParam(name: string, value: string, fallback: string) {
   const url = new URL(window.location.href);
   if (value === fallback) url.searchParams.delete(name);
   else url.searchParams.set(name, value);
-  window.history.replaceState(null, '', url);
+  window.history.replaceState(window.history.state, '', url);
 }
 
 const byRecent = (a: ShelfItem, b: ShelfItem) => b.lastOpened - a.lastOpened;
@@ -80,19 +134,19 @@ function stoppedSharing(n: number, category: Category): string {
 const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
 
 /*
- * The reader, Browse, a series' sheet and Add book come in pieces of their own, so the library
+ * The reader, Browse, a series' page and Add book come in pieces of their own, so the library
  * opens on less. Each is fetched once the app is idle, so it's here before it's wanted.
  */
 const loadReader = () => import('./features/reader/Reader');
 const loadBrowse = () => import('./features/manga/Browse');
-const loadSheet = () => import('./features/manga/MangaSheet');
+const loadPage = () => import('./features/manga/MangaPage');
 const loadAdd = () => import('./features/add/AddBook');
 const Reader = lazy(() => loadReader().then((m) => ({ default: m.Reader })));
 const Browse = lazy(() => loadBrowse().then((m) => ({ default: m.Browse })));
-const MangaSheet = lazy(() => loadSheet().then((m) => ({ default: m.MangaSheet })));
+const MangaPage = lazy(() => loadPage().then((m) => ({ default: m.MangaPage })));
 const AddBook = lazy(() => loadAdd().then((m) => ({ default: m.AddBook })));
 function loadSoon() {
-  const all = () => { for (const load of [loadReader, loadBrowse, loadSheet, loadAdd]) void load().catch(() => {}); };
+  const all = () => { for (const load of [loadReader, loadBrowse, loadPage, loadAdd]) void load().catch(() => {}); };
   // Safari has no requestIdleCallback.
   const idle = window.requestIdleCallback as typeof window.requestIdleCallback | undefined;
   if (idle) window.requestIdleCallback(all, { timeout: 4000 });
@@ -125,10 +179,19 @@ function cardRect(id: string): DOMRect | null {
   return new DOMRect(r.left, top, r.width, r.height);
 }
 
-/** The reader goes back into its card: its text clears, then the page draws back into the card. */
-async function closeReader(host: HTMLElement, id: string, reduced: boolean) {
+/** Where a series' cover is on its page, when it's on screen. */
+function coverRect(): DOMRect | null {
+  const r = document.querySelector('.mdp .mds-cover')?.getBoundingClientRect();
+  if (!r || r.width < 8 || r.top >= window.innerHeight || r.bottom <= 0) return null;
+  return r;
+}
+
+/**
+ * The reader goes back into its card, or the cover on the series' page it was read from: its text
+ * clears, then the page draws back into it.
+ */
+async function closeReader(host: HTMLElement, r: DOMRect | null, reduced: boolean) {
   if (reduced) { await animate(host, { opacity: 0 }, { duration: 0.15 }); return; }
-  const r = cardRect(id);
   if (!r) { await animate(host, { opacity: 0, scale: 0.98 }, { duration: 0.3 }); return; }
   const content = Array.from(host.querySelectorAll<HTMLElement>('.rd-body'));
   await Promise.all([
@@ -151,9 +214,9 @@ export default function App() {
   /** The laptop has MangaDex (null until it says), and how this device looks through it. */
   const [mdOn, setMdOn] = useState<boolean | null>(null);
   const [mdPrefs, setMdPrefs] = useState<MangaPrefs>(readMangaPrefs);
-  /** A series' sheet, open over the library: everywhere it was found, the first the one picked. */
-  const [sheet, setSheet] = useState<MangaFound[] | null>(null);
-  /** A chapter picked in a sheet: where its series opens, this once. */
+  /** A series' page, over the library, and under the reader while a chapter read from it is open. */
+  const [sheet, setSheet] = useState<SeriesAt | null>(() => seriesNow(parseHash()));
+  /** A chapter picked on a series' page: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
   useEffect(loadSoon, []);
   // Whether the Manga shelf has its Browse button: the laptop says. Out of reach, it stays and Browse says so.
@@ -199,7 +262,8 @@ export default function App() {
   /* Books removed this session, kept out of every view (previews show copies of stored books). */
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
   const [opening, setOpening] = useState<{ id: string; rect: DOMRect } | null>(null);
-  const [closing, setClosing] = useState<{ id: string } | null>(null);
+  /** A book closing: back into its card, or into the cover on the series' page it was read from. */
+  const [closing, setClosing] = useState<{ id: string; series: boolean } | null>(null);
   const reduced = useReducedMotion() ?? false;
   const hostRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState<{ id: string; book: LoadedBook } | null>(null);
@@ -226,7 +290,7 @@ export default function App() {
     const q = Object.fromEntries(RETURN_PARAMS.map((k) => [k, url.searchParams.get(k)]));
     if (!q.login && !q.verify && !q.reset) return;
     RETURN_PARAMS.forEach((k) => url.searchParams.delete(k));
-    window.history.replaceState(null, '', url);
+    window.history.replaceState(window.history.state, '', url);
     if (q.reset) setLogin({ mode: 'reset', token: q.reset });
     else if (q.login === 'google') setLogin({ mode: 'entering' });
     else if (q.login === 'failed') say('Google login didn’t work.');
@@ -246,11 +310,60 @@ export default function App() {
     }
   }, [say]);
 
+  // Back and Forward, and an address typed in: the place they go to, as the history kept it.
   useEffect(() => {
-    const onHash = () => setRoute(parseHash());
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    const onMove = () => {
+      const next = parseHash();
+      setRoute((r) => (sameRoute(r, next) ? r : next));
+      const series = seriesNow(next);
+      setSheet((s) => (s && series && seriesId(s) === seriesId(series) && s.from === series.from ? s : series));
+    };
+    window.addEventListener('popstate', onMove);
+    window.addEventListener('hashchange', onMove);
+    return () => {
+      window.removeEventListener('popstate', onMove);
+      window.removeEventListener('hashchange', onMove);
+    };
   }, []);
+
+  /** To one of the app's places, a step on in the browser's history, so Back comes back. */
+  const goTo = useCallback((next: Route, series: SeriesAt | null) => {
+    const kept: Kept = { inApp: true };
+    if (series) kept.series = series;
+    window.history.pushState(kept, '', hashOf(next));
+    setRoute(next);
+    setSheet(series);
+  }, []);
+
+  /**
+   * Back to the place this one was gone to from: the browser's own step back, when that's where it
+   * came from; otherwise (an address opened as it is) there, in this one's place.
+   */
+  const goBack = useCallback((to: Route, series: SeriesAt | null) => {
+    setRoute(to);
+    setSheet(series);
+    if (keptNow().inApp) {
+      window.history.back();
+      return;
+    }
+    let kept: Kept | null = null;
+    if (series) kept = { series };
+    window.history.replaceState(kept, '', hashOf(to));
+  }, []);
+
+  /** A series' page, over the library. from: what its Back says. */
+  const openSeries = useCallback((found: MangaFound[], from: string) => {
+    goTo({ name: 'series', id: found[0].card.id }, { found, from });
+  }, [goTo]);
+  const leaveSeries = useCallback(() => {
+    // Back where it was picked, a reload since or not.
+    if (sheet?.from === 'Browse') {
+      setCategory('manga');
+      setTab('browse');
+    }
+    goBack({ name: 'library' }, null);
+  }, [goBack, sheet]);
+  const pickInBrowse = useCallback((found: MangaFound[]) => openSeries(found, 'Browse'), [openSeries]);
 
   /* Data for the current view */
   const previewSets = useMemo(
@@ -386,25 +499,16 @@ export default function App() {
 
   /* Opening a book: the reader grows out of the card, then takes over. */
   const finishOpen = useCallback((id: string) => {
-    window.location.hash = `#/read/${encodeURIComponent(id)}`;
+    // Read from a series' page, the page stays under the reader, for coming back to.
+    goTo({ name: 'read', id }, seriesNow(parseHash()));
     setOpening(null);
-  }, []);
+  }, [goTo]);
 
-  /**
-   * A series in My manga: its sheet, from what the card knows until the rest comes. Its other
-   * copies are looked for by its name.
-   */
+  /** A series in My manga: its page, from what the card knows until the rest comes. Its other copies are looked for by its name. */
   const chaptersOf = useCallback((b: BookRecord) => {
-    const w = remoteOf(b.url);
-    const names = namesOf([b.title]);
-    if (w?.kind === 'mangadex') {
-      const card = { id: w.series, title: b.title, cover: null, rating: 'safe' as const, status: null, year: null, langs: [], original: '', kind: 'manga' as const, authors: b.author ? [b.author] : [], side: false };
-      setSheet([{ kind: 'mangadex', source: 'MangaDex', card, ...names }]);
-    } else if (w?.kind === 'source') {
-      const card = { id: w.id, title: b.title, cover: `/v1/manga/source/${w.id}/cover`, status: null, adult: false, side: false, kind: null };
-      setSheet([{ kind: 'source', source: '', card, ...names }]);
-    }
-  }, []);
+    const found = foundOf(b);
+    if (found) openSeries(found, labels.mine);
+  }, [openSeries, labels.mine]);
 
   const startLoad = useCallback(async (id: string, given?: BookRecord, at?: Position) => {
     const rec = given ?? recordById.get(id);
@@ -459,12 +563,29 @@ export default function App() {
     if (route.name === 'read' && loaded?.id !== route.id && !opening && lib.ready) void startLoad(route.id);
   }, [route, loaded, opening, lib.ready, startLoad]);
 
+  // Back from a book: to the series' page it was read from, or the library.
   const back = useCallback(() => {
-    if (route.name === 'read' && loadedId.current === route.id) setClosing({ id: route.id });
-    window.location.hash = '';
-    setRoute({ name: 'library' });
+    if (route.name === 'read' && loadedId.current === route.id) setClosing({ id: route.id, series: !!sheet });
+    if (sheet) goBack({ name: 'series', id: seriesId(sheet) }, sheet);
+    else goBack({ name: 'library' }, null);
     setStartAt(null);
-  }, [route]);
+  }, [route, sheet, goBack]);
+
+  // A series' page opened from its address alone, with nothing kept in the history (a link, say): from
+  // its card in My manga, or the library when it isn't in it.
+  useEffect(() => {
+    if (route.name !== 'series' || sheet || !lib.ready) return;
+    const rec = remoteSeries.get(route.id);
+    const found = rec ? foundOf(rec) : null;
+    if (!found) {
+      window.history.replaceState(null, '', hashOf({ name: 'library' }));
+      setRoute({ name: 'library' });
+      return;
+    }
+    const series = { found, from: labels.mine };
+    window.history.replaceState({ ...keptNow(), series }, '', hashOf(route));
+    setSheet(series);
+  }, [route, sheet, lib.ready, remoteSeries, labels.mine]);
 
   // A chapter not in the book as it's open (a series from a Suwayomi source opens a few at a
   // time): the book opens again, there.
@@ -554,7 +675,6 @@ export default function App() {
     if (!rec) rec = await addSeries(about, url);
     const id = rec.id;
     setStartAt(from ? { id, pos: from } : null);
-    setSheet(null);
     openAnimDone.current = false;
     loadedId.current = null;
     setOpening({ id, rect: rect ?? new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2 - 85, 120, 170) });
@@ -620,7 +740,8 @@ export default function App() {
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
         const host = hostRef.current;
-        void (host ? closeReader(host, closing.id, reduced) : Promise.resolve()).then(() => {
+        const to = closing.series ? coverRect() : cardRect(closing.id);
+        void (host ? closeReader(host, to, reduced) : Promise.resolve()).then(() => {
           if (!live) return;
           // Gone before its styles are undone, or it shows whole for a frame over the library.
           flushSync(() => setClosing(null));
@@ -1121,8 +1242,9 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      {route.name === 'library' && (
-        <div className="lib">
+      {/* Under a series' page, the library stays as it was left, for going back to. */}
+      {route.name !== 'read' && (
+        <div className="lib" inert={route.name === 'series'}>
           <Header
             category={category}
             onCategory={setCategory}
@@ -1199,12 +1321,31 @@ export default function App() {
                 have={haveSeries}
                 prefs={mdPrefs}
                 onPrefs={setMdPrefs}
-                onPick={setSheet}
+                onPick={pickInBrowse}
               />
             </Suspense>
           )}
         </div>
       )}
+
+      <AnimatePresence>
+        {sheet && route.name !== 'library' && (
+          <Suspense key={`series-${seriesId(sheet)}`} fallback={null}>
+          <MangaPage
+            found={sheet.found}
+            from={sheet.from}
+            covered={route.name === 'read'}
+            prefs={mdPrefs}
+            recordOf={recordOf}
+            placeOf={placeOf}
+            onRead={(about, picked, had, from, rect) => readSeries(about, picked, had, from, rect)}
+            onAdd={(about, picked) => addSeriesOnly(about, picked)}
+            onMove={moveSeries}
+            onBack={leaveSeries}
+          />
+          </Suspense>
+        )}
+      </AnimatePresence>
 
       {shown && shownRec && (
         <div className={`rd-host${leaving ? ' is-leaving' : ''}`} ref={hostRef}>
@@ -1215,7 +1356,7 @@ export default function App() {
             title={lib.edits[shown.id]?.title}
             color={normColor(lib.edits[shown.id]?.color ?? shownRec.color, shownRec.title)}
             book={shown.book}
-            // A chapter picked in its sheet: there, whatever place was kept.
+            // A chapter picked on its series' page: there, whatever place was kept.
             initial={startAt?.id === shown.id ? { ...(lib.reads[shown.id] ?? { progress: 0, line: '', lastOpened: now }), pos: startAt.pos } : lib.reads[shown.id]}
             latest={lib.reads[shown.id]}
             closing={!!leaving}
@@ -1294,22 +1435,8 @@ export default function App() {
           />
         )}
         {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} />}
-        {/* A key made as a series was read waits for the library. */}
-        {freshKey && route.name === 'library' && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
-        {sheet && route.name === 'library' && (
-          <Suspense key={`sheet-${sheet[0].card.id}`} fallback={null}>
-          <MangaSheet
-            found={sheet}
-            prefs={mdPrefs}
-            recordOf={recordOf}
-            placeOf={placeOf}
-            onRead={(about, picked, had, from, rect) => readSeries(about, picked, had, from, rect)}
-            onAdd={(about, picked) => addSeriesOnly(about, picked)}
-            onMove={moveSeries}
-            onClose={() => setSheet(null)}
-          />
-          </Suspense>
-        )}
+        {/* A key made as a series was read waits for the reader to close. */}
+        {freshKey && route.name !== 'read' && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
         {login && (
           <LoginDialog
             key="login"

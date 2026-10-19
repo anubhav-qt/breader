@@ -749,6 +749,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       look: mangaLook,
       pick: (patch) => update((s) => withMangaLook(s, record.id, patch, narrow)),
       widen: (width) => update((s) => ({ ...s, mangaWidth: width })),
+      pair: (pages) => update((s) => ({ ...s, mangaPages: pages })),
       saver: remoteOf(record.url)?.kind === 'mangadex',
       panels,
     } : null,
@@ -820,7 +821,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} aside={tail} />
           ) : book.kind === 'manga' ? (
-            <MangaView ref={view} book={book} layout={mangaLook.layout} dir={mangaLook.dir} width={mangaLook.width} start={start} onLocation={onLocation} onWidth={setPageW} onTap={tapPage} onGrow={onBook} />
+            <MangaView ref={view} book={book} layout={mangaLook.layout} dir={mangaLook.dir} width={mangaLook.width} pages={mangaLook.pages} start={start} onLocation={onLocation} onWidth={setPageW} onTap={tapPage} onGrow={onBook} />
           ) : (
             <PdfView ref={view} book={book} layout={settings.pdfLayout} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           )}

@@ -46,7 +46,7 @@ interface Props {
   onKeep?: (book: ShelfItem) => void;
   /** Someone's shared library: puts these books of a series in the reader's own at once. */
   onKeepAll?: (books: ShelfItem[], series: string) => void;
-  /** A series from MangaDex: its sheet, for its chapters and their language. */
+  /** A series from MangaDex: its page, for its chapters and their language. */
   onChapters?: (book: ShelfItem) => void;
   /** What an empty library says, in place of its Add button. */
   empty?: ReactNode;

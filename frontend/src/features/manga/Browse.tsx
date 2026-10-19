@@ -16,7 +16,7 @@ import './manga.css';
  * the search, one line holds the order, the kinds to show, Doujinshi, 18+ and the language, each a
  * dot that lights when it's on, sliding sideways where it doesn't all fit. Series for adults show only once 18+ is on, which asks
  * whether they show alone or mixed in with the rest. Picking one opens its
- * sheet (MangaSheet.tsx), to pick a copy, read it or add it to My manga.
+ * page (MangaPage.tsx), to pick a copy, read it or add it to My manga.
  */
 
 interface Props {
