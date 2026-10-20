@@ -41,7 +41,6 @@ export async function readVoice(files: File[]): Promise<Draft> {
   if (onnx.length) {
     if (onnx.length > 1 || json.length !== 1) throw new Error('A Piper voice is two files, its .onnx and its .onnx.json. Pick both.');
     const [m, c] = [onnx[0], json[0]];
-    if (m.size > LIMITS.key.fileBytes) throw new Error('That model is too big to upload.');
     if (c.size > LIMITS.voiceSideBytes) throw new Error('That .json is too big to be a voice’s settings.');
     const config = await bytesOf(c);
     let cfg: Partial<PiperConfig> & { language?: { code?: string }; dataset?: string };

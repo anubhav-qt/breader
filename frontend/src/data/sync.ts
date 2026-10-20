@@ -485,6 +485,32 @@ export async function storeFile(blob: Blob, mime: string, kind: 'voice' | 'sampl
   return uploadBlob(blob, mime, kind);
 }
 
+let unsentQueued = false;
+
+/**
+ * Once a start: books added here whose file or cover never reached the server (it said no, or the
+ * upload was cut off) go back in the queue. Books whose file isn't in this browser are left alone.
+ */
+async function queueUnsent() {
+  if (unsentQueued) return;
+  unsentQueued = true;
+  const unsent: string[] = [];
+  for (const r of host!.snapshot().records) {
+    if (r.source !== 'file' || r.origin) continue;
+    const coverMissing = r.hasCover && !r.coverId;
+    if (r.fileId && !coverMissing) continue;
+    const data = await store.get(`file:${r.id}`);
+    if (data === undefined) continue;
+    unsent.push(r.id);
+  }
+  if (!unsent.length) return;
+  await update((s) => {
+    for (const id of unsent) {
+      if (!s.uploads.includes(id)) s.uploads.push(id);
+    }
+  });
+}
+
 async function uploadAll() {
   const s = await read();
   const recheck = new Set(s.recheck ?? []);
@@ -555,6 +581,7 @@ export function flush(): Promise<void> {
         try {
           await withData(queueSnapshotLocked);
           if (!(await read()).registered) await register();
+          await queueUnsent();
           let stuck: unknown = null;
           try {
             await pushAll();

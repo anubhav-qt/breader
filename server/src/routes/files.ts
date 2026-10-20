@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { LIMITS, UploadRequest, type UploadResponse } from '@breader/shared';
+import { UploadRequest, type UploadResponse } from '@breader/shared';
 import type { AppEnv, Deps, LibraryRow } from '../context.ts';
 import { blobs, libraries } from '../db/schema.ts';
 import type { Db } from '../db/client.ts';
@@ -26,18 +26,12 @@ const BAD_TYPE = {
   sample: 'Voice samples are WAV files.',
 };
 
-const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
-
-const quotaFull = (lib: LibraryRow) =>
-  new ApiError(413, 'quota_full', `Your library is full (${mb(lib.quotaBytes)}). Remove books you’ve finished to make room.`);
-
 type BlobRow = typeof blobs.$inferSelect;
 
-/** The file is in storage: mark it ready and count it against the library's quota, once. */
+/** The file is in storage: mark it ready and add it to the library's used space, once. */
 async function markReady(db: Db, blob: BlobRow) {
   await db.transaction(async (tx) => {
     const [row] = await tx.select().from(libraries).where(eq(libraries.id, blob.ownerLibraryId!)).for('update');
-    if (row.usedBytes + blob.size > row.quotaBytes) throw quotaFull(row);
     const done = await tx
       .update(blobs)
       .set({ status: 'ready', readyAt: new Date(), unusedSince: null })
@@ -70,12 +64,6 @@ export function fileRoutes(deps: Deps) {
     const body = parse(UploadRequest, await readJson(c));
     const lib = c.var.library;
     if (!TYPES[body.kind].has(body.mime)) throw new ApiError(400, 'bad_type', BAD_TYPE[body.kind]);
-    const side = body.kind === 'sample' || body.mime === 'application/json';
-    const limit = body.kind === 'cover' ? LIMITS.coverBytes : side ? LIMITS.voiceSideBytes : lib.fileBytes;
-    if (body.size > limit) {
-      const who = body.kind === 'cover' || side ? 'This kind of file can be' : lib.ownerAccountId ? 'Files can be' : 'Key libraries take files';
-      throw new ApiError(413, 'file_too_large', `This file is ${mb(body.size)}. ${who} up to ${mb(limit)}.`);
-    }
 
     let [blob] = await db.select().from(blobs).where(and(eq(blobs.ownerLibraryId, lib.id), eq(blobs.sha256, body.sha256)));
     if (blob?.status === 'ready') {
@@ -83,8 +71,6 @@ export function fileRoutes(deps: Deps) {
       if (blob.unusedSince) await db.update(blobs).set({ unusedSince: null }).where(eq(blobs.id, blob.id));
       return c.json({ fileId: blob.id, status: 'ready' } satisfies UploadResponse);
     }
-    if (lib.usedBytes + body.size > lib.quotaBytes) throw quotaFull(lib);
-
     if (!blob) {
       [blob] = await db
         .insert(blobs)
@@ -119,7 +105,7 @@ export function fileRoutes(deps: Deps) {
     return c.json({ fileId: blob.id, status: 'upload', upload } satisfies UploadResponse);
   });
 
-  /** The browser says the upload finished: check what R2 holds, then count it against the quota. */
+  /** The browser says the upload finished: check what R2 holds, then add it to the used space. */
   r.post('/uploads/:id/complete', async (c) => {
     const lib = c.var.library;
     const [blob] = await db.select().from(blobs).where(and(eq(blobs.id, c.req.param('id')), eq(blobs.ownerLibraryId, lib.id)));

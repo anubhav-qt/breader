@@ -1,10 +1,12 @@
 const MB = 1024 * 1024;
 
-/** Storage and lifetime limits (§1 of the backend design; still to be confirmed). */
+/**
+ * Lifetime of key libraries (§1 of the backend design). quotaBytes and fileBytes are only what the
+ * libraries table still records: nothing checks them, so a library takes files of any size and count.
+ */
 export const LIMITS = {
   key: { quotaBytes: 100 * MB, fileBytes: 100 * MB, idleDays: 365 },
   account: { quotaBytes: 500 * MB, fileBytes: 100 * MB, idleDays: null },
-  coverBytes: 5 * MB,
   /** A voice's settings (a Piper .onnx.json) or its sample line. */
   voiceSideBytes: 1 * MB,
 } as const;

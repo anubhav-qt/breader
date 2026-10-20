@@ -19,7 +19,7 @@ async function upload(b: Awaited<ReturnType<typeof registered>>['b'], body: Buff
 }
 
 describe('files', () => {
-  it('uploads straight to storage with a signed link, then counts it against the quota', async () => {
+  it('uploads straight to storage with a signed link, then adds it to the used space', async () => {
     const { b } = await registered();
     const body = bytes(`an epub ${Math.random()}`);
     const ask = await upload(b, body);
@@ -80,13 +80,12 @@ describe('files', () => {
     expect((await b.get('/v1/sync/pull?since=0')).body.books[0]).toMatchObject({ format: 'CBZ', fileId: ask.body.fileId });
   });
 
-  it('enforces the per-file limit, the quota and the file types', async () => {
+  it('takes files of any size into a library of any size, but only the file types', async () => {
     const { b, libraryId } = await registered();
-    const big = await b.post('/v1/uploads', { sha256: 'a'.repeat(64), size: 101 * 1024 * 1024, mime: 'application/pdf', kind: 'book' });
-    expect(big.status).toBe(413);
-    expect(big.body.message).toBe('This file is 101 MB. Key libraries take files up to 100 MB.');
-    await primary.db.update(libraries).set({ usedBytes: 100 * 1024 * 1024 - 10 }).where(eq(libraries.id, libraryId));
-    expect((await b.post('/v1/uploads', { sha256: 'b'.repeat(64), size: 11, mime: 'application/pdf', kind: 'book' })).body.code).toBe('quota_full');
+    const big = await b.post('/v1/uploads', { sha256: 'a'.repeat(64), size: 900 * 1024 * 1024, mime: 'application/pdf', kind: 'book' });
+    expect(big.status).toBe(200);
+    await primary.db.update(libraries).set({ usedBytes: 100 * 1024 * 1024 * 1024 }).where(eq(libraries.id, libraryId));
+    expect((await b.post('/v1/uploads', { sha256: 'b'.repeat(64), size: 11, mime: 'application/pdf', kind: 'book' })).status).toBe(200);
     expect((await b.post('/v1/uploads', { sha256: 'c'.repeat(64), size: 5, mime: 'text/html', kind: 'book' })).body.code).toBe('bad_type');
   });
 });

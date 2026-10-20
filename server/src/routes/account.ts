@@ -129,8 +129,8 @@ async function claim(pool: pg.Pool, fromId: string, toId: string, userId: string
     // Both libraries, in id order, so two claims can't wait on each other.
     await c.query('SELECT 1 FROM libraries WHERE id = ANY($1) ORDER BY id FOR UPDATE', [[fromId, toId]]);
     const { rows: [from] } = await c.query('SELECT owner_account_id, retired_at FROM libraries WHERE id = $1', [fromId]);
-    const { rows: [to] } = await c.query<{ rev: number; used_bytes: number; quota_bytes: number; owner_account_id: string; retired_at: Date | null }>(
-      'SELECT rev, used_bytes, quota_bytes, owner_account_id, retired_at FROM libraries WHERE id = $1',
+    const { rows: [to] } = await c.query<{ rev: number; owner_account_id: string; retired_at: Date | null }>(
+      'SELECT rev, owner_account_id, retired_at FROM libraries WHERE id = $1',
       [toId],
     );
     if (!from || from.owner_account_id !== null || from.retired_at || !to || to.owner_account_id !== userId || to.retired_at) {
@@ -151,10 +151,6 @@ async function claim(pool: pg.Pool, fromId: string, toId: string, userId: string
       `SELECT coalesce(sum(size), 0)::bigint AS moved FROM blobs WHERE owner_library_id = $1 AND status = 'ready' AND sha256 NOT IN (${theirs})`,
       [fromId, toId],
     );
-    if (to.used_bytes + moved > to.quota_bytes) {
-      const mb = (b: number) => Math.ceil(b / 1024 / 1024);
-      throw new ApiError(413, 'quota_full', `These books need ${mb(moved)} MB, and your account has ${mb(to.quota_bytes - to.used_bytes)} MB free. Remove some books first.`);
-    }
     await c.query(`UPDATE blobs SET owner_library_id = $2 WHERE owner_library_id = $1 AND sha256 NOT IN (${theirs})`, [fromId, toId]);
 
     const rev = to.rev + 1;
