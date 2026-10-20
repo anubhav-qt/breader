@@ -6,7 +6,6 @@ import type { AppEnv, Deps, LibraryRow } from '../context.ts';
 import { blobs, libraries } from '../db/schema.ts';
 import type { Db } from '../db/client.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
-import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { keeps, sharedSomewhere, usedBy } from '../lib/shelf.ts';
 import { voiceFile } from '../lib/voices.ts';
@@ -60,7 +59,7 @@ export function fileRoutes(deps: Deps) {
     return !!stored && stored.size === blob.size && stored.sha256 === blob.sha256;
   };
 
-  r.post('/uploads', rateLimit({ name: 'upload', max: 60, windowMs: 3_600_000 }), async (c) => {
+  r.post('/uploads', async (c) => {
     const body = parse(UploadRequest, await readJson(c));
     const lib = c.var.library;
     if (!TYPES[body.kind].has(body.mime)) throw new ApiError(400, 'bad_type', BAD_TYPE[body.kind]);
