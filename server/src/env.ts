@@ -20,6 +20,8 @@ const Env = z.object({
 
   /** Supabase (through its session pooler, which works over IPv4). Every write goes here first. */
   PRIMARY_URL: z.string().min(1),
+  /** Supabase's session pooler, when PRIMARY_URL is the transaction pooler: LISTEN only hears anything through a session. */
+  PRIMARY_SESSION_URL: z.string().optional(),
   /** off for local Docker; require for Supabase. */
   PRIMARY_SSL: z.enum(['off', 'require']).default('off'),
   /** The laptop's copy. Unset on the fallback. */

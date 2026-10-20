@@ -24,6 +24,8 @@ const SLOW_MS = 10_000;
 const ACCOUNTS_MS = 60_000;
 const WATCHING_MS = 20_000;
 const FALLBACK_MS = 3_000;
+/** Read the fast part this often even while listening, in case notifications stop without the connection closing. */
+const BACKSTOP_MS = 15_000;
 const SETTLE_MS = 150;
 const AGAIN_MS = 5_000;
 /** How long the hub stays up after the last page closes, so a reload finds it warm. */
@@ -228,7 +230,8 @@ export function adminHub(deps: Pick<Deps, 'env' | 'pool' | 'mirror'>) {
 
   const listen = async () => {
     const client = new pg.Client({
-      connectionString: env.PRIMARY_URL,
+      // The transaction pooler takes LISTEN and then never passes a notification on.
+      connectionString: env.PRIMARY_SESSION_URL ?? env.PRIMARY_URL,
       ssl: env.PRIMARY_SSL === 'require' ? { rejectUnauthorized: false } : undefined,
       application_name: 'breader-admin-listen',
     });
@@ -273,6 +276,7 @@ export function adminHub(deps: Pick<Deps, 'env' | 'pool' | 'mirror'>) {
       setInterval(() => void readAccounts(), ACCOUNTS_MS),
       setInterval(watching, WATCHING_MS),
       setInterval(() => { if (!listener) void readFast().catch(() => {}); }, FALLBACK_MS),
+      setInterval(() => void readFast().catch(() => {}), BACKSTOP_MS),
     ];
   };
 

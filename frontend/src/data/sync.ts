@@ -543,7 +543,8 @@ async function uploadAll() {
       await host!.linked(id, { fileId, coverId });
       await drop();
     } catch (e) {
-      if (e instanceof ApiError && e.status < 500 && e.code !== 'signed_out') {
+      // Told to wait (429), it stays queued and goes with a later sync.
+      if (e instanceof ApiError && e.status < 500 && e.status !== 429 && e.code !== 'signed_out') {
         host!.notice(`“${rec.title}” stays in this browser only. ${e.message}`);
         await drop();
       } else throw e;
