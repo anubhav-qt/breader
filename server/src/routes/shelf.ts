@@ -64,7 +64,7 @@ export function shelfRoutes(deps: Deps) {
    * The books a library shares, newest first: its files, and the series it reads from a catalogue,
    * which anyone it's shared with reads from there too.
    */
-  r.post('/shared/books', rateLimit({ name: 'shared-books', max: 240, windowMs: 60_000 }), async (c) => {
+  r.post('/shared/books', async (c) => {
     const lib = await opened(parse(SharedBooksRequest, await readJson(c)).token);
     const rows = await db
       .select({
@@ -114,7 +114,7 @@ export function shelfRoutes(deps: Deps) {
   });
 
   /** A signed download link for one of a library's shared books, or its cover. */
-  r.post('/shared/link', rateLimit({ name: 'shared-file', max: 120, windowMs: 60_000 }), async (c) => {
+  r.post('/shared/link', async (c) => {
     const { token, fileId } = parse(SharedLinkRequest, await readJson(c));
     const lib = await opened(token);
     const [blob] = await db

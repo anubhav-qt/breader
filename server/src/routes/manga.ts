@@ -4,7 +4,6 @@ import { streamSSE } from 'hono/streaming';
 import { MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type MangaSearchEvent, type MangaState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, signedOut } from '../lib/errors.ts';
-import { rateLimit } from '../lib/http.ts';
 import { readSession } from '../lib/session.ts';
 import { log } from '../log.ts';
 import type { Cover } from '../manga/covers.ts';
@@ -52,7 +51,7 @@ export function mangaRoutes(deps: Deps) {
     return c.body(got.pic.data as Uint8Array<ArrayBuffer>, 200, { 'content-type': got.pic.type, ...headers });
   };
 
-  r.get('/manga/search', rateLimit({ name: 'manga-search', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/search', async (c) => {
     const q = parse(MangaSearchQuery, c.req.query());
     // Never kept by the browser: a lot where every place was late answers differently a moment
     // later, and a kept copy would be shown instead, over and over. The server keeps its own.
@@ -79,63 +78,63 @@ export function mangaRoutes(deps: Deps) {
     });
   });
 
-  r.get('/manga/series/:id', rateLimit({ name: 'manga-series', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/series/:id', async (c) => {
     const { adult } = parse(MangaSeriesQuery, c.req.query());
     c.header('Cache-Control', 'private, max-age=600');
     return c.json(await manga!.series(id(c), !!adult));
   });
 
-  r.get('/manga/series/:id/chapters', rateLimit({ name: 'manga-chapters', max: 60, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/series/:id/chapters', async (c) => {
     const { lang } = parse(MangaChaptersQuery, c.req.query());
     c.header('Cache-Control', 'private, max-age=300');
     return c.json(await manga!.chapters(id(c), lang));
   });
 
   // Its copies, each group's pages measured: a few pages fetched the first time, kept a day.
-  r.get('/manga/series/:id/copies', rateLimit({ name: 'manga-copies', max: 60, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/series/:id/copies', async (c) => {
     const { lang } = parse(MangaChaptersQuery, c.req.query());
     c.header('Cache-Control', 'private, max-age=3600');
     return c.json(await manga!.copies(id(c), lang));
   });
 
   // A page each second or two, and a chapter or a few at once when they're kept to read offline.
-  r.get('/manga/chapter/:id/:n{[0-9]{1,4}}', rateLimit({ name: 'manga-page', max: 600, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/chapter/:id/:n{[0-9]{1,4}}', async (c) => {
     const { saver } = parse(MangaPageQuery, c.req.query());
     return picture(c, await manga!.page(id(c), Number(c.req.param('n')), !!saver), 86_400);
   });
 
-  r.get('/manga/cover/:id/:file{[\\w-]{1,80}\\.(?:jpe?g|png|webp|gif)}', rateLimit({ name: 'manga-cover', max: 600, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/cover/:id/:file{[\\w-]{1,80}\\.(?:jpe?g|png|webp|gif)}', async (c) => {
     const { size } = parse(MangaCoverQuery, c.req.query());
     return cover(c, await manga!.cover(id(c), c.req.param('file'), size));
   });
 
   // A series on one of Suwayomi's sources, by its source and address (SourceId).
-  r.get('/manga/source/chapter/:id', rateLimit({ name: 'manga-source-pages', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/source/chapter/:id', async (c) => {
     c.header('Cache-Control', 'private, max-age=300');
     return c.json({ pages: await manga!.sourcePages(sourceId(c)) });
   });
 
-  r.get('/manga/source/chapter/:id/:n{[0-9]{1,4}}', rateLimit({ name: 'manga-page', max: 600, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/source/chapter/:id/:n{[0-9]{1,4}}', async (c) => {
     return picture(c, await manga!.sourcePage(sourceId(c), Number(c.req.param('n'))), 86_400);
   });
 
-  r.get('/manga/source/:id', rateLimit({ name: 'manga-series', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/source/:id', async (c) => {
     const { adult } = parse(MangaSeriesQuery, c.req.query());
     c.header('Cache-Control', 'private, max-age=600');
     return c.json(await manga!.sourceSeries(sourceId(c), !!adult));
   });
 
-  r.get('/manga/source/:id/chapters', rateLimit({ name: 'manga-chapters', max: 60, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/source/:id/chapters', async (c) => {
     c.header('Cache-Control', 'private, max-age=300');
     return c.json(await manga!.sourceChapters(sourceId(c)));
   });
 
-  r.get('/manga/source/:id/copies', rateLimit({ name: 'manga-copies', max: 60, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/source/:id/copies', async (c) => {
     c.header('Cache-Control', 'private, max-age=3600');
     return c.json(await manga!.copies(sourceId(c), ''));
   });
 
-  r.get('/manga/source/:id/cover', rateLimit({ name: 'manga-cover', max: 600, windowMs: 60_000 }), async (c) => {
+  r.get('/manga/source/:id/cover', async (c) => {
     const { size } = parse(MangaCoverQuery, c.req.query());
     return cover(c, await manga!.sourceCover(sourceId(c), size));
   });

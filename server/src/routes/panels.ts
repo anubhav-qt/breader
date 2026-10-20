@@ -4,7 +4,6 @@ import { streamSSE } from 'hono/streaming';
 import { MangaId, MangaPageQuery, PanelSeatAsk, PanelsOffer, SourceId, type ChapterPanels, type PagePanels, type PanelSeat, type PanelsOffered, type PanelsState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, readJson, signedOut } from '../lib/errors.ts';
-import { rateLimit } from '../lib/http.ts';
 import { readSession } from '../lib/session.ts';
 import { makeKept } from '../panels/kept.ts';
 
@@ -64,7 +63,7 @@ export function panelRoutes(deps: Deps) {
   };
   const chapterOf = (raw: string) => (raw.startsWith('sw:') ? parse(SourceId, raw) : `md:${parse(MangaId, raw)}`);
 
-  r.get('/panels', rateLimit({ name: 'panels-state', max: 60, windowMs: 60_000 }), (c) => {
+  r.get('/panels', (c) => {
     c.header('Cache-Control', 'private, no-store');
     const ok = !!panels && !!manga && !!readSession(c, env);
     const count = ok ? panels!.seats.count() : { used: 0, seats: 0 };
@@ -72,7 +71,7 @@ export function panelRoutes(deps: Deps) {
   });
 
   // Every half a minute from each device reading with it, and once more as it opens and closes.
-  r.post('/panels/seat', rateLimit({ name: 'panels-seat', max: 30, windowMs: 60_000 }), async (c) => {
+  r.post('/panels/seat', async (c) => {
     const p = on();
     const lib = library(c);
     const { device } = parse(PanelSeatAsk, await readJson(c));
@@ -80,7 +79,7 @@ export function panelRoutes(deps: Deps) {
     return c.json({ seated, ...p.seats.count() } satisfies PanelSeat);
   });
 
-  r.post('/panels/seat/leave', rateLimit({ name: 'panels-seat', max: 30, windowMs: 60_000 }), async (c) => {
+  r.post('/panels/seat/leave', async (c) => {
     const p = on();
     const lib = library(c);
     const { device } = parse(PanelSeatAsk, await readJson(c));
@@ -89,7 +88,7 @@ export function panelRoutes(deps: Deps) {
   });
 
   // How full it is, each time that changes, for a reader waiting for a seat.
-  r.get('/panels/seats', rateLimit({ name: 'panels-seats', max: 30, windowMs: 60_000 }), (c) => {
+  r.get('/panels/seats', (c) => {
     const p = on();
     library(c);
     c.header('Cache-Control', 'private, no-store');
@@ -109,7 +108,7 @@ export function panelRoutes(deps: Deps) {
   });
 
   // A chapter's pages kept already, as it opens: no seat, nor the laptop, needed.
-  r.get('/panels/:id/kept', rateLimit({ name: 'panels-kept', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/panels/:id/kept', async (c) => {
     library(c);
     const chapter = chapterOf(c.req.param('id'));
     // It grows as readers read: asked once a chapter by the app, which keeps it while it's open.
@@ -118,7 +117,7 @@ export function panelRoutes(deps: Deps) {
   });
 
   // As many as the pages fetched: a chapter or a few at once, when they're kept to read offline.
-  r.get('/panels/:id/:n{[0-9]{1,4}}', rateLimit({ name: 'panels-page', max: 600, windowMs: 60_000 }), async (c) => {
+  r.get('/panels/:id/:n{[0-9]{1,4}}', async (c) => {
     const lib = library(c);
     const page = pageOf(c);
     const had = await kept.get(page.chapter, page.n);
@@ -136,7 +135,7 @@ export function panelRoutes(deps: Deps) {
   });
 
   // A page's panels as the reader's device found them, kept once another library's agree.
-  r.post('/panels/:id/:n{[0-9]{1,4}}', rateLimit({ name: 'panels-offer', max: 300, windowMs: 60_000 }), async (c) => {
+  r.post('/panels/:id/:n{[0-9]{1,4}}', async (c) => {
     const p = on();
     const lib = library(c);
     const page = pageOf(c);

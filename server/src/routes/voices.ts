@@ -3,7 +3,6 @@ import { Hono } from 'hono';
 import { VOICE_LIST_LIMIT, type VoiceEngine, type VoicesResponse } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError } from '../lib/errors.ts';
-import { rateLimit } from '../lib/http.ts';
 import { sessionLibrary } from '../lib/library.ts';
 import { keptBy, listed, voiceFile } from '../lib/voices.ts';
 
@@ -33,7 +32,7 @@ export function voiceRoutes(deps: Deps) {
   const { db, storage } = deps;
   const r = new Hono<AppEnv>();
 
-  r.get('/voices', rateLimit({ name: 'voices', max: 240, windowMs: 60_000 }), async (c) => {
+  r.get('/voices', async (c) => {
     const lib = await sessionLibrary(c, deps);
     const id = lib?.id ?? null;
     // Every public voice, newest first, then this library's own and kept ones on top.
@@ -69,7 +68,7 @@ export function voiceRoutes(deps: Deps) {
   });
 
   /** A signed download link for a voice's file, for anyone the voice is open to. */
-  r.get('/voices/files/:id/link', rateLimit({ name: 'voice-file', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/voices/files/:id/link', async (c) => {
     const lib = await sessionLibrary(c, deps);
     const { rows: [blob] } = await db.execute<{ r2_key: string }>(sql`
       SELECT b.r2_key FROM blobs b WHERE b.id = ${c.req.param('id')} AND b.status = 'ready' AND ${voiceFile(lib?.id ?? null, sql.raw('b.id'))}

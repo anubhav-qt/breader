@@ -4,7 +4,6 @@ import { TRACK_ID, trackKey, type AiCastResponse, type AiEntry, type AiFile, typ
 import type { AppEnv, Deps } from '../context.ts';
 import { castFor, cutAt, musicFor, revisitFor, voicesFor } from '../lib/ai.ts';
 import { ApiError } from '../lib/errors.ts';
-import { rateLimit } from '../lib/http.ts';
 import { requireLibrary } from '../lib/library.ts';
 
 /*
@@ -40,7 +39,7 @@ export function aiRoutes(deps: Deps) {
     return row;
   }
 
-  r.get('/books/:bookId/ai', rateLimit({ name: 'ai', max: 240, windowMs: 60_000 }), async (c) => {
+  r.get('/books/:bookId/ai', async (c) => {
     const row = await notes<{ made: Date; revisit: boolean; voices: boolean; music: boolean }>(c.var.library.id, c.req.param('bookId'), sql`
       n.made,
       (jsonb_array_length(n.data->'revisit'->'people') + jsonb_array_length(n.data->'revisit'->'places') + jsonb_array_length(n.data->'revisit'->'terms')) > 0 AS revisit,
@@ -52,7 +51,7 @@ export function aiRoutes(deps: Deps) {
     return c.json(status);
   });
 
-  r.get('/books/:bookId/revisit', rateLimit({ name: 'ai-revisit', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/books/:bookId/revisit', async (c) => {
     const row = await notes<{ made: Date; revisit: AiFile['revisit']; mark: Parameters<typeof cutAt>[0] }>(
       c.var.library.id,
       c.req.param('bookId'),
@@ -63,7 +62,7 @@ export function aiRoutes(deps: Deps) {
     return c.json(revisitFor({ made: new Date(row.made).toISOString(), revisit: row.revisit }, cutAt(row.mark)) satisfies RevisitResponse);
   });
 
-  r.get('/books/:bookId/voices', rateLimit({ name: 'ai-voices', max: 60, windowMs: 60_000 }), async (c) => {
+  r.get('/books/:bookId/voices', async (c) => {
     const row = await notes<{ made: Date; sections: string[]; voices: AiFile['voices'] }>(
       c.var.library.id,
       c.req.param('bookId'),
@@ -74,7 +73,7 @@ export function aiRoutes(deps: Deps) {
     return c.json(voicesFor({ made: new Date(row.made).toISOString(), sections: row.sections, voices: row.voices }) satisfies AiVoicesResponse);
   });
 
-  r.get('/books/:bookId/cast', rateLimit({ name: 'ai-cast', max: 120, windowMs: 60_000 }), async (c) => {
+  r.get('/books/:bookId/cast', async (c) => {
     const row = await notes<{ made: Date; voices: AiFile['voices']; people: AiEntry[]; mark: Parameters<typeof cutAt>[0] }>(
       c.var.library.id,
       c.req.param('bookId'),
@@ -85,7 +84,7 @@ export function aiRoutes(deps: Deps) {
     return c.json(castFor({ made: new Date(row.made).toISOString(), voices: row.voices, people: row.people }, cutAt(row.mark)) satisfies AiCastResponse);
   });
 
-  r.get('/books/:bookId/music', rateLimit({ name: 'ai-music', max: 60, windowMs: 60_000 }), async (c) => {
+  r.get('/books/:bookId/music', async (c) => {
     const row = await notes<{ made: Date; sections: string[]; music: AiFile['music'] | null }>(
       c.var.library.id,
       c.req.param('bookId'),
@@ -97,7 +96,7 @@ export function aiRoutes(deps: Deps) {
   });
 
   /** One of the book's tracks, by its number: a signed link to its file. */
-  r.get('/books/:bookId/music/:n', rateLimit({ name: 'ai-music-track', max: 240, windowMs: 60_000 }), async (c) => {
+  r.get('/books/:bookId/music/:n', async (c) => {
     const n = Number(c.req.param('n'));
     if (!Number.isInteger(n) || n < 0 || n > 1000) throw noMusic();
     const row = await notes<{ id: string | null }>(c.var.library.id, c.req.param('bookId'), sql`n.data->'music'->'tracks'->(${n}::int)->>'id' AS id`);

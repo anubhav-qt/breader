@@ -3,7 +3,6 @@ import { Hono } from 'hono';
 import { SpeechReadyRequest, SpeechRequest, type SpeechReady, type SpeechState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
-import { rateLimit } from '../lib/http.ts';
 import { log } from '../log.ts';
 
 /*
@@ -29,13 +28,13 @@ export function speechRoutes(deps: Deps) {
     return speech;
   };
 
-  r.get('/speech', rateLimit({ name: 'speech-state', max: 60, windowMs: 60_000 }), async (c) => {
+  r.get('/speech', async (c) => {
     c.header('Cache-Control', 'private, no-store');
     const ok = !!speech && (await allowed(c));
     return c.json({ allowed: ok, voices: ok ? speech!.voices : [] } satisfies SpeechState);
   });
 
-  r.post('/speech/ready', rateLimit({ name: 'speech-ready', max: 60, windowMs: 60_000 }), async (c) => {
+  r.post('/speech/ready', async (c) => {
     const { voice } = parse(SpeechReadyRequest, await readJson(c));
     const s = await gate(c, voice);
     try {
@@ -48,7 +47,7 @@ export function speechRoutes(deps: Deps) {
   });
 
   // A sentence every few seconds, two ahead, and 2 voices cuts them shorter.
-  r.post('/speech/say', rateLimit({ name: 'speech-say', max: 300, windowMs: 60_000 }), async (c) => {
+  r.post('/speech/say', async (c) => {
     const { voice, text, speed } = parse(SpeechRequest, await readJson(c));
     const s = await gate(c, voice);
     let said;
