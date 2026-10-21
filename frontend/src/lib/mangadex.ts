@@ -43,7 +43,8 @@ function kindsOf(kinds: MangaKind[] | undefined): string | undefined {
   return kinds.join(',');
 }
 
-const query = (q: Record<string, string | number | undefined>) => {
+/** A query string from what's set, or nothing. */
+export const query = (q: Record<string, string | number | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') p.set(k, String(v));
   const s = p.toString();
@@ -53,8 +54,8 @@ const query = (q: Record<string, string | number | undefined>) => {
 const searchPath = (s: MangaSearch, stream = false) =>
   `/v1/manga/search${query({ q: s.q?.trim(), lang: s.lang, sort: s.sort, adult: s.adult ? 1 : undefined, adultOnly: s.adultOnly ? 1 : undefined, doujinshi: s.doujinshi ? 1 : undefined, kinds: kindsOf(s.kinds), names: s.names?.join(','), next: s.next, stream: stream ? 1 : undefined })}`;
 
-/** A streamed search's events, as the server sends them (routes/manga.ts). */
-async function* eventsOf(res: Response): AsyncGenerator<MangaSearchEvent> {
+/** A streamed search's events, as the server sends them (routes/manga.ts, routes/books.ts). */
+export async function* eventsOf<E>(res: Response): AsyncGenerator<E> {
   const reader = res.body!.getReader();
   const text = new TextDecoder();
   let buf = '';
@@ -66,7 +67,7 @@ async function* eventsOf(res: Response): AsyncGenerator<MangaSearchEvent> {
       const event = buf.slice(0, end);
       buf = buf.slice(end + 2);
       const data = event.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6)).join('\n');
-      if (data) yield JSON.parse(data) as MangaSearchEvent;
+      if (data) yield JSON.parse(data) as E;
     }
   }
 }
@@ -79,7 +80,7 @@ export const mangadex = {
     const res = await ask(() => api.laptop.raw(searchPath(s, true), undefined, 20_000));
     // A server from before streaming answers with the whole lot at once.
     if (!res.body || !res.headers.get('content-type')?.includes('text/event-stream')) return res.json() as Promise<MangaSearchResult>;
-    for await (const e of eventsOf(res)) {
+    for await (const e of eventsOf<MangaSearchEvent>(res)) {
       if (e.kind === 'some') onSome(e.items);
       else if (e.kind === 'lot') return { items: e.items, next: e.next };
       else throw new ApiError(e.status, e.code, e.message);

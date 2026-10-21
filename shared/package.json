@@ -8,6 +8,7 @@
     "./accounts": "./src/accounts.ts",
     "./admin": "./src/admin.ts",
     "./ai": "./src/ai.ts",
+    "./books": "./src/books.ts",
     "./comments": "./src/comments.ts",
     "./genres": "./src/genres.ts",
     "./key": "./src/key.ts",
