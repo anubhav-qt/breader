@@ -1,0 +1,275 @@
+{
+  "series": [
+    {
+      "key": "beastars",
+      "title": "BEASTARS",
+      "manga": "f5e3baad-3cd4-427c-a2ec-ad7d776b370d",
+      "chapter": "5aa5b8f8-7809-40c9-adbc-81c929cd7c04",
+      "number": "35",
+      "pages": [
+        { "page": 2, "note": "title logo inside panels with a side caption column" },
+        { "page": 4, "note": "spotlit figure in a borderless dark panel" },
+        { "page": 16, "note": "small spread on grey with faint panels" },
+        { "page": 19, "note": "full bleed tree figure with a caption, no panels" },
+        { "page": 20, "note": "credits text beside a figure on grey, no panels" }
+      ]
+    },
+    {
+      "key": "beastars",
+      "title": "BEASTARS",
+      "manga": "f5e3baad-3cd4-427c-a2ec-ad7d776b370d",
+      "chapter": "800eda27-e6af-4990-9208-b258dee3081d",
+      "number": "88",
+      "pages": [
+        { "page": 1, "note": "colour cover with a vertical title, no panels" },
+        { "page": 7, "note": "wide pencil spread half floating on grey" },
+        { "page": 11, "note": "flowchart style panels with arrows and text boxes" },
+        { "page": 12, "note": "dense hand lettered text over a busy face panel" },
+        { "page": 21, "note": "sketchy credits drawing on grey, no panels" }
+      ]
+    },
+    {
+      "key": "kendeshita",
+      "title": "Tensei Shitara Ken deshita",
+      "manga": "77fd8118-61b0-4b1f-95a6-2b839d754f81",
+      "chapter": "5821912f-6119-421d-8efe-70098abc09f3",
+      "number": "32",
+      "pages": [
+        { "page": 1, "note": "colour credits and donation banner on grey, no panels" },
+        { "page": 2, "note": "title page with a vertical Japanese promo strip" },
+        { "page": 13, "note": "panels on a dark speckled background" },
+        { "page": 18, "note": "black page with a glowing sun panel and white text" },
+        { "page": 20, "note": "black bar panel above a glowing summon panel" }
+      ]
+    },
+    {
+      "key": "kendeshita",
+      "title": "Tensei Shitara Ken deshita",
+      "manga": "77fd8118-61b0-4b1f-95a6-2b839d754f81",
+      "chapter": "99d7dcb0-c304-45e0-a742-e43d4291a78a",
+      "number": "74",
+      "pages": [
+        { "page": 3, "note": "speed line burst panel with a floating food image" },
+        { "page": 7, "note": "location caption bar over a manor panel" },
+        { "page": 10, "note": "stat box text over a towering armoured figure" },
+        { "page": 16, "note": "black strip at the top of a wide city panel" },
+        { "page": 17, "note": "tall sword figure breaking across stacked panels" }
+      ]
+    },
+    {
+      "key": "aoex",
+      "title": "Ao no Exorcist",
+      "manga": "3ee952f1-45c7-4c39-aea2-7df7676606d4",
+      "chapter": "82759f38-1bb8-4474-9cad-8322d640a1db",
+      "number": "161",
+      "pages": [
+        { "page": 1, "note": "black page with white captions and floating panels" },
+        { "page": 2, "note": "colour French credits card, no panels" },
+        { "page": 9, "note": "church interior panel inside a black surround" },
+        { "page": 18, "note": "black page with gutters and a smoky bottom panel" },
+        { "page": 24, "note": "inverted figure on black with French captions, no panels" }
+      ]
+    },
+    {
+      "key": "aoex",
+      "title": "Ao no Exorcist",
+      "manga": "3ee952f1-45c7-4c39-aea2-7df7676606d4",
+      "chapter": "3fb37d51-09b5-40c9-99b4-f05776599250",
+      "number": "167",
+      "pages": [
+        { "page": 1, "note": "opening action page with a vertical title down the edge" },
+        { "page": 8, "note": "tall ice explosion panel with a borderless edge" },
+        { "page": 12, "note": "huge sound effects slashing across a busy panel" },
+        { "page": 18, "note": "panels broken by burst sound effects and speed lines" },
+        { "page": 23, "note": "tall standing figure with vertical text around it" }
+      ]
+    },
+    {
+      "key": "noragami",
+      "title": "Noragami",
+      "manga": "e5ce88e2-8c46-482d-8acf-5c6d5a64a585",
+      "chapter": "e609112c-8a9c-4d39-bcb5-d56263caae7a",
+      "number": "11",
+      "pages": [
+        { "page": 1, "note": "almost solid black page with faint marks, no panels" },
+        { "page": 4, "note": "figure over a blood splash with a small chapter tag" },
+        { "page": 13, "note": "vertical sign and figures breaking the panel frames" },
+        { "page": 21, "note": "steep diagonal panel cuts with tiny figures" },
+        { "page": 23, "note": "wide action spread half floating on grey" }
+      ]
+    },
+    {
+      "key": "noragami",
+      "title": "Noragami",
+      "manga": "e5ce88e2-8c46-482d-8acf-5c6d5a64a585",
+      "chapter": "bd1d6844-1150-444d-bb9a-c9c5e2068239",
+      "number": "26",
+      "pages": [
+        { "page": 5, "note": "aerial figure among scattered papers with a small title tag" },
+        { "page": 12, "note": "single long diagonal panel slicing the page" },
+        { "page": 31, "note": "wide spread half floating on grey" },
+        { "page": 40, "note": "small shrine drawing in open white above a face panel" },
+        { "page": 45, "note": "almost blank white page with tiny marks, no panels" }
+      ]
+    },
+    {
+      "key": "kagurabachi",
+      "title": "Kagurabachi",
+      "manga": "d65c0332-3764-4c89-84bd-b1a4e7278ad7",
+      "chapter": "becff1bb-6957-45ac-9bf4-b7c5ad39a9c9",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "colour cover with a credits block, no panels" },
+        { "page": 2, "note": "title logo over panels with a vertical heading" },
+        { "page": 5, "note": "giant rock in a borderless panel on black and white" },
+        { "page": 15, "note": "wide fight spread half floating on grey" },
+        { "page": 16, "note": "black banner caption above slanted panels" }
+      ]
+    },
+    {
+      "key": "kagurabachi",
+      "title": "Kagurabachi",
+      "manga": "d65c0332-3764-4c89-84bd-b1a4e7278ad7",
+      "chapter": "e8e123c9-7557-48bc-8452-76eccd6c21ad",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "colour cover with a credits block, no panels" },
+        { "page": 2, "note": "colour title collage with Spanish chapter heading, no panels" },
+        { "page": 14, "note": "black disc and ropes art over the top panel" },
+        { "page": 22, "note": "full page dark face with captions on black, no panels" },
+        { "page": 23, "note": "black recruiting banner on grey, no panels" }
+      ]
+    },
+    {
+      "key": "worldtrigger",
+      "title": "World Trigger",
+      "manga": "7ae7067a-7e68-4bd2-a064-5e3e3c059078",
+      "chapter": "b601e0cf-de40-4e15-94c7-fe8871631ae7",
+      "number": "251",
+      "pages": [
+        { "page": 4, "note": "panels on a black page with white gutters" },
+        { "page": 6, "note": "black page with a big title sound and floating faces" },
+        { "page": 7, "note": "black gradient top panel above stacked strips" },
+        { "page": 11, "note": "team name caption box cutting into a dark panel" },
+        { "page": 14, "note": "results table panel with typed rows" }
+      ]
+    },
+    {
+      "key": "worldtrigger",
+      "title": "World Trigger",
+      "manga": "7ae7067a-7e68-4bd2-a064-5e3e3c059078",
+      "chapter": "4a874809-5789-4f93-b220-55b2fa7aa64f",
+      "number": "259",
+      "pages": [
+        { "page": 1, "note": "colour group cover floating on grey, no panels" },
+        { "page": 4, "note": "map panel with sector labels inside a panel" },
+        { "page": 5, "note": "unit diagram with numbered icons and a note strip" },
+        { "page": 20, "note": "tactical map panels with numbered markers" },
+        { "page": 23, "note": "wide city panorama with speed lines, borderless edges" }
+      ]
+    },
+    {
+      "key": "kenshin",
+      "title": "Rurouni Kenshin: Meiji Kenkaku Romantan",
+      "manga": "754a46fa-62fa-457a-bc3b-4f31bf1373d4",
+      "chapter": "94feea2c-4fc8-4ba1-90b7-741286445654",
+      "number": "223",
+      "pages": [
+        { "page": 1, "note": "colour staff credits with a QR code, no panels" },
+        { "page": 4, "note": "chapter title in a white box over a dark panel" },
+        { "page": 9, "note": "panels on black with a recurring figure at the bottom" },
+        { "page": 16, "note": "long vertical laugh running down a slim panel" },
+        { "page": 19, "note": "small logo and sketch in a dotted frame, no panels" }
+      ]
+    },
+    {
+      "key": "kenshin",
+      "title": "Rurouni Kenshin: Meiji Kenkaku Romantan",
+      "manga": "754a46fa-62fa-457a-bc3b-4f31bf1373d4",
+      "chapter": "63743c01-853b-4052-a11b-468e0baa730f",
+      "number": "225",
+      "pages": [
+        { "page": 4, "note": "sword in a speed line burst on a black page" },
+        { "page": 11, "note": "huge sound effects tearing across slanted panels" },
+        { "page": 15, "note": "wide kanji attack spread floating on grey" },
+        { "page": 16, "note": "vertical kanji banner beside slanted action panels" },
+        { "page": 19, "note": "recruiting poster with a QR code, no panels" }
+      ]
+    },
+    {
+      "key": "houseki",
+      "title": "Houseki no Kuni",
+      "manga": "cade38b7-64c4-4a29-8e3c-8c283291d6c6",
+      "chapter": "9c19526e-e820-42a7-96b3-832a1a44bee7",
+      "number": "94",
+      "pages": [
+        { "page": 1, "note": "borderless cracked floor with long shadows, no panels" },
+        { "page": 10, "note": "thin line sketch page with a small figure, no clear frames" },
+        { "page": 12, "note": "wedge shaped panels slicing through a sky" },
+        { "page": 17, "note": "black arches panel with very thin pale panels below" },
+        { "page": 22, "note": "wide pale spread floating on grey" }
+      ]
+    },
+    {
+      "key": "houseki",
+      "title": "Houseki no Kuni",
+      "manga": "cade38b7-64c4-4a29-8e3c-8c283291d6c6",
+      "chapter": "74bc5adf-350a-49f5-b37e-e6d644130b13",
+      "number": "96",
+      "pages": [
+        { "page": 1, "note": "diagonal black stripes with round balloons, no panels" },
+        { "page": 10, "note": "night spread half floating on grey" },
+        { "page": 14, "note": "large white panel with a black shape crossing it" },
+        { "page": 20, "note": "black panels with white gutters and pale figures" },
+        { "page": 24, "note": "full page dark rock silhouette with an end caption" }
+      ]
+    },
+    {
+      "key": "bakemono",
+      "title": "Bakemonogatari",
+      "manga": "4265c437-7d57-4d31-9b1d-0e574a07b7b7",
+      "chapter": "b94c125b-ba71-4f3d-a38c-87c73c3a2a67",
+      "number": "4",
+      "pages": [
+        { "page": 1, "note": "colour Ukrainian volume cover, no panels" },
+        { "page": 3, "note": "wide pastel title banner on grey, no panels" },
+        { "page": 6, "note": "character profile spread with text boxes on grey" },
+        { "page": 7, "note": "collage of photo fragments and part titles, no frames" },
+        { "page": 8, "note": "clockwork collage panel over a black and white split" }
+      ]
+    },
+    {
+      "key": "bakemono",
+      "title": "Bakemonogatari",
+      "manga": "4265c437-7d57-4d31-9b1d-0e574a07b7b7",
+      "chapter": "91aed633-885a-4973-a448-37e3b10c91b3",
+      "number": "8",
+      "pages": [
+        { "page": 9, "note": "kanji collage with photo panels and text boxes" },
+        { "page": 10, "note": "magazine clipping and black bars between panels" },
+        { "page": 11, "note": "bike panel with a framed photo insert" },
+        { "page": 13, "note": "speakers and wheels collage with no clean frames" },
+        { "page": 20, "note": "dense translator notes text page, no panels" }
+      ]
+    },
+    {
+      "key": "mobpsycho",
+      "title": "Mob Psycho 100",
+      "manga": "736a2bf0-f875-4b52-a7b4-e8c40505b68a",
+      "chapter": "03c4259a-a856-488a-aee0-d94ff1334a80",
+      "number": "93",
+      "pages": [
+        { "page": 1, "note": "wobbly hand drawn panels with a black caption bar" },
+        { "page": 2, "note": "black chapter title band across the bottom of the panels" },
+        { "page": 10, "note": "single big figure panel with a thin strip below" },
+        { "page": 14, "note": "black time skip bar between panel rows" },
+        { "page": 17, "note": "full page monster collage with no panels" },
+        { "page": 24, "note": "omake page with floating drawings and no frames" },
+        { "page": 35, "note": "huge sphere with sound effects over the panels" },
+        { "page": 36, "note": "monster splash above a black empty strip" },
+        { "page": 45, "note": "purple colour illustration with Japanese text, no panels" },
+        { "page": 46, "note": "small credits drawing on grey, no panels" }
+      ]
+    }
+  ]
+}
