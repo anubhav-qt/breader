@@ -65,6 +65,33 @@ panels laid over each other and dense pen work. MangaDex has NANA only in Spanis
 Turkish and Polish and the colour Sakamoto Days in Vietnamese and Italian, and the later Blue Lock
 chapter is in Spanish.
 
+The seventh, `picks7.json`, is 96 more from older classics: Hokuto no Ken, Glass Mask, Devilman, Hi
+no Tori, Cat's Eye, Kinnikuman (the newer series, in grey tone), Touch, Video Girl Ai, Urusei
+Yatsura and Captain Tsubasa, for bent book scans, faded print, 1950s colour and old double-page
+spreads. MangaDex has Urusei Yatsura only in Spanish.
+
+The eighth, `picks8.json`, is 100 more shoujo from Skip Beat!, Kimi ni Todoke, Ouran High School
+Host Club, Paradise Kiss, Boys Over Flowers, Kodomo no Omocha, His and Her Circumstances, Ao Haru
+Ride, Vampire Knight and Kamisama Hajimemashita, for soft borders, flowers and screentone spilling
+over gutters and panels laid over each other.
+
+The ninth, `picks9.json`, is 100 more gag and slice of life from K-ON!, Hidamari Sketch, Asobi
+Asobase, Hinamatsuri, Yuru Camp, Shirokuma Café, Gokushufudou, Grand Blue, Tomo-chan (fan coloured)
+and Aria, for four-panel strips, colour pages and omake. MangaDex has Gokushufudou here in
+Portuguese and Grand Blue in Vietnamese.
+
+The tenth, `picks10.json`, is 100 more shonen and sport from Gintama, Eyeshield 21, Yowamushi Pedal,
+Major, Yakitate!! Japan, Beelzebub, Magi, Detective Conan, Dandadan and Chihayafuru, for speed lines,
+slanted cuts, big sound effects and crowded battle pages. Dandadan is in Portuguese.
+
+The eleventh, `picks11.json`, is 100 more seinen and horror from Shigurui, Junji Ito's short stories,
+Blame!, Akira, Knights of Sidonia, Homunculus, Shamo, Nijigahara Holograph, Kowloon Generic Romance
+and Solanin, for black gutters, near black pages, photo-like backgrounds and near empty ones.
+Blame! and Akira are in Portuguese and Knights of Sidonia in Latin American Spanish.
+
+Across the five, some pages have no panels on purpose (covers, title pages, credits and recruiting
+pages), and some have a scanlator's mark across the art.
+
 ```bash
 npm --prefix ai run panels-export
 ```
