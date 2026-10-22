@@ -1,0 +1,285 @@
+{
+  "series": [
+    {
+      "key": "gundamorigin",
+      "title": "Mobile Suit Gundam - The Origin",
+      "manga": "f36895e4-5045-4a5c-a8ec-c073d8958433",
+      "chapter": "c9646466-300e-4b45-acc3-67a35081c446",
+      "number": "11",
+      "pages": [
+        { "page": 1, "note": "section title page in grey wash with palms, no panels" },
+        { "page": 8, "note": "painted ship splash over a wide panel, soft grey wash" },
+        { "page": 14, "note": "huge sound effect bursting across the panel borders" },
+        { "page": 24, "note": "three stacked landscape panels with planes, no speech" },
+        { "page": 34, "note": "map screen panel on black above a busy grid" }
+      ]
+    },
+    {
+      "key": "gundamorigin",
+      "title": "Mobile Suit Gundam - The Origin",
+      "manga": "f36895e4-5045-4a5c-a8ec-c073d8958433",
+      "chapter": "fe370c9a-c478-47d7-ad82-6f3550a9a28a",
+      "number": "25",
+      "pages": [
+        { "page": 1, "note": "colour volume cover, no panels" },
+        { "page": 7, "note": "contents page in white on a starry black, no panels" },
+        { "page": 13, "note": "double page spread scanned small on a grey sheet" },
+        { "page": 33, "note": "tall figure with a huge sound effect running down the page" },
+        { "page": 42, "note": "slanted action panels full of smoke and explosions" }
+      ]
+    },
+    {
+      "key": "appleseed",
+      "title": "Appleseed",
+      "manga": "2d68c7b8-6085-49cb-9c44-ec16805481da",
+      "chapter": "840ac3c3-5d5f-46c9-be07-db6d85f4ab00",
+      "number": "6",
+      "pages": [
+        { "page": 1, "note": "chapter title above a night city panel, credits in the margin" },
+        { "page": 7, "note": "broken slanted panels with figures crossing the borders" },
+        { "page": 21, "note": "very dense mecha detail with note text under the panels" },
+        { "page": 36, "note": "tall overlapping panels with a wide building shot" },
+        { "page": 45, "note": "black explosion panel between tight action strips" }
+      ]
+    },
+    {
+      "key": "appleseed",
+      "title": "Appleseed",
+      "manga": "2d68c7b8-6085-49cb-9c44-ec16805481da",
+      "chapter": "54f8271c-fad8-4cbb-8009-43e8471f32b6",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "title strip over a dark crowded panel, credits under the art" },
+        { "page": 2, "note": "bottom panel bleeds into a black edge" },
+        { "page": 4, "note": "slanted panels with debris flying across the gutters" },
+        { "page": 10, "note": "stacked wide panels of dense machinery and small faces" },
+        { "page": 14, "note": "tall panels with a figure breaking out of the frame" }
+      ]
+    },
+    {
+      "key": "drstone",
+      "title": "Dr.STONE",
+      "manga": "cfc3d743-bd89-48e2-991f-63e680cc4edf",
+      "chapter": "cd1b97e0-4994-4ec7-9106-ee3ddd6cbcae",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "scanlator credits page in colour, no panels" },
+        { "page": 2, "note": "colour chapter cover with text blocks, no panels" },
+        { "page": 3, "note": "slanted panels with a giant eye, Vietnamese text" },
+        { "page": 16, "note": "double page spread scanned small on a grey sheet" },
+        { "page": 18, "note": "tall black panels side by side with a bleed" }
+      ]
+    },
+    {
+      "key": "drstone",
+      "title": "Dr.STONE",
+      "manga": "cfc3d743-bd89-48e2-991f-63e680cc4edf",
+      "chapter": "323be3d5-724c-4439-a32e-0fbf5369e87f",
+      "number": "31",
+      "pages": [
+        { "page": 2, "note": "grey title page drawn as a big tree, no real panels" },
+        { "page": 4, "note": "black panel with the planet beside tight strips" },
+        { "page": 6, "note": "slanted face panels on a dark page" },
+        { "page": 13, "note": "huge fist panel over the top of the page" },
+        { "page": 14, "note": "double page spread on a grey sheet" }
+      ]
+    },
+    {
+      "key": "aposimz",
+      "title": "APOSIMZ",
+      "manga": "936771f7-eec8-45bd-b1fa-d5802a9cfd06",
+      "chapter": "6b2a303a-8877-4b4a-928a-8ccc0624efa2",
+      "number": "11",
+      "pages": [
+        { "page": 1, "note": "scanlator credits page in colour, no panels" },
+        { "page": 3, "note": "very light title page with thin line art, no panels" },
+        { "page": 4, "note": "borderless light art with sound effects floating over it" },
+        { "page": 6, "note": "faint pale panels with lots of empty white" },
+        { "page": 24, "note": "two sparse panels with vertical text in the margin" }
+      ]
+    },
+    {
+      "key": "aposimz",
+      "title": "APOSIMZ",
+      "manga": "936771f7-eec8-45bd-b1fa-d5802a9cfd06",
+      "chapter": "adb9500b-4310-415e-9941-eed0717233a0",
+      "number": "30",
+      "pages": [
+        { "page": 2, "note": "full colour illustration of a tower, no panels" },
+        { "page": 6, "note": "wide open landscape panel with a small figure, little ink" },
+        { "page": 16, "note": "tall slanted panel with a falling pillar" },
+        { "page": 26, "note": "pale sketchy panels with sound effects in the gutters" },
+        { "page": 29, "note": "scanlator notice page on dark grey, no panels" }
+      ]
+    },
+    {
+      "key": "biomega",
+      "title": "BioMega",
+      "manga": "5bdb093f-9707-4a30-b02e-c8b66554ecf0",
+      "chapter": "cf76cd67-6970-4f32-b71a-1f190ed14c7d",
+      "number": "13",
+      "pages": [
+        { "page": 2, "note": "black double page spread scanned on a grey sheet" },
+        { "page": 3, "note": "full bleed dark seascape with a sound effect, one panel" },
+        { "page": 7, "note": "wide city panel over a busy lower half" },
+        { "page": 19, "note": "huge sound effect letters cutting across panels" },
+        { "page": 27, "note": "motorbike spread on a grey sheet with speech on the edge" }
+      ]
+    },
+    {
+      "key": "biomega",
+      "title": "BioMega",
+      "manga": "5bdb093f-9707-4a30-b02e-c8b66554ecf0",
+      "chapter": "22cd87e9-ea5f-4ed0-a223-3741f339e146",
+      "number": "32",
+      "pages": [
+        { "page": 1, "note": "full page black splash with a small corner mark, no panels" },
+        { "page": 10, "note": "heavy black borderless splash with figures cut in" },
+        { "page": 12, "note": "action spread on a grey sheet with a huge sound effect" },
+        { "page": 18, "note": "round black panel breaking a white page, big lettering" },
+        { "page": 30, "note": "plain black page, no panels" }
+      ]
+    },
+    {
+      "key": "cyborg009",
+      "title": "Cyborg 009",
+      "manga": "596bae2a-6a5b-4975-8e5e-1dd44393eaaf",
+      "chapter": "7f44b4da-a414-447f-bec9-a906cb07a594",
+      "number": "27.5",
+      "pages": [
+        { "page": 1, "note": "grey toned title splash with a lion, no panels" },
+        { "page": 2, "note": "map panel among irregular old style panels" },
+        { "page": 17, "note": "tall narrow black panel with a lightning tree beside small ones" },
+        { "page": 20, "note": "big tree drawing where the panel edges fade out" },
+        { "page": 27, "note": "black panels with odd shapes and thick gutters" }
+      ]
+    },
+    {
+      "key": "cyborg009",
+      "title": "Cyborg 009",
+      "manga": "596bae2a-6a5b-4975-8e5e-1dd44393eaaf",
+      "chapter": "50aaf53d-b48b-4962-bdfc-35ddff6baec4",
+      "number": "68",
+      "pages": [
+        { "page": 3, "note": "black sea monster spread scanned on a grey sheet" },
+        { "page": 5, "note": "full page black splash of falling spears, no panels" },
+        { "page": 10, "note": "tall black panels with white lines, gutters hard to see" },
+        { "page": 13, "note": "white figure on black with a tall black strip panel" },
+        { "page": 21, "note": "stone pillars panel taking most of the page" }
+      ]
+    },
+    {
+      "key": "galaxy999",
+      "title": "Galaxy Express 999",
+      "manga": "6c5a3310-c4c7-4231-b34b-1124332a2236",
+      "chapter": "b304d790-898d-4331-a9ef-ed0c579d7af2",
+      "number": "33",
+      "pages": [
+        { "page": 2, "note": "black chapter title spread on a grey sheet" },
+        { "page": 3, "note": "full page of wavy lines with a tiny train, no panels" },
+        { "page": 8, "note": "one big plain panel with lots of empty space" },
+        { "page": 15, "note": "black page with a white skeleton and a cut in panel" },
+        { "page": 29, "note": "wide black bars stacked like panels" },
+        { "page": 35, "note": "colour scanlator credits page, no panels" }
+      ]
+    },
+    {
+      "key": "galaxy999",
+      "title": "Galaxy Express 999",
+      "manga": "6c5a3310-c4c7-4231-b34b-1124332a2236",
+      "chapter": "34b2b79e-8fe4-41a3-b830-0eb514dd33bd",
+      "number": "92",
+      "pages": [
+        { "page": 4, "note": "almost blank scanned page, no panels" },
+        { "page": 11, "note": "character guide with small framed pictures and text, not panels" },
+        { "page": 15, "note": "chapter title over a planet on black, no panels" },
+        { "page": 34, "note": "thin slanted strips of faces stacked down the page" },
+        { "page": 52, "note": "borderless art with sound effects running off the edges" }
+      ]
+    },
+    {
+      "key": "loghe",
+      "title": "Ginga Eiyuu Densetsu",
+      "manga": "a29bd145-116e-49c8-bc2f-b15857299304",
+      "chapter": "9bfd682e-c5e9-4dc8-b504-b51ad5857dbc",
+      "number": "22",
+      "pages": [
+        { "page": 1, "note": "digital screentone, chapter title text along the bottom panel" },
+        { "page": 8, "note": "narrow strip panels of ships in black space" },
+        { "page": 13, "note": "black page with one figure and floating text, no frame" },
+        { "page": 20, "note": "almost all black page with a small logo, no panels" },
+        { "page": 21, "note": "colour credits image on a grey sheet, no panels" }
+      ]
+    },
+    {
+      "key": "loghe",
+      "title": "Ginga Eiyuu Densetsu",
+      "manga": "a29bd145-116e-49c8-bc2f-b15857299304",
+      "chapter": "dfa06211-d0bf-4042-a4f3-8ad2f8477680",
+      "number": "55",
+      "pages": [
+        { "page": 2, "note": "colour title image scanned on a grey sheet" },
+        { "page": 4, "note": "explosions with sound effects across grey toned panels" },
+        { "page": 10, "note": "tactical map panel with circles and arrows" },
+        { "page": 13, "note": "speed lines burst panel under a small panel" },
+        { "page": 24, "note": "black scanlator credits page with a grin logo, no panels" }
+      ]
+    },
+    {
+      "key": "astroboy",
+      "title": "Astro Boy",
+      "manga": "ca4c84bb-7272-45aa-a22d-dc1282b52372",
+      "chapter": "ed7b13dc-e759-4f81-888c-827e9755c58e",
+      "number": "10",
+      "pages": [
+        { "page": 11, "note": "tall slanted panel packed with a crowd beside small panels" },
+        { "page": 15, "note": "one big tower panel over a strip of small ones" },
+        { "page": 22, "note": "dark tower panel with a striped sky, few gutters" },
+        { "page": 48, "note": "grey photo of a cat on a grey sheet, no panels" },
+        { "page": 49, "note": "colour scanlator staff banner on a grey sheet, no panels" }
+      ]
+    },
+    {
+      "key": "astroboy",
+      "title": "Astro Boy",
+      "manga": "ca4c84bb-7272-45aa-a22d-dc1282b52372",
+      "chapter": "b9959497-ff69-4523-a290-7e47b831dc5f",
+      "number": "21",
+      "pages": [
+        { "page": 3, "note": "tall panels with a robot drawn over the gutter" },
+        { "page": 7, "note": "big raised hands panel with panels tucked beneath" },
+        { "page": 10, "note": "black space panel with a white explosion, mixed sizes" },
+        { "page": 12, "note": "odd stacked panels with a round building" },
+        { "page": 17, "note": "colour credits page with Astro Boy, no panels" }
+      ]
+    },
+    {
+      "key": "kamenrider",
+      "title": "Kamen Rider",
+      "manga": "56f3f735-31c4-46a1-bc89-7260c9bade1e",
+      "chapter": "b59d5069-659b-4ad4-a32f-4195a9cd6a12",
+      "number": "3.1",
+      "pages": [
+        { "page": 1, "note": "borderless title art of a smoking factory" },
+        { "page": 2, "note": "crowd spread scanned small on a grey sheet" },
+        { "page": 7, "note": "huge snake face panel with a small panel cut in" },
+        { "page": 19, "note": "end of volume text on a blank page, no panels" },
+        { "page": 20, "note": "book colophon page with print details, no panels" }
+      ]
+    },
+    {
+      "key": "kamenrider",
+      "title": "Kamen Rider",
+      "manga": "56f3f735-31c4-46a1-bc89-7260c9bade1e",
+      "chapter": "72abf290-3743-4af7-9b80-d7ea4afc3423",
+      "number": "6.1",
+      "pages": [
+        { "page": 1, "note": "black title card with a mask, no panels" },
+        { "page": 16, "note": "swirling round panel in the middle of the page" },
+        { "page": 54, "note": "small borderless figure on a white strip, grey sheet" },
+        { "page": 64, "note": "big white burst panel with tiny speech bubbles" },
+        { "page": 70, "note": "single borderless figure on a white page" }
+      ]
+    }
+  ]
+}
