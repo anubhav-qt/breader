@@ -1,0 +1,275 @@
+{
+  "series": [
+    {
+      "key": "yona",
+      "title": "Akatsuki no Yona",
+      "manga": "3bb0279f-a01d-4aa4-93e4-305800f4b83e",
+      "chapter": "14b8b114-7b3e-4992-8858-7a1afe993e33",
+      "number": "43",
+      "pages": [
+        { "page": 1, "note": "borderless opening art with a small title in the corner" },
+        { "page": 2, "note": "panels with a huge hand lettered sound effect across the gutter" },
+        { "page": 6, "note": "faint texture page with a caption block in the top right" },
+        { "page": 13, "note": "pale page of wide strips fading into white" },
+        { "page": 16, "note": "black flower background with overlapping figures, no clean borders" },
+        { "page": 22, "note": "slanted strips with a torn rock panel in the middle" },
+        { "page": 24, "note": "star field panel above a big face with soft edges" },
+        { "page": 28, "note": "full page figure on a black tree background" },
+        { "page": 30, "note": "end page with a night panel and small caption" },
+        { "page": 31, "note": "colour scanlator credits on grey, no panels" }
+      ]
+    },
+    {
+      "key": "orange",
+      "title": "Orange",
+      "manga": "cffdc4f4-0cd9-409b-b88c-62aaf2882e07",
+      "chapter": "58cfd0c6-fef0-4e45-a8cb-5d416eebf9b6",
+      "number": "5",
+      "pages": [
+        { "page": 2, "note": "colour magazine cover with Japanese text, no panels" },
+        { "page": 3, "note": "colour scrapbook collage of photos and stickers, no panels" },
+        { "page": 4, "note": "colour map collage page with photo boxes, no panels" },
+        { "page": 7, "note": "diary text page with a black dotted edge and one panel" },
+        { "page": 27, "note": "vertical title strip on a tone patterned panel beside text" }
+      ]
+    },
+    {
+      "key": "orange",
+      "title": "Orange",
+      "manga": "cffdc4f4-0cd9-409b-b88c-62aaf2882e07",
+      "chapter": "f81c7cf4-8a3e-4262-a492-c61f800a498a",
+      "number": "30",
+      "pages": [
+        { "page": 1, "note": "colour scanlator credits on grey, no panels" },
+        { "page": 14, "note": "typed narration between panels on a black strip" },
+        { "page": 22, "note": "fully blank white page, no panels" },
+        { "page": 23, "note": "handwritten letter on lined paper, no panels" },
+        { "page": 24, "note": "colour fireworks art with a discord banner, no panels" }
+      ]
+    },
+    {
+      "key": "apollon",
+      "title": "Kids on the Slope",
+      "manga": "9384d8e3-fb58-46da-8cf5-26602126d157",
+      "chapter": "6c6d48bb-6948-49a0-97c4-bf5699ccd154",
+      "number": "16",
+      "pages": [
+        { "page": 1, "note": "colour volume cover with a jacket flap on grey, no panels" },
+        { "page": 4, "note": "typed contents list with a piano key strip, no panels" },
+        { "page": 5, "note": "character introduction boxes with portraits and text" },
+        { "page": 6, "note": "single tilted window vignette on a white page" },
+        { "page": 8, "note": "scene title art with balloons and buildings, no frames" }
+      ]
+    },
+    {
+      "key": "apollon",
+      "title": "Kids on the Slope",
+      "manga": "9384d8e3-fb58-46da-8cf5-26602126d157",
+      "chapter": "ff38a003-d6a2-4ba0-ac5a-b9fb21c977a8",
+      "number": "39",
+      "pages": [
+        { "page": 2, "note": "full bleed concert splash with sparkles and a scene title" },
+        { "page": 4, "note": "small figures on an empty white page, no panels" },
+        { "page": 6, "note": "black page background with white gutters inverted" },
+        { "page": 8, "note": "panels on black with a borderless figure at the bottom" },
+        { "page": 12, "note": "wide pale panels with a black stripe and empty space" }
+      ]
+    },
+    {
+      "key": "wotakoi",
+      "title": "Wotaku ni Koi wa Muzukashii",
+      "manga": "65263bf9-4f87-4513-b72f-ad6436b3911c",
+      "chapter": "582e531d-2480-473d-be2d-6c8b8ec5ba19",
+      "number": "51",
+      "pages": [
+        { "page": 1, "note": "pink text credits over faded art, no panels" },
+        { "page": 4, "note": "four panel style strips with a borderless figure on hatching" },
+        { "page": 8, "note": "slanted strip panels with a caption under each row" },
+        { "page": 15, "note": "polka dot page with a small figure, no panels" },
+        { "page": 16, "note": "character profile card in a thin frame, no panels" }
+      ]
+    },
+    {
+      "key": "wotakoi",
+      "title": "Wotaku ni Koi wa Muzukashii",
+      "manga": "65263bf9-4f87-4513-b72f-ad6436b3911c",
+      "chapter": "62b94892-84c9-4c50-a3c3-cf1b7e1eb218",
+      "number": "65.2",
+      "pages": [
+        { "page": 1, "note": "wide credits banner floating on grey, no panels" },
+        { "page": 4, "note": "sparse page with an episode tab and white space" },
+        { "page": 8, "note": "crowded panels with a big shout breaking the border" },
+        { "page": 14, "note": "diagonal stripe with upside down figures, no panels" },
+        { "page": 15, "note": "two full figures over a grey diagonal band, no panels" }
+      ]
+    },
+    {
+      "key": "sasaki",
+      "title": "Sasaki to Miyano",
+      "manga": "b603c211-d1f9-4145-a2ac-04dcd5f06329",
+      "chapter": "dc71aba3-8a59-4b62-a9d3-6c9ea52ff2b5",
+      "number": "19",
+      "pages": [
+        { "page": 1, "note": "small credits banner on grey, no panels" },
+        { "page": 2, "note": "colour volume cover with a vertical title, no panels" },
+        { "page": 3, "note": "colour back cover with a barcode and circles, no panels" },
+        { "page": 5, "note": "colour illustration with flowers and a tilted figure, no panels" },
+        { "page": 13, "note": "four panel strip with a crosshatched panel and side caption" }
+      ]
+    },
+    {
+      "key": "sasaki",
+      "title": "Sasaki to Miyano",
+      "manga": "b603c211-d1f9-4145-a2ac-04dcd5f06329",
+      "chapter": "b432e374-5e79-4ff2-9793-f221aae951b4",
+      "number": "44",
+      "pages": [
+        { "page": 3, "note": "magazine chapter title art with Japanese logo, no panels" },
+        { "page": 5, "note": "panels sitting on a black and white gradient band" },
+        { "page": 11, "note": "panels on a dark bubbly background, grey scan sheet" },
+        { "page": 14, "note": "borderless rain scene with water drops across the page" },
+        { "page": 15, "note": "four strips with a big hand lettered sound effect" }
+      ]
+    },
+    {
+      "key": "kaoruhana",
+      "title": "Kaoru Hana wa Rin to Saku",
+      "manga": "418791c0-35cf-4f87-936b-acd9cddf0989",
+      "chapter": "9a1da360-24ed-470c-93a2-e3377b743363",
+      "number": "2.6",
+      "pages": [
+        { "page": 1, "note": "teal colour volume cover with a window, no panels" },
+        { "page": 3, "note": "yellowed scan with a big eye panel and alarm clock" },
+        { "page": 4, "note": "title art with figures and Japanese logo, no frames" },
+        { "page": 22, "note": "teal back cover with a small building, no panels" },
+        { "page": 23, "note": "typed afterword and credits text, no panels" }
+      ]
+    },
+    {
+      "key": "kaoruhana",
+      "title": "Kaoru Hana wa Rin to Saku",
+      "manga": "418791c0-35cf-4f87-936b-acd9cddf0989",
+      "chapter": "3d5083d1-a9e8-4775-ab7e-75e56d9b6a86",
+      "number": "175.5",
+      "pages": [
+        { "page": 2, "note": "soft pencil illustration with a stamp, no panels" },
+        { "page": 3, "note": "character profile with chalkboard text, no panels" },
+        { "page": 7, "note": "chapter title in a borderless street scene" },
+        { "page": 12, "note": "large face panel over a short panel with white gutters" },
+        { "page": 14, "note": "faint credits page with outline shapes, no panels" }
+      ]
+    },
+    {
+      "key": "loafer",
+      "title": "Skip to Loafer",
+      "manga": "244c9d4f-e5fb-4590-9b96-4da191977b33",
+      "chapter": "c5a82bc7-798f-4058-8af6-3562cafb60a3",
+      "number": "72",
+      "pages": [
+        { "page": 1, "note": "Russian page with black gutters around three panels" },
+        { "page": 2, "note": "title art with Russian lettering over dotted tone, no frames" },
+        { "page": 7, "note": "black margin page with a stage panel above two panels" },
+        { "page": 14, "note": "wide hall panel floating on grey" },
+        { "page": 19, "note": "sparse page with figures standing outside any panel" }
+      ]
+    },
+    {
+      "key": "loafer",
+      "title": "Skip to Loafer",
+      "manga": "244c9d4f-e5fb-4590-9b96-4da191977b33",
+      "chapter": "9ee94242-e979-416f-a08d-5521e2eb1049",
+      "number": "80",
+      "pages": [
+        { "page": 1, "note": "panels with a borderless tree scene down the right edge" },
+        { "page": 4, "note": "title illustration with Russian text, no panels" },
+        { "page": 15, "note": "black panel with a lone figure among white space panels" },
+        { "page": 16, "note": "borderless figure in the middle with panels around it" },
+        { "page": 18, "note": "panels with a black tilted strip and a blank wedge" }
+      ]
+    },
+    {
+      "key": "aonohako",
+      "title": "Ao no Hako",
+      "manga": "ed5dddc0-999d-4fd2-a702-9fef1ec2c955",
+      "chapter": "6778aaa7-c2be-40be-87d0-e26ce946a81b",
+      "number": "202",
+      "pages": [
+        { "page": 1, "note": "colour Vietnamese credits on grey, no panels" },
+        { "page": 2, "note": "Vietnamese chapter opener with a logo inside a panel grid" },
+        { "page": 8, "note": "photo like temple panel on top of a crowd panel" },
+        { "page": 14, "note": "panels on a black gradient band with slanted cuts" },
+        { "page": 15, "note": "black strips and slanted panels in a dense grid" }
+      ]
+    },
+    {
+      "key": "aonohako",
+      "title": "Ao no Hako",
+      "manga": "ed5dddc0-999d-4fd2-a702-9fef1ec2c955",
+      "chapter": "9b2888ef-d686-423b-ba58-c397bb26008c",
+      "number": "220",
+      "pages": [
+        { "page": 1, "note": "colour credits card on grey, no panels" },
+        { "page": 2, "note": "opening page with a logo and caption in the corner" },
+        { "page": 9, "note": "figure panel with vertical sound effects on the edge" },
+        { "page": 21, "note": "screenshot of a social page on grey, no panels" },
+        { "page": 22, "note": "colour credits banner on grey, no panels" }
+      ]
+    },
+    {
+      "key": "insomnia",
+      "title": "Kimi wa Houkago Insomnia",
+      "manga": "99af94f5-04c2-424b-8438-0c8386b0ec5f",
+      "chapter": "034dc7a8-4c22-461d-a744-83dc976a062f",
+      "number": "2",
+      "pages": [
+        { "page": 1, "note": "full page face with no frame, small title tag in the corner" },
+        { "page": 3, "note": "cat and building panels with plenty of white gutter" },
+        { "page": 9, "note": "tall borderless figure walking across the page" },
+        { "page": 21, "note": "panels with a thin black vertical strip and a lettered sound effect" },
+        { "page": 24, "note": "wide spread half floating on grey" }
+      ]
+    },
+    {
+      "key": "insomnia",
+      "title": "Kimi wa Houkago Insomnia",
+      "manga": "99af94f5-04c2-424b-8438-0c8386b0ec5f",
+      "chapter": "4d85c5f2-3875-44b8-8f3a-5dd6571ef806",
+      "number": "4",
+      "pages": [
+        { "page": 1, "note": "hands panel on grey tone with a caption diamond" },
+        { "page": 6, "note": "full page figure with no panels" },
+        { "page": 9, "note": "chat screen panels with Ukrainian text boxes" },
+        { "page": 11, "note": "crowded classroom panel with a caption over the art" },
+        { "page": 15, "note": "sky panel down the right with stacked text boxes" }
+      ]
+    },
+    {
+      "key": "nozaki",
+      "title": "Gekkan Shoujo Nozaki-kun",
+      "manga": "bc634b22-0c05-4a55-9b7e-3f55438a1ad3",
+      "chapter": "a144eb84-9e5b-4624-80f4-b7eda71ea879",
+      "number": "125",
+      "pages": [
+        { "page": 1, "note": "pastel credits card in Portuguese, no panels" },
+        { "page": 2, "note": "chapter title page with heavy black, no panels" },
+        { "page": 6, "note": "four panel strip with a diagram in the last panel" },
+        { "page": 13, "note": "four panel strip with sound effects spilling into the gutter" },
+        { "page": 15, "note": "single vignette with a caption on an empty page" }
+      ]
+    },
+    {
+      "key": "nozaki",
+      "title": "Gekkan Shoujo Nozaki-kun",
+      "manga": "bc634b22-0c05-4a55-9b7e-3f55438a1ad3",
+      "chapter": "8b6d9c73-b543-4ef2-917c-169e26748b78",
+      "number": "126",
+      "pages": [
+        { "page": 2, "note": "chapter title art with a big heart and dotted border, no panels" },
+        { "page": 12, "note": "four panel strip with round name badges" },
+        { "page": 18, "note": "single wide panel floating in the middle of white space" },
+        { "page": 19, "note": "translation notes text beside a striped spine, no panels" },
+        { "page": 20, "note": "pastel promo page for other works, no panels" }
+      ]
+    }
+  ]
+}
