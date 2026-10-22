@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "another",
+      "title": "Another",
+      "manga": "c40bf165-81fa-499f-b368-48b353a968df",
+      "chapter": "b17fef6a-2615-4ca0-ba00-bebeeb82c44e",
+      "number": "7",
+      "pages": [
+        { "page": 2, "note": "translators wanted poster on grey, no panels" },
+        { "page": 4, "note": "dark desk splash with a caption box, no clean frames" },
+        { "page": 7, "note": "panels on black with a tilted eye panel" },
+        { "page": 8, "note": "dark spread half on grey with faint art" },
+        { "page": 9, "note": "magazine page with a vertical ad strip on the right" }
+      ]
+    },
+    {
+      "key": "another",
+      "title": "Another",
+      "manga": "c40bf165-81fa-499f-b368-48b353a968df",
+      "chapter": "d05306db-72ef-4d8d-8c57-7ecc18dd3086",
+      "number": "16",
+      "pages": [
+        { "page": 1, "note": "colour cover with credits on grey, no panels" },
+        { "page": 7, "note": "black page with white gutters inverted" },
+        { "page": 14, "note": "moon and building panel on a black background" },
+        { "page": 30, "note": "dark rain panel with slanted cuts and a sound effect" },
+        { "page": 32, "note": "borderless rain splash with an end caption" }
+      ]
+    },
+    {
+      "key": "mirainikki",
+      "title": "Future Diary",
+      "manga": "7bcdff73-7d1a-4c88-8501-58b027e1632c",
+      "chapter": "fbcf2300-1e1b-4634-9fc9-587f5f8cf22c",
+      "number": "15",
+      "pages": [
+        { "page": 1, "note": "typed translator note with a small drawing, no panels" },
+        { "page": 5, "note": "borderless figure with a long vertical scream" },
+        { "page": 6, "note": "black date banner over panels with a magazine margin" },
+        { "page": 23, "note": "wide spread half on grey" },
+        { "page": 24, "note": "panels with a black text box and side strips" }
+      ]
+    },
+    {
+      "key": "mirainikki",
+      "title": "Future Diary",
+      "manga": "7bcdff73-7d1a-4c88-8501-58b027e1632c",
+      "chapter": "a59daa80-d106-4686-aefd-37c88178e849",
+      "number": "44",
+      "pages": [
+        { "page": 1, "note": "colour magazine opener with a cityscape, no clean frames" },
+        { "page": 2, "note": "colour title art with Japanese logo on grey, no panels" },
+        { "page": 3, "note": "panels inside a black frame with a header strip" },
+        { "page": 14, "note": "small spread on grey with a white strip across" },
+        { "page": 17, "note": "vault spread on grey with big kanji lettering" }
+      ]
+    },
+    {
+      "key": "billybat",
+      "title": "Billy Bat",
+      "manga": "e5357466-c8a2-4259-9b02-2580185bd2bb",
+      "chapter": "8c035252-2746-40e0-ae90-aaeb31a20841",
+      "number": "28",
+      "pages": [
+        { "page": 1, "note": "colour volume cover with a big logo, no panels" },
+        { "page": 2, "note": "black title page with white text, no panels" },
+        { "page": 3, "note": "colour theme park panels on sky blue" },
+        { "page": 4, "note": "colour wide postcard spread on grey, no panels" },
+        { "page": 8, "note": "comic book page shown inside a panel" }
+      ]
+    },
+    {
+      "key": "billybat",
+      "title": "Billy Bat",
+      "manga": "e5357466-c8a2-4259-9b02-2580185bd2bb",
+      "chapter": "b46e444d-d9b5-40c8-be06-ab7e104ee025",
+      "number": "70",
+      "pages": [
+        { "page": 3, "note": "colour panels on an orange wood texture background" },
+        { "page": 4, "note": "colour borderless figure with a cross and title strip" },
+        { "page": 8, "note": "black bat silhouette panel above a village panel" },
+        { "page": 17, "note": "night tree panel bleeding off the bottom edge" },
+        { "page": 23, "note": "handwritten signature panel at the top of a grid" }
+      ]
+    },
+    {
+      "key": "hanako",
+      "title": "Jibaku Shounen: Hanako-kun",
+      "manga": "a4b39b6e-a448-4644-a540-64ceff1d8305",
+      "chapter": "2c7b2721-dba7-48d1-926d-8c1f984c67de",
+      "number": "69",
+      "pages": [
+        { "page": 1, "note": "colour credits page with a big chapter heading, no panels" },
+        { "page": 2, "note": "colour collage of overlapping art pieces, no clean panels" },
+        { "page": 3, "note": "colour card table art floating on grey, no panels" },
+        { "page": 7, "note": "panels above a black band with a row of figures" },
+        { "page": 17, "note": "full page borderless splash with a vertical shout" }
+      ]
+    },
+    {
+      "key": "hanako",
+      "title": "Jibaku Shounen: Hanako-kun",
+      "manga": "a4b39b6e-a448-4644-a540-64ceff1d8305",
+      "chapter": "ab6458f8-1aed-4910-8acd-d1b2e753191f",
+      "number": "103",
+      "pages": [
+        { "page": 2, "note": "black page with a white title frame and a heavy black border" },
+        { "page": 10, "note": "panels on black with the gutters as black bars" },
+        { "page": 19, "note": "tilted chain panels cutting across the page" },
+        { "page": 33, "note": "stairway panel framed by a black doorway" },
+        { "page": 38, "note": "colour credits board with characters, no panels" }
+      ]
+    },
+    {
+      "key": "neverland",
+      "title": "Yakusoku no Neverland",
+      "manga": "46e9cae5-4407-4576-9b9e-4c517ae9298e",
+      "chapter": "26bd57a7-c7dc-4084-aa29-dd2d4da83f8e",
+      "number": "12",
+      "pages": [
+        { "page": 1, "note": "colour Spanish credits banner over art, no panels" },
+        { "page": 3, "note": "title splash with moon and logo, Spanish captions" },
+        { "page": 5, "note": "panels with a black gradient strip across the middle" },
+        { "page": 12, "note": "panels with a big blank white panel in the middle" },
+        { "page": 20, "note": "end page with a vertical caption down the side" }
+      ]
+    },
+    {
+      "key": "neverland",
+      "title": "Yakusoku no Neverland",
+      "manga": "46e9cae5-4407-4576-9b9e-4c517ae9298e",
+      "chapter": "acf9bde3-a7e7-4280-ab96-ac342301037e",
+      "number": "29",
+      "pages": [
+        { "page": 2, "note": "title art with Japanese logo and Spanish text, no frames" },
+        { "page": 5, "note": "tall slanted climbing panel with vertical sound effects" },
+        { "page": 11, "note": "giant diagonal wall panel cutting across the page" },
+        { "page": 13, "note": "diagram panel of a hexagon map with arrows" },
+        { "page": 17, "note": "borderless hug scene filling most of the page" }
+      ]
+    },
+    {
+      "key": "hikanatsu",
+      "title": "Hikaru Ga Shinda Natsu",
+      "manga": "9e954c6b-7a02-4fd7-986d-6331c0ba95d4",
+      "chapter": "d0c826ea-a447-42f2-8d21-2c89d14c6c96",
+      "number": "36",
+      "pages": [
+        { "page": 2, "note": "black patreon banner on grey, no panels" },
+        { "page": 9, "note": "full page tunnel of writhing texture, no panels" },
+        { "page": 14, "note": "dark spread half on grey with radiating lines" },
+        { "page": 28, "note": "full bleed burning house page, no panels" },
+        { "page": 42, "note": "sparse sketch with a tiny caption on white, no panels" }
+      ]
+    },
+    {
+      "key": "hikanatsu",
+      "title": "Hikaru Ga Shinda Natsu",
+      "manga": "9e954c6b-7a02-4fd7-986d-6331c0ba95d4",
+      "chapter": "f32aac22-081e-460f-a704-ea3f1d862584",
+      "number": "44.1",
+      "pages": [
+        { "page": 1, "note": "colour credits page with a figure and QR code, no panels" },
+        { "page": 6, "note": "dark texture splash with a lettered title, no clean frames" },
+        { "page": 8, "note": "vertical sound effect running down a gutter" },
+        { "page": 15, "note": "panels on a pale green background" },
+        { "page": 16, "note": "colour recruitment poster with text, no panels" }
+      ]
+    },
+    {
+      "key": "yofukashi",
+      "title": "Yofukashi no Uta",
+      "manga": "259dfd8a-f06a-4825-8fa6-a2dcd7274230",
+      "chapter": "899205e8-70b0-46d1-9fe1-330680eace06",
+      "number": "27",
+      "pages": [
+        { "page": 1, "note": "colour cover with Spanish credits box, no panels" },
+        { "page": 2, "note": "black title bar over text boxes and panels" },
+        { "page": 9, "note": "wide strips with a black panel band in the middle" },
+        { "page": 13, "note": "tall alley panel beside short stacked panels" },
+        { "page": 18, "note": "colour grid of covers on a dark banner, no panels" }
+      ]
+    },
+    {
+      "key": "yofukashi",
+      "title": "Yofukashi no Uta",
+      "manga": "259dfd8a-f06a-4825-8fa6-a2dcd7274230",
+      "chapter": "066b2418-c641-47a3-8fdc-466b5442cc21",
+      "number": "45",
+      "pages": [
+        { "page": 1, "note": "colour cover art with credits text, no panels" },
+        { "page": 2, "note": "colour magazine title page with Japanese logo, no panels" },
+        { "page": 4, "note": "wide night spread on grey with a caption box" },
+        { "page": 13, "note": "blank white panel above a black strip and short panels" },
+        { "page": 19, "note": "night city panel taking most of the page" }
+      ]
+    },
+    {
+      "key": "wadachi",
+      "title": "Chi no Wadachi",
+      "manga": "ab41d97a-0725-4f37-85db-da001d4ff0dc",
+      "chapter": "4cc0f462-f200-4940-b0ef-1862e0c7cfb5",
+      "number": "12",
+      "pages": [
+        { "page": 1, "note": "black page with panels and a Farsi chapter caption" },
+        { "page": 5, "note": "single face panel filling a black page" },
+        { "page": 6, "note": "borderless mouth close-up on black with Farsi text" },
+        { "page": 17, "note": "panels with a huge solid black panel at the bottom" },
+        { "page": 21, "note": "borderless figure on black with katakana sound effects" }
+      ]
+    },
+    {
+      "key": "wadachi",
+      "title": "Chi no Wadachi",
+      "manga": "ab41d97a-0725-4f37-85db-da001d4ff0dc",
+      "chapter": "50d7ddee-9095-4f94-89de-ed80343d4680",
+      "number": "30",
+      "pages": [
+        { "page": 1, "note": "panels with a Japanese logo in the bottom corner" },
+        { "page": 2, "note": "vertical Farsi notes in the right margin beside panels" },
+        { "page": 10, "note": "black mountain strip and a small clock panel" },
+        { "page": 19, "note": "face panel above an all black panel" },
+        { "page": 24, "note": "Farsi note text running down the margin beside panels" }
+      ]
+    },
+    {
+      "key": "durarara",
+      "title": "Durarara!!",
+      "manga": "207670b3-9dd1-4ea6-ad19-b7a03d1adb13",
+      "chapter": "7444b7f2-11a5-47f6-af65-d57169695c43",
+      "number": "7",
+      "pages": [
+        { "page": 1, "note": "black recruiting page with white text, no panels" },
+        { "page": 2, "note": "colour magazine promo with a big logo, no clean panels" },
+        { "page": 3, "note": "story so far page with art and floating text" },
+        { "page": 4, "note": "chat room log in stacked boxes on black, no art panels" },
+        { "page": 16, "note": "tilted collage of book covers inside panels" }
+      ]
+    },
+    {
+      "key": "durarara",
+      "title": "Durarara!!",
+      "manga": "207670b3-9dd1-4ea6-ad19-b7a03d1adb13",
+      "chapter": "34c37650-1dba-4003-b404-81a8d4827c0b",
+      "number": "16",
+      "pages": [
+        { "page": 1, "note": "full figure against a fence with a long title sound, no panels" },
+        { "page": 13, "note": "borderless silhouette in a smoky gradient" },
+        { "page": 16, "note": "phone screen panel with typed text" },
+        { "page": 27, "note": "collage of faces and a round logo, no clean frames" },
+        { "page": 33, "note": "single kneeling figure with no panel border" }
+      ]
+    },
+    {
+      "key": "kuroshitsuji",
+      "title": "Kuroshitsuji",
+      "manga": "8bd19e5c-94f7-4368-a918-50f463857446",
+      "chapter": "87f4e777-e7d9-4811-920c-0aeea99f2ce1",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "black scanlator note with white text, no panels" },
+        { "page": 2, "note": "colour title art with a Portuguese caption, no panels" },
+        { "page": 7, "note": "borderless doorway scene with long shadows" },
+        { "page": 11, "note": "stained glass spread half floating on grey" },
+        { "page": 12, "note": "flower filled page with panels blending into the art" }
+      ]
+    },
+    {
+      "key": "kuroshitsuji",
+      "title": "Kuroshitsuji",
+      "manga": "8bd19e5c-94f7-4368-a918-50f463857446",
+      "chapter": "7a127449-a66e-44a3-bcb7-c79c2512dff0",
+      "number": "31",
+      "pages": [
+        { "page": 2, "note": "title splash of a seated figure on a checker floor" },
+        { "page": 4, "note": "towering hall panel with figures overlapping the frame" },
+        { "page": 11, "note": "wide stage spread floating on grey" },
+        { "page": 19, "note": "black page with oval speech panels and slanted cuts" },
+        { "page": 29, "note": "dark credits card with a decorative frame, no panels" }
+      ]
+    }
+  ]
+}
