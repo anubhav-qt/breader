@@ -119,6 +119,38 @@ soft borderless pages. Uzumaki is in Portuguese, I Am a Hero in Polish and Kingd
 
 These five also mix in pages with no panels (covers, contents, credits, book jackets and posters).
 
+The seventeenth, `picks17.json`, is 100 more classics from City Hunter, Dragon Quest: The Adventure
+of Dai, Flame of Recca, Kimagure Orange Road, Marmalade Boy, Souten no Ken, Nodame Cantabile, Sunny,
+Tekkon Kinkreet and Steel Ball Run, for colour pages, loose shoujo layouts, shard-like cuts and
+spreads on grey. Nodame Cantabile is in Latin American Spanish and Tekkon Kinkreet in Spanish.
+
+The eighteenth, `picks18.json`, is 100 more shoujo, josei and romance from Yona of the Dawn, Orange,
+Kids on the Slope, Wotakoi, Sasaki and Miyano, The Fragrant Flower Blooms with Dignity, Skip to
+Loafer, Blue Box, Insomniacs After School and Nozaki-kun, for scrapbook pages, letters, chat screens,
+four-panel strips and soft pale borders. Skip to Loafer is in Russian, Blue Box in Vietnamese,
+Insomniacs in Ukrainian and Nozaki-kun in Portuguese.
+
+The nineteenth, `picks19.json`, is 100 more horror and thrillers from Another, Future Diary, Billy
+Bat, Toilet-bound Hanako-kun, The Promised Neverland, The Summer Hikaru Died, Call of the Night, Chi
+no Wadachi, Durarara!! and Black Butler, for black pages, inverted gutters, dark textures and
+phone screens. Neverland, Hikaru and Call of the Night are in Latin American Spanish, Chi no Wadachi
+in Persian and Black Butler in Portuguese.
+
+The twentieth, `picks20.json`, is 100 more comedy and slice of life from Saiki K., Ichigo
+Mashimaro, Teekyuu, Yukari Ozawa's Silver Spoon, Moyashimon, Tonari no Seki-kun, a School-Live!
+anthology, Hirayasumi, Tsurezure Children and Dungeon Meshi, for two columns of four-panel strips,
+recipe pages, side notes and magazine ad strips. Seki-kun is in Latin American Spanish, Hirayasumi
+in Vietnamese, Tsurezure Children in Kazakh and Dungeon Meshi in Indonesian.
+
+The twenty-first, `picks21.json`, is 100 more fantasy and action from Beastars, Reincarnated as a
+Sword, Blue Exorcist, Noragami, Kagurabachi, World Trigger, Rurouni Kenshin, Land of the Lustrous,
+Bakemonogatari and Mob Psycho 100, for maps, collages, very thin line art, wedge cuts and huge sound
+effects. Blue Exorcist is in French, Noragami and Mob Psycho in Russian, Kagurabachi in Latin
+American Spanish, World Trigger and Kenshin in Portuguese, Land of the Lustrous in Indonesian and
+Bakemonogatari in Ukrainian.
+
+These five mix in pages with no panels as well, plus a few nearly blank pages.
+
 ```bash
 npm --prefix ai run panels-export
 ```
