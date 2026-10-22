@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "slamdunk",
+      "title": "Slam Dunk!",
+      "manga": "319df2e2-e6a6-4e3a-a31c-68539c140a84",
+      "chapter": "e7e03f55-7867-4785-909c-f586e27d11db",
+      "number": "77",
+      "pages": [
+        { "page": 1, "note": "chapter title page with a face sketch in one frame" },
+        { "page": 6, "note": "full bleed dunk splash, panels hard to see" },
+        { "page": 11, "note": "borderless jump with a tall shout down the side" },
+        { "page": 16, "note": "tall dark panel of a man in a stand" },
+        { "page": 20, "note": "mostly blank end page with a round mascot, no panels" }
+      ]
+    },
+    {
+      "key": "slamdunk",
+      "title": "Slam Dunk!",
+      "manga": "319df2e2-e6a6-4e3a-a31c-68539c140a84",
+      "chapter": "332e31ea-b62e-427e-9875-ecbbe9ce703e",
+      "number": "191",
+      "pages": [
+        { "page": 1, "note": "chapter title over a borderless school scene" },
+        { "page": 6, "note": "wide empty court panel under a small strip" },
+        { "page": 12, "note": "double page spread scanned on a grey sheet" },
+        { "page": 17, "note": "single borderless jump drawing, no panels" },
+        { "page": 19, "note": "blank end page with a round mascot and logo, no panels" }
+      ]
+    },
+    {
+      "key": "ippo",
+      "title": "Hajime no Ippo",
+      "manga": "f7888782-0727-49b0-95ec-a3530c70f83b",
+      "chapter": "0a296f33-04db-4c5c-8108-dfecded94997",
+      "number": "1493",
+      "pages": [
+        { "page": 1, "note": "colour scanlator credits page, no panels" },
+        { "page": 3, "note": "logo and round title above a wide arena panel" },
+        { "page": 8, "note": "full bleed crowd in an arena with one bubble" },
+        { "page": 12, "note": "silhouettes in an open panel with no top border" },
+        { "page": 16, "note": "full bleed screentone of a seated boxer, no panels" }
+      ]
+    },
+    {
+      "key": "ippo",
+      "title": "Hajime no Ippo",
+      "manga": "f7888782-0727-49b0-95ec-a3530c70f83b",
+      "chapter": "df77d99b-cfd1-4b87-aa06-dc03af75342a",
+      "number": "1502",
+      "pages": [
+        { "page": 2, "note": "grey scanlator notice page, no panels" },
+        { "page": 7, "note": "black strip panel at the bottom of a busy fight page" },
+        { "page": 10, "note": "fight spread scanned on a grey sheet" },
+        { "page": 15, "note": "black silhouette art with no frame and one caption" },
+        { "page": 20, "note": "movie still meme on a grey sheet, no panels" }
+      ]
+    },
+    {
+      "key": "pingpong",
+      "title": "Ping Pong",
+      "manga": "7e435a27-b4fc-417d-94de-30cea79ab6f4",
+      "chapter": "c6c95687-bfde-48d4-b712-52c279f0673b",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "title page with huge letters over the panels" },
+        { "page": 4, "note": "top panel bleeds off the page with black lettering" },
+        { "page": 8, "note": "open panels with thin uneven lines and a big face" },
+        { "page": 12, "note": "two big panels, lower one with no gutter" },
+        { "page": 16, "note": "small panels above a big diagonal swing" }
+      ]
+    },
+    {
+      "key": "pingpong",
+      "title": "Ping Pong",
+      "manga": "7e435a27-b4fc-417d-94de-30cea79ab6f4",
+      "chapter": "b93c8536-b6ab-4d05-9889-9f9b5e046c6f",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "title page with vertical chapter text beside a figure" },
+        { "page": 7, "note": "three faces above a near empty street panel" },
+        { "page": 12, "note": "products panel above stacked strips" },
+        { "page": 13, "note": "slanted dark speed panel through the middle" },
+        { "page": 17, "note": "thin slanted strip panels down the page" }
+      ]
+    },
+    {
+      "key": "kuroko",
+      "title": "Kuroko no Basket",
+      "manga": "f8e41a48-5ca9-41e3-94a7-a1379a4fda62",
+      "chapter": "714b65d7-e30e-460f-bc7d-e915a06ace31",
+      "number": "57",
+      "pages": [
+        { "page": 1, "note": "colour scanlator team banner on a grey sheet, no panels" },
+        { "page": 11, "note": "two tall faces with no gutter between them" },
+        { "page": 15, "note": "dark night spread scanned on a grey sheet" },
+        { "page": 16, "note": "dunk spread on a grey sheet with panels down one side" },
+        { "page": 19, "note": "omake title with small sketches floating, no frames" }
+      ]
+    },
+    {
+      "key": "kuroko",
+      "title": "Kuroko no Basket",
+      "manga": "f8e41a48-5ca9-41e3-94a7-a1379a4fda62",
+      "chapter": "26ee0df0-062a-412c-81b5-a4b73d3920a9",
+      "number": "74",
+      "pages": [
+        { "page": 6, "note": "chapter title art with no frame on white" },
+        { "page": 9, "note": "tall half page panel with a dog by a curtain" },
+        { "page": 14, "note": "slanted action panels with sound effects in the gutters" },
+        { "page": 19, "note": "borderless dog and players with a slanted cut" },
+        { "page": 21, "note": "omake page with a small loose sketch and title" }
+      ]
+    },
+    {
+      "key": "tennis",
+      "title": "Tennis no Oujisama",
+      "manga": "57b52103-769a-490e-af54-49fd9ce08dcf",
+      "chapter": "7f95fa67-8f93-48d6-8ff0-04871d16a21d",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "borderless title art with a figure on a pale scan" },
+        { "page": 3, "note": "slanted panels with speed lines on a yellowed scan" },
+        { "page": 14, "note": "tall borderless figure with a caption, few frames" },
+        { "page": 16, "note": "spread scanned on a grey sheet" },
+        { "page": 17, "note": "round text ring around a small drawing, no panels" }
+      ]
+    },
+    {
+      "key": "tennis",
+      "title": "Tennis no Oujisama",
+      "manga": "57b52103-769a-490e-af54-49fd9ce08dcf",
+      "chapter": "ab92a5b2-014f-4433-88ba-2ce782732d59",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "chapter title art with a caption box, no panels" },
+        { "page": 4, "note": "single huge slanted court shot with sound effects" },
+        { "page": 9, "note": "slanted panels crossing each other with speed lines" },
+        { "page": 18, "note": "small spread on a grey sheet" },
+        { "page": 21, "note": "round text ring with a small comic inside, no real panels" }
+      ]
+    },
+    {
+      "key": "real",
+      "title": "REAL",
+      "manga": "62b74aa6-24df-4b91-b76d-39e7ab3c3ca5",
+      "chapter": "01c335e3-03c7-4897-98ce-a476038db17f",
+      "number": "32",
+      "pages": [
+        { "page": 1, "note": "chapter number tab and credits under three panels" },
+        { "page": 10, "note": "slanted strips of faces with a sound effect panel" },
+        { "page": 18, "note": "big close panel bleeding off the right side" },
+        { "page": 30, "note": "table chart in the top panel, not a picture" },
+        { "page": 34, "note": "loose sketch with handwritten notes, no panels" }
+      ]
+    },
+    {
+      "key": "real",
+      "title": "REAL",
+      "manga": "62b74aa6-24df-4b91-b76d-39e7ab3c3ca5",
+      "chapter": "5af0645e-2fe1-48aa-a858-723810e708f6",
+      "number": "80",
+      "pages": [
+        { "page": 1, "note": "stacked wide panels with a slanted bottom panel" },
+        { "page": 5, "note": "one big borderless jump scene with a shout" },
+        { "page": 12, "note": "bracket chart panel with a scoreboard below" },
+        { "page": 28, "note": "spread scanned on a grey sheet" },
+        { "page": 34, "note": "black end page with a faint title at the bottom" }
+      ]
+    },
+    {
+      "key": "initiald",
+      "title": "Initial D",
+      "manga": "21f54bc1-aefd-4be1-8284-5858b1df0e55",
+      "chapter": "4646c247-1643-43f3-8260-d68a7fedf2ba",
+      "number": "29",
+      "pages": [
+        { "page": 1, "note": "title page with one loose figure, no panels" },
+        { "page": 9, "note": "huge sound effects crossing every panel" },
+        { "page": 13, "note": "dark road panels with a low wide strip" },
+        { "page": 16, "note": "three panels with a black night scene in the middle" },
+        { "page": 20, "note": "end page with an end note under the panels" }
+      ]
+    },
+    {
+      "key": "initiald",
+      "title": "Initial D",
+      "manga": "21f54bc1-aefd-4be1-8284-5858b1df0e55",
+      "chapter": "f80344df-b3fb-4fe0-bef0-4440ba2f69dc",
+      "number": "72",
+      "pages": [
+        { "page": 1, "note": "full bleed title art with sound effects, no panels" },
+        { "page": 4, "note": "spread scanned on a grey sheet with big lettering" },
+        { "page": 11, "note": "panels split by a slanted cut under heavy lettering" },
+        { "page": 13, "note": "dark spread on a grey sheet" },
+        { "page": 14, "note": "sound effects bigger than the panels they sit in" }
+      ]
+    },
+    {
+      "key": "ahiru",
+      "title": "Ahiru no Sora",
+      "manga": "8f3c24d3-6e15-4fea-a60f-f80cef482853",
+      "chapter": "9f0308a8-95b9-42b5-83ef-98af4562a382",
+      "number": "73",
+      "pages": [
+        { "page": 1, "note": "borderless title art with a shirt and brush lettering" },
+        { "page": 9, "note": "spread scanned on a grey sheet" },
+        { "page": 13, "note": "faces in strips beside a tall panel with no right border" },
+        { "page": 17, "note": "two players with no frame and a small panel cut in" },
+        { "page": 19, "note": "loud colour scanlator banner on a grey sheet" }
+      ]
+    },
+    {
+      "key": "ahiru",
+      "title": "Ahiru no Sora",
+      "manga": "8f3c24d3-6e15-4fea-a60f-f80cef482853",
+      "chapter": "123d1cb5-4434-4fdf-a11a-a9168eb6b31e",
+      "number": "160.2",
+      "pages": [
+        { "page": 1, "note": "narrow colour credits strip on a grey sheet, no panels" },
+        { "page": 7, "note": "tilted action panels packed with players" },
+        { "page": 12, "note": "borderless leap at the top over a crowd panel" },
+        { "page": 13, "note": "slanted panels without clear gutters" },
+        { "page": 15, "note": "tall building art bleeding off the page with captions" }
+      ]
+    },
+    {
+      "key": "babysteps",
+      "title": "Baby Steps",
+      "manga": "c433f163-d610-49ba-a031-a1f3b6377af2",
+      "chapter": "3da8fa1a-dc28-4422-a17c-c2727de816bb",
+      "number": "84",
+      "pages": [
+        { "page": 1, "note": "wraparound colour cover scanned small on a grey sheet" },
+        { "page": 3, "note": "colour character guide spread on a grey sheet, not panels" },
+        { "page": 4, "note": "contents page drawn over a court on grey, no panels" },
+        { "page": 12, "note": "small action spread on a grey sheet" },
+        { "page": 21, "note": "two big stacked panels with a figure crossing the line" }
+      ]
+    },
+    {
+      "key": "babysteps",
+      "title": "Baby Steps",
+      "manga": "c433f163-d610-49ba-a031-a1f3b6377af2",
+      "chapter": "f695b12b-b114-4596-9026-5a6e90cbe090",
+      "number": "207",
+      "pages": [
+        { "page": 1, "note": "colour cover with a scanlator credits box, no panels" },
+        { "page": 5, "note": "big serve panel that bleeds off the top" },
+        { "page": 13, "note": "wide slanted court panel across the page" },
+        { "page": 18, "note": "swing art breaking out of every panel" },
+        { "page": 19, "note": "single borderless swing with speed lines, no panels" }
+      ]
+    },
+    {
+      "key": "hikarunogo",
+      "title": "Hikaru no Go",
+      "manga": "17dcd7da-7692-420f-b813-a92159def4be",
+      "chapter": "17759a6e-0c68-4f95-bda7-bff4c9ad0d86",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "borderless school scene with signs, few frames" },
+        { "page": 2, "note": "title spread scanned on a grey sheet" },
+        { "page": 16, "note": "one figure in an open panel with a faint tree" },
+        { "page": 18, "note": "crowd room panel under small strips" },
+        { "page": 19, "note": "hand drawn credits page with figures, no panels" }
+      ]
+    },
+    {
+      "key": "hikarunogo",
+      "title": "Hikaru no Go",
+      "manga": "17dcd7da-7692-420f-b813-a92159def4be",
+      "chapter": "8a8502ce-7b91-4089-b18f-d559d277b2c2",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "title art with a curved top on a scanned page" },
+        { "page": 4, "note": "burst panel full of English chat text" },
+        { "page": 7, "note": "computer chat window drawn as a panel" },
+        { "page": 21, "note": "plane with a big sound effect running off the bottom" },
+        { "page": 22, "note": "hand drawn credits page with figures, no panels" }
+      ]
+    }
+  ]
+}
