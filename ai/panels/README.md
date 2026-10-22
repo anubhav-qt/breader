@@ -92,6 +92,33 @@ Blame! and Akira are in Portuguese and Knights of Sidonia in Latin American Span
 Across the five, some pages have no panels on purpose (covers, title pages, credits and recruiting
 pages), and some have a scanlator's mark across the art.
 
+The twelfth, `picks12.json`, is 101 more sci-fi and mecha from Gundam The Origin, Appleseed, Dr.
+Stone, Aposimz, Biomega, Cyborg 009, Galaxy Express 999, Legend of the Galactic Heroes, Astro Boy and
+Kamen Rider, for space black, dense machines, very light line art and spreads. Gundam is in Spanish,
+Appleseed, Aposimz and Astro Boy in Portuguese and Dr. Stone in Vietnamese.
+
+The thirteenth, `picks13.json`, is 100 more sport from Slam Dunk, Hajime no Ippo, Ping Pong, Kuroko
+no Basket, Prince of Tennis, Real, Initial D, Ahiru no Sora, Baby Steps and Hikaru no Go, for jumps
+that break the frame, crowds, scoreboards and tilted action panels. Ippo and Kuroko are in
+Portuguese, Ping Pong and Prince of Tennis in Spanish and Hikaru no Go in Latin American Spanish.
+
+The fourteenth, `picks14.json`, is 100 more gags and four-panel strips from Yotsuba&!, Pop Team
+Epic, Non Non Biyori, Gabriel DropOut, Working!!, a Maid Dragon anthology, Doraemon, Kochikame,
+Nichijou and a Girls' Last Tour anthology, for strips side by side, clean thin borders, old style
+grids and translator notes in the margin. Nichijou is in Ukrainian.
+
+The fifteenth, `picks15.json`, is 100 more shonen action from Hunter x Hunter, Toriko, JoJo part 4,
+Dragon Ball, D.Gray-man, Undead Unluck, Kaiju No. 8, Black Clover, Saiyuki and Lupin III, for busy
+fights, black gutters, magazine pages and yellowed book spreads. Dragon Ball, Kaiju No. 8 and Black
+Clover are in Portuguese and Undead Unluck in Vietnamese.
+
+The sixteenth, `picks16.json`, is 100 more seinen, horror and josei from Dorohedoro, Uzumaki, Usagi
+Drop, Honey and Clover, The Rose of Versailles, I Am a Hero, Kingdom, Mononoke, Natsume's Book of
+Friends and a Higurashi anthology, for scratchy ink, photo-like backgrounds, graphic patterns and
+soft borderless pages. Uzumaki is in Portuguese, I Am a Hero in Polish and Kingdom in Spanish.
+
+These five also mix in pages with no panels (covers, contents, credits, book jackets and posters).
+
 ```bash
 npm --prefix ai run panels-export
 ```
