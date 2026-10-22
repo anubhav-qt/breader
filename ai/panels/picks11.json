@@ -1,0 +1,275 @@
+{
+  "series": [
+    {
+      "key": "shigurui",
+      "title": "Death Frenzy",
+      "manga": "c8b3d40c-86b8-41cd-a793-c280d5b9da10",
+      "chapter": "60e978f1-073c-4fde-91ee-42aaf8653723",
+      "number": "26",
+      "pages": [
+        { "page": 1, "note": "a dense pencil style title page with chapter caption, no panels" },
+        { "page": 6, "note": "a figure bursting through panels on a black page" },
+        { "page": 10, "note": "thick black gutters around tall and thin panels" },
+        { "page": 14, "note": "a wide spread on a grey sheet with a strip of small panels" },
+        { "page": 24, "note": "a moonlit spread on a grey sheet, borderless art" }
+      ]
+    },
+    {
+      "key": "shigurui",
+      "title": "Death Frenzy",
+      "manga": "c8b3d40c-86b8-41cd-a793-c280d5b9da10",
+      "chapter": "f55577f6-527e-41c2-992d-e4070b2b221a",
+      "number": "64",
+      "pages": [
+        { "page": 1, "note": "a black page with a framed title panel and street scene" },
+        { "page": 2, "note": "black gutters with a street panel and a caption box" },
+        { "page": 11, "note": "a wide moon panel over a sitting figure, black margins" },
+        { "page": 18, "note": "a castle panel and a street panel on black, a caption at the corner" },
+        { "page": 20, "note": "stacked rooftop and street panels with captions, black gutters" }
+      ]
+    },
+    {
+      "key": "junjiito",
+      "title": "Junji Ito Horror Manga Collection",
+      "manga": "3f7b7736-84c5-4f38-bf73-7266021f355a",
+      "chapter": "3411e62c-417c-4549-a3e4-4f0d90676195",
+      "number": "3",
+      "pages": [
+        { "page": 1, "note": "a title page swirling with smoke and hand lettered title, no panels" },
+        { "page": 2, "note": "a chimney panel over a tall tree panel with wide white margins" },
+        { "page": 9, "note": "wavy smoke filling the gutters between panels" },
+        { "page": 14, "note": "smoke patterns spilling across panel borders" },
+        { "page": 17, "note": "a tall tree panel with a chimney cutting diagonally" }
+      ]
+    },
+    {
+      "key": "junjiito",
+      "title": "Junji Ito Horror Manga Collection",
+      "manga": "3f7b7736-84c5-4f38-bf73-7266021f355a",
+      "chapter": "ce864bc0-cb62-4109-897c-1e7486940e09",
+      "number": "5.2",
+      "pages": [
+        { "page": 1, "note": "a corridor title page with lettered title, no panels" },
+        { "page": 5, "note": "a wide dark room panel between stacked rows" },
+        { "page": 12, "note": "a crash panel with lettered sound effect across the gutter" },
+        { "page": 14, "note": "a radiating white burst panel at the foot" },
+        { "page": 20, "note": "a dark corridor full of wavy lines in tall panels" }
+      ]
+    },
+    {
+      "key": "blame",
+      "title": "BLAME!",
+      "manga": "b905f827-8d48-4948-b58c-0d6fd330d10d",
+      "chapter": "492e0c35-baa4-4943-83ab-717dd6e795e8",
+      "number": "3",
+      "pages": [
+        { "page": 1, "note": "a black and white title page with a framed figure, no story panels" },
+        { "page": 4, "note": "a dark top panel over a narrow strip, almost all black" },
+        { "page": 11, "note": "black gutters merging with dark machinery panels" },
+        { "page": 16, "note": "a borderless creature crossing two tall dark panels" },
+        { "page": 23, "note": "tall thin panels of dark structure with almost no gutter contrast" }
+      ]
+    },
+    {
+      "key": "blame",
+      "title": "BLAME!",
+      "manga": "b905f827-8d48-4948-b58c-0d6fd330d10d",
+      "chapter": "1182d01f-4aa4-4b18-8188-23f34c02bca9",
+      "number": "6",
+      "pages": [
+        { "page": 4, "note": "a long corridor panel with thin borders and a dark lower strip" },
+        { "page": 5, "note": "debris flying across a panel border into white space" },
+        { "page": 10, "note": "a white cross shape panel inside a dark page" },
+        { "page": 18, "note": "a borderless tall figure next to a pillar, empty white page" },
+        { "page": 24, "note": "a cracked wall filling a near borderless page with a sound effect" }
+      ]
+    },
+    {
+      "key": "akira",
+      "title": "Akira",
+      "manga": "175cf215-2122-4656-9fac-37ac092438af",
+      "chapter": "d5f94893-0072-461a-bb62-6f08ab7a8b92",
+      "number": "4",
+      "pages": [
+        { "page": 1, "note": "a wide helicopter panel with a sign caption above, Portuguese lettering" },
+        { "page": 4, "note": "stacked wide panels with big sound effects crossing the gutters" },
+        { "page": 9, "note": "striped barrier panels with explosions and sound effects" },
+        { "page": 13, "note": "a round seat panel framed in the middle of the page" },
+        { "page": 16, "note": "rows of marching feet panels between wider shots" }
+      ]
+    },
+    {
+      "key": "akira",
+      "title": "Akira",
+      "manga": "175cf215-2122-4656-9fac-37ac092438af",
+      "chapter": "46817df4-8a5e-44ac-88ba-fc8a6df324bf",
+      "number": "8",
+      "pages": [
+        { "page": 1, "note": "an explosion over a city with a three tier grid below" },
+        { "page": 4, "note": "a top down round panel and a sound effect at the foot" },
+        { "page": 12, "note": "a wide high angle room panel taking half the page" },
+        { "page": 18, "note": "a black panel with a long scream lettered across two panels" },
+        { "page": 21, "note": "a colour scanlator credit page with tilted pictures, no panels" }
+      ]
+    },
+    {
+      "key": "sidonia",
+      "title": "Knights of Sidonia",
+      "manga": "82d1553b-84a1-4baf-9e14-8ac72f034aab",
+      "chapter": "1a63f3c6-b8d4-44cd-9df8-7d3bafd92f89",
+      "number": "12",
+      "pages": [
+        { "page": 1, "note": "a title page with a bathhouse front and caption text, Spanish lettering" },
+        { "page": 2, "note": "a two page spread scanned small on a grey sheet" },
+        { "page": 7, "note": "a wide floating figure panel taking most of the page" },
+        { "page": 16, "note": "a big borderless creature over a strip of tiny panels" },
+        { "page": 21, "note": "a white explosion cloud filling a black bordered page" }
+      ]
+    },
+    {
+      "key": "sidonia",
+      "title": "Knights of Sidonia",
+      "manga": "82d1553b-84a1-4baf-9e14-8ac72f034aab",
+      "chapter": "61f824f8-eb28-42c1-950e-60e4e8c3b05d",
+      "number": "30",
+      "pages": [
+        { "page": 4, "note": "white streaks on a black page with small panels below" },
+        { "page": 5, "note": "white katakana shapes on solid black, panels hard to tell apart" },
+        { "page": 10, "note": "concentric rings and white effects with no clear borders" },
+        { "page": 18, "note": "a single tall borderless mecha figure on white" },
+        { "page": 24, "note": "a gauge panel with numbers and a mecha bleeding off the top" }
+      ]
+    },
+    {
+      "key": "homunculus",
+      "title": "Homunculus",
+      "manga": "231d5196-1f41-4eba-af8d-841d40bc548d",
+      "chapter": "4232b5e6-bbe0-4d39-85a5-6998f4cb2a32",
+      "number": "1",
+      "pages": [
+        { "page": 3, "note": "a volume title page with a tribal logo and vertical text, no panels" },
+        { "page": 5, "note": "a single top down snowy city filling the page" },
+        { "page": 6, "note": "a thin face strip between two wide snowy panels" },
+        { "page": 8, "note": "snow falling over every panel with a car window frame" },
+        { "page": 13, "note": "a grid of eye close ups with tiny reaction panels" },
+        { "page": 22, "note": "a lone figure on a blank page, no panel border" },
+        { "page": 77, "note": "a tilted page of car crash panels with a lettered skid" },
+        { "page": 80, "note": "a shattering windshield panel spilling into the panel below" },
+        { "page": 82, "note": "small panels over a wide field of scattered money" },
+        { "page": 92, "note": "a dense grid of close ups with balloons across the gutters" }
+      ]
+    },
+    {
+      "key": "shamo",
+      "title": "Shamo",
+      "manga": "a81e63a3-83f1-4da5-95a4-ba431e830ce9",
+      "chapter": "4ab5fff4-b571-4827-af2f-5f7f17bfcacc",
+      "number": "37",
+      "pages": [
+        { "page": 2, "note": "a small framed camera picture on a blank page" },
+        { "page": 4, "note": "slanted panels with sound effects crossing black gutters" },
+        { "page": 6, "note": "a borderless dark face bleeding off the page" },
+        { "page": 13, "note": "a sign panel over a dark alley with a footnote at the foot" },
+        { "page": 21, "note": "a wedge shaped dark panel with thin slanted strips" }
+      ]
+    },
+    {
+      "key": "shamo",
+      "title": "Shamo",
+      "manga": "a81e63a3-83f1-4da5-95a4-ba431e830ce9",
+      "chapter": "3dfcb210-bf5a-4a47-8d79-0e1901b1ba20",
+      "number": "92",
+      "pages": [
+        { "page": 1, "note": "a chapter title over cracked earth, no panels" },
+        { "page": 6, "note": "a car crash panel with a figure flying through the border" },
+        { "page": 10, "note": "a full width standing figure over a row of small panels" },
+        { "page": 18, "note": "a wide misty landscape on a grey sheet, borderless" },
+        { "page": 19, "note": "stacked wide panels with a chapter end caption" }
+      ]
+    },
+    {
+      "key": "nijigahara",
+      "title": "Nijigahara Holograph",
+      "manga": "b7fa8210-b086-4f1b-bb5e-1f3b4c35b790",
+      "chapter": "05ae55f0-7bd0-41f8-b901-84dcda4202cc",
+      "number": "3",
+      "pages": [
+        { "page": 3, "note": "black caption panels alternating with photo real panels" },
+        { "page": 5, "note": "a chapter title in spaced letters between panels" },
+        { "page": 12, "note": "stacked photo style interior panels with thin borders" },
+        { "page": 19, "note": "black text panels and a top down well panel" },
+        { "page": 23, "note": "a near blank white page with a tiny moth and a strip of skyline" }
+      ]
+    },
+    {
+      "key": "nijigahara",
+      "title": "Nijigahara Holograph",
+      "manga": "b7fa8210-b086-4f1b-bb5e-1f3b4c35b790",
+      "chapter": "5e260ac3-2b00-4b14-8420-1a84e5346820",
+      "number": "10",
+      "pages": [
+        { "page": 5, "note": "almost all black panels with white text on black gutters" },
+        { "page": 7, "note": "black panels with glowing eyes and a chapter title box" },
+        { "page": 16, "note": "a wide butterfly swarm spread on a grey sheet" },
+        { "page": 19, "note": "a blank white panel above dark interior panels" },
+        { "page": 23, "note": "a near blank page with a small black square" }
+      ]
+    },
+    {
+      "key": "kowloon",
+      "title": "Kowloon Generic Romance",
+      "manga": "dc22c201-a2a8-40aa-a23f-69852b0c8d0f",
+      "chapter": "ee05181e-36fa-422a-b538-0f48fa2c0fb0",
+      "number": "22",
+      "pages": [
+        { "page": 2, "note": "a magazine opener with headline banners and a framed title, no story panels" },
+        { "page": 4, "note": "a juggling figure crossing panels with swish sound effects" },
+        { "page": 6, "note": "a tall street panel with a big lettered sign down the side" },
+        { "page": 15, "note": "a tiled floor panel with a figure breaking the frame" },
+        { "page": 18, "note": "a close up with a shaped caption and an overlapping figure" }
+      ]
+    },
+    {
+      "key": "kowloon",
+      "title": "Kowloon Generic Romance",
+      "manga": "dc22c201-a2a8-40aa-a23f-69852b0c8d0f",
+      "chapter": "9d8586a9-a51f-4f73-9ece-b024befd8753",
+      "number": "55",
+      "pages": [
+        { "page": 1, "note": "a title page with a tall figure and vertical logo, no panels" },
+        { "page": 8, "note": "a hospital sign panel cutting across the middle" },
+        { "page": 12, "note": "two overlapping close up ovals bleeding into each other" },
+        { "page": 14, "note": "a document panel overlapping a seated figure" },
+        { "page": 20, "note": "a scanlator recruiting page over faded art, no panels" }
+      ]
+    },
+    {
+      "key": "solanin",
+      "title": "Solanin",
+      "manga": "a42db50d-20df-4f33-bddc-fe990df9c231",
+      "chapter": "48ef890b-582d-42ec-b566-746c6a9cf17a",
+      "number": "8",
+      "pages": [
+        { "page": 1, "note": "a credits page with a scooter sketch, no panels" },
+        { "page": 3, "note": "black margins with a borderless figure among small panels" },
+        { "page": 10, "note": "a black text panel at the foot of a street scene" },
+        { "page": 12, "note": "black side margins with handwritten notes beside the panels" },
+        { "page": 15, "note": "a small framed river photo on a blank page" }
+      ]
+    },
+    {
+      "key": "solanin",
+      "title": "Solanin",
+      "manga": "a42db50d-20df-4f33-bddc-fe990df9c231",
+      "chapter": "c6a57f43-1f21-4803-b3b3-eb1b79875c6e",
+      "number": "22",
+      "pages": [
+        { "page": 1, "note": "a title page with a small framed bridge picture and credits" },
+        { "page": 7, "note": "black text panels with a sneaker close up" },
+        { "page": 8, "note": "a night street panel above a black text strip" },
+        { "page": 12, "note": "glowing hands in a borderless bottom panel" },
+        { "page": 14, "note": "a small figure on a blank page with drawn lines, no panels" }
+      ]
+    }
+  ]
+}

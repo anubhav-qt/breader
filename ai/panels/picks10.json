@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "gintama",
+      "title": "Gintama",
+      "manga": "f65444dc-3694-4e31-a166-8afb2938ed55",
+      "chapter": "0158b2fd-3440-4cb8-b860-593af049624b",
+      "number": "44",
+      "pages": [
+        { "page": 3, "note": "a title page with huge katakana sound effects over the top panel" },
+        { "page": 7, "note": "a big sound effect cutting through slanted panels" },
+        { "page": 9, "note": "a near borderless full page sword strike with a shout" },
+        { "page": 12, "note": "a tall vertical caption strip beside stacked faces" },
+        { "page": 16, "note": "a crowd fight panel squeezed between wide strips" }
+      ]
+    },
+    {
+      "key": "gintama",
+      "title": "Gintama",
+      "manga": "f65444dc-3694-4e31-a166-8afb2938ed55",
+      "chapter": "6513afda-8bcd-444b-a40d-955e340ca206",
+      "number": "110",
+      "pages": [
+        { "page": 4, "note": "a black framed title page with white caption text above the art" },
+        { "page": 9, "note": "a dense page of slanted panels and sound effects" },
+        { "page": 10, "note": "a fan shaped panel overlapping the cells below" },
+        { "page": 16, "note": "a black margin on the left with a vertical shout" },
+        { "page": 20, "note": "a dark border on the left with a cut off shout at the foot" }
+      ]
+    },
+    {
+      "key": "eyeshield",
+      "title": "Eyeshield 21",
+      "manga": "30460ee1-e7c1-4b1a-90a0-6861f9992c17",
+      "chapter": "0a4512a5-644f-4d87-9ccc-59ad88e0fee8",
+      "number": "60",
+      "pages": [
+        { "page": 2, "note": "a title page with a temple scene and chapter caption at the foot" },
+        { "page": 6, "note": "figures bursting across slanted panel borders" },
+        { "page": 13, "note": "tall split panels with a vertical shout in the gutter" },
+        { "page": 18, "note": "a double page spread shown as one wide image with action across both halves" },
+        { "page": 19, "note": "a fake graduation album page, framed photo and text, no story panels" }
+      ]
+    },
+    {
+      "key": "eyeshield",
+      "title": "Eyeshield 21",
+      "manga": "30460ee1-e7c1-4b1a-90a0-6861f9992c17",
+      "chapter": "3dc673a0-8816-4c43-8e80-a7eabdb5edf4",
+      "number": "148",
+      "pages": [
+        { "page": 2, "note": "a title splash with speed lines, title box at the foot" },
+        { "page": 8, "note": "diagonal panels with a runner breaking across them" },
+        { "page": 10, "note": "a big sound effect over a slanted action stack" },
+        { "page": 14, "note": "a wide spread on a grey sheet with a row of small panels below" },
+        { "page": 18, "note": "a grey toned extra page with a banner title and framed panels" }
+      ]
+    },
+    {
+      "key": "yowapeda",
+      "title": "Yowamushi Pedal",
+      "manga": "003e7fbf-f047-4783-a7df-1533a2a653d4",
+      "chapter": "c181e320-589d-45ad-8aaa-5dbf17453513",
+      "number": "95",
+      "pages": [
+        { "page": 5, "note": "a character chart page with hexagon portraits, no panels" },
+        { "page": 6, "note": "a volume contents page with a wheel drawing, no panels" },
+        { "page": 9, "note": "speed lined panels with a tall rider panel at the right" },
+        { "page": 14, "note": "crossing diagonal panels covered in speed lines" },
+        { "page": 21, "note": "a wide spread on a grey sheet full of speed lines" }
+      ]
+    },
+    {
+      "key": "yowapeda",
+      "title": "Yowamushi Pedal",
+      "manga": "003e7fbf-f047-4783-a7df-1533a2a653d4",
+      "chapter": "566e6523-4782-4e23-9568-fd601e70c60d",
+      "number": "237",
+      "pages": [
+        { "page": 1, "note": "a chapter opener with stacked wide panels and a title at the foot" },
+        { "page": 3, "note": "a black framed flashback strip among white panels" },
+        { "page": 8, "note": "vertical lettering running down the left edge of the art" },
+        { "page": 9, "note": "a wide spread on a grey sheet with a vertical shout" },
+        { "page": 16, "note": "a borderless reaching hand with framed panels below" }
+      ]
+    },
+    {
+      "key": "major",
+      "title": "Major",
+      "manga": "491aba94-e971-4911-8a93-0b1200403f4b",
+      "chapter": "b65e13fb-8a88-4e0f-897c-39635110b6bb",
+      "number": "138",
+      "pages": [
+        { "page": 2, "note": "a wide spread on a grey sheet with a chapter title in the corner" },
+        { "page": 11, "note": "a tall pitcher panel beside stacked fielder panels" },
+        { "page": 13, "note": "a diagonal pitch panel with a batter inset" },
+        { "page": 19, "note": "a near borderless windup with speed lines" },
+        { "page": 22, "note": "a colour scanlator credit banner, no panels" }
+      ]
+    },
+    {
+      "key": "major",
+      "title": "Major",
+      "manga": "491aba94-e971-4911-8a93-0b1200403f4b",
+      "chapter": "0185aa08-937d-4961-a3bd-a48efa3b4fd4",
+      "number": "343",
+      "pages": [
+        { "page": 1, "note": "a grey screentone chapter title page, no panels" },
+        { "page": 5, "note": "burst balloons between a building panel and a sign caption" },
+        { "page": 10, "note": "a hospital exterior over a striped flashback strip" },
+        { "page": 13, "note": "a solid black bottom panel under talking heads" },
+        { "page": 18, "note": "a staggered page with a vertical clinic sign panel" }
+      ]
+    },
+    {
+      "key": "yakitate",
+      "title": "Yakitate!! Japan",
+      "manga": "0c29ce86-04c7-45cb-b623-70510b2064e3",
+      "chapter": "2fbd728f-f4f3-4e67-bb14-c5c693ad8eb3",
+      "number": "73",
+      "pages": [
+        { "page": 2, "note": "a black title page with a single figure and caption, no panels" },
+        { "page": 10, "note": "a radiating burst panel above a plane flying through the gutter" },
+        { "page": 16, "note": "a full page map with a dashed border and captions" },
+        { "page": 18, "note": "a borderless page of question balloons with small panels below" },
+        { "page": 24, "note": "a single borderless cliff over the sea filling the page" }
+      ]
+    },
+    {
+      "key": "yakitate",
+      "title": "Yakitate!! Japan",
+      "manga": "0c29ce86-04c7-45cb-b623-70510b2064e3",
+      "chapter": "108fa49e-6908-4ab5-94cb-591bac2c6e9f",
+      "number": "182",
+      "pages": [
+        { "page": 1, "note": "a pancake title page with chapter caption, no panels" },
+        { "page": 7, "note": "a stack of narrow panels on the right of a tall figure" },
+        { "page": 12, "note": "a borderless pancake diagram over a black panel" },
+        { "page": 16, "note": "a black text box breaking out of a stacked page" },
+        { "page": 18, "note": "a final page with a borderless figure and a caption at the foot" }
+      ]
+    },
+    {
+      "key": "beelzebub",
+      "title": "Beelzebub",
+      "manga": "8af3ad21-3e7e-4fb5-b344-d0044ec154fc",
+      "chapter": "ac6e699f-8d0b-487a-8038-d1d72c9f59c1",
+      "number": "57",
+      "pages": [
+        { "page": 3, "note": "a title page with vertical text along both edges" },
+        { "page": 6, "note": "a kick slicing diagonally across stacked panels" },
+        { "page": 13, "note": "a black framed flashback page with white captions" },
+        { "page": 16, "note": "a wide spread on a grey sheet with a big sound effect" },
+        { "page": 18, "note": "a figure standing over panels with sound effects in the gutter" }
+      ]
+    },
+    {
+      "key": "beelzebub",
+      "title": "Beelzebub",
+      "manga": "8af3ad21-3e7e-4fb5-b344-d0044ec154fc",
+      "chapter": "a6ae1040-98fc-4737-b61c-8c05b260a391",
+      "number": "140",
+      "pages": [
+        { "page": 2, "note": "a borderless park title page with a caption strip at the foot" },
+        { "page": 10, "note": "a black panel with a shaped caption and loose figures" },
+        { "page": 18, "note": "a black panel cracked by white lines across the middle" },
+        { "page": 19, "note": "black letterbox strips stacked down the page" },
+        { "page": 20, "note": "a lightning dark top panel and a progress bar footer" }
+      ]
+    },
+    {
+      "key": "magi",
+      "title": "Magi",
+      "manga": "ce63e6b8-fad8-48bc-a2aa-d801fb8d5d43",
+      "chapter": "04617aa7-495c-4450-9978-c3cc4fada546",
+      "number": "70",
+      "pages": [
+        { "page": 3, "note": "a title page with a monster slash and the chapter title at the foot" },
+        { "page": 7, "note": "sharp diagonal cuts with figures crossing every border" },
+        { "page": 12, "note": "a wide battle spread on a grey sheet" },
+        { "page": 15, "note": "a near borderless page of a figure and a huge sound effect" },
+        { "page": 21, "note": "a full width figure over stacked strips at the bottom" }
+      ]
+    },
+    {
+      "key": "magi",
+      "title": "Magi",
+      "manga": "ce63e6b8-fad8-48bc-a2aa-d801fb8d5d43",
+      "chapter": "19f80cdd-5930-4a2d-bc2f-fe36ac98a4a8",
+      "number": "175",
+      "pages": [
+        { "page": 2, "note": "a crowd page with a black diagonal and a side caption" },
+        { "page": 9, "note": "a page with the army in heavy pattern and a slanted shout panel" },
+        { "page": 14, "note": "a huge borderless city with small panels at the foot" },
+        { "page": 17, "note": "a single figure filling the page with shouts on either side" },
+        { "page": 19, "note": "a crowd panel above thin strips and a sword inset" }
+      ]
+    },
+    {
+      "key": "conan",
+      "title": "Meitantei Conan",
+      "manga": "7f30dfc3-0b80-4dcc-a3b9-0cd746fac005",
+      "chapter": "987251fa-7e5b-44c1-93bc-ed1fb0e9384e",
+      "number": "37",
+      "pages": [
+        { "page": 2, "note": "a file title page with a code sheet drawing, no panels" },
+        { "page": 10, "note": "a crowd chase with slanted panels and a running figure across them" },
+        { "page": 12, "note": "a close up and a large paper prop overlapping the panels" },
+        { "page": 18, "note": "a code strip panel running down through the page" },
+        { "page": 19, "note": "a big face at the top over a sunglasses close up" }
+      ]
+    },
+    {
+      "key": "conan",
+      "title": "Meitantei Conan",
+      "manga": "7f30dfc3-0b80-4dcc-a3b9-0cd746fac005",
+      "chapter": "7e1a4c91-9ec1-4ece-8e45-f2aec2607d4c",
+      "number": "93",
+      "pages": [
+        { "page": 2, "note": "a black title page with a framed drawing in the middle" },
+        { "page": 3, "note": "a slanted burst balloon over a body panel and small reactions" },
+        { "page": 9, "note": "a soft tone dream panel and a sneeze balloon box" },
+        { "page": 16, "note": "lightning burst panels around a close up with narrow side cells" },
+        { "page": 17, "note": "a body outline panel at the foot of a stacked page" }
+      ]
+    },
+    {
+      "key": "dandadan",
+      "title": "Dandadan",
+      "manga": "68112dc1-2b80-4f20-beb8-2f2a8716a430",
+      "chapter": "46972268-2d63-4b91-8812-4809406833f2",
+      "number": "11",
+      "pages": [
+        { "page": 1, "note": "a chapter opener with a large top panel and a chapter caption, Portuguese lettering" },
+        { "page": 6, "note": "a large lucky cat figure breaking out over slanted panels" },
+        { "page": 7, "note": "a long black corridor panel with a glowing figure" },
+        { "page": 13, "note": "a tight stack of horizontal panels with shouting balloons" },
+        { "page": 20, "note": "a solid black end page with only a logo, no panels" }
+      ]
+    },
+    {
+      "key": "dandadan",
+      "title": "Dandadan",
+      "manga": "68112dc1-2b80-4f20-beb8-2f2a8716a430",
+      "chapter": "f3b55056-c972-42cc-8cfe-ac7b0c557bad",
+      "number": "27",
+      "pages": [
+        { "page": 1, "note": "a big sushi platter panel between wide strips" },
+        { "page": 5, "note": "a dense patterned spread of bodies with framed insets" },
+        { "page": 11, "note": "a milk carton panel cutting across the page" },
+        { "page": 14, "note": "a wide spread of a UFO on a grey sheet" },
+        { "page": 16, "note": "grey tone panels with bright figures in a dark crowd" }
+      ]
+    },
+    {
+      "key": "chihaya",
+      "title": "Chihayafuru",
+      "manga": "d7d5f269-6969-4f86-af89-ee57a6180f36",
+      "chapter": "472f357d-981d-4887-9c2e-50f40e826430",
+      "number": "99",
+      "pages": [
+        { "page": 3, "note": "a plain title page with vertical Japanese text, no panels" },
+        { "page": 5, "note": "a vertical title strip beside overlapping character panels" },
+        { "page": 11, "note": "tilted panels with a tilted caption inside a grey tone" },
+        { "page": 18, "note": "black oval poem balloons over a wide hall panel" },
+        { "page": 22, "note": "card shapes flying over a dark radial background" }
+      ]
+    },
+    {
+      "key": "chihaya",
+      "title": "Chihayafuru",
+      "manga": "d7d5f269-6969-4f86-af89-ee57a6180f36",
+      "chapter": "569242f8-eadf-4071-907b-e55de9d3a7d1",
+      "number": "196",
+      "pages": [
+        { "page": 1, "note": "a grey tone chapter opener with a cut in title" },
+        { "page": 7, "note": "a soft snow tone flashback panel bleeding off the page" },
+        { "page": 13, "note": "a phone screen panel and a shout panel cutting diagonally" },
+        { "page": 14, "note": "buzz sound effects over a crowd panel" },
+        { "page": 20, "note": "a dark oval poem balloon over a slanted card throw" }
+      ]
+    }
+  ]
+}

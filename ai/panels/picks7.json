@@ -1,0 +1,262 @@
+{
+  "series": [
+    {
+      "key": "hokuto",
+      "title": "Hokuto no Ken",
+      "manga": "75251a47-952c-4e38-b1c6-3572b9bfd481",
+      "chapter": "d8f3d814-2356-46f9-891d-a0e806d0c711",
+      "number": "56",
+      "pages": [
+        { "page": 3, "note": "a crowd under slanted borders, sound effects over the cuts" },
+        { "page": 6, "note": "a shouting face breaking down through a grid" },
+        { "page": 10, "note": "a giant cut across by diagonal borders" },
+        { "page": 14, "note": "one tall panel of motion lines, a small one tucked into it" },
+        { "page": 16, "note": "a tight grid of crowds and faces" }
+      ]
+    },
+    {
+      "key": "hokuto",
+      "title": "Hokuto no Ken",
+      "manga": "75251a47-952c-4e38-b1c6-3572b9bfd481",
+      "chapter": "a6e8f053-58c6-42b4-9f8e-e8fa3fa1f964",
+      "number": "127",
+      "pages": [
+        { "page": 1, "note": "a title page, a crowd with panels set into it" },
+        { "page": 3, "note": "a fighter bursting across the panels around him" },
+        { "page": 7, "note": "a big slanted strike over small panels" },
+        { "page": 13, "note": "a girl standing over the panels beside her" },
+        { "page": 19, "note": "a cloaked figure cutting through the grid" }
+      ]
+    },
+    {
+      "key": "glassmask",
+      "title": "Glass Mask",
+      "manga": "51fe4713-013a-4acc-8874-bfd01b60eff9",
+      "chapter": "c095bedb-8126-4a0c-aa28-0f5e82222aaf",
+      "number": "80",
+      "pages": [
+        { "page": 5, "note": "a girl in a long dress standing over the panels, no border round her" },
+        { "page": 9, "note": "a dense shoujo page, faces and flowers spilling over the borders" },
+        { "page": 14, "note": "a ghostly face over a stack of borderless panels" },
+        { "page": 19, "note": "a sparkling figure cut across by slanted panels" },
+        { "page": 22, "note": "one panel, a building filling the page" }
+      ]
+    },
+    {
+      "key": "glassmask",
+      "title": "Glass Mask",
+      "manga": "51fe4713-013a-4acc-8874-bfd01b60eff9",
+      "chapter": "13fff0f9-5a89-4a00-a9ce-4462c5bc861d",
+      "number": "200",
+      "pages": [
+        { "page": 2, "note": "wide landscape panels stacked down the page" },
+        { "page": 10, "note": "a tall figure in black filling half the page beside a bed" },
+        { "page": 14, "note": "a field under a bursting sun, its borders fading out" },
+        { "page": 19, "note": "black shards between slanted panels, a figure across them" },
+        { "page": 24, "note": "black and white panels cut on a diagonal, a rope swinging over" }
+      ]
+    },
+    {
+      "key": "devilman",
+      "title": "Devilman",
+      "manga": "4393fd4e-d646-4bab-9c95-786168ccb618",
+      "chapter": "19332ad4-70ad-46db-a6f5-bd28f8b6fc60",
+      "number": "0",
+      "pages": [
+        { "page": 25, "note": "a face over a black starry sky, small panels under it" },
+        { "page": 37, "note": "speech bursts and a face with no borders, a grid below" },
+        { "page": 41, "note": "a corridor drawn in deep perspective over thin strips of eyes" },
+        { "page": 42, "note": "black strips of glaring faces, slanted cuts" },
+        { "page": 46, "note": "a demon rising through the page, borders lost in the ink" },
+        { "page": 104, "note": "a struggle shattered into slanted shards" },
+        { "page": 106, "note": "one panel of a mob and an explosion, out to the edges" },
+        { "page": 109, "note": "slanted strips of a fight and a thrown bottle" },
+        { "page": 116, "note": "two tall black panels, a figure hanging upside down" },
+        { "page": 120, "note": "a devil looming over borderless crowds" }
+      ]
+    },
+    {
+      "key": "hinotori",
+      "title": "Hi no Tori",
+      "manga": "fb4ad02c-f4d6-49d9-b8f0-7b705d490026",
+      "chapter": "aee3e81e-59a2-495c-99c4-c5e018e8aa94",
+      "number": "4",
+      "pages": [
+        { "page": 1, "note": "a colour title page over a strip of four small panels" },
+        { "page": 4, "note": "a 1950s colour grid, a boat across two panels" },
+        { "page": 5, "note": "uneven colour panels around a storm at sea" },
+        { "page": 8, "note": "a plain colour grid, four rows of three" },
+        { "page": 12, "note": "wide strips with thin borders, small faces under them" },
+        { "page": 16, "note": "a tight old grid, a caption under the last row" }
+      ]
+    },
+    {
+      "key": "catseye",
+      "title": "Cat's Eye",
+      "manga": "a7af8655-f969-44dd-a66c-ee15aedc616d",
+      "chapter": "d8b947d2-bf17-4f2a-b1ec-5a6fc7d48d90",
+      "number": "41",
+      "pages": [
+        { "page": 5, "note": "a volume cover, no panels" },
+        { "page": 9, "note": "an 80s grid, panels of different heights" },
+        { "page": 13, "note": "a crowded grid, a shout bursting over a gutter" },
+        { "page": 23, "note": "a slanted roof over the top panel, a scream across it" },
+        { "page": 24, "note": "a figure stepping out of a slanted panel, sound effects over the cuts" }
+      ]
+    },
+    {
+      "key": "catseye",
+      "title": "Cat's Eye",
+      "manga": "a7af8655-f969-44dd-a66c-ee15aedc616d",
+      "chapter": "b51852ed-2411-4693-96c1-ccd006762936",
+      "number": "102",
+      "pages": [
+        { "page": 1, "note": "a title page, two women in one tall picture" },
+        { "page": 4, "note": "a dark starry panel over a grid, a speed-lined cut" },
+        { "page": 11, "note": "a wide night street across the middle, small panels round it" },
+        { "page": 16, "note": "panels overlapping, a figure standing out of the bottom left" },
+        { "page": 20, "note": "an illustration inside a frame, a title and a number around it" }
+      ]
+    },
+    {
+      "key": "kinnikuman",
+      "title": "Kinnikuman",
+      "manga": "7b9d73ff-a19e-4817-9eb7-657471f4d8d5",
+      "chapter": "e1c08729-83ca-492d-b685-b433cd707cf5",
+      "number": "820",
+      "pages": [
+        { "page": 1, "note": "an opening page in grey tone, a title strip slanted across" },
+        { "page": 3, "note": "a count shouted down through slanted panels" },
+        { "page": 6, "note": "a wrestler leaping out over the panels beside him" },
+        { "page": 9, "note": "stacked grey panels, a striped wrestler across two" },
+        { "page": 14, "note": "a slam spread over the page, panels broken behind it" }
+      ]
+    },
+    {
+      "key": "kinnikuman",
+      "title": "Kinnikuman",
+      "manga": "7b9d73ff-a19e-4817-9eb7-657471f4d8d5",
+      "chapter": "d0ec7c3b-77a4-4e68-8e78-08dd4dc3cdf5",
+      "number": "886",
+      "pages": [
+        { "page": 2, "note": "a ring seen from above, a title slanted under it" },
+        { "page": 10, "note": "two tall panels of a throw, small faces at the foot" },
+        { "page": 11, "note": "a falling wrestler running down a tall middle panel" },
+        { "page": 15, "note": "one big grey impact panel, a caption in the corner" },
+        { "page": 19, "note": "a weeping face over a lower panel, both bleeding off the edge" }
+      ]
+    },
+    {
+      "key": "touch",
+      "title": "Touch",
+      "manga": "36b4c3d4-629d-45cb-b911-ae0906f6b544",
+      "chapter": "49e44413-0816-4a14-87bb-98b2ca483edf",
+      "number": "78",
+      "pages": [
+        { "page": 1, "note": "a pencil portrait framed on black, a title above it" },
+        { "page": 4, "note": "a glass roof over a gymnast, wide and narrow panels below" },
+        { "page": 12, "note": "a tall strip down the right beside a batter" },
+        { "page": 15, "note": "speed lines through slanted panels over a wide pitch" },
+        { "page": 16, "note": "thin wide strips, a ball crossing two of them" }
+      ]
+    },
+    {
+      "key": "touch",
+      "title": "Touch",
+      "manga": "36b4c3d4-629d-45cb-b911-ae0906f6b544",
+      "chapter": "36dbc920-9923-495f-80e6-64dfd888aacb",
+      "number": "194",
+      "pages": [
+        { "page": 2, "note": "a stadium in two tall panels, scoreboard over the top" },
+        { "page": 3, "note": "a pitch in slanted panels, a ball breaking the border" },
+        { "page": 8, "note": "a sky panel with no edge on one side, slanted cuts above" },
+        { "page": 11, "note": "captions in boxes beside a stadium, slanted gaps" },
+        { "page": 17, "note": "an empty top panel, a scoreboard slanting off the corner" }
+      ]
+    },
+    {
+      "key": "videogirl",
+      "title": "Video Girl Ai",
+      "manga": "6d93d9dd-f303-4caa-b314-f4d817076891",
+      "chapter": "4341563e-699e-45c6-b9ca-2120173da505",
+      "number": "39",
+      "pages": [
+        { "page": 1, "note": "a black title page, words only, no panels" },
+        { "page": 2, "note": "wide strips of a school, captions laid over them" },
+        { "page": 11, "note": "a girl striding out of her panel over the ones below" },
+        { "page": 14, "note": "an embrace on a white page with no border" },
+        { "page": 20, "note": "a small figure glowing on a black page, no panels" }
+      ]
+    },
+    {
+      "key": "videogirl",
+      "title": "Video Girl Ai",
+      "manga": "6d93d9dd-f303-4caa-b314-f4d817076891",
+      "chapter": "61ec1afb-807f-45ed-9c57-667e4d7b8260",
+      "number": "101",
+      "pages": [
+        { "page": 2, "note": "a tall standing figure beside an overlapping inset" },
+        { "page": 5, "note": "a shout bursting over slanted panels in grey tone" },
+        { "page": 12, "note": "a quiet page, a wide snowy panel with open space" },
+        { "page": 15, "note": "a building on a tilt filling a borderless page" },
+        { "page": 19, "note": "a dark full-height panel over a narrow strip" }
+      ]
+    },
+    {
+      "key": "urusei",
+      "title": "Urusei Yatsura",
+      "manga": "6b9206b3-5c0f-4cf8-a0cc-d2c9e1aa4df9",
+      "chapter": "8541e9ce-4698-48cc-a8dd-d9049e97e6dd",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "a title page, one drawing with no border" },
+        { "page": 5, "note": "a black slanted panel of tentacles cutting through a grid" },
+        { "page": 7, "note": "a figure flying across slanted panels, small ones under it" },
+        { "page": 11, "note": "two big heads over a row of small 80s panels" },
+        { "page": 18, "note": "a dense grid with vertical notes in the margin" }
+      ]
+    },
+    {
+      "key": "urusei",
+      "title": "Urusei Yatsura",
+      "manga": "6b9206b3-5c0f-4cf8-a0cc-d2c9e1aa4df9",
+      "chapter": "badcd522-30b4-49b6-98e1-bae1b0165ec6",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "a title page in swirling ink, no panels" },
+        { "page": 4, "note": "a crowded comic grid, a monster bursting up from the bottom" },
+        { "page": 6, "note": "a big shout across the top, sound effects over the borders" },
+        { "page": 10, "note": "a busy crowd panel framed by a few small ones" },
+        { "page": 15, "note": "wide strips of a flying pig, sound effects across the gutters" }
+      ]
+    },
+    {
+      "key": "tsubasa",
+      "title": "Captain Tsubasa",
+      "manga": "94be07be-2a8f-4557-a575-7a26a8a6194e",
+      "chapter": "928dd880-5ae6-45de-8f43-aa55408c23c8",
+      "number": "35",
+      "pages": [
+        { "page": 3, "note": "a tall ship over a face, panels stacked down the left" },
+        { "page": 13, "note": "a player running out of the bottom over a borderless warm-up" },
+        { "page": 16, "note": "a team standing in one big panel, a title over it" },
+        { "page": 20, "note": "panels on a black page, black gutters" },
+        { "page": 23, "note": "faces in panels on black, a crowd along the foot" }
+      ]
+    },
+    {
+      "key": "tsubasa",
+      "title": "Captain Tsubasa",
+      "manga": "94be07be-2a8f-4557-a575-7a26a8a6194e",
+      "chapter": "ac695411-3b18-4b5e-ab70-e6c3b4fecc0a",
+      "number": "86",
+      "pages": [
+        { "page": 26, "note": "a two-page spread in one picture, a shot streaking across the fold" },
+        { "page": 30, "note": "a volley in slanted panels, sound effects over the cuts" },
+        { "page": 33, "note": "a two-page spread of crowded slanted panels" },
+        { "page": 44, "note": "a coach standing out of a stacked grid, black down one side" },
+        { "page": 47, "note": "a ball flying through a page of broken slanted panels" }
+      ]
+    }
+  ]
+}

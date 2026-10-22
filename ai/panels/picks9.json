@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "kon",
+      "title": "K-ON!",
+      "manga": "227e498f-ff83-4d2a-8c76-eaa9d83863c4",
+      "chapter": "5b90d7fe-1a6c-41d7-b791-b43a4318a786",
+      "number": "26",
+      "pages": [
+        { "page": 1, "note": "a colour magazine cover, no panels" },
+        { "page": 5, "note": "colour four panel strips in two columns" },
+        { "page": 7, "note": "black and white four panel strips in two columns" },
+        { "page": 10, "note": "four panel strips in two columns with captions between" },
+        { "page": 12, "note": "a sketch omake page with no panels" }
+      ]
+    },
+    {
+      "key": "kon",
+      "title": "K-ON!",
+      "manga": "227e498f-ff83-4d2a-8c76-eaa9d83863c4",
+      "chapter": "bf6bf27a-b92e-4547-8003-95f1ae4306de",
+      "number": "43",
+      "pages": [
+        { "page": 5, "note": "a wraparound volume cover with spine and back, no panels" },
+        { "page": 7, "note": "purple ink four panel strips in two columns" },
+        { "page": 9, "note": "a character profile grid of framed portraits, not story panels" },
+        { "page": 10, "note": "full colour four panel strips with a wide bottom panel" },
+        { "page": 13, "note": "full colour strips with a shouting panel breaking the grid" }
+      ]
+    },
+    {
+      "key": "hidamari",
+      "title": "Hidamari Sketch",
+      "manga": "b93212ef-5d8f-4814-9e10-9237720a4057",
+      "chapter": "1ee189d8-e99e-4787-b26a-c13c8b88d1e9",
+      "number": "14",
+      "pages": [
+        { "page": 2, "note": "a pink character analysis page with callout labels, no panels" },
+        { "page": 7, "note": "colour watercolour panels with faint soft borders" },
+        { "page": 9, "note": "colour horizontal strips with sound effects across the borders" },
+        { "page": 11, "note": "grey tone chapter title over a stack of small four panel strips" },
+        { "page": 15, "note": "titled four panel strips in two columns with a footnote" }
+      ]
+    },
+    {
+      "key": "hidamari",
+      "title": "Hidamari Sketch",
+      "manga": "b93212ef-5d8f-4814-9e10-9237720a4057",
+      "chapter": "36398510-9f5d-4019-948c-e4d01803d403",
+      "number": "52.5",
+      "pages": [
+        { "page": 6, "note": "slanted panels with a black caption box and a small inset" },
+        { "page": 8, "note": "panels melting into a dotted haze with no lower border" },
+        { "page": 10, "note": "tall and wide panels with a walking strip along the bottom" },
+        { "page": 13, "note": "a dark cloud panel over lettered memory panels" },
+        { "page": 19, "note": "a book colophon page, no panels" }
+      ]
+    },
+    {
+      "key": "asobi",
+      "title": "Asobi Asobase",
+      "manga": "bb393058-0eb1-4958-b46c-eb71de753d35",
+      "chapter": "a190cf39-5a69-4b05-ae57-091c96f8f173",
+      "number": "29",
+      "pages": [
+        { "page": 1, "note": "a title page with a framed classroom scene and chapter caption" },
+        { "page": 7, "note": "a dense grid with a wide panel of a crying face at the foot" },
+        { "page": 10, "note": "tall vertical panels with a borderless note panel below" },
+        { "page": 13, "note": "a panel bleeding off the left edge beside a stack of small cells" },
+        { "page": 15, "note": "a jagged burst panel among square cells" }
+      ]
+    },
+    {
+      "key": "asobi",
+      "title": "Asobi Asobase",
+      "manga": "bb393058-0eb1-4958-b46c-eb71de753d35",
+      "chapter": "37fea602-2f58-4147-aeea-77d3110854cc",
+      "number": "67",
+      "pages": [
+        { "page": 2, "note": "a grey margin around the page with three tiers of panels" },
+        { "page": 4, "note": "a wide action panel with katakana sound effects at the foot" },
+        { "page": 10, "note": "figures leaping out of the top panel into the gutter" },
+        { "page": 12, "note": "a grey tone panel and a wide panel with a broken border" },
+        { "page": 18, "note": "a near blank page with only a small logo, no panels" }
+      ]
+    },
+    {
+      "key": "hinamatsuri",
+      "title": "Hinamatsuri",
+      "manga": "8a3d319d-2d10-4364-928c-0f30fd367c24",
+      "chapter": "a504dafd-283c-4779-90cd-5232dc78ad33",
+      "number": "31",
+      "pages": [
+        { "page": 2, "note": "a title page with a borderless photo style street scene and logo" },
+        { "page": 7, "note": "staggered panels with a figure overlapping two cells" },
+        { "page": 14, "note": "a tall city panel beside a close up, sound effects in the gutter" },
+        { "page": 20, "note": "a dark bordered panel with heavy speed lines and a borderless corridor" },
+        { "page": 21, "note": "five tiers with a document panel and a wide two shot" }
+      ]
+    },
+    {
+      "key": "hinamatsuri",
+      "title": "Hinamatsuri",
+      "manga": "8a3d319d-2d10-4364-928c-0f30fd367c24",
+      "chapter": "e719f949-cc1d-4ab1-9f5b-92619d62c326",
+      "number": "77",
+      "pages": [
+        { "page": 1, "note": "a dark chapter cover with vertical title text, no panels" },
+        { "page": 9, "note": "a meeting room panel above a three tier grid with a dark close up" },
+        { "page": 15, "note": "a single borderless full page of a newsreader with a balloon" },
+        { "page": 18, "note": "a borderless face at the top over thin framed panels" },
+        { "page": 19, "note": "a list of job titles as boxed captions between panels" }
+      ]
+    },
+    {
+      "key": "yurucamp",
+      "title": "Yuru Camp\u25b3",
+      "manga": "1ee97895-4796-4bcf-bcd1-5ef99c011f8b",
+      "chapter": "b281be32-93c5-48fc-8d95-08f3db24611a",
+      "number": "18.5",
+      "pages": [
+        { "page": 4, "note": "a mock car advert page with product captions, loose panels" },
+        { "page": 8, "note": "panels with black gutters and white sound effect lettering" },
+        { "page": 14, "note": "a borderless figure at top left beside rounded corner panels" },
+        { "page": 18, "note": "a magazine spoof page with headline and boxes, no story panels" },
+        { "page": 20, "note": "a tall bird panel cutting through a stack of food panels" }
+      ]
+    },
+    {
+      "key": "yurucamp",
+      "title": "Yuru Camp\u25b3",
+      "manga": "1ee97895-4796-4bcf-bcd1-5ef99c011f8b",
+      "chapter": "cd22ad1f-2530-4f60-9d81-e8a7a5e960b5",
+      "number": "95",
+      "pages": [
+        { "page": 1, "note": "vertical side notes along the page edge beside the panels" },
+        { "page": 3, "note": "a grey colour opening page with magazine banners" },
+        { "page": 11, "note": "a dark night spread of campfire panels with thin white gutters" },
+        { "page": 14, "note": "a phone screen panel inside dark tone panels" },
+        { "page": 23, "note": "horror style black panels with jagged captions" }
+      ]
+    },
+    {
+      "key": "shirokuma",
+      "title": "Shirokuma Caf\u00e9",
+      "manga": "86afee37-175b-46ba-b488-932a96c9d48b",
+      "chapter": "fd5955ab-d52a-45fb-8c52-b19a08070c7b",
+      "number": "26",
+      "pages": [
+        { "page": 3, "note": "a chapter title page with a strawberry pattern and a balloon, no panels" },
+        { "page": 4, "note": "a borderless cafe scene with a tall inset panel and a stamp" },
+        { "page": 9, "note": "a page with footnotes under the bottom panels" },
+        { "page": 12, "note": "a large borderless panda figure across framed panels" },
+        { "page": 18, "note": "a crowd of monkeys spilling over every border" }
+      ]
+    },
+    {
+      "key": "shirokuma",
+      "title": "Shirokuma Caf\u00e9",
+      "manga": "86afee37-175b-46ba-b488-932a96c9d48b",
+      "chapter": "fb5b9282-58f8-487c-bba3-9518173571d5",
+      "number": "56",
+      "pages": [
+        { "page": 2, "note": "a borderless cafe interior with a round chapter badge" },
+        { "page": 4, "note": "a starry tone panel and a penguin breaking the frame" },
+        { "page": 7, "note": "diagonal panels with a card spread in the middle" },
+        { "page": 10, "note": "a colour card printout page with a title, no story panels" },
+        { "page": 13, "note": "a colour grid of trading cards in frames, not story panels" }
+      ]
+    },
+    {
+      "key": "gokushufudou",
+      "title": "Gokushufudou",
+      "manga": "89daf9dc-075a-4aa5-873a-cc76bb287108",
+      "chapter": "6ed5b0be-90df-4dad-8f61-5915a9838353",
+      "number": "14",
+      "pages": [
+        { "page": 3, "note": "a tall borderless figure beside slim panels, Portuguese lettering" },
+        { "page": 8, "note": "thin gutters with a car panel and a wide bottom panel" },
+        { "page": 10, "note": "a figure breaking out of the top panel with a slanted cut" },
+        { "page": 13, "note": "a full width explosion bleeding off the page edge" },
+        { "page": 15, "note": "a black recruitment page with a drawing, no panels" }
+      ]
+    },
+    {
+      "key": "gokushufudou",
+      "title": "Gokushufudou",
+      "manga": "89daf9dc-075a-4aa5-873a-cc76bb287108",
+      "chapter": "5cb2f9a8-adfe-4c04-a271-52dbba51b28c",
+      "number": "32",
+      "pages": [
+        { "page": 3, "note": "a wide street panel and a narrow face strip" },
+        { "page": 6, "note": "three wide stacked panels in heavy screentone" },
+        { "page": 10, "note": "a busy page with insets overlapping a close up" },
+        { "page": 12, "note": "a large hand panel bleeding off the bottom edge" },
+        { "page": 16, "note": "a colour scanlator recruitment banner, no panels" }
+      ]
+    },
+    {
+      "key": "grandblue",
+      "title": "Grand Blue Dreaming",
+      "manga": "fffbfac3-b7ad-41ee-9581-b4d90ecec941",
+      "chapter": "35fc1d06-4137-476c-a149-cea2eb3c5248",
+      "number": "11",
+      "pages": [
+        { "page": 3, "note": "an underwater chapter title page with vertical logo, no panels" },
+        { "page": 13, "note": "a row of three identical faces above stacked strips, Vietnamese lettering" },
+        { "page": 14, "note": "tall narrow panels on the left with a crowd panel below" },
+        { "page": 32, "note": "a wide spread shown small on a grey sheet, panels at the foot" },
+        { "page": 35, "note": "a borderless sunlit sea panel over framed panels" }
+      ]
+    },
+    {
+      "key": "grandblue",
+      "title": "Grand Blue Dreaming",
+      "manga": "fffbfac3-b7ad-41ee-9581-b4d90ecec941",
+      "chapter": "f4269018-2390-4291-80d4-9c7556f7d213",
+      "number": "26",
+      "pages": [
+        { "page": 8, "note": "section heading captions between panel rows" },
+        { "page": 13, "note": "a colour magazine cover with blurbs, no panels" },
+        { "page": 15, "note": "a colour opening page with framed panels under a title strip" },
+        { "page": 20, "note": "a food table panel with a scanlator footer" },
+        { "page": 38, "note": "a vertical sound effect column between narrow door panels" }
+      ]
+    },
+    {
+      "key": "tomochancolor",
+      "title": "Tomo-Chan Wa Onnanoko (Fan Colored)",
+      "manga": "83c2d97f-ce11-4f08-9eb7-7c917ecf0f35",
+      "chapter": "3923d146-a02d-4fa1-9830-d29cb60251df",
+      "number": "6",
+      "pages": [
+        { "page": 1, "note": "a coloured four panel strip with a title above, figure overlapping the frame" },
+        { "page": 10, "note": "four colour panels with a black panel of white lettering" },
+        { "page": 15, "note": "four colour panels ending in a solid black panel" },
+        { "page": 20, "note": "a strip with a panel of glowing cut out faces" },
+        { "page": 22, "note": "an omake with a large borderless drawing and small side panels" }
+      ]
+    },
+    {
+      "key": "tomochancolor",
+      "title": "Tomo-Chan Wa Onnanoko (Fan Colored)",
+      "manga": "83c2d97f-ce11-4f08-9eb7-7c917ecf0f35",
+      "chapter": "09047c97-deed-47ff-9c1c-f82a958332ed",
+      "number": "18",
+      "pages": [
+        { "page": 3, "note": "four colour panels with a map inset and a gate panel" },
+        { "page": 10, "note": "a dark middle panel among bright colour panels" },
+        { "page": 13, "note": "a pink pattern background with a food panel" },
+        { "page": 17, "note": "a dotted chocolate box panel in a colour strip" },
+        { "page": 20, "note": "an omake with two standing figures beside a column of small panels" }
+      ]
+    },
+    {
+      "key": "aria",
+      "title": "Aria",
+      "manga": "8edf35b1-8948-45df-9971-981094126f48",
+      "chapter": "c4a0bda2-91b3-47d5-9b29-34f65541c502",
+      "number": "21",
+      "pages": [
+        { "page": 3, "note": "a wide cover spread scanned small on a grey sheet, no panels" },
+        { "page": 6, "note": "a blue inner cover with a cross of numbered small panels" },
+        { "page": 7, "note": "a contents page with a colour figure, no panels" },
+        { "page": 18, "note": "a tall gothic arch panel beside small cells" },
+        { "page": 21, "note": "a vertical canal panel running the full height" }
+      ]
+    },
+    {
+      "key": "aria",
+      "title": "Aria",
+      "manga": "8edf35b1-8948-45df-9971-981094126f48",
+      "chapter": "2b5df0f8-4d88-4e98-b920-c91c81844659",
+      "number": "48",
+      "pages": [
+        { "page": 1, "note": "five colour horizontal strips with a blue frame" },
+        { "page": 3, "note": "a near blank page with a small dotted frame in the corner" },
+        { "page": 7, "note": "tall thin panels with a borderless street at the side" },
+        { "page": 10, "note": "a dark water panel and a crowd of cells with loose borders" },
+        { "page": 23, "note": "a wide spread scanned small on a grey sheet with small insets" }
+      ]
+    }
+  ]
+}

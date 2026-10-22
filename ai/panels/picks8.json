@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "skipbeat",
+      "title": "Skip Beat!",
+      "manga": "9356fa3f-9ecd-4ff7-a7fe-241884680079",
+      "chapter": "6eb68593-8e58-4baf-9d96-acf9ac96ea69",
+      "number": "76",
+      "pages": [
+        { "page": 3, "note": "a chapter opening, a figure in an open panel with no lower border" },
+        { "page": 10, "note": "a face over a borderless page, a small inset at the foot" },
+        { "page": 11, "note": "overlapping shoujo panels, a figure across two of them" },
+        { "page": 14, "note": "a stage set in wide strips, a crowd panel set into the corner" },
+        { "page": 23, "note": "tall slanted faces overlapping, a figure walking out of them" }
+      ]
+    },
+    {
+      "key": "skipbeat",
+      "title": "Skip Beat!",
+      "manga": "9356fa3f-9ecd-4ff7-a7fe-241884680079",
+      "chapter": "96cf883e-354a-4691-b1cb-d01630031883",
+      "number": "189",
+      "pages": [
+        { "page": 10, "note": "a tall figure in a coat down the right, panels tucked beside him" },
+        { "page": 12, "note": "a boot crossing the bottom panel, slanted cuts and sound effects" },
+        { "page": 13, "note": "a scream burst over overlapping panels, no gutters on one side" },
+        { "page": 21, "note": "slanted panels in heavy grey, a face cut across them" },
+        { "page": 23, "note": "a face rising out of the bottom of a borderless page" }
+      ]
+    },
+    {
+      "key": "kiminitodoke",
+      "title": "Kimi ni Todoke",
+      "manga": "b3b6fa42-08df-4663-b827-caaa49c7ccbf",
+      "chapter": "c44f1088-20c5-44e9-8db2-4854e264d82f",
+      "number": "34",
+      "pages": [
+        { "page": 4, "note": "a title page, a girl in grey tone on its own, title down the side" },
+        { "page": 8, "note": "a soft shoujo page, faces fading out with no borders" },
+        { "page": 13, "note": "slanted strips of faces, one panel black" },
+        { "page": 17, "note": "a grey panel of starry words set into the middle, a cry beside it" },
+        { "page": 21, "note": "a grab cut across slanted panels, a face over the top" }
+      ]
+    },
+    {
+      "key": "kiminitodoke",
+      "title": "Kimi ni Todoke",
+      "manga": "b3b6fa42-08df-4663-b827-caaa49c7ccbf",
+      "chapter": "7a35f610-2ad0-49de-ad1d-24255362bb84",
+      "number": "85",
+      "pages": [
+        { "page": 2, "note": "a colour magazine cover, no panels" },
+        { "page": 7, "note": "panels floating on a page of trees, a boy at the foot with no border" },
+        { "page": 13, "note": "a flashback page, panels on black down both sides" },
+        { "page": 20, "note": "a flashback on black, silhouettes on a bridge in a tall panel" },
+        { "page": 24, "note": "narrow strips of words beside a figure with no border" }
+      ]
+    },
+    {
+      "key": "ouran",
+      "title": "Ouran High School Host Club",
+      "manga": "661a792b-6729-4f54-af20-4108db55ccf4",
+      "chapter": "c1bc57d8-8f0e-4bd7-adbe-4d33357182b1",
+      "number": "26",
+      "pages": [
+        { "page": 4, "note": "a two-page spread of a carriage in flowers, one picture" },
+        { "page": 5, "note": "sound effects running down over overlapping panels" },
+        { "page": 12, "note": "panels slanting into a corner, a big word across them" },
+        { "page": 16, "note": "a soft face with sparkles fading into the page, few borders" },
+        { "page": 22, "note": "sound effects slashing across stacked panels, a crowd panel in the middle" }
+      ]
+    },
+    {
+      "key": "ouran",
+      "title": "Ouran High School Host Club",
+      "manga": "661a792b-6729-4f54-af20-4108db55ccf4",
+      "chapter": "2ebfa062-9c33-4ed7-997a-897ebf072676",
+      "number": "65",
+      "pages": [
+        { "page": 1, "note": "a grey title illustration filling the page, no panels" },
+        { "page": 4, "note": "a tiger behind a face, a strip of tiny faces at the foot" },
+        { "page": 8, "note": "a horse leaping across the page over panels that run into it" },
+        { "page": 16, "note": "a figure flying through one tall slanted panel, a face below" },
+        { "page": 24, "note": "a shout of sound effects down a stack of overlapping panels" }
+      ]
+    },
+    {
+      "key": "parakiss",
+      "title": "Paradise Kiss",
+      "manga": "2419695a-840b-4e3a-8d0c-d19d050c7afa",
+      "chapter": "7f9a721f-97be-4754-846b-426e4a92ccb4",
+      "number": "15",
+      "pages": [
+        { "page": 1, "note": "a title page, a girl on a scooter over vertical stripes" },
+        { "page": 2, "note": "a speeding scooter over the top, wide panels below" },
+        { "page": 7, "note": "a night page in black, a light cutting across, borders lost in the dark" },
+        { "page": 10, "note": "a tall figure overlapping a stack of panels, a black one at the foot" },
+        { "page": 13, "note": "a face above a crowded collage of overlapping panels" }
+      ]
+    },
+    {
+      "key": "parakiss",
+      "title": "Paradise Kiss",
+      "manga": "2419695a-840b-4e3a-8d0c-d19d050c7afa",
+      "chapter": "e354b0aa-a529-47e3-821d-f3d02902d760",
+      "number": "37",
+      "pages": [
+        { "page": 3, "note": "an arched window at night over a feast, black all round" },
+        { "page": 5, "note": "a face over grey panels, a wide strip of patterned crowd at the foot" },
+        { "page": 7, "note": "a bottle bursting in the corner, panels opening onto white" },
+        { "page": 13, "note": "wide strips of faces, one panel bleeding to the edge" },
+        { "page": 16, "note": "a phone ringing in a panel that fades into the page" }
+      ]
+    },
+    {
+      "key": "hanadan",
+      "title": "Boys Over Flowers",
+      "manga": "4c2b7c0d-f97b-4044-b94a-638d99e92d24",
+      "chapter": "e4f4caac-9a08-44b0-8006-910f2333615e",
+      "number": "80",
+      "pages": [
+        { "page": 9, "note": "a dreamy page of soft bubbles, an embrace with no border" },
+        { "page": 10, "note": "a brick wall over a face, wide panels melting into each other" },
+        { "page": 15, "note": "vertical notes down a margin beside a mountain and a cabin" },
+        { "page": 19, "note": "a sunlit mountain cut by a slant, sound effects over it" },
+        { "page": 23, "note": "a shoe flying through overlapping panels, a scream across them" }
+      ]
+    },
+    {
+      "key": "hanadan",
+      "title": "Boys Over Flowers",
+      "manga": "4c2b7c0d-f97b-4044-b94a-638d99e92d24",
+      "chapter": "7b04a91f-f51b-4366-88ed-7069275b2a36",
+      "number": "185",
+      "pages": [
+        { "page": 1, "note": "steep slanted panels of a tower at dusk, sound effects down the side" },
+        { "page": 2, "note": "thin strips of a city at night, a figure small at the foot" },
+        { "page": 4, "note": "a dark sky across the top, slanted panels fading below" },
+        { "page": 13, "note": "ink splatter and sound effects over slanted grey panels" },
+        { "page": 22, "note": "a black sky cut in slants over a balcony, a city at the foot" }
+      ]
+    },
+    {
+      "key": "kodocha",
+      "title": "Kodomo no Omocha",
+      "manga": "b4c36fb4-348d-4248-8acc-3c4def7b21be",
+      "chapter": "8c471613-0992-4a1d-a4e2-89a4bd5c6d1a",
+      "number": "15.5",
+      "pages": [
+        { "page": 1, "note": "a title page on a chequered ground, two girls, no panels" },
+        { "page": 2, "note": "busy 90s screentone panels, a girl breaking out of the top one" },
+        { "page": 7, "note": "small panels scattered over a page, a big face at the foot" },
+        { "page": 10, "note": "a tall girl down the middle overlapping panels on both sides" },
+        { "page": 14, "note": "a black panel of words beside a stack of small ones" }
+      ]
+    },
+    {
+      "key": "kodocha",
+      "title": "Kodomo no Omocha",
+      "manga": "b4c36fb4-348d-4248-8acc-3c4def7b21be",
+      "chapter": "26c1af6d-2c30-4b46-9bf1-7a2ec51ecde8",
+      "number": "39",
+      "pages": [
+        { "page": 1, "note": "wide panels at the top, a small framed picture alone on white below" },
+        { "page": 12, "note": "a column of Japanese notes beside the panels, the book's curve showing" },
+        { "page": 16, "note": "a scanned page bending into the spine, a shadow down one side" },
+        { "page": 18, "note": "a sparse page, a figure leaping between a few loose panels" },
+        { "page": 24, "note": "a train station in a wide panel, a boy standing out at the foot" }
+      ]
+    },
+    {
+      "key": "karekano",
+      "title": "His and Her Circumstances",
+      "manga": "b5fab65a-641d-4637-aa4a-d6353f99d836",
+      "chapter": "5e5dd50a-8aea-4b11-9d0e-4c5c55c7ee33",
+      "number": "30",
+      "pages": [
+        { "page": 1, "note": "a title page, a boy on a bed, vertical title down the side" },
+        { "page": 4, "note": "a scream across slanted panels, a black one at the top" },
+        { "page": 10, "note": "a long corridor down a tall panel, small ones beside it" },
+        { "page": 18, "note": "a house on black over a wide panel of shouting faces" },
+        { "page": 21, "note": "two students standing in a panel cut out of a black page, notes in the margin" }
+      ]
+    },
+    {
+      "key": "karekano",
+      "title": "His and Her Circumstances",
+      "manga": "b5fab65a-641d-4637-aa4a-d6353f99d836",
+      "chapter": "d82331b7-34ba-4c98-809c-8c5f9320ab59",
+      "number": "77",
+      "pages": [
+        { "page": 4, "note": "a shout running down the page through a crowd, no clear borders" },
+        { "page": 16, "note": "rippling water across a borderless page, a few faces at the top" },
+        { "page": 19, "note": "a moon in a black panel, a figure overlapping the ones below" },
+        { "page": 22, "note": "tall black strips of branches between thin vertical panels" },
+        { "page": 23, "note": "bare trees on black, a figure standing in the gaps" }
+      ]
+    },
+    {
+      "key": "aoharu",
+      "title": "Ao Haru Ride",
+      "manga": "aa0399ae-d9e8-44ce-9459-30763de36604",
+      "chapter": "c2531327-3054-4e9a-b3fa-18858cfb2c66",
+      "number": "15",
+      "pages": [
+        { "page": 4, "note": "a title page, a girl and the title, no panels" },
+        { "page": 9, "note": "a modern shoujo grid, faces overlapping the gutters" },
+        { "page": 13, "note": "a flower face across the top, panels fading under it" },
+        { "page": 18, "note": "fireworks on a black panel, a crowd and faces below" },
+        { "page": 23, "note": "a fence across the page, small panels and a dark inset" }
+      ]
+    },
+    {
+      "key": "aoharu",
+      "title": "Ao Haru Ride",
+      "manga": "aa0399ae-d9e8-44ce-9459-30763de36604",
+      "chapter": "62d0c84a-d5b6-4f4a-9d6a-6bee1d9ab968",
+      "number": "40",
+      "pages": [
+        { "page": 25, "note": "magazine text down the left margin beside panels" },
+        { "page": 27, "note": "a phone held up in a panel that cuts into the ones round it" },
+        { "page": 34, "note": "a big face across the page, small panels slotted into it" },
+        { "page": 40, "note": "a narrow caption box between soft panels with no edges" },
+        { "page": 44, "note": "a bus across the middle panel, a face at the top with no border" }
+      ]
+    },
+    {
+      "key": "vampireknight",
+      "title": "Vampire Knight",
+      "manga": "baaa0ca4-efef-4b15-b91a-c1f85692c2a7",
+      "chapter": "25e9db71-15de-43f3-824b-ae8b4db6cfca",
+      "number": "26",
+      "pages": [
+        { "page": 3, "note": "a pale embrace over a black caption strip, magazine text at the foot" },
+        { "page": 7, "note": "faint grey panels with hardly any borders, slanting into each other" },
+        { "page": 9, "note": "panels melting into soft grey tone, a face across the top" },
+        { "page": 14, "note": "a near-empty page, a few faint panels and blood spatter" },
+        { "page": 22, "note": "slanted panels in pale tone, a sign and a figure across the cuts" }
+      ]
+    },
+    {
+      "key": "vampireknight",
+      "title": "Vampire Knight",
+      "manga": "baaa0ca4-efef-4b15-b91a-c1f85692c2a7",
+      "chapter": "c292ac02-daa1-4002-b67c-f77064814f53",
+      "number": "71",
+      "pages": [
+        { "page": 1, "note": "a colour-page cover in grey, a figure and vertical title, no panels" },
+        { "page": 10, "note": "a slanted panel of a figure in a doorway, others tilted round it" },
+        { "page": 11, "note": "a strip of magazine ads down the left beside the panels" },
+        { "page": 20, "note": "a silhouette on black in a tall panel, white beside it" },
+        { "page": 21, "note": "black tone swallowing the borders, a faint figure in the middle" }
+      ]
+    },
+    {
+      "key": "kamisama",
+      "title": "Kamisama Hajimemashita",
+      "manga": "d8f7ffd5-8ad8-4d17-a40c-12fe7e032674",
+      "chapter": "2e5da72c-bd5d-4a18-9b8c-d2a2cb3b1ee6",
+      "number": "47",
+      "pages": [
+        { "page": 1, "note": "a title page framed in flowers, no panels" },
+        { "page": 4, "note": "a kick in a small panel set into a page of soft tone and petals" },
+        { "page": 11, "note": "a cluttered page, panels piled at angles over each other" },
+        { "page": 15, "note": "a girl clapping in a borderless foot, tall panels above" },
+        { "page": 22, "note": "lightning over a slanted grid, faces crossing the cuts" }
+      ]
+    },
+    {
+      "key": "kamisama",
+      "title": "Kamisama Hajimemashita",
+      "manga": "d8f7ffd5-8ad8-4d17-a40c-12fe7e032674",
+      "chapter": "9b21be66-b92a-4322-af15-f8c0bfda3c9a",
+      "number": "114",
+      "pages": [
+        { "page": 3, "note": "faces in wide strips, a figure fading into the page below" },
+        { "page": 8, "note": "a magazine ad strip down the left beside the panels" },
+        { "page": 15, "note": "bubbles drifting over soft panels with faint edges" },
+        { "page": 18, "note": "a scanlator watermark written across every panel" },
+        { "page": 21, "note": "black slanted panels with round insets, a scream at the foot" }
+      ]
+    }
+  ]
+}
