@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "saiki",
+      "title": "The Disastrous Life of Saiki K.",
+      "manga": "ae163fec-29d0-42f9-9fac-b751fc0f9035",
+      "chapter": "ca6cee07-b794-4baf-9bfa-036ea06a0bae",
+      "number": "77",
+      "pages": [
+        { "page": 1, "note": "colour city cover with a black credits panel, no comic panels" },
+        { "page": 2, "note": "recap text block above a short panel row" },
+        { "page": 3, "note": "chapter title page with a big centred caption" },
+        { "page": 10, "note": "dense grid with a borderless shout at the top" },
+        { "page": 16, "note": "crowded panels with screentone hearts at the bottom" }
+      ]
+    },
+    {
+      "key": "saiki",
+      "title": "The Disastrous Life of Saiki K.",
+      "manga": "ae163fec-29d0-42f9-9fac-b751fc0f9035",
+      "chapter": "2b79ddd9-80ef-4ba4-9cca-e0c749fc1370",
+      "number": "208",
+      "pages": [
+        { "page": 1, "note": "cover art with a black credits box, no panels" },
+        { "page": 3, "note": "tall portrait with chapter text, no frames" },
+        { "page": 11, "note": "panels broken by a borderless object at the top" },
+        { "page": 16, "note": "firework burst panel with big lettering" },
+        { "page": 17, "note": "dense interview text with a manga cover inset" }
+      ]
+    },
+    {
+      "key": "ichigo",
+      "title": "Ichigo Mashimaro",
+      "manga": "840ebe1f-d1a5-4205-9dd0-58124bdda8f7",
+      "chapter": "3d4e45e5-1960-4e55-b8e1-cd0fa74763e1",
+      "number": "22",
+      "pages": [
+        { "page": 2, "note": "single small figure drawing with an episode title, no panels" },
+        { "page": 8, "note": "small floating panel above a wide sky strip, white space" },
+        { "page": 16, "note": "stacked strip panels with a short panel cutting in" },
+        { "page": 19, "note": "pin-up inside a dotted frame with a caption, no panels" },
+        { "page": 20, "note": "figure in a dotted frame with a hoop, no panels" }
+      ]
+    },
+    {
+      "key": "ichigo",
+      "title": "Ichigo Mashimaro",
+      "manga": "840ebe1f-d1a5-4205-9dd0-58124bdda8f7",
+      "chapter": "1878d12e-91ca-40ea-a52c-1fa6cb55de87",
+      "number": "66",
+      "pages": [
+        { "page": 2, "note": "title art with a vertical English caption, no panels" },
+        { "page": 9, "note": "map diagram panel with arrows and labels" },
+        { "page": 12, "note": "polka dot title page with a logo stamp, no panels" },
+        { "page": 13, "note": "wide spread half with three strips on grey" },
+        { "page": 17, "note": "panels with a big splash sound effect over the gutter" }
+      ]
+    },
+    {
+      "key": "teekyuu",
+      "title": "Teekyuu",
+      "manga": "b5aea413-6f36-4de4-9c14-fdafd72fd5c5",
+      "chapter": "cb31c689-1485-4b71-bebe-a6ab732da085",
+      "number": "1",
+      "pages": [
+        { "page": 1, "note": "colour volume cover on grey, no panels" },
+        { "page": 3, "note": "contents list in a checkered border, no panels" },
+        { "page": 6, "note": "blank page with a small logo in the corner, no panels" },
+        { "page": 10, "note": "tilted panels around a borderless figure" },
+        { "page": 14, "note": "huge sound effects and a ball crossing the panel borders" }
+      ]
+    },
+    {
+      "key": "teekyuu",
+      "title": "Teekyuu",
+      "manga": "b5aea413-6f36-4de4-9c14-fdafd72fd5c5",
+      "chapter": "62247b10-4db0-4081-a052-c398be6212cd",
+      "number": "7",
+      "pages": [
+        { "page": 2, "note": "black panel at the top with grey tone panels below" },
+        { "page": 3, "note": "title art with a big pot and logo, no panels" },
+        { "page": 10, "note": "borderless group shot over a fence panel" },
+        { "page": 13, "note": "white page with a small can and logo, no panels" },
+        { "page": 14, "note": "craft instructions with numbered drawings, no panels" }
+      ]
+    },
+    {
+      "key": "silverspoon",
+      "title": "Silver Spoon",
+      "manga": "84d60997-65fc-49e1-b1a4-3fcf0390c6cb",
+      "chapter": "3af1d3bf-c944-470c-911a-3e358afb252e",
+      "number": "23.1",
+      "pages": [
+        { "page": 1, "note": "faint pencil figure with a chapter title on grey, no panels" },
+        { "page": 2, "note": "nearly blank page with a small signature, no panels" },
+        { "page": 3, "note": "borderless figures under a building with pale gutters" },
+        { "page": 10, "note": "pale panels with no clear borders and lots of white" },
+        { "page": 17, "note": "sparkly borderless faces under a row of panels" }
+      ]
+    },
+    {
+      "key": "silverspoon",
+      "title": "Silver Spoon",
+      "manga": "84d60997-65fc-49e1-b1a4-3fcf0390c6cb",
+      "chapter": "c6d03188-85c5-4d0f-9393-ea97e3eb024a",
+      "number": "55.2",
+      "pages": [
+        { "page": 1, "note": "landscape photo credits banner on grey, no panels" },
+        { "page": 7, "note": "floating text and a tiny vignette, no clear panels" },
+        { "page": 8, "note": "single figure at a desk with sound text, no panels" },
+        { "page": 13, "note": "rain lines over panels with soft edges" },
+        { "page": 18, "note": "recipe text with a drawn dish, no panels" }
+      ]
+    },
+    {
+      "key": "moyashimon",
+      "title": "Tales of Agriculture",
+      "manga": "9c141f57-1756-4275-9d39-e94adab92650",
+      "chapter": "1aae3286-012e-4db6-9526-035370f82bef",
+      "number": "46",
+      "pages": [
+        { "page": 1, "note": "colour photo credits page on grey, no panels" },
+        { "page": 3, "note": "notice board text panel above a grid with side notes" },
+        { "page": 4, "note": "title logo over a crowd, no clean frames" },
+        { "page": 15, "note": "clock tower panel with small notes in the margin" },
+        { "page": 18, "note": "big lettered shout breaking out of the panel grid" }
+      ]
+    },
+    {
+      "key": "moyashimon",
+      "title": "Tales of Agriculture",
+      "manga": "9c141f57-1756-4275-9d39-e94adab92650",
+      "chapter": "cb1421af-7482-4625-b169-4900a6babd45",
+      "number": "117",
+      "pages": [
+        { "page": 2, "note": "airport sign panel with notes running along the edge" },
+        { "page": 4, "note": "car front splash with big sound effects, no panels" },
+        { "page": 12, "note": "panels with a candle food drawing outside the frame" },
+        { "page": 16, "note": "sparse page with floating vignettes and white space" },
+        { "page": 17, "note": "dark sparkly panel with a vertical note down the side" }
+      ]
+    },
+    {
+      "key": "sekikun",
+      "title": "Tonari no Seki-kun",
+      "manga": "7e45964e-87d0-43bd-90c1-51d5165f371c",
+      "chapter": "7c77f84b-5c8f-447c-ba3e-a6aa972a958c",
+      "number": "134",
+      "pages": [
+        { "page": 1, "note": "black Spanish cover with a big title, no panels" },
+        { "page": 2, "note": "title strip inside the top panel with small panels below" },
+        { "page": 6, "note": "giant cat figure breaking out over the panels" },
+        { "page": 10, "note": "form document drawn inside a panel" },
+        { "page": 14, "note": "round badge insets overlapping the panel edges" }
+      ]
+    },
+    {
+      "key": "sekikun",
+      "title": "Tonari no Seki-kun",
+      "manga": "7e45964e-87d0-43bd-90c1-51d5165f371c",
+      "chapter": "deafda9a-91bb-4c0f-b943-8428b40c86b1",
+      "number": "136",
+      "pages": [
+        { "page": 3, "note": "title strip across a tall pyramid of glasses panel" },
+        { "page": 11, "note": "knight panel with a big shout over the bottom row" },
+        { "page": 18, "note": "bars cutting through a tall panel with tone texture" },
+        { "page": 19, "note": "black promo card with volume covers, no panels" },
+        { "page": 20, "note": "wide black grid of covers floating on grey, no panels" }
+      ]
+    },
+    {
+      "key": "gakkou",
+      "title": "Gakkou Gurashi! Anthology Comic: On",
+      "manga": "8b6a6251-50e1-4e68-bed2-7f1243c98935",
+      "chapter": "047bd7f8-63f0-4fb4-bb5f-ec90dc72fefa",
+      "number": "1",
+      "pages": [
+        { "page": 3, "note": "fully blank white page, no panels" },
+        { "page": 5, "note": "colour contents page with speech bubble shapes, no panels" },
+        { "page": 8, "note": "colour spread of strips floating small on grey" },
+        { "page": 9, "note": "chapter title tucked under a pale panel with soft edges" },
+        { "page": 14, "note": "wide pale panels with lots of white gutter" }
+      ]
+    },
+    {
+      "key": "gakkou",
+      "title": "Gakkou Gurashi! Anthology Comic: On",
+      "manga": "8b6a6251-50e1-4e68-bed2-7f1243c98935",
+      "chapter": "52dd4f4b-7db1-456f-ba22-ebb0c1b62993",
+      "number": "2",
+      "pages": [
+        { "page": 2, "note": "colour recruiting flyer with a cover inset, no panels" },
+        { "page": 3, "note": "slanted panels full of speed lines and sound effects" },
+        { "page": 6, "note": "panels with a big glare sound effect cutting across" },
+        { "page": 10, "note": "thin slanted strips with lightning shapes" },
+        { "page": 14, "note": "sparkly borderless bowl image over small end panels" }
+      ]
+    },
+    {
+      "key": "hirayasumi",
+      "title": "Hirayasumi",
+      "manga": "87ebd557-8394-4f16-8afe-a8644e555ddc",
+      "chapter": "3acb0a10-cf9b-4a46-8eb3-5a0067860dd1",
+      "number": "82",
+      "pages": [
+        { "page": 1, "note": "colour volume promo with book photos on grey, no panels" },
+        { "page": 2, "note": "magazine opener with a big borderless street scene" },
+        { "page": 13, "note": "night street panel with a magazine page number" },
+        { "page": 17, "note": "wide spread half with snow on grey" },
+        { "page": 18, "note": "large borderless faces with a vertical Japanese promo strip" }
+      ]
+    },
+    {
+      "key": "hirayasumi",
+      "title": "Hirayasumi",
+      "manga": "87ebd557-8394-4f16-8afe-a8644e555ddc",
+      "chapter": "bb0d94d3-8563-40a4-98e2-c3b887076179",
+      "number": "92",
+      "pages": [
+        { "page": 1, "note": "colour award promo collage on grey, no panels" },
+        { "page": 2, "note": "full page house scene with a title caption, no panels" },
+        { "page": 8, "note": "vertical book ad strip along the left of the panels" },
+        { "page": 11, "note": "magazine logo over a borderless figure with ad text at the side" },
+        { "page": 16, "note": "panels on the left with vertical text in open white" }
+      ]
+    },
+    {
+      "key": "tsurezure",
+      "title": "Tsuredure Children",
+      "manga": "a840d47c-4080-4783-9c42-af8100e48079",
+      "chapter": "a2da8329-61c7-457b-ba01-30c5d71632e4",
+      "number": "2",
+      "pages": [
+        { "page": 1, "note": "four panel column beside a silhouette title, Kazakh text" },
+        { "page": 2, "note": "two columns of four panel strips" },
+        { "page": 3, "note": "two columns of four panel strips with thin gutters" },
+        { "page": 4, "note": "two four panel columns with a big shout in one panel" },
+        { "page": 5, "note": "two four panel columns with a vertical end mark" }
+      ]
+    },
+    {
+      "key": "tsurezure",
+      "title": "Tsuredure Children",
+      "manga": "a840d47c-4080-4783-9c42-af8100e48079",
+      "chapter": "51f60389-9074-4e67-9d85-abc8b4563d13",
+      "number": "5",
+      "pages": [
+        { "page": 1, "note": "four panel column beside a black silhouette title" },
+        { "page": 2, "note": "two columns of four panel strips on grey tone" },
+        { "page": 3, "note": "two four panel columns with dense Kazakh balloons" },
+        { "page": 4, "note": "two four panel columns with sparkly screentone" },
+        { "page": 5, "note": "two four panel columns ending in a small end mark" }
+      ]
+    },
+    {
+      "key": "dunmeshi",
+      "title": "Dungeon Meshi",
+      "manga": "d90ea6cb-7bc3-4d80-8af0-28557e6c4e17",
+      "chapter": "9d0de89a-659d-4aa7-8602-6a7241db8e0d",
+      "number": "3",
+      "pages": [
+        { "page": 1, "note": "equipment diagram with labelled items, no panels" },
+        { "page": 12, "note": "slanted panels with a giant monster crossing them" },
+        { "page": 17, "note": "recipe notes with floating ingredient drawings" },
+        { "page": 19, "note": "recipe card in a black ink splash below panels" },
+        { "page": 23, "note": "clock and lettering collage with no clean panels" }
+      ]
+    },
+    {
+      "key": "dunmeshi",
+      "title": "Dungeon Meshi",
+      "manga": "d90ea6cb-7bc3-4d80-8af0-28557e6c4e17",
+      "chapter": "cdc5118e-3b64-4d5c-9981-dd4252c5dfc2",
+      "number": "5",
+      "pages": [
+        { "page": 1, "note": "title vignette in a small frame over a borderless scene" },
+        { "page": 10, "note": "shelf panel inside a black surround" },
+        { "page": 13, "note": "huge slash effect crossing the top panel" },
+        { "page": 16, "note": "tall panel with sound effects breaking the frame" },
+        { "page": 22, "note": "recipe card art and text with small panels below" }
+      ]
+    }
+  ]
+}
