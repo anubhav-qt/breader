@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "yotsuba",
+      "title": "Yotsuba to!",
+      "manga": "58be6aa6-06cb-4ca5-bd20-f1392ce451fb",
+      "chapter": "55694536-df27-4e44-8311-58e47f73aa37",
+      "number": "37",
+      "pages": [
+        { "page": 1, "note": "vertical margin text beside clean thin panels" },
+        { "page": 4, "note": "title page with a logo and a small bike drawing, no panels" },
+        { "page": 11, "note": "vertical author note running down the left margin" },
+        { "page": 21, "note": "big landscape panel with open sky and few lines" },
+        { "page": 26, "note": "panel edges broken by a slope running off the page" },
+        { "page": 28, "note": "vertical text strip down the edge and a small ad box" }
+      ]
+    },
+    {
+      "key": "yotsuba",
+      "title": "Yotsuba to!",
+      "manga": "58be6aa6-06cb-4ca5-bd20-f1392ce451fb",
+      "chapter": "d42bc9e3-dc53-45b6-8408-6c6e33a4e37b",
+      "number": "88",
+      "pages": [
+        { "page": 1, "note": "title page with two loose figures and a logo, no panels" },
+        { "page": 4, "note": "wide origami panel above stacked face panels" },
+        { "page": 11, "note": "insect drawing loose between clean panels" },
+        { "page": 18, "note": "tall street panel with a small next chapter box" },
+        { "page": 19, "note": "colour fan art credits page, no panels" }
+      ]
+    },
+    {
+      "key": "popteam",
+      "title": "Poputepipikku",
+      "manga": "e55a7036-1479-48aa-8127-942698de9530",
+      "chapter": "61f8adb7-3b89-45a3-8e6c-183c51e86021",
+      "number": "25",
+      "pages": [
+        { "page": 1, "note": "four-panel strip beside a cover figure and logo" },
+        { "page": 3, "note": "four-panel strip with black panel backgrounds" },
+        { "page": 6, "note": "single four-panel strip on a page with grey bands" },
+        { "page": 11, "note": "four-panel strip with a dark tone in the last cell" },
+        { "page": 13, "note": "faded grey four-panel strip" },
+        { "page": 15, "note": "colour strip image on a grey sheet, no panels" }
+      ]
+    },
+    {
+      "key": "popteam",
+      "title": "Poputepipikku",
+      "manga": "e55a7036-1479-48aa-8127-942698de9530",
+      "chapter": "1c3790ef-870a-4fe0-9385-5f3ecb1a6dae",
+      "number": "64",
+      "pages": [
+        { "page": 1, "note": "four-panel strip with a black building panel" },
+        { "page": 4, "note": "four-panel strip of plain portraits" },
+        { "page": 12, "note": "four-panel strip with a screen inside a panel" },
+        { "page": 20, "note": "four-panel strip with huge lettering in one cell" },
+        { "page": 25, "note": "four-panel strip with a hand filling the last cell" }
+      ]
+    },
+    {
+      "key": "nonnon",
+      "title": "Non Non Biyori",
+      "manga": "74502f72-ad26-4af1-846c-de18061107a0",
+      "chapter": "14d52533-91ef-40a7-abb6-fea04ece9bd3",
+      "number": "18",
+      "pages": [
+        { "page": 2, "note": "pink book jacket scanned flat on a grey sheet, no panels" },
+        { "page": 3, "note": "colour volume cover, no panels" },
+        { "page": 4, "note": "colour contents page with numbers, no panels" },
+        { "page": 14, "note": "huge lettering across a busy page of panels" },
+        { "page": 21, "note": "tiny sketch on a blank page, no panels" },
+        { "page": 23, "note": "scanlator joke comic with rough panels on grey" }
+      ]
+    },
+    {
+      "key": "nonnon",
+      "title": "Non Non Biyori",
+      "manga": "74502f72-ad26-4af1-846c-de18061107a0",
+      "chapter": "e074ae3f-233d-4e1c-ba6e-b226ac5f4c9b",
+      "number": "92",
+      "pages": [
+        { "page": 2, "note": "nearly blank page with a small animal and text, no panels" },
+        { "page": 7, "note": "character guide of round portraits, not panels" },
+        { "page": 9, "note": "light grey toned panels with soft edges" },
+        { "page": 13, "note": "tall panels with the figure crossing the gutters" },
+        { "page": 25, "note": "small sketches at the foot of a blank page" }
+      ]
+    },
+    {
+      "key": "gabriel",
+      "title": "Gabriel DropOut",
+      "manga": "74088ca4-48ea-4c09-8df0-2943708b1c0c",
+      "chapter": "acab5b3c-73b7-44c6-b893-41a54150393c",
+      "number": "40",
+      "pages": [
+        { "page": 1, "note": "title logo in the top corner of a page of panels" },
+        { "page": 9, "note": "gradient grey panels with a pattern background" },
+        { "page": 15, "note": "tall grey gradient panel at the bottom left" },
+        { "page": 17, "note": "small loose sketch with notes, no panels" },
+        { "page": 18, "note": "blank page with faint logo text, no panels" }
+      ]
+    },
+    {
+      "key": "gabriel",
+      "title": "Gabriel DropOut",
+      "manga": "74088ca4-48ea-4c09-8df0-2943708b1c0c",
+      "chapter": "4562fde7-d39c-4221-ad78-5b3f6da06499",
+      "number": "90",
+      "pages": [
+        { "page": 1, "note": "colour volume cover, no panels" },
+        { "page": 2, "note": "colour illustration with no panels" },
+        { "page": 3, "note": "contents page with pale arrows, no panels" },
+        { "page": 4, "note": "colour scanlator discord banner, no panels" },
+        { "page": 17, "note": "certificate drawn as a panel with text" },
+        { "page": 24, "note": "one small strip in the middle of a blank page" }
+      ]
+    },
+    {
+      "key": "working",
+      "title": "WORKING!!",
+      "manga": "b54c1fe5-61f3-47db-898d-8e4fc58ac204",
+      "chapter": "473bd8e7-c137-482b-a1c7-cbd82bd65c89",
+      "number": "79.5",
+      "pages": [
+        { "page": 1, "note": "four-panel strips with a black panel at the bottom" },
+        { "page": 6, "note": "tall figure breaking through the strip panels" },
+        { "page": 14, "note": "tall figure over a dark sky with no frame" },
+        { "page": 20, "note": "book colophon page with print details, no panels" },
+        { "page": 21, "note": "colour scanlator banner on a grey sheet" }
+      ]
+    },
+    {
+      "key": "working",
+      "title": "WORKING!!",
+      "manga": "b54c1fe5-61f3-47db-898d-8e4fc58ac204",
+      "chapter": "3c9f2993-59ec-4933-b87d-4b0312616553",
+      "number": "155",
+      "pages": [
+        { "page": 1, "note": "wraparound cover scanned tiny on a grey sheet" },
+        { "page": 5, "note": "single four-panel strip with a translator note below" },
+        { "page": 6, "note": "colour character art with vertical names, no panels" },
+        { "page": 8, "note": "calendar panel above a big strip with a sound effect" },
+        { "page": 10, "note": "two four-panel strips side by side with titles" },
+        { "page": 14, "note": "colour photo style scanlator credits, no panels" }
+      ]
+    },
+    {
+      "key": "maiddragon",
+      "title": "Kobayashi-san Chi no Maid Dragon Koushiki Anthology",
+      "manga": "f2343565-30fc-4a47-bf48-3a99019a0cf4",
+      "chapter": "5e342478-c2e7-4772-acae-02c7744dab7c",
+      "number": "7",
+      "pages": [
+        { "page": 9, "note": "scanlator thanks page with one framed picture" }
+      ]
+    },
+    {
+      "key": "maiddragon",
+      "title": "Kobayashi-san Chi no Maid Dragon Koushiki Anthology",
+      "manga": "f2343565-30fc-4a47-bf48-3a99019a0cf4",
+      "chapter": "9c996cd8-28e3-4783-b703-a6745321da74",
+      "number": "18",
+      "pages": [
+        { "page": 1, "note": "title caption box inside a page of mixed panels" },
+        { "page": 5, "note": "slanted panel with a big sound effect over it" },
+        { "page": 8, "note": "huge lettering spread across the top panel" },
+        { "page": 10, "note": "giant BOOM lettering over a slanted panel" },
+        { "page": 11, "note": "sign drawn inside a panel with lots of text" },
+        { "page": 12, "note": "wide pale panels with a city at the bottom" }
+      ]
+    },
+    {
+      "key": "doraemon",
+      "title": "Doraemon",
+      "manga": "e36da8b0-feca-46dd-9120-d5dc2f3feae8",
+      "chapter": "62376ec5-ea9f-4146-b1b2-91c3b2c87008",
+      "number": "70",
+      "pages": [
+        { "page": 1, "note": "small title spread scanned on a grey sheet with credits" },
+        { "page": 3, "note": "old style grid with thick black framed panels" },
+        { "page": 8, "note": "even grid of small panels, very busy" },
+        { "page": 15, "note": "tidy grid with end text under the last panel" },
+        { "page": 16, "note": "book colophon page in Japanese, no panels" }
+      ]
+    },
+    {
+      "key": "doraemon",
+      "title": "Doraemon",
+      "manga": "e36da8b0-feca-46dd-9120-d5dc2f3feae8",
+      "chapter": "b5c2379c-8bb2-424f-87eb-f4f90e9c4f81",
+      "number": "278",
+      "pages": [
+        { "page": 1, "note": "title page with loose figures and no frame" },
+        { "page": 2, "note": "panels cut off by a figure stepping in from the edge" },
+        { "page": 5, "note": "big sound effect breaking the bottom left panel" },
+        { "page": 12, "note": "one huge open panel with a tiny figure in the middle" },
+        { "page": 14, "note": "scanlator credits on a grey sheet, no panels" },
+        { "page": 16, "note": "black panel behind silhouettes among small ones" }
+      ]
+    },
+    {
+      "key": "kochikame",
+      "title": "Kochikame",
+      "manga": "54791531-d62c-4041-9eaa-c2c7f20495cd",
+      "chapter": "915329b3-4ac0-41ab-946b-3cb4ac709866",
+      "number": "2",
+      "pages": [
+        { "page": 1, "note": "borderless street title page with outlined lettering" },
+        { "page": 7, "note": "translator notes in the top margin above panels" },
+        { "page": 13, "note": "wide crowd panel with small panels below" },
+        { "page": 18, "note": "very dense grid of small busy panels" },
+        { "page": 24, "note": "black scanlator credits page, no panels" }
+      ]
+    },
+    {
+      "key": "kochikame",
+      "title": "Kochikame",
+      "manga": "54791531-d62c-4041-9eaa-c2c7f20495cd",
+      "chapter": "cac98c7c-b62d-4c05-952d-cd425631822f",
+      "number": "22",
+      "pages": [
+        { "page": 1, "note": "title page with one loose drawing, no frame" },
+        { "page": 7, "note": "wide street panel with lots of open grass" },
+        { "page": 12, "note": "camera clapper panel among busy small panels" },
+        { "page": 14, "note": "car panel with a black box over part of the art" },
+        { "page": 18, "note": "tall building panel beside small ones" },
+        { "page": 21, "note": "busy colour scanlator credits page, no panels" }
+      ]
+    },
+    {
+      "key": "nichijou",
+      "title": "Nichijou",
+      "manga": "f5bf9cc3-d003-47fe-bc76-99774b2a0562",
+      "chapter": "b72730ea-c8fd-4b4a-9472-495d73f0119d",
+      "number": "46",
+      "pages": [
+        { "page": 2, "note": "Ukrainian text, chapter title over a box panel" },
+        { "page": 14, "note": "black swirl panel in the top corner" },
+        { "page": 15, "note": "wide pale panel with grey tone and no outline on one side" },
+        { "page": 18, "note": "floating faces with no frame around a strip of small panels" },
+        { "page": 21, "note": "red scanlator notes card, no panels" }
+      ]
+    },
+    {
+      "key": "nichijou",
+      "title": "Nichijou",
+      "manga": "f5bf9cc3-d003-47fe-bc76-99774b2a0562",
+      "chapter": "8690d4e7-b313-4772-8b63-a38551895792",
+      "number": "51",
+      "pages": [
+        { "page": 2, "note": "huge sound effect over a tall panel" },
+        { "page": 10, "note": "tilted panels with legs coming in from the top" },
+        { "page": 18, "note": "tall bottle panel beside small stacked ones" },
+        { "page": 19, "note": "slanted thin panels with grey tone" },
+        { "page": 21, "note": "red scanlator notes card, no panels" }
+      ]
+    },
+    {
+      "key": "glt",
+      "title": "Girls' Last Tour Official Anthology Comic",
+      "manga": "a07bde20-3862-4255-92a5-de60e3b38756",
+      "chapter": "13a013dc-2909-4628-845b-bf7abb0d625a",
+      "number": "7",
+      "pages": [
+        { "page": 1, "note": "small tilted chapter labels between dark grey panels" },
+        { "page": 3, "note": "captions sitting in the gutters between panels" },
+        { "page": 5, "note": "huge lettering across a grey fish panel" },
+        { "page": 7, "note": "dark tone panels with no clear white gutters" },
+        { "page": 9, "note": "text credits page with a small drawing, no panels" }
+      ]
+    },
+    {
+      "key": "glt",
+      "title": "Girls' Last Tour Official Anthology Comic",
+      "manga": "a07bde20-3862-4255-92a5-de60e3b38756",
+      "chapter": "ce271c9a-3e04-4aad-8c36-c91350fdb0e5",
+      "number": "16",
+      "pages": [
+        { "page": 1, "note": "grey toned panels with captions sitting in the gutters" }
+      ]
+    }
+  ]
+}

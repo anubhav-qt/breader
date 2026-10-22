@@ -1,0 +1,275 @@
+{
+  "series": [
+    {
+      "key": "dorohedoro",
+      "title": "Dorohedoro",
+      "manga": "34f45c13-2b78-4900-8af2-d0bb551101f4",
+      "chapter": "73f6f893-c5f8-4a82-a10d-ffe3cf9e0ebd",
+      "number": "48",
+      "pages": [
+        { "page": 1, "note": "ornate title art on a black frame with vertical text" },
+        { "page": 7, "note": "smoke and explosion running across panel borders" },
+        { "page": 10, "note": "tilted dark panels with no clean gutters" },
+        { "page": 16, "note": "scratchy dense panels with a tall right strip" },
+        { "page": 18, "note": "huge mask panel filling the bottom half" }
+      ]
+    },
+    {
+      "key": "dorohedoro",
+      "title": "Dorohedoro",
+      "manga": "34f45c13-2b78-4900-8af2-d0bb551101f4",
+      "chapter": "4f808757-de70-4c01-965b-5fd28599729a",
+      "number": "119",
+      "pages": [
+        { "page": 1, "note": "grey cover art with a logo and title, no panels" },
+        { "page": 3, "note": "tall alley panel beside small rough ones" },
+        { "page": 10, "note": "black house shape drawn as a big panel" },
+        { "page": 13, "note": "black hooded face panels with white eyes" },
+        { "page": 25, "note": "colour credits banner on a grey sheet" }
+      ]
+    },
+    {
+      "key": "uzumaki",
+      "title": "Uzumaki",
+      "manga": "f4cfbb1c-766e-49db-ae80-1a5db3cbcc1b",
+      "chapter": "c5afa057-df4b-402a-9d04-2e2682f516fd",
+      "number": "7",
+      "pages": [
+        { "page": 1, "note": "colour cover with a scanlator credit, no panels" },
+        { "page": 4, "note": "black book cover with a green spiral, no panels" },
+        { "page": 6, "note": "green book band scanned on a grey sheet" },
+        { "page": 9, "note": "vertical contents text on black, no panels" },
+        { "page": 13, "note": "spiral sky panels across the page" },
+        { "page": 20, "note": "car crash panel bleeding off the page" },
+        { "page": 33, "note": "tall dark panel beside a strip of faces" },
+        { "page": 39, "note": "slanted panels with sound effects running up" }
+      ]
+    },
+    {
+      "key": "uzumaki",
+      "title": "Uzumaki",
+      "manga": "f4cfbb1c-766e-49db-ae80-1a5db3cbcc1b",
+      "chapter": "b1cbe863-aa0b-4eb4-a1cf-28027e2ac783",
+      "number": "16",
+      "pages": [
+        { "page": 2, "note": "vertical chapter title over a spiral, no panels" },
+        { "page": 7, "note": "whirlpool panel bleeding off the top" },
+        { "page": 18, "note": "crowd and wreckage with slanted panel edges" },
+        { "page": 20, "note": "crowd of faces with no gutters, borders hard to find" },
+        { "page": 22, "note": "wide panels of rubble and dense hatching" }
+      ]
+    },
+    {
+      "key": "usagidrop",
+      "title": "Usagi Drop",
+      "manga": "a24e7759-f588-4b5d-8727-1e28c0787dba",
+      "chapter": "4a8c4607-f6fc-4613-af48-5587a3b14a06",
+      "number": "19",
+      "pages": [
+        { "page": 2, "note": "green book jacket scanned flat on a grey sheet" },
+        { "page": 5, "note": "big grey logo letters on a pale page, no panels" },
+        { "page": 6, "note": "character portraits in boxes, not story panels" },
+        { "page": 7, "note": "contents list on a blank page, no panels" },
+        { "page": 11, "note": "colour page with two framed pictures on blue" },
+        { "page": 44, "note": "patterned panels and a black starry panel" }
+      ]
+    },
+    {
+      "key": "usagidrop",
+      "title": "Usagi Drop",
+      "manga": "a24e7759-f588-4b5d-8727-1e28c0787dba",
+      "chapter": "e9160f78-8f7d-40ad-9c40-22cb7cab1c77",
+      "number": "47",
+      "pages": [
+        { "page": 1, "note": "grey wash cover art, no panels" },
+        { "page": 14, "note": "black panels with balloons drawn on them" },
+        { "page": 15, "note": "three wide panels, middle one in soft tone" },
+        { "page": 34, "note": "two big close panels stacked" },
+        { "page": 36, "note": "text credits page, no panels" }
+      ]
+    },
+    {
+      "key": "honeyclover",
+      "title": "Hachimitsu to Clover",
+      "manga": "8d64bbc5-b1a7-4346-b233-4b81952945e9",
+      "chapter": "9c0336a0-d690-431d-9523-62fda55a9a06",
+      "number": "6",
+      "pages": [
+        { "page": 2, "note": "small scanlator credits banner on a grey sheet" },
+        { "page": 3, "note": "black title art with clouds and no frame" },
+        { "page": 4, "note": "blank page with a tiny sketch, no panels" },
+        { "page": 13, "note": "black night sky panels cut by a slant" },
+        { "page": 18, "note": "faint soft panels with figures fading out" }
+      ]
+    },
+    {
+      "key": "honeyclover",
+      "title": "Hachimitsu to Clover",
+      "manga": "8d64bbc5-b1a7-4346-b233-4b81952945e9",
+      "chapter": "aa52fb7d-b308-4d09-85cf-d3db18215dc8",
+      "number": "10",
+      "pages": [
+        { "page": 4, "note": "colour map with text notes, no panels" },
+        { "page": 7, "note": "contents list on a blank page, no panels" },
+        { "page": 8, "note": "open sky title art with no frame" },
+        { "page": 13, "note": "black gutters around offset strip panels" },
+        { "page": 22, "note": "huge lettering across panels near the bottom" }
+      ]
+    },
+    {
+      "key": "versailles",
+      "title": "Versailles no Bara",
+      "manga": "fd9577a0-43a3-4610-835f-1cbf903b7e3f",
+      "chapter": "7adf2f09-4963-4b8b-9241-a1c31c0fd404",
+      "number": "20",
+      "pages": [
+        { "page": 1, "note": "framed title portrait with an ornate border" },
+        { "page": 4, "note": "black page with a sparkling necklace splash" },
+        { "page": 13, "note": "black burst splash with small panels at the foot" },
+        { "page": 16, "note": "black diagonal beams cutting across the page" },
+        { "page": 24, "note": "borderless palace art with captions floating" }
+      ]
+    },
+    {
+      "key": "versailles",
+      "title": "Versailles no Bara",
+      "manga": "fd9577a0-43a3-4610-835f-1cbf903b7e3f",
+      "chapter": "12dec88e-0936-4467-bf06-eaefff3d2582",
+      "number": "49",
+      "pages": [
+        { "page": 1, "note": "spread scanned on a grey sheet" },
+        { "page": 10, "note": "black panel with a bright burst and grey bands" },
+        { "page": 15, "note": "tall black column panel beside a crowd scene" },
+        { "page": 20, "note": "flag shaped panel with caption boxes" },
+        { "page": 21, "note": "black forest panel with white text blocks" }
+      ]
+    },
+    {
+      "key": "iamahero",
+      "title": "I Am a Hero",
+      "manga": "ff5ef336-72d7-45a2-bc69-c2ae8fbfeec8",
+      "chapter": "f962b8e9-d579-48ca-9a35-597db125f5c6",
+      "number": "109",
+      "pages": [
+        { "page": 1, "note": "colour scanlator credits banner on a grey sheet" },
+        { "page": 6, "note": "map panel at the bottom of a photo-like page" },
+        { "page": 12, "note": "very dark panel with a small inset face" },
+        { "page": 13, "note": "near black panels in a dim room" },
+        { "page": 18, "note": "colour recruiting poster, no panels" }
+      ]
+    },
+    {
+      "key": "iamahero",
+      "title": "I Am a Hero",
+      "manga": "ff5ef336-72d7-45a2-bc69-c2ae8fbfeec8",
+      "chapter": "a1fceb48-02ad-47a0-abef-de024cccda89",
+      "number": "127",
+      "pages": [
+        { "page": 2, "note": "two big panels with heavy dark tone" },
+        { "page": 4, "note": "two tall dark panels, little white" },
+        { "page": 11, "note": "empty room panel at the bottom with no figures" },
+        { "page": 15, "note": "three stacked panels ending in a photo-like shed" },
+        { "page": 16, "note": "colour recruiting poster, no panels" }
+      ]
+    },
+    {
+      "key": "kingdom",
+      "title": "Kingdom",
+      "manga": "077a3fed-1634-424f-be7a-9a96b7f07b78",
+      "chapter": "f0cf2ae8-914b-473f-a34c-0dd2fba0c610",
+      "number": "843",
+      "pages": [
+        { "page": 1, "note": "colour credits page with art, no panels" },
+        { "page": 5, "note": "title spread on a grey sheet" },
+        { "page": 14, "note": "tall palace panel with a sky and a face panel" },
+        { "page": 15, "note": "three wide landscape panels with captions" },
+        { "page": 18, "note": "end page with a small logo strip at the bottom" }
+      ]
+    },
+    {
+      "key": "kingdom",
+      "title": "Kingdom",
+      "manga": "077a3fed-1634-424f-be7a-9a96b7f07b78",
+      "chapter": "76d36f38-4889-4ba2-a46c-658d9e063d27",
+      "number": "861",
+      "pages": [
+        { "page": 2, "note": "borderless title art with a logo and text" },
+        { "page": 4, "note": "tall slanted panels crossed by an arrow" },
+        { "page": 16, "note": "panels on a black page with a forest in the middle" },
+        { "page": 17, "note": "black page with small panels and a target" },
+        { "page": 19, "note": "huge face with lines breaking out of the frame" }
+      ]
+    },
+    {
+      "key": "mononoke",
+      "title": "Mononoke",
+      "manga": "b57d09a1-b33c-4209-88b9-a8dbe3dda1b6",
+      "chapter": "acf6fc85-eeff-449f-b43c-e5df34104ef2",
+      "number": "6",
+      "pages": [
+        { "page": 1, "note": "black title card with an emblem, no panels" },
+        { "page": 4, "note": "patterned busy art with almost no clear gutters" },
+        { "page": 16, "note": "bold graphic shapes and slanted frames" },
+        { "page": 17, "note": "tilted frames inside a busy black and white page" },
+        { "page": 22, "note": "black end page with a logo, no panels" }
+      ]
+    },
+    {
+      "key": "mononoke",
+      "title": "Mononoke",
+      "manga": "b57d09a1-b33c-4209-88b9-a8dbe3dda1b6",
+      "chapter": "6ff439bb-0fdc-4e67-aa8f-fd39bb99a757",
+      "number": "15",
+      "pages": [
+        { "page": 3, "note": "huge lettering above a patterned panel strip" },
+        { "page": 7, "note": "small spread on a grey sheet with sound effects" },
+        { "page": 11, "note": "black page with panels and a radial design" },
+        { "page": 13, "note": "black gutters around odd shaped panels" },
+        { "page": 18, "note": "creature art bursting over the panel borders" }
+      ]
+    },
+    {
+      "key": "natsume",
+      "title": "Natsume Yuujinchou",
+      "manga": "2c3cd370-04bd-4994-87dc-e54a4d80c4ec",
+      "chapter": "b31c8aa7-9236-4500-b337-6ba1b4867325",
+      "number": "35",
+      "pages": [
+        { "page": 1, "note": "title art with vertical lettering, no panels" },
+        { "page": 5, "note": "column of Japanese text beside the panels" },
+        { "page": 8, "note": "dark tilted panels with figures crossing over" },
+        { "page": 16, "note": "black pot shapes merging with panel edges" },
+        { "page": 22, "note": "soft borderless grass scene with a figure" }
+      ]
+    },
+    {
+      "key": "natsume",
+      "title": "Natsume Yuujinchou",
+      "manga": "2c3cd370-04bd-4994-87dc-e54a4d80c4ec",
+      "chapter": "a92e2a38-9694-488b-8f0b-0ba6fb7d3bfb",
+      "number": "86",
+      "pages": [
+        { "page": 1, "note": "colour magazine cover, no panels" },
+        { "page": 2, "note": "colour scanlator credits art, no panels" },
+        { "page": 3, "note": "title page with scattered leaves and no frame" },
+        { "page": 8, "note": "spread scanned on a grey sheet" },
+        { "page": 14, "note": "vertical scanlator text running down the margin" }
+      ]
+    },
+    {
+      "key": "higurashi",
+      "title": "Higurashi no Naku Koro ni: Wonderful",
+      "manga": "b6b2f3e8-42cc-4479-b2b5-61cd7fefdd29",
+      "chapter": "dd92af33-2ce6-4d41-87ba-b2770a962211",
+      "number": "1",
+      "pages": [
+        { "page": 1, "note": "colour anthology cover, no panels" },
+        { "page": 3, "note": "contents table with lines and page numbers, no panels" },
+        { "page": 4, "note": "title art with a bottom caption bar, few frames" },
+        { "page": 13, "note": "dotted tone panels with lettering over the gutters" },
+        { "page": 15, "note": "small loose sketches with a THE END note" },
+        { "page": 16, "note": "grey scanlator credits page, no panels" }
+      ]
+    }
+  ]
+}

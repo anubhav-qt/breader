@@ -1,0 +1,284 @@
+{
+  "series": [
+    {
+      "key": "hxh",
+      "title": "Hunter x Hunter",
+      "manga": "db692d58-4b13-4174-ae8c-30c515c0689c",
+      "chapter": "2068225d-70f9-43e7-9de3-b309c9c4ea5c",
+      "number": "45",
+      "pages": [
+        { "page": 1, "note": "colour volume cover, no panels" },
+        { "page": 2, "note": "pale spread scanned on a grey sheet" },
+        { "page": 3, "note": "contents page with a logo, no panels" },
+        { "page": 4, "note": "tall tower art with a chapter banner, no real grid" },
+        { "page": 18, "note": "huge shout lettering running down past the panels" }
+      ]
+    },
+    {
+      "key": "hxh",
+      "title": "Hunter x Hunter",
+      "manga": "db692d58-4b13-4174-ae8c-30c515c0689c",
+      "chapter": "28fbb66a-0070-4d19-b6e7-966f71721ec7",
+      "number": "118",
+      "pages": [
+        { "page": 2, "note": "black page with white figures and a chapter banner" },
+        { "page": 7, "note": "thin black strip panels stacked down the page" },
+        { "page": 9, "note": "panels with black gutters and dark heavy tone" },
+        { "page": 13, "note": "wide black crowd panel across the middle" },
+        { "page": 15, "note": "borderless figures over a sky with panels at the bottom" }
+      ]
+    },
+    {
+      "key": "toriko",
+      "title": "TORIKO",
+      "manga": "a7a8149f-65cf-4cab-a243-9b00b91e3b24",
+      "chapter": "c30abeff-e86e-44e7-be9c-fb5157a25639",
+      "number": "55",
+      "pages": [
+        { "page": 1, "note": "colour scanlator disclaimer page, no panels" },
+        { "page": 3, "note": "flames and sound effects over every panel" },
+        { "page": 9, "note": "figure breaking out across three panels" },
+        { "page": 15, "note": "map panel with a grid and labels" },
+        { "page": 19, "note": "dense slanted action with heavy lines, panels hard to split" }
+      ]
+    },
+    {
+      "key": "toriko",
+      "title": "TORIKO",
+      "manga": "a7a8149f-65cf-4cab-a243-9b00b91e3b24",
+      "chapter": "3cd0c855-75ea-435c-90c0-67e30e43ff9b",
+      "number": "138",
+      "pages": [
+        { "page": 1, "note": "colour cover with green text blocks, no panels" },
+        { "page": 10, "note": "very busy splash with tiny panels at the bottom" },
+        { "page": 12, "note": "calorie table drawn in a black panel" },
+        { "page": 17, "note": "dense dark splash with a scream across the top" },
+        { "page": 19, "note": "colour scanlator credits with a sun, no panels" }
+      ]
+    },
+    {
+      "key": "jojo4",
+      "title": "JoJo no Kimyou na Bouken: Part 4 - Diamond wa Kudakenai",
+      "manga": "5ed1f8fc-a119-4cbc-aeae-26ce2bd3f838",
+      "chapter": "82438665-bb85-4cfe-afca-76d49c0d2ae5",
+      "number": "48",
+      "pages": [
+        { "page": 1, "note": "wraparound cover scanned small on a grey sheet" },
+        { "page": 3, "note": "family tree chart with portraits, not panels" },
+        { "page": 5, "note": "text contents on a diamond pattern, no panels" },
+        { "page": 7, "note": "tall sea splash with sound effects along the bottom" },
+        { "page": 13, "note": "chaotic slanted action with no clear gutters" }
+      ]
+    },
+    {
+      "key": "jojo4",
+      "title": "JoJo no Kimyou na Bouken: Part 4 - Diamond wa Kudakenai",
+      "manga": "5ed1f8fc-a119-4cbc-aeae-26ce2bd3f838",
+      "chapter": "f4e1b804-0655-4726-96f0-f38d80111f20",
+      "number": "119",
+      "pages": [
+        { "page": 1, "note": "title art with Chinese and English title text" },
+        { "page": 5, "note": "steep slanted panels with huge sound effects" },
+        { "page": 15, "note": "tilted panels on a heavily curved scan" },
+        { "page": 16, "note": "sound effect letters stacked over slanted panels" },
+        { "page": 20, "note": "faint sketch on a blank page, no panels" }
+      ]
+    },
+    {
+      "key": "dragonball",
+      "title": "Dragon Ball",
+      "manga": "40bc649f-7b49-4645-859e-6cd94136e722",
+      "chapter": "306695b3-68c5-40d5-b768-71aa7b3ab833",
+      "number": "12",
+      "pages": [
+        { "page": 1, "note": "logo and chapter title above one wide panel" },
+        { "page": 2, "note": "tall boxed caption beside the panels" },
+        { "page": 11, "note": "big sound effect across panel edges" },
+        { "page": 14, "note": "thin wide strip panels of sea" },
+        { "page": 15, "note": "scroll caption over a busy bottom panel" }
+      ]
+    },
+    {
+      "key": "dragonball",
+      "title": "Dragon Ball",
+      "manga": "40bc649f-7b49-4645-859e-6cd94136e722",
+      "chapter": "9dda74e2-6261-40d9-9025-5daa1afaacb4",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "logo and title above a car with no frame" },
+        { "page": 4, "note": "open top panel with loose sound effects" },
+        { "page": 10, "note": "big sound effect over a tilted panel edge" },
+        { "page": 11, "note": "tall rock panel with a sound effect, uneven grid" },
+        { "page": 12, "note": "shark bursting out with sound effects off the edge" }
+      ]
+    },
+    {
+      "key": "dgrayman",
+      "title": "D.Gray-man",
+      "manga": "b6886009-e60b-44a7-abc2-a575765277ba",
+      "chapter": "6dda1f87-4285-41a1-b7ff-117523223531",
+      "number": "255",
+      "pages": [
+        { "page": 2, "note": "colour scanlator credits image, no panels" },
+        { "page": 6, "note": "black panel with a cross above pale panels" },
+        { "page": 9, "note": "title splash with the logo and no frame" },
+        { "page": 17, "note": "soft light bursting out of the panel borders" },
+        { "page": 18, "note": "black panel at the bottom with a faint top half" }
+      ]
+    },
+    {
+      "key": "dgrayman",
+      "title": "D.Gray-man",
+      "manga": "b6886009-e60b-44a7-abc2-a575765277ba",
+      "chapter": "70945fd8-a5c4-4747-b1df-c0f5cf77360f",
+      "number": "257",
+      "pages": [
+        { "page": 1, "note": "title art on a black edge with vertical text" },
+        { "page": 14, "note": "tall glowing panel with lettering over the border" },
+        { "page": 19, "note": "black panels with white symbols and slanted cuts" },
+        { "page": 30, "note": "dark sparkling panels with white text boxes" },
+        { "page": 35, "note": "translation notes page with small picture clips" }
+      ]
+    },
+    {
+      "key": "undead",
+      "title": "Undead Unluck",
+      "manga": "cc1b8669-82b2-4232-99c1-40d48fc2d988",
+      "chapter": "8a88bcb7-d107-4dad-89dc-70bf074c667a",
+      "number": "13",
+      "pages": [
+        { "page": 1, "note": "cover art with title blocks, Vietnamese credits text" },
+        { "page": 7, "note": "black page with panels laid out on it" },
+        { "page": 8, "note": "black gutters around tilted panels" },
+        { "page": 18, "note": "spread scanned on a grey sheet" },
+        { "page": 19, "note": "dark scanlator ad page with a QR code, no panels" }
+      ]
+    },
+    {
+      "key": "undead",
+      "title": "Undead Unluck",
+      "manga": "cc1b8669-82b2-4232-99c1-40d48fc2d988",
+      "chapter": "e6eb5817-ef82-4cfd-9a3f-87b27e22c8fb",
+      "number": "31",
+      "pages": [
+        { "page": 1, "note": "black title page with faces boxed in a grid" },
+        { "page": 5, "note": "black spread with a planet, on a grey sheet" },
+        { "page": 8, "note": "huge eye shape breaking the panel layout" },
+        { "page": 13, "note": "tall black panel cut by a slanted gutter" },
+        { "page": 15, "note": "busy action spread on a grey sheet" }
+      ]
+    },
+    {
+      "key": "kaiju8",
+      "title": "Kaiju No. 8",
+      "manga": "237d527f-adb5-420e-8e6e-b7dd006fbe47",
+      "chapter": "c3dde0e1-9de6-44b3-9e47-c1801e053b5c",
+      "number": "111",
+      "pages": [
+        { "page": 2, "note": "white text quote page with a logo, no panels" },
+        { "page": 3, "note": "dark recruitment page with a QR code, no panels" },
+        { "page": 7, "note": "slanted panels with debris crossing the gutters" },
+        { "page": 17, "note": "huge teeth panel filling most of the page" },
+        { "page": 21, "note": "gun spread on a grey sheet with speed lines" }
+      ]
+    },
+    {
+      "key": "kaiju8",
+      "title": "Kaiju No. 8",
+      "manga": "237d527f-adb5-420e-8e6e-b7dd006fbe47",
+      "chapter": "dcc48dba-2e50-4e78-8860-ca8f55b211b5",
+      "number": "119",
+      "pages": [
+        { "page": 1, "note": "colour credits image on a grey sheet, no panels" },
+        { "page": 8, "note": "full height face with almost no frame" },
+        { "page": 12, "note": "dark spread with a burst, on a grey sheet" },
+        { "page": 14, "note": "pattern of rings filling a panel" },
+        { "page": 22, "note": "tall panel crossing a busy grid" }
+      ]
+    },
+    {
+      "key": "blackclover",
+      "title": "Black Clover",
+      "manga": "e7eabe96-aa17-476f-b431-2497d5e9d060",
+      "chapter": "1727c738-0ede-4513-a434-7f07f84f7c9c",
+      "number": "383",
+      "pages": [
+        { "page": 1, "note": "colour credits spread on a grey sheet, no panels" },
+        { "page": 4, "note": "black shapes slashing across tilted panels" },
+        { "page": 5, "note": "steep diagonal panels with a spear crossing them" },
+        { "page": 15, "note": "ornate splash with floral circles and few borders" },
+        { "page": 17, "note": "spread scanned on a grey sheet with big lettering" }
+      ]
+    },
+    {
+      "key": "blackclover",
+      "title": "Black Clover",
+      "manga": "e7eabe96-aa17-476f-b431-2497d5e9d060",
+      "chapter": "ee156480-cb45-4d1d-b5c8-cff2552130ad",
+      "number": "390",
+      "pages": [
+        { "page": 3, "note": "colour magazine page with art and text boxes, not panels" },
+        { "page": 7, "note": "colour event poster with photos and a QR code" },
+        { "page": 8, "note": "vertical margin text and a pale mountain panel" },
+        { "page": 18, "note": "tall white streak panels with a black swirl" },
+        { "page": 21, "note": "faint wide spread on a grey sheet" }
+      ]
+    },
+    {
+      "key": "saiyuki",
+      "title": "Saiyuki",
+      "manga": "cc8643f2-5ede-4b0a-9bcd-8994a201b45b",
+      "chapter": "ac024388-b68a-447c-bc23-f30496e4896e",
+      "number": "16",
+      "pages": [
+        { "page": 1, "note": "black title page with a figure and text, no panels" },
+        { "page": 5, "note": "floating text over a wide open panel" },
+        { "page": 12, "note": "static noise pattern filling a panel" },
+        { "page": 26, "note": "dark spread scanned on a grey sheet" },
+        { "page": 29, "note": "two panels on a black page" }
+      ]
+    },
+    {
+      "key": "saiyuki",
+      "title": "Saiyuki",
+      "manga": "cc8643f2-5ede-4b0a-9bcd-8994a201b45b",
+      "chapter": "9cf001f1-f7c7-43d0-a7ae-fae1fb3c3187",
+      "number": "42",
+      "pages": [
+        { "page": 1, "note": "black page with title text and bars over the art" },
+        { "page": 7, "note": "small panel above a big blank frame with a drawing" },
+        { "page": 10, "note": "black gutters and bars cutting across the panels" },
+        { "page": 12, "note": "black page with panels and a near empty strip" },
+        { "page": 14, "note": "credits page with a small sketch, no panels" }
+      ]
+    },
+    {
+      "key": "lupin",
+      "title": "Lupin III",
+      "manga": "50fe4f79-8c94-4052-bf66-2cf87f8efd34",
+      "chapter": "0521bb15-3242-48b5-ac40-d293b234b5e8",
+      "number": "27",
+      "pages": [
+        { "page": 1, "note": "framed title page on a yellowed scan" },
+        { "page": 3, "note": "spread on a grey sheet with four wide black strips" },
+        { "page": 10, "note": "thin uneven panels on a yellowed page" },
+        { "page": 12, "note": "odd shaped panels with heavy black shadows" },
+        { "page": 13, "note": "wide strip panels stacked tight" }
+      ]
+    },
+    {
+      "key": "lupin",
+      "title": "Lupin III",
+      "manga": "50fe4f79-8c94-4052-bf66-2cf87f8efd34",
+      "chapter": "0b636e9a-7735-4656-80f3-bba21a7a0ada",
+      "number": "83",
+      "pages": [
+        { "page": 1, "note": "title spread with one blank page, on a grey sheet" },
+        { "page": 2, "note": "dark spread with tall narrow panels and a beam of light" },
+        { "page": 7, "note": "busy spread with slanted strips, on a grey sheet" },
+        { "page": 12, "note": "spread with a car splash and slanted panels" },
+        { "page": 14, "note": "single framed drawing on a yellowed page, no grid" }
+      ]
+    }
+  ]
+}
