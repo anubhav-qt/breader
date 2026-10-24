@@ -7,6 +7,8 @@ import { Covers, type Cover, type CoverWidth } from './covers.ts';
 import { Disk, type Picture } from './disk.ts';
 import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
 import { makeMangaDex } from './mangadex.ts';
+import type { Curate, Tab } from './curate.ts';
+import type { Same } from './same.ts';
 import { makeSuwayomi, type Suwayomi } from './suwayomi.ts';
 
 /*
@@ -55,10 +57,18 @@ export interface MangaOptions {
   suwayomi?: string;
   /** How long a lot it hasn't seen may take a source for it to be browsed (suwayomi.ts). Tests go faster. */
   browseWithin?: number;
+  /** Which series found are one, as Gemini told (same.ts). */
+  same?: Same | null;
+  /** Which cards don't belong in Browse's tabs, as Gemini told (curate.ts). */
+  curate?: Curate | null;
 }
 
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
 const unmeasured = () => new ApiError(503, 'manga_unreachable', 'Its pages couldn’t be measured just now. Try again in a minute.');
+
+/** How long a lot may wait for Gemini to group its series the first time they come together, within the app's 20 s for a search. */
+const GROUP_WAIT = 6_000;
+const SEARCH_WITHIN = 19_000;
 
 /** How long a series' copies are fresh: groups come and go slowly, and a page's size never changes. */
 const COPIES_FOR = 24 * 3_600_000;
@@ -135,6 +145,8 @@ export function makeManga(opts: MangaOptions): Manga {
 
   return {
     async search(q, onSome) {
+      const began = Date.now();
+      const same = opts.same ?? null;
       // In MANGA_KINDS' order, so the same ask is kept once.
       let kinds: MangaKind[] = [...MANGA_KINDS];
       const asked = q.kinds;
@@ -142,7 +154,7 @@ export function makeManga(opts: MangaOptions): Manga {
       const w: Wanted = { lang: q.lang, sort: q.sort, adult: !!q.adult || !!q.adultOnly, doujinshi: !!q.doujinshi, kinds };
       if (q.adultOnly) w.adultOnly = true;
       if (q.q) w.q = q.q;
-      if (q.names) w.names = q.names;
+      if (q.names) w.names = same ? await same.widen(q.names) : q.names;
       // Top rated is MangaDex's alone: a source lists only its popular and its latest, and its
       // popular in place of a rating made Top rated Popular over again.
       const rated = !w.q && w.sort === 'rated';
@@ -160,7 +172,26 @@ export function makeManga(opts: MangaOptions): Manga {
       // and only series going by what they searched for, as some sites answer with anything like it.
       let grace: number | null = GRACE;
       if (w.names) grace = null;
-      return find(places, w.q, q.next, DEADLINE, grace, !w.names, onSome);
+      // What's come so far shows the groups known already; the lot's whole waits a moment for Gemini
+      // to group what it hasn't seen together, only the first time (same.ts).
+      // A tab (no name searched for) leaves out the cards Gemini said don't belong, and has the
+      // ones it hasn't seen there checked behind the reader (curate.ts).
+      const curate = opts.curate ?? null;
+      let tab: Tab | null = null;
+      if (curate && !w.q && !w.names) tab = { sort: w.sort ?? 'popular', lang: w.lang ?? 'en', kinds, adult: w.adult, adultOnly: !!w.adultOnly, doujinshi: w.doujinshi };
+      const shown = (items: MangaFound[]) => {
+        let out = items;
+        if (same) out = same.known(out);
+        if (tab) out = curate!.known(tab, out);
+        return out;
+      };
+      let some = onSome;
+      if (onSome && (same || tab)) some = (items) => onSome(shown(items));
+      const lot = await find(places, w.q, q.next, DEADLINE, grace, !w.names, some);
+      let items = lot.items;
+      if (same) items = await same.settle(items, Math.min(GROUP_WAIT, SEARCH_WITHIN - (Date.now() - began)));
+      if (tab) items = await curate!.check(tab, items);
+      return { ...lot, items };
     },
 
     series: (id, adult) => dex.series(id, adult),

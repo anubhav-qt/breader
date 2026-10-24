@@ -4,15 +4,19 @@ import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
 import { loadEnv, mangaCacheMb, onThinkPad } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
+import { fillBlanks } from './jobs/fill.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
 import { asJob, runKind, takeCommands } from './lib/admin.ts';
-import { connectRedis, type Redis } from './lib/cache.ts';
+import { connectRedis, MemoryStore, type Redis } from './lib/cache.ts';
+import { makeGemini } from './lib/gemini.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
+import { makeCurate, pgChecks } from './manga/curate.ts';
 import { makeKeeper } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
+import { makeSame, pgGroups } from './manga/same.ts';
 import { makePanels } from './panels/index.ts';
 import { makeSpeech } from './speech/index.ts';
 
@@ -32,6 +36,14 @@ const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(en
 const mangaOn = env.MANGADEX;
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: mangaCacheMb(env) * 1024 * 1024, store: redis };
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
+// Gemini, through the worker's proxy for the AI accounts, on the laptop only (lib/gemini.ts). Both
+// servers go by what it has said, kept in Supabase: which series found are one (manga/same.ts) and
+// which cards don't belong in Browse's tabs (manga/curate.ts).
+const gemini = env.ROLE === 'laptop' ? makeGemini(env) : null;
+if (mangaOn) {
+  mangaOptions.same = makeSame({ groups: pgGroups(primary.pool), gemini, store: redis ?? new MemoryStore(5_000) });
+  mangaOptions.curate = makeCurate({ checks: pgChecks(primary.pool), gemini });
+}
 const manga = mangaOn ? makeManga(mangaOptions) : null;
 // Manga panels from the panel model, for any reader with a seat, on the laptop only: the fallback's
 // free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
@@ -123,6 +135,34 @@ if (manga && (env.MANGA_KEEP ?? onThinkPad(env))) {
   runNow[runKind('manga-keep')] = () => void turn(true);
 }
 
+// What nobody gave a book (its genres, author, series), filled in by Gemini every 30 minutes, the
+// first soon after a start (jobs/fill.ts). Each book is asked about once, whichever libraries hold it.
+let fillAt: NodeJS.Timeout | undefined;
+if (gemini) {
+  let filling = false;
+  const fill = async (now = false) => {
+    if (filling) return;
+    filling = true;
+    try {
+      const r = await asJob(primary.pool, 'ai-fill', () => fillBlanks(primary.pool, gemini, prefetching.signal), { evenIfOff: now });
+      if (!r) return;
+      if (r.asked || r.books) log.info(r, 'Gemini filled in what books left blank');
+      if (!prefetching.signal.aborted) await recordOk(primary.pool, 'ai-fill', r);
+    } catch (err) {
+      log.error({ err }, 'filling in books failed');
+      report(err, { job: 'ai-fill' });
+      await recordError(primary.pool, 'ai-fill', err).catch(() => {});
+    } finally {
+      filling = false;
+    }
+  };
+  const again = (ms: number) => {
+    fillAt = setTimeout(() => void fill().finally(() => again(30 * 60_000)), ms);
+  };
+  again(3 * 60_000);
+  runNow[runKind('ai-fill')] = () => void fill(true);
+}
+
 // Run now, from the admin page.
 if (Object.keys(runNow).length) {
   commands = setInterval(() => {
@@ -139,6 +179,7 @@ const stop = () => {
   clearInterval(warming);
   clearTimeout(prefetchAt);
   clearTimeout(keepAt);
+  clearTimeout(fillAt);
   clearInterval(commands);
   prefetching.abort();
   void speech?.close();

@@ -310,6 +310,62 @@ export const aiFirst = pgTable('ai_first', {
 });
 
 /**
+ * Which series a search found are one series, as Gemini told (manga/same.ts): each card, by its id
+ * where it was found, and its group. Cards in one group are shown as one. A card Gemini looked at
+ * and found no other copy of is a group of its own, so it isn't asked about again. `names` are the
+ * card's names, keyed (shared seriesName), so a sheet looking for its series' other copies looks
+ * under every name its group goes by. Not fed: only the API reads it, from Supabase.
+ */
+export const seriesMatches = pgTable(
+  'series_matches',
+  {
+    card: text('card').primaryKey(),
+    canon: text('canon').notNull(),
+    names: text('names').array().notNull().default(sql`'{}'::text[]`),
+    /** The model that said so. */
+    by: text('by').notNull(),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [index('series_matches_canon_idx').on(t.canon), index('series_matches_names_idx').using('gin', t.names)],
+);
+
+/**
+ * Whether a card belongs in a Browse tab, as Gemini told (manga/curate.ts): by the tab (its order,
+ * language, kinds and what's allowed) and the card's id. Those that don't are left out of it. Not
+ * fed: only the API reads it, from Supabase.
+ */
+export const recChecks = pgTable(
+  'rec_checks',
+  {
+    tab: text('tab').notNull(),
+    card: text('card').notNull(),
+    hide: boolean('hide').notNull(),
+    /** Why it's left out, in a few words. */
+    why: text('why').notNull().default(''),
+    by: text('by').notNull(),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tab, t.card] })],
+);
+
+/**
+ * What Gemini filled in for a book nobody had (jobs/fill.ts): its genres, author and series, by its
+ * file's SHA-256 (sha:…) or a manga's address (url:…), so every library holding it shares one
+ * answer. Empty where Gemini couldn't tell. Copied into each library's books where they're still
+ * blank, never over what someone picked. Not fed: only the API reads it, from Supabase.
+ */
+export const aiFills = pgTable('ai_fills', {
+  key: text('key').primaryKey(),
+  /** Genre ids joined by commas (shared genres.ts), '' for none. */
+  genres: text('genres').notNull().default(''),
+  author: text('author').notNull().default(''),
+  series: text('series'),
+  seriesIndex: doublePrecision('series_index'),
+  by: text('by').notNull(),
+  at: at('at').notNull().defaultNow(),
+});
+
+/**
  * The name a library comments under (shared comments.ts). `fold` is the name as foldName tells
  * names apart, and no two libraries may share one. Fed.
  */

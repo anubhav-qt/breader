@@ -113,7 +113,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           // The book's own details. Card edits and removal have their own mutations.
           set: {
             title: sql`excluded.title`,
-            author: sql`excluded.author`,
+            // A file naming no author or series keeps what Gemini filled in (jobs/fill.ts).
+            author: sql`coalesce(nullif(excluded.author, ''), ${libraryItems.author})`,
             format: sql`excluded.format`,
             source: sql`excluded.source`,
             url: sql`excluded.url`,
@@ -126,8 +127,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             fileId: sql`coalesce(excluded.file_id, ${libraryItems.fileId})`,
             coverId: sql`coalesce(excluded.cover_id, ${libraryItems.coverId})`,
             origin: sql`coalesce(excluded.origin, ${libraryItems.origin})`,
-            series: sql`excluded.series`,
-            seriesIndex: sql`excluded.series_index`,
+            series: sql`coalesce(excluded.series, ${libraryItems.series})`,
+            seriesIndex: sql`CASE WHEN excluded.series IS NULL THEN ${libraryItems.seriesIndex} ELSE excluded.series_index END`,
             // Set when the book is added; a later put without one (an older app) keeps it.
             genre: sql`coalesce(excluded.genre, ${libraryItems.genre})`,
             rev,

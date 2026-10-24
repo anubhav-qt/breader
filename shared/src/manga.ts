@@ -47,7 +47,7 @@ export const SourceId = z.string().regex(/^sw:\d{1,20}:[\w-]{1,400}(:[\w-]{1,400
  */
 const Next = z.string().regex(/^[a-z]{2}\d{0,20}:(s\d{1,6}|\d{1,6}(\.\d{1,4})?)(,[a-z]{2}\d{0,20}:(s\d{1,6}|\d{1,6}(\.\d{1,4})?)){0,49}$/, 'Not where a search carries on');
 
-/** Series names as seriesName keys them, comma separated. */
+/** Series names as seriesName keys them, or a group's key (server manga/same.ts), comma separated. */
 const Names = z
   .string()
   .max(4000)
