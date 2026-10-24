@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AI_LABEL } from '../../../books/ai';
-import { api } from '../../../lib/api';
+import { api, sayAway } from '../../../lib/api';
 import { springs } from '../../../lib/springs';
 import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, useGpu, type Engine, type Mode, type VoiceInfo } from '../voice/catalog';
@@ -253,7 +253,10 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       {speech.allowed && (
         <div className="ctl tgrow">
           <span className="clbl">Read on the server</span>
-          <button type="button" className="tg" role="switch" aria-checked={prefs.server} aria-label="Read aloud on Breader’s own computer" onClick={() => setVoicePrefs({ server: !prefs.server })} />
+          <button type="button" className="tg" role="switch" aria-checked={prefs.server} aria-label="Read aloud on Breader’s own computer" onClick={() => {
+            if (!prefs.server && api.away) sayAway('it can’t read aloud on the server');
+            setVoicePrefs({ server: !prefs.server });
+          }} />
         </div>
       )}
       {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}

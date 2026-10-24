@@ -12,7 +12,7 @@ import { CATEGORIES, categoryOf, countOf, type Category } from './books/category
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
 import { sweepKept } from './books/kept';
-import { placeChapter, readOnLaptop, remoteCover, remoteOf, withAlso } from './books/remote';
+import { placeChapter, readFrom, remoteCover, remoteOf, withAlso } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
@@ -35,7 +35,7 @@ import type { About, Picked } from './features/manga/MangaPage';
 import { LibraryMenu } from './features/shared/LibraryMenu';
 import { OwnLibraryMenu } from './features/shared/OwnLibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
-import { api } from './lib/api';
+import { api, sayAway } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
 import { genreOf, mangadex, readMangaPrefs, sources, type MangaPrefs } from './lib/mangadex';
 import { springs } from './lib/springs';
@@ -132,6 +132,12 @@ function stoppedSharing(n: number, category: Category): string {
 
 /** Links that bring the reader back to the app: from Google, and from Breader's emails. */
 const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
+
+/** A series read from a site only the laptop reaches, opened while it's away, is read from Weeb Central meanwhile (books/remote.ts readFrom). */
+function tellIfAway(rec: BookRecord) {
+  const w = rec.source === 'remote' ? remoteOf(rec.url) : null;
+  if (w && readFrom(w) !== w) sayAway('this series reads from Weeb Central');
+}
 
 /*
  * The reader, Browse, a series' page and Add book come in pieces of their own, so the library
@@ -474,27 +480,12 @@ export default function App() {
     swept.current = true;
     void sweepKept(haveSeries);
   }, [lib.ready, haveSeries]);
-  /** Which copy of the server the app is on: the laptop, or the fallback while the laptop's away. */
-  const [via, setVia] = useState(api.via);
+  // Something just asked for waits for the laptop while it's away (lib/api.ts sayAway): said for a moment.
   useEffect(() => {
-    setVia(api.via);
-    return api.onVia(setVia);
-  }, []);
-  /** Series in the library read from a site only the laptop reaches (books/remote.ts readFrom). */
-  const onLaptopSite = useMemo(() => lib.records.some((r) => r.source === 'remote' && readOnLaptop(r.url)), [lib.records]);
-  // While the laptop's away, those are read from Weeb Central: the reader's told once each time, and
-  // the message goes as soon as it's back.
-  const awayToast = useRef<number | null>(null);
-  useEffect(() => {
-    if (via === 'primary') {
-      if (awayToast.current !== null) dismissToast(awayToast.current);
-      awayToast.current = null;
-      return;
-    }
-    if (!onLaptopSite || awayToast.current !== null) return;
-    say('Breader’s home computer is down, so your MangaFire series read from Weeb Central until it’s back.', { stay: true });
-    awayToast.current = toastId.current;
-  }, [via, onLaptopSite, say, dismissToast]);
+    const onAway = (e: Event) => say((e as CustomEvent<string>).detail);
+    window.addEventListener('breader:away', onAway);
+    return () => window.removeEventListener('breader:away', onAway);
+  }, [say]);
   const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...everything.mine, ...everything.shelf], b), [everything]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
@@ -548,6 +539,7 @@ export default function App() {
     if (!rec) return;
     // One taken out of My books comes back in once it's being read again.
     if (rec.sharedOnly) lib.setSharedOnly(rec.id, false);
+    tellIfAway(rec);
     setOpening({ id: rec.id, rect });
     void startLoad(rec.id, rec).then((b) => {
       if (!b) setOpening(null);
@@ -676,6 +668,7 @@ export default function App() {
       rec = { ...rec, url };
     }
     if (!rec) rec = await addSeries(about, url);
+    tellIfAway(rec);
     const id = rec.id;
     setStartAt(from ? { id, pos: from } : null);
     openAnimDone.current = false;

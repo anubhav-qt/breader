@@ -28,6 +28,12 @@ const ASLEEP_AFTER = 10 * 60_000;
 const WAKE_TIMEOUT = 60_000;
 /** When each copy of the server last answered. */
 const heard: Record<ApiBase, number> = { primary: 0, fallback: 0 };
+/** The laptop gave no answer the last time it was asked: a gateway's, or none at all. */
+let laptopMissed = false;
+const answered = (base: ApiBase, yes: boolean) => {
+  if (yes) heard[base] = Date.now();
+  if (base === 'primary') laptopMissed = !yes;
+};
 
 function timeoutFor(base: ApiBase, timeout: number): number {
   if (base === 'fallback' && Date.now() - heard.fallback > ASLEEP_AFTER) return Math.max(timeout, WAKE_TIMEOUT);
@@ -60,10 +66,14 @@ async function attempt(base: ApiBase, path: string, init: RequestInit, timeout: 
   const t = window.setTimeout(() => ctrl.abort(), timeoutFor(base, timeout));
   try {
     const res = await fetch(BASES[base] + path, { ...init, credentials: 'include', signal: ctrl.signal });
-    if (GATEWAY.has(res.status)) return null;
-    heard[base] = Date.now();
+    if (GATEWAY.has(res.status)) {
+      answered(base, false);
+      return null;
+    }
+    answered(base, true);
     return res;
   } catch {
+    answered(base, false);
     return null;
   } finally {
     window.clearTimeout(t);
@@ -122,9 +132,10 @@ async function fetchFrom(base: ApiBase, path: string, body: unknown, timeout: nu
       credentials: 'include',
       signal: ctrl.signal,
     });
-    if (!LAPTOP_GATEWAY.has(res.status)) heard[base] = Date.now();
+    answered(base, !LAPTOP_GATEWAY.has(res.status));
     return res;
   } catch {
+    answered(base, false);
     return new Response(null, { status: 504 });
   } finally {
     window.clearTimeout(t);
@@ -171,6 +182,14 @@ async function manga(path: string, body: unknown, timeout: number): Promise<Resp
   throw await failure(res, 'Breader’s computer can’t be reached.');
 }
 
+/**
+ * Tells the reader, for a moment, that what they've just asked for waits for Breader's home computer
+ * (the laptop), which is away. Only for something they asked for: App.tsx shows it.
+ */
+export function sayAway(what: string) {
+  window.dispatchEvent(new CustomEvent('breader:away', { detail: `Breader’s home computer is down, so ${what} until it’s back.` }));
+}
+
 /** An address for a manga picture to load straight from, on the copy of the server the app is on. */
 export const mangaUrl = (path: string) => BASES[active] + path;
 
@@ -192,6 +211,8 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
   /** Which copy of the server is answering. */
   get via(): ApiBase { return active; },
+  /** The laptop is away: the app's on the fallback, or the laptop didn't answer when last asked. */
+  get away(): boolean { return active === 'fallback' || laptopMissed; },
   onVia(fn: (b: ApiBase) => void) {
     listeners.add(fn);
     return () => { listeners.delete(fn); };

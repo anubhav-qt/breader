@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { keepChapters, letGo, stopKeeping, useKept } from '../../books/kept';
 import type { LoadedBook, MangaBook, TocItem } from '../../books/types';
+import { api, sayAway } from '../../lib/api';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
 import { Modal } from '../../components/Modal';
@@ -239,7 +240,10 @@ function ServerPanels() {
     <>
       <div className="ctl tgrow">
         <span className="clbl">Find panels on the server</span>
-        <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Find panels on Breader’s own computer" onClick={() => setServerPanels(!on)} />
+        <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Find panels on Breader’s own computer" onClick={() => {
+          if (!on && api.away) sayAway('this device finds the panels itself');
+          setServerPanels(!on);
+        }} />
       </div>
       {s.on && s.full && (
         <>
