@@ -131,6 +131,8 @@ type List = 'POPULAR' | 'LATEST';
 interface Shelved {
   card: SourceCard;
   names: string[];
+  /** Its author and artist; not on shelves kept from before they were. */
+  people?: string[];
 }
 
 /**
@@ -152,7 +154,8 @@ export interface Suwayomi {
   /** How many pages a chapter has. */
   pages(chapterId: string): Promise<number>;
   /** Page n of a chapter, from 0. */
-  page(chapterId: string, n: number): Promise<Picture>;
+  /** quiet: not counted as read (disk.ts). */
+  page(chapterId: string, n: number, quiet?: boolean): Promise<Picture>;
   /** A series' cover at a width; early: the prefetch's (covers.ts). */
   cover(id: string, width: CoverWidth, early?: number): Promise<Cover>;
   /** Shelves every English source's Popular and Updated lists ahead of readers, their covers too. */
@@ -670,7 +673,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     if (!wants(card, w)) return null;
     const ok = await readable(m, source.id);
     if (!ok) return null;
-    return { item: { kind: 'source', source: source.name, card }, names: [m.title] };
+    return { item: { kind: 'source', source: source.name, card }, names: [m.title], people: people(m) };
   }
 
   /** A series a source lists, when it can be shown at all, whoever asks. */
@@ -679,7 +682,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     const m = await rawSeries(x.id, source);
     if (neverGenre(m.genre)) return null;
     if (!(await readable(m, source))) return null;
-    return { card: cardOf(m, source), names: [m.title] };
+    return { card: cardOf(m, source), names: [m.title], people: people(m) };
   }
 
   async function shelfOf(source: string, list: List): Promise<Shelf | null> {
@@ -767,7 +770,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       const s = shelf.items[i];
       i += 1;
       if (!wants(s.card, w)) continue;
-      found.push({ item: { kind: 'source', source: source.name, card: s.card }, names: s.names });
+      found.push({ item: { kind: 'source', source: source.name, card: s.card }, names: s.names, people: s.people ?? [] });
     }
     let next: string | null = null;
     if (i < shelf.items.length) next = `s${i}`;
@@ -953,7 +956,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       return (await pageList(chapter, source)).length;
     },
 
-    async page(chapterId, n) {
+    async page(chapterId, n, quiet = false) {
       const { chapter, source } = await chapterOfId(chapterId);
       return opts.disk.keep(`sw-page:${chapterId}:${n}`, async () => {
         const paths = await pageList(chapter, source);
@@ -967,7 +970,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
           if (n >= fresh.length) throw noPage();
           return picture(fresh[n]);
         }
-      });
+      }, quiet);
     },
 
     cover: coverOf,

@@ -1,10 +1,10 @@
-import { sameKind, type MangaFound, type MangaKind } from '@breader/shared/manga';
+import { sameSeries, type MangaFound, type MangaKind } from '@breader/shared/manga';
 import { KIND_NAME, mangadex, RATING_NAME, sources, STATUS_NAME } from '../../lib/mangadex';
 
 /*
  * The same series found in several places, or twice in one, is one entry: one card in Browse, its
- * copies listed on its page (MangaPage.tsx). Series are the same by name (the server keys them,
- * shared seriesName), when both are doujinshi or neither, and their kinds don't clash.
+ * copies listed on its page (MangaPage.tsx). Series are the same by name (shared sameSeries), when
+ * both are doujinshi or neither, and their kinds don't clash.
  */
 
 /** A series as one card: everywhere it was found, the first the one it opens at. */
@@ -23,19 +23,6 @@ export interface EntryView {
   /** A MangaDex cover comes in two sizes, a source's in one. */
   cover: { src: string; srcSet: string | undefined } | null;
   adult: boolean;
-}
-
-/** Whether this is the same series as those found: the same name, side works with side works, no clash of kinds. */
-export function sameSeries(found: MangaFound[], f: MangaFound): boolean {
-  if (found.length === 0) return false;
-  if (found[0].card.side !== f.card.side) return false;
-  for (const x of found) {
-    if (!sameKind(x.card.kind, f.card.kind)) return false;
-  }
-  for (const x of found) {
-    if (x.keys.some((k) => f.keys.includes(k))) return true;
-  }
-  return false;
 }
 
 /** What a search found, as cards: each series joins the first card it's the same series as, in order. */

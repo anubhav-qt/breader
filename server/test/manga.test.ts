@@ -661,6 +661,27 @@ describe('pages on disk', () => {
     expect(again.size.files).toBe(3);
   });
 
+  it('doesn’t count a quiet read as use, and says when it’s nearly full and when pages go', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'breader-disk-'));
+    const warn = vi.spyOn(log, 'warn');
+    const disk = new Disk(dir, 100 * 1024);
+    const page = (n: number) => { const b = new Uint8Array(24 * 1024); b.set(png(n)); return b; };
+    for (const n of [1, 2, 3]) await disk.put(`p${n}`, page(n));
+    await new Promise((done) => setTimeout(done, 5));
+    // The keeper looking at p1 leaves it the oldest.
+    expect(await disk.get('p1', true)).not.toBeNull();
+    await disk.put('p4', page(4));
+    expect(warn.mock.calls.map((c) => c[1])).toEqual([expect.stringContaining('nearly full')]);
+    await disk.put('p5', page(5));
+    expect(await disk.has('p1')).toBe(false);
+    expect(await disk.has('p2')).toBe(false);
+    expect(warn.mock.calls.map((c) => c[1])).toEqual([expect.stringContaining('nearly full'), expect.stringContaining('went')]);
+    // Once a day, not with every page.
+    await disk.put('p6', page(6));
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
   it('forgets a file that isn’t a picture any more', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'breader-disk-'));
     const disk = new Disk(dir, 1024 * 1024);

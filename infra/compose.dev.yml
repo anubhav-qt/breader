@@ -34,7 +34,7 @@ services:
     ports: ["9000:9000"]
     volumes: ["s3:/data"]
 
-  # The cache in front of MangaDex and the other manga sources. Only the servers reach it; to look
+  # The cache in front of MangaDex and the other manga sources, and of the AI's notes. Only the servers reach it; to look
   # inside: docker compose -f infra/compose.dev.yml exec redis redis-cli
   redis:
     image: redis:8-alpine

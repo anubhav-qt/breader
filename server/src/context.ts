@@ -3,6 +3,7 @@ import type { Auth } from './auth.ts';
 import type { Db } from './db/client.ts';
 import type { libraries } from './db/schema.ts';
 import type { Env } from './env.ts';
+import type { Store } from './lib/cache.ts';
 import type { Storage } from './lib/storage.ts';
 import type { Manga } from './manga/index.ts';
 import type { Panels } from './panels/index.ts';
@@ -23,6 +24,8 @@ export interface Deps {
   manga: Manga | null;
   /** Manga panels found with the panel model (panels/); null or missing where it's off, as on the fallback. */
   panels?: Panels | null;
+  /** Redis, where answers worth keeping outlast a restart (lib/cache.ts); null or missing without one, each then keeping a few in memory. */
+  redis?: Store | null;
 }
 
 export type LibraryRow = typeof libraries.$inferSelect;

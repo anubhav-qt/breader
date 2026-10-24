@@ -91,7 +91,7 @@ const seriesId = (s: SeriesAt) => s.found[0].card.id;
 /** A series in My manga, as found where it's read from: what its card knows, until its page has the rest. */
 function foundOf(b: BookRecord): MangaFound[] | null {
   const w = remoteOf(b.url);
-  const names = namesOf([b.title]);
+  const names = namesOf([b.title], b.author ? b.author.split(',') : []);
   if (w?.kind === 'mangadex') {
     const card = { id: w.series, title: b.title, cover: null, rating: 'safe' as const, status: null, year: null, langs: [], original: '', kind: 'manga' as const, authors: b.author ? [b.author] : [], side: false };
     return [{ kind: 'mangadex', source: 'MangaDex', card, ...names }];

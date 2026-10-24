@@ -1,4 +1,4 @@
-import type { MangaChapter, MangaKind, MangaSeries, SourceSeries } from '@breader/shared/manga';
+import { filledIn, numberOf, pickChapters, PLACE_PER, placeChapter, placeKey, type Fill, type MangaChapter, type MangaKind, type MangaSeries, type SourceSeries } from '@breader/shared/manga';
 import { api, ApiError, OfflineError } from '../lib/api';
 import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
@@ -125,82 +125,6 @@ export async function remoteCover(url: string | undefined): Promise<Blob | undef
   }
 }
 
-/** Its number: 12, 12.5; null for a oneshot or an extra. */
-export function numberOf(c: { chapter: string | null }): number | null {
-  const n = parseFloat(c.chapter ?? '');
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-const keyOf = (c: MangaChapter) => {
-  const n = numberOf(c);
-  return n !== null ? `n${n}` : `x${(c.title ?? '').trim().toLowerCase() || 'oneshot'}`;
-};
-
-/** By number, extras after, each as it came. */
-const ofSort = (a: MangaChapter, b: MangaChapter) => {
-  const x = numberOf(a);
-  const y = numberOf(b);
-  if (x !== null && y !== null) return x - y || a.at - b.at;
-  return x !== null ? -1 : y !== null ? 1 : a.at - b.at;
-};
-
-/**
- * One upload of each chapter, in order. Of several, one that can be read here before one read on
- * its publisher's site; then the one by the group picked (the copy it's read in), where it has
- * one; then the one by the group that made the most of the series, so names and style carry on
- * from chapter to chapter; then the newest.
- */
-export function pickChapters(all: MangaChapter[], prefer: string | null = null): MangaChapter[] {
-  const made = new Map<string, Set<string>>();
-  for (const c of all) for (const g of c.groups) {
-    if (!made.has(g.id)) made.set(g.id, new Set());
-    made.get(g.id)!.add(keyOf(c));
-  }
-  const weight = (c: MangaChapter) => Math.max(0, ...c.groups.map((g) => made.get(g.id)?.size ?? 0));
-  const preferred = (c: MangaChapter) => Number(c.groups.some((g) => g.id === prefer));
-  const better = (a: MangaChapter, b: MangaChapter) =>
-    Number(!a.external) - Number(!b.external) || preferred(a) - preferred(b) || weight(a) - weight(b) || a.at - b.at;
-  const best = new Map<string, MangaChapter>();
-  for (const c of all) {
-    const k = keyOf(c);
-    const had = best.get(k);
-    if (!had || better(c, had) > 0) best.set(k, c);
-  }
-  // Extras after the numbered chapters, as they came.
-  return [...best.values()].sort(ofSort);
-}
-
-/** A copy filling in, its chapters picked one of each (pickChapters), and the site it's on, to credit with them. */
-export interface Fill {
-  site: string;
-  chapters: MangaChapter[];
-}
-
-/**
- * A copy's chapters, picked one of each, with those it hasn't got (or only links to on its
- * publisher's site) from the next copies in turn, each one credited with its site. Only numbered
- * chapters fill in: extras go by their names, which sites write differently.
- */
-export function filledIn(own: MangaChapter[], fills: Fill[]): MangaChapter[] {
-  if (!fills.length) return own;
-  const at = new Map<string, MangaChapter>();
-  for (const c of own) at.set(keyOf(c), c);
-  let added = false;
-  for (const f of fills) {
-    for (const c of f.chapters) {
-      if (numberOf(c) === null || c.external) continue;
-      const k = keyOf(c);
-      const had = at.get(k);
-      if (had && !had.external) continue;
-      const groups = c.groups.length ? c.groups.map((g) => ({ ...g, name: `${g.name} · ${f.site}` })) : [{ id: f.site, name: f.site }];
-      at.set(k, { ...c, groups });
-      added = true;
-    }
-  }
-  if (!added) return own;
-  return [...at.values()].sort(ofSort);
-}
-
 /** "Ch. 12", or an unnumbered one's own name. */
 export const labelOf = (c: { chapter: string | null; title: string | null }, only = false) =>
   c.chapter ? `Ch. ${c.chapter}` : c.title?.trim() || (only ? 'Oneshot' : 'Extra');
@@ -225,9 +149,12 @@ async function kept<T>(key: string, get: () => Promise<T>): Promise<T> {
 /** A chapter on a Suwayomi source, by its id (sw:…), rather than MangaDex's. */
 const onSource = (id: string) => id.startsWith('sw:');
 
-/** A place's block: its chapter's number and its page in it (books/types.ts MangaBook.anchor). */
-const PER = 1000;
-const keyed = (n: number) => Math.round(n * 100);
+// The app and the server (manga/keeper.ts) pick a series' chapters and read its places alike.
+export { filledIn, numberOf, pickChapters, placeChapter, type Fill };
+
+/** A place's block: its chapter's number and its page in it (books/types.ts MangaBook.anchor, shared PLACE_PER). */
+const PER = PLACE_PER;
+const keyed = placeKey;
 const blockOf = (c: Pick<RemoteChapter, 'number'>, page = 0) => (c.number !== null && c.number <= 9999 ? (keyed(c.number) + 1) * PER + Math.min(PER - 1, page) : 0);
 
 /** The chapters picked, one after another: where each starts in the book, and the pages in all. */
@@ -244,11 +171,6 @@ export function laidOut(picked: MangaChapter[]): { chapters: RemoteChapter[]; to
 /** The start of a chapter, as a place the book finds again whatever's changed before it. */
 export const startOf = (c: Pick<RemoteChapter, 'number' | 'first'>): Position => ({ section: Math.max(0, c.first), block: blockOf(c), offset: 0 });
 
-/** The number of the chapter a place is in, or null when it names none. It's the same on every site. */
-export function placeChapter(pos: Position | undefined): number | null {
-  if (!pos || pos.block < PER) return null;
-  return (Math.floor(pos.block / PER) - 1) / 100;
-}
 
 /** The chapter a place names, by its number: or, gone, the next one after it. */
 function chapterAt<T extends Pick<RemoteChapter, 'number'>>(chapters: T[], pos: Position): T | undefined {

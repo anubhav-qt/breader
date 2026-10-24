@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { MangaCopies, MangaFound, MangaGroup } from '@breader/shared/manga';
+import { namesIn, sameSeries, type MangaCopies, type MangaFound, type MangaGroup } from '@breader/shared/manga';
 import { remoteUrl, sourceUrl } from '../../books/remote';
 import { mangadex, sources, type MangaPrefs } from '../../lib/mangadex';
-import { sameSeries } from './found';
 
 /*
  * A series' copies, for its page (MangaPage.tsx): everywhere it's found, by the same name looked
@@ -51,21 +50,6 @@ function copiesIn(found: MangaFound, lang: string): Promise<MangaCopies> {
     going.catch(() => measured.delete(key));
   }
   return going;
-}
-
-/** The most names a search takes. */
-const MOST_NAMES = 40;
-
-/** Every name the series goes by where it was found, keyed as the server keys them (seriesName). */
-function namesIn(found: MangaFound[]): string[] {
-  const out: string[] = [];
-  for (const f of found) {
-    for (const k of f.keys) {
-      if (k.length === 0 || k.length > 200) continue;
-      if (!out.includes(k)) out.push(k);
-    }
-  }
-  return out.slice(0, MOST_NAMES);
 }
 
 /**

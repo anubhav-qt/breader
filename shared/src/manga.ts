@@ -185,6 +185,13 @@ export type MangaFoundIn = { kind: 'mangadex'; source: string; card: MangaCard }
 /** The names a series goes by, as seriesName keys them, to tell it on another site. */
 export interface SeriesNames {
   keys: string[];
+  /**
+   * The main titles of its names that have a subtitle, keyed: "Frieren" of "Frieren: Beyond
+   * Journey's End". A series going by one of these is the same only if its people are too (sameNames).
+   */
+  stems: string[];
+  /** Who made it, as personKey keys them, when the place says. */
+  people: string[];
   /** An edition its title names (Color), or null. */
   edition: string | null;
 }
@@ -225,16 +232,77 @@ export function sameKind(a: MangaKind | null, b: MangaKind | null): boolean {
   return a === b;
 }
 
-/** Every name a series goes by, keyed; its edition as its first name says. */
-export function namesOf(titles: string[]): SeriesNames {
+/** Where a name's subtitle starts: "Frieren: Beyond…", "Frieren - Beyond…", "Frieren (Beyond…)". */
+const SUBTITLE = /\s*:\s*|\s+[-–—~]\s+|\s*[([]/;
+/** A main title this short ("Ao", "One") names too many series to go by. */
+const SHORT_STEM = 4;
+
+/**
+ * A person's name as every site spells it: its words in lower case, without accents, in any order
+ * (Yamada Kanehito, Kanehito YAMADA).
+ */
+export function personKey(name: string): string {
+  const parts = name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]+/gu);
+  if (!parts) return '';
+  return parts.sort().join(' ');
+}
+
+/** Every name a series goes by, keyed, and who made it; its edition as its first name says. */
+export function namesOf(titles: string[], people: string[] = []): SeriesNames {
   const keys: string[] = [];
+  const stems: string[] = [];
   for (const t of titles) {
     const { key } = seriesName(t);
     if (key && !keys.includes(key)) keys.push(key);
+    const cut = SUBTITLE.exec(t);
+    if (!cut || cut.index === 0) continue;
+    const stem = seriesName(t.slice(0, cut.index)).key;
+    if (stem.length >= SHORT_STEM && stem !== key && !stems.includes(stem)) stems.push(stem);
+  }
+  const who: string[] = [];
+  for (const p of people) {
+    const k = personKey(p);
+    if (k && !who.includes(k)) who.push(k);
   }
   let edition: string | null = null;
   if (titles.length > 0) edition = seriesName(titles[0]).edition;
-  return { keys, edition };
+  return { keys, stems: stems.filter((x) => !keys.includes(x)), people: who, edition };
+}
+
+/**
+ * Whether two places' series go by the same name: one of their names, or one's whole name the
+ * other's main title ("Frieren", "Frieren: Beyond Journey's End") when someone made both. Without
+ * that, "Attack on Titan" would be "Attack on Titan: Before the Fall" too.
+ */
+export function sameNames(a: SeriesNames, b: SeriesNames): boolean {
+  if (a.keys.some((k) => b.keys.includes(k))) return true;
+  if (!(a.people ?? []).some((p) => (b.people ?? []).includes(p))) return false;
+  return (a.stems ?? []).some((s) => b.keys.includes(s)) || (b.stems ?? []).some((s) => a.keys.includes(s));
+}
+
+/** Whether this is the same series as those found: the same name, side works with side works, no clash of kinds. One card in Browse. */
+export function sameSeries(found: MangaFound[], f: MangaFound): boolean {
+  if (found.length === 0) return false;
+  if (found[0].card.side !== f.card.side) return false;
+  for (const x of found) {
+    if (!sameKind(x.card.kind, f.card.kind)) return false;
+  }
+  return found.some((x) => sameNames(x, f));
+}
+
+/** The most names a search for a series' other copies takes (MangaSearchQuery names). */
+export const MOST_NAMES = 40;
+
+/** Every name a series goes by where it was found, main titles too, for a search for its other copies. */
+export function namesIn(found: MangaFound[]): string[] {
+  const out: string[] = [];
+  for (const f of found) {
+    for (const k of [...f.keys, ...(f.stems ?? [])]) {
+      if (k.length === 0 || k.length > 200) continue;
+      if (!out.includes(k)) out.push(k);
+    }
+  }
+  return out.slice(0, MOST_NAMES);
 }
 
 /**
@@ -279,4 +347,96 @@ export interface MangaCopies {
   /** How many chapters the series has in this place, so a copy with fewer can say so. */
   chapters: number;
   copies: MangaCopy[];
+}
+
+/*
+ * A series' chapters as Read lays them out (frontend books/remote.ts), here so the laptop keeping a
+ * library's manga on its disk ahead of its readers (server manga/keeper.ts) keeps the very uploads
+ * the app will open.
+ */
+
+/** Its number: 12, 12.5; null for a oneshot or an extra. */
+export function numberOf(c: { chapter: string | null }): number | null {
+  const n = parseFloat(c.chapter ?? '');
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+const keyOf = (c: MangaChapter) => {
+  const n = numberOf(c);
+  return n !== null ? `n${n}` : `x${(c.title ?? '').trim().toLowerCase() || 'oneshot'}`;
+};
+
+/** By number, extras after, each as it came. */
+const ofSort = (a: MangaChapter, b: MangaChapter) => {
+  const x = numberOf(a);
+  const y = numberOf(b);
+  if (x !== null && y !== null) return x - y || a.at - b.at;
+  return x !== null ? -1 : y !== null ? 1 : a.at - b.at;
+};
+
+/**
+ * One upload of each chapter, in order. Of several, one that can be read here before one read on
+ * its publisher's site; then the one by the group picked (the copy it's read in), where it has
+ * one; then the one by the group that made the most of the series, so names and style carry on
+ * from chapter to chapter; then the newest.
+ */
+export function pickChapters(all: MangaChapter[], prefer: string | null = null): MangaChapter[] {
+  const made = new Map<string, Set<string>>();
+  for (const c of all) for (const g of c.groups) {
+    if (!made.has(g.id)) made.set(g.id, new Set());
+    made.get(g.id)!.add(keyOf(c));
+  }
+  const weight = (c: MangaChapter) => Math.max(0, ...c.groups.map((g) => made.get(g.id)?.size ?? 0));
+  const preferred = (c: MangaChapter) => Number(c.groups.some((g) => g.id === prefer));
+  const better = (a: MangaChapter, b: MangaChapter) =>
+    Number(!a.external) - Number(!b.external) || preferred(a) - preferred(b) || weight(a) - weight(b) || a.at - b.at;
+  const best = new Map<string, MangaChapter>();
+  for (const c of all) {
+    const k = keyOf(c);
+    const had = best.get(k);
+    if (!had || better(c, had) > 0) best.set(k, c);
+  }
+  // Extras after the numbered chapters, as they came.
+  return [...best.values()].sort(ofSort);
+}
+
+/** A copy filling in, its chapters picked one of each (pickChapters), and the site it's on, to credit with them. */
+export interface Fill {
+  site: string;
+  chapters: MangaChapter[];
+}
+
+/**
+ * A copy's chapters, picked one of each, with those it hasn't got (or only links to on its
+ * publisher's site) from the next copies in turn, each one credited with its site. Only numbered
+ * chapters fill in: extras go by their names, which sites write differently.
+ */
+export function filledIn(own: MangaChapter[], fills: Fill[]): MangaChapter[] {
+  if (!fills.length) return own;
+  const at = new Map<string, MangaChapter>();
+  for (const c of own) at.set(keyOf(c), c);
+  let added = false;
+  for (const f of fills) {
+    for (const c of f.chapters) {
+      if (numberOf(c) === null || c.external) continue;
+      const k = keyOf(c);
+      const had = at.get(k);
+      if (had && !had.external) continue;
+      const groups = c.groups.length ? c.groups.map((g) => ({ ...g, name: `${g.name} · ${f.site}` })) : [{ id: f.site, name: f.site }];
+      at.set(k, { ...c, groups });
+      added = true;
+    }
+  }
+  if (!added) return own;
+  return [...at.values()].sort(ofSort);
+}
+
+/** A remote manga's place is kept by its chapter's number and its page in it: block = (number × 100 + 1) × PLACE_PER + page. */
+export const PLACE_PER = 1000;
+export const placeKey = (n: number) => Math.round(n * 100);
+
+/** The number of the chapter a place is in, or null when it names none. It's the same on every site. */
+export function placeChapter(pos: { block: number } | undefined | null): number | null {
+  if (!pos || pos.block < PLACE_PER) return null;
+  return (Math.floor(pos.block / PLACE_PER) - 1) / 100;
 }

@@ -120,6 +120,9 @@ engine holds about 150 MB per Normal voice while it reads, and about 1 GB while 
 held, letting go after ten quiet minutes. The heavy ones run at about twice real time on four
 threads of an M-series Mac; a slower processor may keep a reader waiting between sentences.
 `SPEECH_THREADS` caps the processor threads it uses (4, or one less than the laptop has).
+Each sentence's sound is kept in the `voices` volume, by a hash of its voice, speed and text, up to
+`SPEECH_CACHE_MB` (4096 by default), the ones used longest ago going first: a book read again, or
+on another phone, is spoken once. The sound is kept, though no text is.
 
 **Manga from MangaDex.** The Manga shelf's MangaDex tab finds series there and reads them
 through the laptop: MangaDex lets only its own site fetch its pages in a browser, so its API, its
@@ -127,16 +130,24 @@ covers and its pages all come through here. Anyone can look through it; pages ar
 signed in to a library, which a series joins as it's read. However many
 read at once, the laptop keeps to MangaDex's limits for its one address (four calls a second, 35
 chapters opened a minute), so a busy minute waits instead of getting the address blocked. Pages
-read lately are kept in the `manga` volume, up to `MANGA_CACHE_MB` (2048 by default), the ones
-used longest ago going first; none go to R2. Its answers (searches, series, chapter lists) are kept
-in the `redis` service (`REDIS_URL`), 1 GB at most, so a restart doesn't ask MangaDex for them
-again; if Redis stops answering, the API asks MangaDex instead and logs a warning. The API sets
+fetched are kept in the `manga` volume, up to `MANGA_CACHE_MB`: 102400 (100 GB) on the ThinkPad,
+enough that a page fetched once stays, and 2048 elsewhere. Only when it's full do the pages read
+longest ago go, never so many that the disk has under 5 GB free, and the API tells Sentry once a
+day when it's past 90% or has let pages go (TODO.md › Manga on an HDD is the plan for then); none go
+to R2. Its answers (searches, series, chapter lists), and the AI's notes on each
+book, are kept in the `redis` service (`REDIS_URL`), 1 GB at most, so a restart doesn't ask MangaDex
+or Supabase for them again; if Redis stops answering, the API asks MangaDex instead and logs a warning. The API sets
 Redis's room itself each time it connects, so a laptop on an older `compose.yml` gets the 1 GB too.
 What was asked lately is given straight away for three days, and fetched again behind the reader
 once it's old. Once a day at 04:00 in India (and soon after a start, if the last run was over a day
 ago), the API fetches the first 50 series of each of Browse's orders, with every kind on and with
 each kind alone, and everything their sheets ask for: other places, copies, chapters and covers.
-The status page shows it as **Manga prefetch**. Series for adults show only to readers who turn on
+The status page shows it as **Manga prefetch**. On the ThinkPad (`MACHINE=laptop`), every
+library's manga is kept on the SSD ahead of its readers too: every 15 minutes, each library's
+series, read most lately first, the chapter each is read to and the ten after it, one page at a
+time, the libraries taking turns a chapter each, and a series several read fetched once. Its reads
+don't count as a reader's, so a series only it has touched still looks unread. The status page shows it as **Manga on
+the SSD**; `MANGA_KEEP=true` or `false` turns it on or off elsewhere. Series for adults show only to readers who turn on
 **Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
 Render has it too, with Suwayomi's sources through the one on AWS (*Suwayomi on AWS for Render*),
 without the panel model: readers' devices find panels there, and panels kept serve all.

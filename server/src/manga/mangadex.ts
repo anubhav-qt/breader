@@ -137,8 +137,8 @@ export interface MangaDex {
   place(w: Wanted): Place;
   series(id: string, adult: boolean): Promise<MangaSeries>;
   chapters(id: string, lang: string): Promise<MangaChapters>;
-  /** Page n of a chapter (from 0), or its data-saver copy. */
-  page(chapterId: string, n: number, saver: boolean): Promise<Picture>;
+  /** Page n of a chapter (from 0), or its data-saver copy. quiet: not counted as read (disk.ts). */
+  page(chapterId: string, n: number, saver: boolean, quiet?: boolean): Promise<Picture>;
   /** A series' cover at a width; early: the prefetch's (covers.ts). */
   cover(mangaId: string, file: string, size: '256' | '512', early?: number): Promise<Cover>;
   /** Checks Popular's and Updated's first screens ahead of readers. */
@@ -624,7 +624,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
   async function foundOf(m: RawManga, lang: string | undefined): Promise<Found | null> {
     const c = await readableCard(m, lang);
     if (!c) return null;
-    return { item: { kind: 'mangadex', source: 'MangaDex', card: c }, names: namesOf(m) };
+    return { item: { kind: 'mangadex', source: 'MangaDex', card: c }, names: namesOf(m), people: [...names(m, 'author'), ...names(m, 'artist')] };
   }
 
   /** A search's next lot from MangaDex, from that far into its results. */
@@ -685,7 +685,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       return feed(id, lang);
     },
 
-    async page(chapterId, n, saver) {
+    async page(chapterId, n, saver, quiet = false) {
       await allowChapter(chapterId);
       return disk.keep(`page:${chapterId}:${saver ? 's' : 'd'}:${n}`, async () => {
         const from = async (fresh: boolean) => {
@@ -702,7 +702,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
           // Its server stopped answering, or the address expired: MangaDex gives another.
           return from(true);
         }
-      });
+      }, quiet);
     },
 
     async cover(mangaId, file, size, early) {

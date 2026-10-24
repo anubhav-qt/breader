@@ -111,14 +111,19 @@ export function syncRoutes(deps: Deps) {
         const [lib] = await tx.select({ rev: libraries.rev, purgedRev: libraries.purgedRev }).from(libraries).where(eq(libraries.id, libraryId));
         const full = since > 0 && (since < lib.purgedRev || since > lib.rev);
         const from = full ? 0 : since;
-        const items = await tx.select().from(libraryItems).where(and(eq(libraryItems.libraryId, libraryId), gt(libraryItems.rev, from)));
-        const reads = await tx.select().from(readingStates).where(and(eq(readingStates.libraryId, libraryId), gt(readingStates.rev, from)));
+        // Most pulls (every two minutes, on focus) find the library as the browser left it: nothing
+        // has a revision past `from`, so only what changes elsewhere is asked for.
+        const same = from > 0 && from === lib.rev;
+        const items = same ? [] : await tx.select().from(libraryItems).where(and(eq(libraryItems.libraryId, libraryId), gt(libraryItems.rev, from)));
+        const reads = same ? [] : await tx.select().from(readingStates).where(and(eq(readingStates.libraryId, libraryId), gt(readingStates.rev, from)));
         const lapsed = (await tx.execute<{ id: string }>(lapsedIn(libraryId))).rows.map((r) => r.id);
-        const elsewhere = await aiElsewhere(tx, libraryId, from);
-        const [settings] = await tx
-          .select({ prefs: librarySettings.prefs })
-          .from(librarySettings)
-          .where(and(eq(librarySettings.libraryId, libraryId), gt(librarySettings.rev, from)));
+        const elsewhere = same ? new Set<string>() : await aiElsewhere(tx, libraryId, from);
+        const [settings] = same
+          ? []
+          : await tx
+            .select({ prefs: librarySettings.prefs })
+            .from(librarySettings)
+            .where(and(eq(librarySettings.libraryId, libraryId), gt(librarySettings.rev, from)));
         return {
           rev: lib.rev,
           books: items.map((i) => ({

@@ -1,4 +1,4 @@
-import { MANGA_KINDS, sameKind, type MangaChapter, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared';
+import { MANGA_KINDS, namesIn, sameSeries, type MangaChapter, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared';
 import { freshly } from '../lib/cache.ts';
 import { log } from '../log.ts';
 import { FRESH_ANYWAY, FRESH_FOR } from './covers.ts';
@@ -26,8 +26,6 @@ const FIRST = 100;
 const MOST_LOTS = 20;
 /** The other places a series' sheet looks for it in: the first three lots of a search for its title (frontend copies.ts). */
 const PLACE_LOTS = 3;
-/** The most names that search takes. */
-const MOST_NAMES = 40;
 const LANG = 'en';
 /** Between series, so a reader's calls never wait long behind these. */
 const BREATHER = 1_000;
@@ -47,16 +45,6 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     const t = setTimeout(done, ms);
     signal?.addEventListener('abort', () => { clearTimeout(t); done(); }, { once: true });
   });
-
-/** The same series as these, as the app tells it (frontend found.ts): one card in Browse. */
-function sameSeries(found: MangaFound[], f: MangaFound): boolean {
-  if (found.length === 0) return false;
-  if (found[0].card.side !== f.card.side) return false;
-  for (const x of found) {
-    if (!sameKind(x.card.kind, f.card.kind)) return false;
-  }
-  return found.some((x) => x.keys.some((k) => f.keys.includes(k)));
-}
 
 /** What a search found, as Browse's cards: each series with every place it was found in. */
 function cardsOf(items: MangaFound[]): MangaFound[][] {
@@ -86,17 +74,6 @@ async function list(manga: Manga, sort: MangaSort, kinds: MangaKind[], signal?: 
   return cardsOf(items).slice(0, FIRST);
 }
 
-/** Every name the series goes by where it was found, as its sheet sends them (frontend copies.ts). */
-function namesIn(found: MangaFound[]): string[] {
-  const out: string[] = [];
-  for (const f of found) {
-    for (const k of f.keys) {
-      if (k.length === 0 || k.length > 200) continue;
-      if (!out.includes(k)) out.push(k);
-    }
-  }
-  return out.slice(0, MOST_NAMES);
-}
 
 /**
  * What a series' sheet asks for, its covers kept for freshFor (covers.ts). Returns how many places

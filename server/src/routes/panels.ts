@@ -4,6 +4,7 @@ import { streamSSE } from 'hono/streaming';
 import { MangaId, MangaPageQuery, PanelSeatAsk, PanelsOffer, SourceId, type ChapterPanels, type PagePanels, type PanelSeat, type PanelsOffered, type PanelsState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, readJson, signedOut } from '../lib/errors.ts';
+import { ownerCheck } from '../lib/owner.ts';
 import { readSession } from '../lib/session.ts';
 import { makeKept } from '../panels/kept.ts';
 
@@ -43,11 +44,7 @@ export function panelRoutes(deps: Deps) {
     return s.libraryId;
   };
   /** The owner's accounts, as for the server voice: they always have a seat, and their devices' panels are kept at once. */
-  const owner = async (c: Context<AppEnv>) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers });
-    const user = session?.user;
-    return !!user && user.emailVerified && env.SPEECH_EMAILS.includes(user.email.toLowerCase());
-  };
+  const owner = ownerCheck(env, auth);
 
   /** Where a page is kept (its chapter, either size of it), and how to fetch its picture. */
   const pageOf = (c: Context<AppEnv>) => {

@@ -3,23 +3,20 @@ import { Hono } from 'hono';
 import { SpeechReadyRequest, SpeechRequest, type SpeechReady, type SpeechState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
+import { ownerCheck } from '../lib/owner.ts';
 import { log } from '../log.ts';
 
 /*
  * The server voice (src/speech/), for the accounts in SPEECH_EMAILS once their address is
  * confirmed: a phone that can't run a voice sends a sentence and gets its sound back. The text
- * isn't kept or logged. Only the laptop speaks; the fallback answers that it can't.
+ * isn't kept or logged; the sound is, by a hash of it (speech/index.ts), so it's spoken once. Only the laptop speaks; the fallback answers that it can't.
  */
 export function speechRoutes(deps: Deps) {
   const { env, auth, speech } = deps;
   const r = new Hono<AppEnv>();
 
   /** Whether the logged-in reader may use it. */
-  const allowed = async (c: Context<AppEnv>) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers });
-    const user = session?.user;
-    return !!user && user.emailVerified && env.SPEECH_EMAILS.includes(user.email.toLowerCase());
-  };
+  const allowed = ownerCheck(env, auth);
 
   const gate = async (c: Context<AppEnv>, voice: string) => {
     if (!speech) throw new ApiError(503, 'speech_off', 'The server voice isn’t reading aloud just now. Turn off Read on the server to read with this device’s voice.');

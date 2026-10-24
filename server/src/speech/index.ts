@@ -1,7 +1,9 @@
 import { availableParallelism } from 'node:os';
+import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { Env } from '../env.ts';
 import { log } from '../log.ts';
+import { Disk } from '../manga/disk.ts';
 import { makeFiles, VOICES } from './files.ts';
 import type { Reply, Request } from './worker.ts';
 
@@ -10,6 +12,12 @@ import type { Reply, Request } from './worker.ts';
  * at a time, as the app asks (routes/speech.ts). The voices' files download the first time each is
  * wanted (files.ts), and the engine runs in a worker thread (worker.ts), started when it's first
  * needed and let go after ten quiet minutes, with the memory it holds.
+ *
+ * What it says is kept on the laptop's disk, up to SPEECH_CACHE_MB, the sentences heard longest ago
+ * going first, so a sentence heard again (a page read twice, a rewind, a second reader of the same
+ * book) is read from disk instead of spoken again, and asked once however many want it at once.
+ * A sentence is kept by a hash of its voice, speed and text, so the files say nothing of what's in
+ * them by name.
  */
 
 export interface Said {
@@ -31,11 +39,31 @@ export interface Speech {
 }
 
 const IDLE_MS = 10 * 60_000;
+/** A kept sentence: its samples and rate, then its MP3. */
+const HEAD = 8;
+
+/** A kept sentence's bytes, while they still start with an MP3 frame. */
+const saidType = (b: Uint8Array) => (b.length > HEAD + 1 && b[HEAD] === 0xff && (b[HEAD + 1] & 0xe0) === 0xe0 ? 'audio/mpeg' : null);
+
+function pack(s: Said): Uint8Array {
+  const out = new Uint8Array(HEAD + s.mp3.byteLength);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, s.samples);
+  view.setUint32(4, s.rate);
+  out.set(s.mp3, HEAD);
+  return out;
+}
+
+function unpack(b: Uint8Array): Said {
+  const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  return { samples: view.getUint32(0), rate: view.getUint32(4), mp3: b.subarray(HEAD) };
+}
 /** Sentences waiting beyond this many are turned away: something is asking far faster than it listens. */
 const MOST_WAITING = 24;
 
 export function makeSpeech(env: Env): Speech {
   const files = makeFiles(env.SPEECH_DIR);
+  const said = new Disk(join(env.SPEECH_DIR, 'said'), env.SPEECH_CACHE_MB * 1024 * 1024, saidType);
   const threads = env.SPEECH_THREADS ?? Math.max(1, Math.min(4, availableParallelism() - 1));
 
   let worker: Worker | null = null;
@@ -114,9 +142,14 @@ export function makeSpeech(env: Env): Speech {
       }
     },
     async say(voice, text, speed) {
-      const f = await files.ensure(voice);
-      const r = await call({ type: 'say', key: voice, files: f, text, speed });
-      return { mp3: r.mp3!, samples: r.samples!, rate: r.rate! };
+      const kept = await said.keep(`${voice}
+${speed}
+${text}`, async () => {
+        const f = await files.ensure(voice);
+        const r = await call({ type: 'say', key: voice, files: f, text, speed });
+        return { data: pack({ mp3: r.mp3!, samples: r.samples!, rate: r.rate! }), type: 'audio/mpeg' };
+      });
+      return unpack(kept.data);
     },
     async close() {
       clearTimeout(idle);

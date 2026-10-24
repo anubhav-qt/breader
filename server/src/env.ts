@@ -98,6 +98,11 @@ const Env = z.object({
   /** Processor threads the voice may use. Defaults to 4, or fewer on a smaller machine. */
   SPEECH_THREADS: z.coerce.number().int().min(1).max(16).optional(),
   /**
+   * Sentences it has said, kept in SPEECH_DIR/said up to this many MB (about 22 MB an hour of
+   * listening), the ones heard longest ago going first, so one heard again isn't spoken again.
+   */
+  SPEECH_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).default(4096),
+  /**
    * Manga panels found with the panel model (src/panels/), for any reader while there's a seat:
    * where the model is, if not in the image; the processor threads each worker may use (4, or
    * fewer on a smaller machine); how many workers, each with the model; and how many readers it
@@ -112,11 +117,18 @@ const Env = z.object({
 
   /**
    * Manga through the server (src/manga/): on unless this says false. Pages read are kept in
-   * MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used longest ago going first.
+   * MANGA_CACHE_DIR, up to MANGA_CACHE_MB, the pages used longest ago going first, and never so
+   * many that the disk has less than a few GB left: 100 GB by default on the ThinkPad (onThinkPad),
+   * enough that a page fetched once stays, and 2 GB elsewhere.
    */
   MANGADEX: bool.default(true),
   MANGA_CACHE_DIR: z.string().default('/data/manga'),
-  MANGA_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).default(2048),
+  MANGA_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).optional(),
+  /**
+   * Keeps every library's manga on the disk ahead of its readers (manga/keeper.ts): the chapter
+   * each series is read to and the next ones. On by default on the ThinkPad only.
+   */
+  MANGA_KEEP: bool.optional(),
   /**
    * Redis (redis://redis:6379), where MangaDex's answers are kept so they outlast a restart.
    * Without it they're kept in memory. Redis not answering never stops a reader.
@@ -131,6 +143,16 @@ const Env = z.object({
 });
 
 export type Env = z.infer<typeof Env>;
+
+/**
+ * The ThinkPad, in production: the laptop that is MACHINE=laptop (the backup on Oracle is
+ * MACHINE=oracle, and Render the fallback). Its SSD has the room to keep manga by the tens of GB.
+ */
+export const onThinkPad = (env: Pick<Env, 'ROLE' | 'MACHINE' | 'NODE_ENV'>) =>
+  env.ROLE === 'laptop' && env.MACHINE === 'laptop' && env.NODE_ENV === 'production';
+
+/** Manga pages kept on disk, in MB: MANGA_CACHE_MB, or 100 GB on the ThinkPad and 2 GB elsewhere. */
+export const mangaCacheMb = (env: Env) => env.MANGA_CACHE_MB ?? (onThinkPad(env) ? 102_400 : 2048);
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   // A blank line in .env (HEARTBEAT_URL=) means "not set".

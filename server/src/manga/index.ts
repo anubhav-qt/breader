@@ -23,7 +23,8 @@ export interface Manga {
   /** A MangaDex series, its chapters in a language, a chapter's page (from 0) and a cover. */
   series(id: string, adult: boolean): Promise<MangaSeries>;
   chapters(id: string, lang: string): Promise<MangaChapters>;
-  page(chapterId: string, n: number, saver: boolean): Promise<Picture>;
+  /** quiet: kept on disk without counting as read (disk.ts), for the keeper. */
+  page(chapterId: string, n: number, saver: boolean, quiet?: boolean): Promise<Picture>;
   /** early: fetched again that much before it's due, and waited for (covers.ts). */
   cover(mangaId: string, file: string, size: '256' | '512', early?: number): Promise<Cover>;
   /** A series on one of Suwayomi's sources (SourceId: sw:<source>:<address>), and the like. */
@@ -34,7 +35,7 @@ export interface Manga {
   coversFor(id: string, freshFor: number): Promise<void>;
   /** How many pages a chapter of a source has. */
   sourcePages(chapterId: string): Promise<number>;
-  sourcePage(chapterId: string, n: number): Promise<Picture>;
+  sourcePage(chapterId: string, n: number, quiet?: boolean): Promise<Picture>;
   /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:…) in its own. */
   copies(id: string, lang: string): Promise<MangaCopies>;
   /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi. */
@@ -164,7 +165,7 @@ export function makeManga(opts: MangaOptions): Manga {
 
     series: (id, adult) => dex.series(id, adult),
     chapters: (id, lang) => dex.chapters(id, lang),
-    page: (chapterId, n, saver) => dex.page(chapterId, n, saver),
+    page: (chapterId, n, saver, quiet) => dex.page(chapterId, n, saver, quiet),
     cover: (mangaId, file, size, early) => dex.cover(mangaId, file, size, early),
     coversFor: (id, freshFor) => covers.listed(id, freshFor),
     async warm() {
@@ -176,7 +177,7 @@ export function makeManga(opts: MangaOptions): Manga {
     sourceChapters: (id) => onSuwayomi().chapters(id),
     sourceCover: (id, size, early) => onSuwayomi().cover(id, Number(size) as CoverWidth, early),
     sourcePages: (chapterId) => onSuwayomi().pages(chapterId),
-    sourcePage: (chapterId, page) => onSuwayomi().page(chapterId, page),
+    sourcePage: (chapterId, page, quiet) => onSuwayomi().page(chapterId, page, quiet),
 
     copies: (id, lang) => copyMemo.get(`${id}:${lang}`, () => measureCopies(id, lang)),
   };

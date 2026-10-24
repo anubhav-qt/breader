@@ -2,11 +2,11 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { newLibraryKey, seriesName, type MangaFound } from '@breader/shared';
+import { namesIn, namesOf, newLibraryKey, sameSeries, seriesName, type MangaFound } from '@breader/shared';
 import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app.ts';
 import type { Store } from '../src/lib/cache.ts';
-import { find, namedLike, rank, type Found, type Place } from '../src/manga/find.ts';
+import { find, namedLike, rank, wantedName, type Found, type Place } from '../src/manga/find.ts';
 import { makeManga } from '../src/manga/index.ts';
 import { chapterId, chapterTitle, seriesId, suwayomiAddress, tidy } from '../src/manga/suwayomi.ts';
 import { browser, deps } from './helpers.ts';
@@ -644,9 +644,10 @@ describe('a series’ copies', () => {
 });
 
 describe('how a search ranks', () => {
-  const found = (source: string, title: string, side = false, names = [title]): Found => ({
+  const found = (source: string, title: string, side = false, names = [title], people?: string[]): Found => ({
     item: { kind: 'source', source, card: { id: `sw:${title.length}`, title, cover: null, status: null, adult: false, side, kind: null } },
     names,
+    ...(people ? { people } : {}),
   });
   const place = (key: string, name: string, lot: Place['lot']): Place => ({ key, name, lot });
   const titlesOf = (items: MangaFound[]) => items.map((x) => `${x.source}: ${x.card.title}`);
@@ -670,6 +671,31 @@ describe('how a search ranks', () => {
     ]);
     expect(titlesOf(items)).toEqual(['MangaDex: Sousou no Frieren', 'Asura Scans: Frieren: Beyond Journey’s End', 'Asura Scans: Other']);
     expect(seriesName('Omniscient Reader’s Viewpoint').key).toBe(seriesName("OMNISCIENT  reader's viewpoint!").key);
+  });
+
+  it('tells it by its main title alone when the same people made it, and not when they didn’t or aren’t known', () => {
+    const md = place('md', 'MangaDex', async () => ({ found: [], next: null }));
+    const sw = place('sw1', 'Weeb Central', async () => ({ found: [], next: null }));
+    const frieren = found('MangaDex', 'Sousou no Frieren', false, ['Sousou no Frieren', "Frieren: Beyond Journey's End"], ['Yamada Kanehito', 'Abe Tsukasa']);
+    const items = rank(undefined, [
+      { place: md, found: [frieren, found('MangaDex', 'Attack on Titan: Before the Fall', false, ['Attack on Titan: Before the Fall'], ['Suzukaze Ryou'])] },
+      { place: sw, found: [found('Weeb Central', 'Frieren', false, ['Frieren'], ['Kanehito YAMADA']), found('Weeb Central', 'Attack on Titan', false, ['Attack on Titan'], ['Isayama Hajime']), found('Weeb Central', 'Sousou', false, ['Sousou'])] },
+    ]);
+    expect(titlesOf(items)).toEqual(['MangaDex: Sousou no Frieren', 'Weeb Central: Frieren', 'MangaDex: Attack on Titan: Before the Fall', 'Weeb Central: Attack on Titan', 'Weeb Central: Sousou']);
+    // Unknown people: a main title alone isn't enough.
+    const alone = rank(undefined, [{ place: md, found: [found('MangaDex', 'Sousou no Frieren', false, ["Frieren: Beyond Journey's End"])] }, { place: sw, found: [found('Weeb Central', 'Frieren')] }]);
+    expect(alone.map((x) => x.source)).toEqual(['MangaDex', 'Weeb Central']);
+    expect(sameSeries([alone[0]], alone[1])).toBe(false);
+    expect(sameSeries([items[0]], items[1])).toBe(true);
+    expect(sameSeries([items[2]], items[3])).toBe(false);
+  });
+
+  it('looks for a series’ other copies by its main titles too', () => {
+    expect(wantedName(['Frieren'], { names: ['sousounofrieren', 'frieren'] } as never)).toBe(true);
+    expect(wantedName(["Frieren: Beyond Journey's End"], { names: ['frieren'] } as never)).toBe(true);
+    expect(wantedName(['Monster'], { names: ['frieren'] } as never)).toBe(false);
+    const md = { kind: 'mangadex', ...namesOf(['Sousou no Frieren', "Frieren: Beyond Journey's End"]) } as MangaFound;
+    expect(namesIn([md])).toEqual(['sosonofrieren', 'frierenbeyondjorneysend', 'frieren']);
   });
 
   it('asks a late place again with the next lot, and leaves out one that failed', async () => {

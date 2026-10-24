@@ -27,3 +27,10 @@
 - [ ] MangaDex: picking a chapter's group by hand; whether a series for adults in My manga hides while 18+ is off; covers on another device need the laptop on.
 - [ ] Your own servers: how many chapters a Suwayomi series opens at a time (now the one before and seven after); its UI login (only no login or a basic one now); reading an OPDS book page by page (its page streaming) before or instead of downloading it; the catalog on the Books shelf too.
 - [ ] Limits: a key library's 100 MB a file, and the header wrapping on the narrowest phones (320px).
+
+## Manga on an HDD
+- [ ] Add a hard disk to the ThinkPad for manga no one is reading, so the SSD (100 GB of pages, `MANGA_CACHE_MB`) never has to let a page go.
+  - A whole series moves to the HDD once no one has opened any of its pages for 30 days. Its file times are when a reader last used them (server `manga/disk.ts`); the keeper's reads are quiet and don't count.
+  - Asked for again, it's read from the HDD, copied back to the SSD (the whole series, in the background), and served from there.
+  - Pages are kept by a hash of `page:<chapter>:…`, so the move needs a series → pages index first (or keys that start with the series).
+  - The server already warns in Sentry when the SSD cache is nearly full or has to drop pages: that's the cue to do this.

@@ -54,7 +54,18 @@ describe('the same series by name', () => {
   });
 
   it('keys every name once, and takes the edition from the first', () => {
-    expect(namesOf(['Haikyu!! (Color)', 'Haikyuu!!', 'ハイキュー!!'])).toEqual({ keys: ['haikyu', 'ハイキュー'], edition: 'Color' });
+    expect(namesOf(['Haikyu!! (Color)', 'Haikyuu!!', 'ハイキュー!!'])).toEqual({ keys: ['haikyu', 'ハイキュー'], stems: [], people: [], edition: 'Color' });
+  });
+
+  it('keys main titles before a subtitle, long enough to say something, and people in any order', () => {
+    expect(namesOf(["Frieren: Beyond Journey's End", 'Frieren - Remnants of the Departed', 'Ao: No Exorcist', 'Frieren'], ['Kanehito Yamada', 'YAMADA kanehito', 'Abe Tsukasa'])).toEqual({
+      keys: ['frierenbeyondjorneysend', 'frierenremnantsofthedeparted', 'aonoexorcist', 'frieren'],
+      stems: [],
+      people: ['kanehito yamada', 'abe tsukasa'],
+      edition: null,
+    });
+    expect(namesOf(["Frieren: Beyond Journey's End"]).stems).toEqual(['frieren']);
+    expect(namesOf(['Sousou no Frieren (Official)']).stems).toEqual(['sosonofrieren']);
   });
 });
 

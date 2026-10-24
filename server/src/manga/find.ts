@@ -1,4 +1,4 @@
-import { MANGA_KINDS, namesOf, sameKind, seriesName, type MangaFound, type MangaFoundIn, type MangaKind, type MangaSearchResult, type MangaSort } from '@breader/shared';
+import { MANGA_KINDS, namesOf, sameKind, sameNames, seriesName, type MangaFound, type MangaFoundIn, type MangaKind, type MangaSearchResult, type MangaSort } from '@breader/shared';
 import { log } from '../log.ts';
 
 /*
@@ -49,10 +49,9 @@ export function wantedKind(kind: MangaKind | null, w: Wanted): boolean {
 /** A series going by these names is one a search wants: any, unless it asked for some names only. */
 export function wantedName(titles: string[], w: Wanted): boolean {
   if (!w.names) return true;
-  for (const t of titles) {
-    if (w.names.includes(seriesName(t).key)) return true;
-  }
-  return false;
+  // Its main titles too: "Frieren" is looked for as "Frieren: Beyond Journey's End" (sameNames).
+  const { keys, stems } = namesOf(titles);
+  return [...keys, ...stems].some((k) => w.names!.includes(k));
 }
 
 /** Words this short ("no", "wa") say too little on their own: a search of only these goes by its whole name. */
@@ -94,6 +93,8 @@ export function namedLike(q: string, names: Iterable<string>): boolean {
 export interface Found {
   item: MangaFoundIn;
   names: string[];
+  /** Who made it, when the place says: one name the other's main title is the same series only by them. */
+  people?: string[];
 }
 
 export interface Lot {
@@ -225,6 +226,8 @@ interface Group {
   /** The first known kind of its series: one of another kind is another series. */
   kind: MangaKind | null;
   names: Set<string>;
+  stems: Set<string>;
+  people: Set<string>;
   places: Set<string>;
   /** Its first series' turn. */
   first: number;
@@ -247,17 +250,20 @@ export function rank(q: string | undefined, lots: Array<{ place: Place; found: F
 
   const groups: Group[] = [];
   for (const turn of turns) {
-    const item: MangaFound = { ...turn.found.item, ...namesOf(turn.found.names) };
+    const item: MangaFound = { ...turn.found.item, ...namesOf(turn.found.names, turn.found.people) };
     const side = item.card.side;
     const kind = item.card.kind;
     const names = item.keys;
-    let group = groups.find((g) => g.side === side && sameKind(g.kind, kind) && names.some((n) => g.names.has(n)));
+    const named = (g: Group) => sameNames({ keys: [...g.names], stems: [...g.stems], people: [...g.people], edition: null }, item);
+    let group = groups.find((g) => g.side === side && sameKind(g.kind, kind) && named(g));
     if (!group) {
-      group = { side, kind, names: new Set(), places: new Set(), first: turn.at, items: [] };
+      group = { side, kind, names: new Set(), stems: new Set(), people: new Set(), places: new Set(), first: turn.at, items: [] };
       groups.push(group);
     }
     if (group.kind === null) group.kind = kind;
     for (const n of names) group.names.add(n);
+    for (const n of item.stems) group.stems.add(n);
+    for (const n of item.people) group.people.add(n);
     group.places.add(turn.place);
     group.items.push(item);
   }
