@@ -1,6 +1,6 @@
 /* Between the reader's own library and the shared ones (LibrarySwitch), at the header's start: two
    halves of one width, whatever they're called, the chosen one lit. A long name ends in an ellipsis. */
-.lsw { flex: none; display: flex; padding: 3px; border-radius: 12px; background: var(--fill); }
+.lsw { flex: none; display: flex; padding: 3px; border-radius: 12px; background: var(--fill); isolation: isolate; }
 .lsw-tab {
   position: relative;
   display: flex;
@@ -17,7 +17,8 @@
 }
 .lsw-tab:hover, .lsw-tab[aria-selected="true"] { color: var(--ink); }
 .lsw-name { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.lsw-on { position: absolute; inset: 0; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
+/* Under both halves' names as it slides from one to the other, over the pill. */
+.lsw-on { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
 .le-btn.is-open { background: var(--fill); }
 @media (max-width: 720px) {
   .lsw-tab { width: 100px; }
@@ -30,7 +31,7 @@
    the end. At the header's end on wide screens, a little apart from the icons either side of it.
    The bar for books picked together (BulkBar) takes its place, in the same pill. */
 .ls { position: relative; min-width: 0; margin: 0 4px; }
-.ls-seg { display: flex; align-items: center; min-width: 0; padding: 3px; border-radius: 12px; background: var(--fill); }
+.ls-seg { display: flex; align-items: center; min-width: 0; padding: 3px; border-radius: 12px; background: var(--fill); isolation: isolate; }
 .ls-tabs { display: flex; min-width: 0; }
 .ls-tab {
   position: relative;
@@ -50,7 +51,7 @@
 .ls-tabs .ls-tab { flex: none; width: 112px; justify-content: center; }
 .ls-tab:hover, .ls-tab[aria-checked="true"] { color: var(--ink); }
 .ls-tab .ls-name { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ls-on { position: absolute; inset: 0; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
+.ls-on { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
 /* The + button, filled, as tall as the halves: Add on the Books shelf and Browse on the Manga one,
    one width, so switching shelves leaves the switch as it was. */
 .ls-plus {

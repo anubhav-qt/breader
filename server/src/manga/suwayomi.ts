@@ -312,17 +312,21 @@ function about(m: RawSeries): string {
 
 /**
  * A chapter's name without the number it starts with, which the reader shows already: "Ch. 4 - Message"
- * is "Message", and "Chapter 4" is no title at all. A name that's only its number is none.
+ * is "Message", and "Chapter 4" is no title at all. A name that's only its number is none, and so
+ * is a site's stand-in for one it doesn't have ("Unknown", "N/A").
  */
+const NO_TITLE = /^(?:unknown|untitled|n\/?a|none|null|-+)$/i;
+
 export function chapterTitle(name: string, n: number): string | null {
   const t = name.trim();
+  if (NO_TITLE.test(t)) return null;
   if (n < 0) return t || null;
   const num = String(n).replace('.', '\\.');
   const lead = new RegExp(`^(?:vol(?:ume)?\\.?\\s*\\d+\\s*[-:,.]?\\s*)?(?:ch(?:apter|ap)?|ep(?:isode)?)\\.?\\s*0*${num}(?!\\d|\\.\\d)\\s*(?:[-:|.\\u2013\\u2014]\\s*)?`, 'i');
   const only = new RegExp(`^0*${num}$`);
   if (only.test(t)) return null;
   const rest = t.replace(lead, '').trim();
-  return rest || null;
+  return rest && !NO_TITLE.test(rest) ? rest : null;
 }
 
 /** A chapter of a series, by the series' id. */

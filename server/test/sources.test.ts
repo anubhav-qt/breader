@@ -927,6 +927,13 @@ describe('a source chapter’s title', () => {
     expect(chapterTitle('Prologue', -1)).toBe('Prologue');
     expect(chapterTitle('  ', -1)).toBeNull();
   });
+
+  it('drops a site’s stand-in for a title it doesn’t have', () => {
+    expect(chapterTitle('Unknown', 3)).toBeNull();
+    expect(chapterTitle('Ch. 3 - Unknown', 3)).toBeNull();
+    expect(chapterTitle('N/A', -1)).toBeNull();
+    expect(chapterTitle('Unknown Soldier', 3)).toBe('Unknown Soldier');
+  });
 });
 
 describe('a source’s chapters, tidied', () => {
