@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { Modal } from '../../components/Modal';
 import { IconChevron, IconKey, IconUpload } from '../../components/icons';
-import { logIn, logInWithGoogle, loginError, refreshAccount, requestReset, resetPassword, signUp } from '../../lib/account';
+import { checkGoogle, logIn, logInWithGoogle, loginError, refreshAccount, requestReset, resetPassword, signUp } from '../../lib/account';
 import { springs } from '../../lib/springs';
 import '../add/add.css';
 import './account.css';
@@ -74,6 +74,11 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
   const running = useRef(false);
   const latest = useRef({ enter, onDone });
   latest.current = { enter, onDone };
+
+  // The server couldn't say whether it logs in with Google when the app opened: asked again.
+  useEffect(() => {
+    if (!google) void checkGoogle();
+  }, [google]);
 
   const go = (next: Step) => {
     setStep(next);

@@ -1,5 +1,5 @@
 import type { AiAccount } from '@breader/shared/accounts';
-import { STEPS, type Admin, type Job, type Marker, type MarkerSettings, type PartState, type Snapshot, type Status, type Task, type Waiting, type Working } from './types';
+import { STEPS, type Admin, type Job, type Marker, type MarkerSettings, type PartState, type ReaderLine, type Snapshot, type Status, type Task, type Waiting, type Working } from './types';
 
 /*
  * A pretend server, in the page (admin/?demo): the marker working through its books, step by step and
@@ -159,11 +159,16 @@ function markerFor(scene: Scene): Marker | null {
     { id: 'b03', title: book('b03').title, task: 'marks', waitsFor: 'Vol. 10 first: the series goes in order' },
     { id: 'b08', title: book('b08').title, task: 'music' },
     { id: 'b09', title: book('b09').title, task: 'music' },
+    { id: 'b10', title: book('b10').title, task: 'notes', first: ['ana@example.com'] },
     { id: 'b07', title: book('b07').title, task: 'notes' },
-    { id: 'b10', title: book('b10').title, task: 'notes' },
     { id: 'b11', title: book('b11').title, task: 'notes' },
   ];
-  const marker: Marker = { at: at(0), books: 41, finished: 33, working, queue, settings };
+  const line = (id: string) => ({ id, title: book(id).title });
+  const readers: ReaderLine[] = [
+    { id: 'lib-ana', name: 'ana@example.com', books: [line('b10'), line('b02'), line('b03')], first: 'b10', by: 'reader', page: null, picked: 'b10' },
+    { id: 'lib-kai', name: 'kai@example.com', books: [line('b07'), line('b11')], first: null, by: null, page: null, picked: null },
+  ];
+  const marker: Marker = { at: at(0), books: 41, finished: 33, working, queue, readers, settings };
   if (scene === 'trouble') {
     queue[4].failed = { times: 3, next: at(95), why: 'Kimi K3’s answer for part 9 didn’t parse: it stopped halfway through a line.' };
     marker.limitedUntil = at(2 * 3600 + 14 * 60);
@@ -433,6 +438,24 @@ export function demoAdmin(scene: Scene): Admin {
       if (!w || !marker) return;
       marker.working = marker.working.filter((x) => x !== w);
       marker.queue = [{ id: w.id, title: w.title, task: w.task, held: true }, ...marker.queue];
+      push();
+    },
+    first(library, id) {
+      const r = marker?.readers?.find((x) => x.id === library);
+      if (!r || !marker) return;
+      const was = r.first;
+      r.page = id;
+      r.first = id ?? r.picked;
+      r.by = id ? 'page' : r.picked ? 'reader' : null;
+      for (const q of marker.queue) {
+        const others = (q.first ?? []).filter((n) => n !== r.name);
+        if (q.id === r.first) others.push(r.name);
+        if (others.length) q.first = others;
+        else delete q.first;
+      }
+      if (r.first && r.first !== was) {
+        for (const q of marker.queue.filter((x) => x.id === r.first)) toFront(q);
+      }
       push();
     },
     redoStep(id, task) {

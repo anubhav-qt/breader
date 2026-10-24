@@ -20,6 +20,19 @@ export const baseUrl = (base: ApiBase) => BASES[base];
 const TIMEOUT = 4000;
 const PROBE_EVERY = 60_000;
 const GATEWAY = new Set([502, 503, 504, 530]);
+/*
+ * Render's free tier sleeps after 15 minutes with no request and takes up to a minute to wake, so
+ * the fallback, unheard from for a while, is given that long to answer.
+ */
+const ASLEEP_AFTER = 10 * 60_000;
+const WAKE_TIMEOUT = 60_000;
+/** When each copy of the server last answered. */
+const heard: Record<ApiBase, number> = { primary: 0, fallback: 0 };
+
+function timeoutFor(base: ApiBase, timeout: number): number {
+  if (base === 'fallback' && Date.now() - heard.fallback > ASLEEP_AFTER) return Math.max(timeout, WAKE_TIMEOUT);
+  return timeout;
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -44,10 +57,12 @@ const listeners = new Set<(b: ApiBase) => void>();
 /** One try against one base. null means "try the other one". */
 async function attempt(base: ApiBase, path: string, init: RequestInit, timeout: number): Promise<Response | null> {
   const ctrl = new AbortController();
-  const t = window.setTimeout(() => ctrl.abort(), timeout);
+  const t = window.setTimeout(() => ctrl.abort(), timeoutFor(base, timeout));
   try {
     const res = await fetch(BASES[base] + path, { ...init, credentials: 'include', signal: ctrl.signal });
-    return GATEWAY.has(res.status) ? null : res;
+    if (GATEWAY.has(res.status)) return null;
+    heard[base] = Date.now();
+    return res;
   } catch {
     return null;
   } finally {
@@ -98,15 +113,17 @@ const LAPTOP_GATEWAY = new Set([502, 504, 530]);
 /** One try at one copy of the server, with no switching: a 504 of its own when nothing answers. */
 async function fetchFrom(base: ApiBase, path: string, body: unknown, timeout: number): Promise<Response> {
   const ctrl = new AbortController();
-  const t = window.setTimeout(() => ctrl.abort(), timeout);
+  const t = window.setTimeout(() => ctrl.abort(), timeoutFor(base, timeout));
   try {
-    return await fetch(BASES[base] + path, {
+    const res = await fetch(BASES[base] + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       credentials: 'include',
       signal: ctrl.signal,
     });
+    if (!LAPTOP_GATEWAY.has(res.status)) heard[base] = Date.now();
+    return res;
   } catch {
     return new Response(null, { status: 504 });
   } finally {

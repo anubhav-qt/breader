@@ -110,6 +110,23 @@ export interface Waiting {
   failed?: { times: number; next: string; why: string };
   /** Kept back by hand until let go. */
   held?: boolean;
+  /** The readers it's the first book of: it goes before every book that isn't one. */
+  first?: string[];
+}
+
+/** A reader with more than one book waiting, and which goes first. */
+export interface ReaderLine {
+  /** Their library's id. */
+  id: string;
+  name: string;
+  /** Their books with anything left, in the order they go. */
+  books: Array<{ id: string; title: string }>;
+  /** Their first book, and why: picked here, picked by them, or their only book that can go. */
+  first: string | null;
+  by: 'page' | 'reader' | 'only' | null;
+  /** What was picked here, and what they picked, while it's still waiting. */
+  page: string | null;
+  picked: string | null;
 }
 
 /** What can be changed about the marker from here. */
@@ -138,6 +155,8 @@ export interface Marker {
   limitedUntil?: string;
   /** No Antigravity account at all, so music waits for one. */
   musicWaitsForAccount?: boolean;
+  /** Readers with more than one book waiting (missing from a marker that doesn't say yet). */
+  readers?: ReaderLine[];
   settings: MarkerSettings;
 }
 
@@ -189,6 +208,8 @@ export interface Admin {
   /** A working book: back to the queue, kept back, or its step from the start. */
   stop: (id: string, task: Task) => void;
   redoStep: (id: string, task: Task) => void;
+  /** A reader's first book picked here, or (null) left to them. */
+  first: (library: string, id: string | null) => void;
   runJob: (name: string) => void;
   jobOn: (name: string, on: boolean) => void;
   /** An account used before the others, or no more. */

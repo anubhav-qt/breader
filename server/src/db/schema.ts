@@ -299,6 +299,17 @@ export const aiBooks = pgTable('ai_books', {
 });
 
 /**
+ * The book a library wants the AI marker to do before its others (routes/ai.ts), by its id in that
+ * library. Each library's first book goes ahead of every library's other books (ai/tools/marker.ts).
+ * Not fed: only the marker and the API read it, both from Supabase.
+ */
+export const aiFirst = pgTable('ai_first', {
+  libraryId: text('library_id').primaryKey().references(() => libraries.id, { onDelete: 'cascade' }),
+  bookId: text('book_id').notNull(),
+  at: at('at').notNull().defaultNow(),
+});
+
+/**
  * The name a library comments under (shared comments.ts). `fold` is the name as foldName tells
  * names apart, and no two libraries may share one. Fed.
  */

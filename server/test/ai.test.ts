@@ -230,3 +230,25 @@ describe('the AI switch', () => {
     expect(await aiOf(two.b, two.a.id)).toBe(true);
   });
 });
+
+describe('the first book', () => {
+  it('is one of the library’s books with its switch on, kept until it’s taken back or the book goes', async () => {
+    const { b, a } = await reader();
+    expect((await b.get('/v1/ai/first')).body).toEqual({ bookId: null });
+    expect((await b.post('/v1/ai/first', { bookId: a.id })).body).toEqual({ bookId: a.id });
+    expect((await b.get('/v1/ai/first')).body).toEqual({ bookId: a.id });
+    expect((await b.post('/v1/ai/first', { bookId: null })).body).toEqual({ bookId: null });
+    expect((await b.get('/v1/ai/first')).body).toEqual({ bookId: null });
+
+    await b.post('/v1/ai/first', { bookId: a.id });
+    await b.post('/v1/sync/push', push('x', { type: 'book.remove', bookId: a.id }));
+    expect((await b.get('/v1/ai/first')).body).toEqual({ bookId: null });
+  });
+
+  it('can’t be a book with its switch off, or someone else’s', async () => {
+    const off = await reader(undefined, false);
+    expect((await off.b.post('/v1/ai/first', { bookId: off.a.id })).status).toBe(404);
+    const other = await reader();
+    expect((await off.b.post('/v1/ai/first', { bookId: other.a.id })).status).toBe(404);
+  });
+});

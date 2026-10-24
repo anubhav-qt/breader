@@ -243,6 +243,14 @@ export interface AiStatus {
   music: boolean;
 }
 
+/**
+ * The book a library wants the AI to do before its others, by its id, or none (GET and POST
+ * /v1/ai/first). A library's first book, or its only one still waiting, goes ahead of every
+ * library's other books.
+ */
+export const AiFirst = z.object({ bookId: z.string().min(1).max(200).nullable() });
+export type AiFirst = z.infer<typeof AiFirst>;
+
 /** A person, place or word, as far as the reader has read and no further. */
 export interface RevisitEntry {
   /** Tells entries apart; says nothing about them. */

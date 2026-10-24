@@ -3,8 +3,8 @@ import { z } from 'zod';
 /*
  * What the admin page changes, kept in one row of admin_state (server/src/lib/admin.ts) and read
  * by whoever it's for: the AI marker's settings (ai/tools/marker.ts), the worker's jobs switched
- * off (server/src/worker.ts), and the marker's queue, books kept back by hand and books asked to
- * go next. Each is read afresh every few seconds, so a change takes hold without a restart.
+ * off (server/src/worker.ts), and the marker's queue: books kept back by hand, books asked to go
+ * next, and each reader's first book when the page picks it for them. Each is read afresh every few seconds, so a change takes hold without a restart.
  */
 
 export const MARKER_TASKS = ['marks', 'music', 'notes'] as const;
@@ -47,9 +47,14 @@ export interface AdminState {
   held: string[];
   /** Books asked to go next in their task, by queueKey, the latest asked first. */
   next: string[];
+  /**
+   * Each reader's first book as the page picked it, by library id: a file's SHA-256. It goes over
+   * the reader's own pick (ai_first) for as long as the reader still has it waiting.
+   */
+  firstFor: Record<string, string>;
 }
 
-export const ADMIN_DEFAULTS: AdminState = { marker: MARKER_DEFAULTS, jobsOff: [], held: [], next: [] };
+export const ADMIN_DEFAULTS: AdminState = { marker: MARKER_DEFAULTS, jobsOff: [], held: [], next: [], firstFor: {} };
 
 /** A book in one task's queue: its file's SHA-256 and the task. */
 export const queueKey = (id: string, task: MarkerTask) => `${id}:${task}`;
@@ -80,6 +85,13 @@ export const QueueAction = z.object({
 });
 export type QueueAction = z.infer<typeof QueueAction>;
 
+/** A reader's first book picked from the page, or the page's pick taken back (id null). */
+export const FirstAction = z.object({
+  library: z.string().min(1).max(200),
+  id: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
+});
+export type FirstAction = z.infer<typeof FirstAction>;
+
 /** The row as it's kept, with anything missing or out of shape taken from the defaults. */
 export function adminStateOf(raw: unknown): AdminState {
   const r = (raw ?? {}) as Partial<AdminState>;
@@ -87,7 +99,11 @@ export function adminStateOf(raw: unknown): AdminState {
   const parsed = MarkerPatch.safeParse({ ...m });
   const marker: MarkerSettings = { ...MARKER_DEFAULTS, ...(parsed.success ? parsed.data : {}) };
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-  return { marker, jobsOff: strings(r.jobsOff), held: strings(r.held), next: strings(r.next) };
+  const firstFor: Record<string, string> = {};
+  if (r.firstFor && typeof r.firstFor === 'object') {
+    for (const [lib, sha] of Object.entries(r.firstFor)) if (typeof sha === 'string') firstFor[lib] = sha;
+  }
+  return { marker, jobsOff: strings(r.jobsOff), held: strings(r.held), next: strings(r.next), firstFor };
 }
 
 /**

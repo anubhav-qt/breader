@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { ACCOUNT_KINDS, MarkerPatch, MusicImport, QueueAction, musicImportKey, musicImportProblems, queueKey } from '@breader/shared';
+import { ACCOUNT_KINDS, FirstAction, MarkerPatch, MusicImport, QueueAction, musicImportKey, musicImportProblems, queueKey } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ADMIN_JOBS, addCommand, changeAdminState, runKind } from '../lib/admin.ts';
 import { adminHub, inUseOrder } from '../lib/admin-live.ts';
@@ -28,8 +28,8 @@ const PING_MS = 20_000;
  * admin role replace the token in Phase 2.
  *
  * - /admin/stream pushes everything the page shows, each time it changes (lib/admin-live.ts).
- * - The marker's settings, its queue (next, kept back, tried again, stopped, a step done again)
- *   and the worker's jobs (run now, on or off) go into admin_state and admin_commands
+ * - The marker's settings, its queue (next, kept back, tried again, stopped, a step done again,
+ *   each reader's first book) and the worker's jobs (run now, on or off) go into admin_state and admin_commands
  *   (lib/admin.ts), for the worker and the marker to take up within a few seconds.
  * - On the laptop it also connects the AI accounts the marker's research and music run on
  *   (lib/cliproxy.ts): Antigravity, Claude Code and Codex, each with its limits, and which goes first.
@@ -124,6 +124,19 @@ export function adminRoutes(deps: Deps) {
     } else {
       await addCommand(pool, 'redo', { id: a.id, task: a.task });
     }
+    return c.json({ ok: true });
+  });
+
+  // A reader's first book, picked here over their own pick, or the pick taken back.
+  r.post('/admin/first', control, async (c) => {
+    checkToken(c);
+    const a = parse(FirstAction, await readJson(c));
+    await changeAdminState(pool, (st) => {
+      const firstFor = { ...st.firstFor };
+      if (a.id) firstFor[a.library] = a.id;
+      else delete firstFor[a.library];
+      return { ...st, firstFor };
+    });
     return c.json({ ok: true });
   });
 

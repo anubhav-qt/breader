@@ -63,6 +63,9 @@ interface Props {
  */
 const entered = { books: false, manga: false };
 
+/** A book the AI reads that the reader can put first: their own copy, with a file on the server. */
+const canBeFirst = (b: ShelfItem) => !!b.ai && b.format !== 'CBZ' && b.source !== 'shelf' && b.source !== 'sample';
+
 /**
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
@@ -178,6 +181,8 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
             // A shared book not started has no reading of the reader's own to finish.
             onFinish={onFinish && editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
             onChapters={onChapters && editingBook.source === 'remote' ? () => { setEditing(null); onChapters(editingBook); } : undefined}
+            // Only the reader's own copy can be their first, and only with another book of theirs to go before.
+            canFirst={canBeFirst(editingBook) && books.filter(canBeFirst).length > 1}
             onClose={closeEdit}
           />
         )}

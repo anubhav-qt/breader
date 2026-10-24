@@ -41,18 +41,32 @@ const signedIn = (user: Account | null) => set({ status: user ? 'in' : 'out', us
 type User = { email: string; name: string; emailVerified: boolean };
 const toAccount = (u: User): Account => ({ email: u.email, name: u.name, emailVerified: u.emailVerified });
 
+/**
+ * Whether the server can log in with Google, asked apart from the session, so a session that
+ * couldn't be checked doesn't hide the button. Until it's known, asked again when the app moves
+ * to the other copy of the server, and when the login opens.
+ */
+let knowGoogle = false;
+export async function checkGoogle() {
+  if (knowGoogle) return;
+  try {
+    const options = await api.get<{ google: boolean }>('/v1/login-options');
+    knowGoogle = true;
+    set({ google: options.google });
+  } catch { /* asked again on the other copy */ }
+}
+api.onVia(() => void checkGoogle());
+
 /** Asks the server who is logged in. Keeps what it knew if the server can't be reached. */
 export async function refreshAccount(): Promise<AccountState> {
+  const google = checkGoogle();
   try {
-    const [session, options] = await Promise.all([
-      api.get<{ user: User } | null>('/v1/auth/get-session'),
-      api.get<{ google: boolean }>('/v1/login-options').catch(() => ({ google: state.google })),
-    ]);
-    set({ google: options.google });
+    const session = await api.get<{ user: User } | null>('/v1/auth/get-session');
     signedIn(session?.user ? toAccount(session.user) : null);
   } catch (e) {
     if (!(e instanceof OfflineError)) console.warn('Couldn’t check the login:', e);
   }
+  await google;
   return state;
 }
 

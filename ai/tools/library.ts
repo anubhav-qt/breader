@@ -9,6 +9,8 @@ import { ROOT, slug, type Format, type Queue, type QueueBook } from './lib.ts';
  * file in two libraries is one book), in the order to work on them: books someone has started, the
  * most recently read first, then the rest. A book whose switch is off in every library isn't listed:
  * nobody said yes to it. Until the app update with the switch is live, it lists them all and says so.
+ * Each book says which libraries hold it, by their account's email or their id, and whether one
+ * picked it to go before its others (ai_first).
  * Read only: the connection can't change anything.
  */
 
@@ -30,6 +32,10 @@ interface Row {
   size: string | number | null;
   r2_key: string | null;
   blob_status: string | null;
+  library_id: string;
+  shared_only: boolean;
+  owner_email: string | null;
+  picked: boolean;
 }
 
 const SQL = `
@@ -37,9 +43,12 @@ const SQL = `
          case when li.edit_series is null then li.series when li.edit_series = '' then null else li.edit_series end as series,
          case when li.edit_series is null then li.series_index else li.edit_series_index end as series_index,
          li.last_opened, li.added_at, rs.read_at, rs.progress, rs.words_read, (rs.mark is not null) as has_mark,
-         b.sha256, b.size, b.r2_key, b.status as blob_status
+         b.sha256, b.size, b.r2_key, b.status as blob_status,
+         li.library_id, li.shared_only, u.email as owner_email, coalesce(af.book_id = li.book_id, false) as picked
     from library_items li
     join libraries l on l.id = li.library_id
+    left join users u on u.id = l.owner_account_id
+    left join ai_first af on af.library_id = li.library_id
     left join blobs b on b.id = li.file_id
     left join reading_states rs on rs.library_id = li.library_id and rs.book_id = li.book_id
    where li.removed_at is null and l.retired_at is null`;
@@ -105,6 +114,7 @@ export async function listBooks(): Promise<Queue> {
       lastRead: new Date(lastRead).toISOString(),
       added: new Date(Math.min(...g.rows.map((r) => time(r.added_at)))).toISOString(),
       readers: g.rows.length,
+      libraries: g.rows.filter((r) => !r.shared_only).map((r) => ({ id: r.library_id, name: r.owner_email ?? `Key library ${r.library_id.slice(0, 6)}`, picked: r.picked })),
     };
   });
   books.sort((a, b) => Number(b.started) - Number(a.started) || b.lastRead.localeCompare(a.lastRead));

@@ -51,6 +51,8 @@ export interface QueueBook {
   added: string;
   /** How many libraries hold it. */
   readers: number;
+  /** The libraries holding it in their own books, and whether each picked it to go first (ai_first). */
+  libraries?: Array<{ id: string; name: string; picked: boolean }>;
 }
 
 export interface Queue {

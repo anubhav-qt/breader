@@ -140,14 +140,27 @@ interface QueueItem {
   held?: boolean;
 }
 
+interface ReaderItem {
+  id: string;
+  books?: Array<{ id: string }>;
+  page?: string | null;
+}
+
 /**
  * The marker as it last said (ai/tools/marker.ts, Live), with the page's own settings, which books
- * are kept back, and each task's books in the order they go, as they are the moment they change.
+ * are kept back, each task's books in the order they go, and each reader's first book as the page
+ * picked it, as they are the moment they change.
  */
 export function markerOf(rows: JobRow[], state: AdminState) {
   const row = rows.find((j) => j.name === 'ai-marker');
-  const d = row?.detail as { working?: unknown; queue?: QueueItem[] } | null | undefined;
+  const d = row?.detail as { working?: unknown; queue?: QueueItem[]; readers?: ReaderItem[] } | null | undefined;
   if (!d || !Array.isArray(d.working)) return null;
+  const readers = (d.readers ?? []).map((r) => {
+    const pick = state.firstFor[r.id];
+    let page: string | null = null;
+    if (pick && r.books?.some((b) => b.id === pick)) page = pick;
+    return { ...r, page };
+  });
   const queue = (d.queue ?? []).map((q) => {
     let held = false;
     if (q.id) held = state.held.includes(queueKey(q.id, q.task));
@@ -155,7 +168,7 @@ export function markerOf(rows: JobRow[], state: AdminState) {
   });
   const keyOf = (q: QueueItem) => queueKey(q.id ?? '', q.task);
   const ordered = MARKER_TASKS.flatMap((t) => nextFirst(queue.filter((q) => q.task === t), keyOf, state.next));
-  return { ...d, queue: ordered, settings: state.marker };
+  return { ...d, queue: ordered, readers, settings: state.marker };
 }
 
 export interface Snapshot {

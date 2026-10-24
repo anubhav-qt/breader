@@ -13,7 +13,9 @@ import type { OnServer } from '../marker.ts';
 
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { bookDir, writeJson } = await import('../lib.ts');
-const { byWithNotes, failures, needs, notesOrder, partStates, progressOf, queueOf, stepKey, toMark, toNote } = await import('../marker.ts');
+const { byWithNotes, failures, firstBooks, needs, notesOrder, partStates, pickFirsts, progressOf, queueOf, stepKey, toMark, toNote } = await import('../marker.ts');
+const { control } = await import('../control.ts');
+const { queueKey } = await import('../../../shared/src/admin.ts');
 const { stageOf } = await import('../mark.ts');
 const { newJob } = await import('../jobs.ts');
 
@@ -77,30 +79,77 @@ test('a series gets its notes from its earliest volume, at the place its book be
   assert.deepEqual(titles(toNote(books, server)), ['Saga 2', 'Other']);
 });
 
-test('a volume that keeps failing is still tried, but stops holding up the ones after it', () => {
+test('a volume that fails keeps its place: the ones after it wait however often it fails, until it’s kept back', () => {
   const v1 = book('Epic 1', { series: 'Epic', seriesIndex: 1 });
   const v2 = book('Epic 2', { series: 'Epic', seriesIndex: 2 });
   const books = [v2, v1];
   const server = new Map(books.map((b) => [b.sha256, marked()]));
   failures.set(v1.sha256, { count: 2, next: Date.now() + 60_000 });
   assert.deepEqual(titles(toNote(books, server)), [], 'resting, and still holding up Epic 2');
-  failures.set(v1.sha256, { count: 5, next: Date.now() + 60_000 });
-  assert.deepEqual(titles(toNote(books, server)), ['Epic 2']);
-  failures.set(v1.sha256, { count: 5, next: 0 });
-  assert.deepEqual(titles(toNote(books, server)), ['Epic 2', 'Epic 1']);
+  failures.set(v1.sha256, { count: 9, next: Date.now() + 60_000 });
+  assert.deepEqual(titles(toNote(books, server)), [], 'still holding it up');
+  failures.set(v1.sha256, { count: 9, next: 0 });
+  assert.deepEqual(titles(toNote(books, server)), ['Epic 1']);
+  failures.set(v1.sha256, { count: 9, next: Date.now() + 60_000 });
+  control.held.push(queueKey(v1.sha256, 'notes'));
+  assert.deepEqual(titles(toNote(books, server)), ['Epic 2'], 'kept back from the admin page, it lets the next go');
+  control.held.length = 0;
   failures.clear();
 });
 
-test('marks: a later volume waits for an earlier one’s cast, so everyone keeps their id and voice', () => {
+test('a series goes one volume at a time, each through its notes before the next is marked', () => {
   const v1 = book('Tale 1', { series: 'Tale', seriesIndex: 1 });
   const v2 = book('Tale 2', { series: 'Tale', seriesIndex: 2 });
   const v3 = book('Tale 3', { series: 'Tale', seriesIndex: 3 });
   const lone = book('Lone');
   const books = [v3, lone, v2, v1];
-  const server = new Map([[v1.sha256, marked(5)]]);
-  assert.deepEqual(titles(toMark(books, server)), ['Lone', 'Tale 2']);
-  writeJson(join(bookDir(v2.key), 'cast-by.json'), { model: 'kimi-k3', rounds: 1, secs: 1, at: '' });
-  assert.deepEqual(titles(toMark(books, server)), ['Tale 3', 'Lone', 'Tale 2']);
+  const server = new Map<string, OnServer>();
+  assert.deepEqual(titles(toMark(books, server)), ['Tale 1', 'Lone']);
+  assert.equal(queueOf(books, server).find((w) => w.id === v2.sha256)?.waitsFor, 'Vol. 1');
+  server.set(v1.sha256, marked());
+  assert.deepEqual(titles(toMark(books, server)), ['Lone'], 'Tale 2 waits for Tale 1’s notes');
+  assert.deepEqual(titles(toNote(books, server)), ['Tale 1']);
+  server.set(v1.sha256, marked(5));
+  assert.deepEqual(titles(toMark(books, server)), ['Tale 2', 'Lone']);
+});
+
+test('first books: the page’s pick, else the reader’s, else their only book that can go, ahead of the rest', () => {
+  const lib = (id: string, picked = false) => ({ id, name: `${id}@example.com`, picked });
+  const rest = book('Rest', { started: true, lastRead: '2026-10-08T00:00:00.000Z', libraries: [lib('c')] });
+  const rest2 = book('Rest 2', { libraries: [lib('c')] });
+  const x = book('X', { libraries: [lib('a')] });
+  const y = book('Y', { libraries: [lib('a', true)] });
+  const only = book('Only', { libraries: [lib('b')] });
+  const s1 = book('Run 1', { series: 'Run', seriesIndex: 1, libraries: [lib('d')] });
+  const s2 = book('Run 2', { series: 'Run', seriesIndex: 2, libraries: [lib('d', true)] });
+  const t1 = book('Trek 1', { series: 'Trek', seriesIndex: 1, libraries: [lib('e')] });
+  const t2 = book('Trek 2', { series: 'Trek', seriesIndex: 2, libraries: [lib('e')] });
+  const books = [rest, rest2, x, y, only, s1, s2, t1, t2];
+  const server = new Map<string, OnServer>();
+  const f = firstBooks(books, server);
+  const firstOf = new Map([...f.firsts].map(([sha, by]) => [by[0], books.find((b) => b.sha256 === sha)!.title]));
+  assert.deepEqual(Object.fromEntries(firstOf), {
+    'a@example.com': 'Y',
+    'b@example.com': 'Only',
+    'd@example.com': 'Run 2',
+    'e@example.com': 'Trek 1',
+  }, 'c has two books that can go and picked neither');
+  assert.deepEqual(f.readers.map((r) => [r.name, r.by]), [
+    ['a@example.com', 'reader'],
+    ['c@example.com', null],
+    ['d@example.com', 'reader'],
+    ['e@example.com', 'only'],
+  ]);
+  control.firstFor.a = x.sha256;
+  pickFirsts(books, server);
+  assert.deepEqual(titles(toMark(books, server)), ['X', 'Only', 'Run 2', 'Trek 1', 'Rest', 'Rest 2', 'Y']);
+  assert.deepEqual(queueOf(books, server).find((w) => w.id === x.sha256)?.first, ['a@example.com']);
+  assert.equal(queueOf(books, server).find((w) => w.id === s1.sha256)?.waitsFor, 'Vol. 2', 'the picked volume goes before the earlier one');
+  server.set(s2.sha256, marked(4));
+  pickFirsts(books, server);
+  assert.ok(titles(toMark(books, server)).includes('Run 1'), 'then the series goes from its earliest');
+  delete control.firstFor.a;
+  pickFirsts([], server);
 });
 
 test('the live view: how far a book’s marks have got, from what’s on disk', () => {

@@ -246,6 +246,7 @@ export function liveAdmin(token: string): Admin {
     retry: (id, task) => queue('retry', id, task),
     stop: (id, task) => queue('stop', id, task),
     redoStep: (id, task) => queue('redo', id, task),
+    first: (library, id) => fire('POST', '/admin/first', { library, id }),
     runJob: (name) => fire('POST', `/admin/jobs/${encodeURIComponent(name)}/run`, {}),
     jobOn: (name, on) => fire('POST', `/admin/jobs/${encodeURIComponent(name)}/on`, { on }),
     useFirst: (id) => {

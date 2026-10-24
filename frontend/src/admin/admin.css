@@ -148,6 +148,15 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 .adm-q-t { flex: 1; min-width: 0; display: grid; justify-items: start; gap: 6px; }
 .adm-q-t b { font: 700 23px/0.9 var(--read); }
 .adm-q-acts { flex: none; display: flex; align-items: center; gap: 6px; }
+.adm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-chip.is-first { background: var(--ink); color: var(--canvas); }
+
+/* Each reader's first book */
+.adm-firsts { list-style: none; margin: 0; padding: 0; }
+.adm-firsts li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.adm-firsts li > div { display: grid; gap: 4px; min-width: 0; }
+.adm-firsts b { font: var(--ui-w-strong) 13px/1.4 var(--ui); overflow-wrap: anywhere; }
+.adm-pick { flex: 0 1 300px; min-width: 0; height: 34px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--tile-border); background: var(--canvas); color: var(--ink); font: var(--ui-w) 12px/1 var(--ui); }
 
 /* Pills, steppers and settings */
 .adm-seg { justify-self: start; display: inline-flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 3px; border-radius: 12px; background: var(--fill); }
@@ -251,6 +260,8 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
   .adm-log li { grid-template-columns: 70px minmax(0, 1fr); }
   .adm-q { flex-wrap: wrap; }
   .adm-q-acts { width: 100%; padding-left: 42px; flex-wrap: wrap; }
+  .adm-firsts li { flex-direction: column; align-items: stretch; gap: 8px; }
+  .adm-pick { flex: none; width: 100%; }
   .adm-job { grid-template-columns: 10px minmax(0, 1fr); }
   .adm-job-acts { grid-column: 2; }
   .adm-set { padding: 12px 14px 14px; }

@@ -17,7 +17,7 @@ import type { Score } from '../music.ts';
 process.env.AI_WORK = mkdtempSync(join(tmpdir(), 'breader-ai-test-'));
 const { checkFile } = await import('../import.ts');
 const { writeJson } = await import('../lib.ts');
-const { byWith, can, musicFailures, needsMusic, toMusic, withMusic } = await import('../marker.ts');
+const { byWith, can, musicFailures, needsMusic, toMark, toMusic, withMusic } = await import('../marker.ts');
 const { musicBy, musicLedgerFile } = await import('../music.ts');
 const { fits, uploadProblems } = await import('../uploads.ts');
 
@@ -63,6 +63,7 @@ test('where it can, a marked book without music needs it; one not marked yet or 
 
 test('a series gets its music from its earliest volume, as its soundtrack starts there', () => {
   can.music = true;
+  can.account = true;
   const s1 = book('Score 1', { series: 'Score', seriesIndex: 1 });
   const s2 = book('Score 2', { series: 'Score', seriesIndex: 2, started: true, lastRead: '2026-10-08T00:00:00.000Z' });
   const s3 = book('Score 3', { series: 'score', seriesIndex: 3 });
@@ -71,12 +72,29 @@ test('a series gets its music from its earliest volume, as its soundtrack starts
   const server = new Map(books.map((b) => [b.sha256, marked()]));
   assert.deepEqual(titles(toMusic(books, server)), ['Score 1', 'Solo']);
   server.set(s1.sha256, marked(true));
+  assert.deepEqual(titles(toMusic(books, server)), ['Solo'], 'Score 2 waits for Score 1’s notes too');
+  server.set(s1.sha256, { ...marked(true), notes: 3 });
   assert.deepEqual(titles(toMusic(books, server)), ['Score 2', 'Solo']);
   can.music = false;
+  can.account = false;
+});
+
+test('without an Antigravity account, a series goes on to its notes and next volume without music', () => {
+  can.music = true;
+  const v1 = book('Hush 1', { series: 'Hush', seriesIndex: 1 });
+  const v2 = book('Hush 2', { series: 'Hush', seriesIndex: 2 });
+  const server = new Map([[v1.sha256, { ...marked(), notes: 4 }]]);
+  assert.deepEqual(titles(toMark([v2, v1], server)), ['Hush 2']);
+  can.account = true;
+  assert.deepEqual(titles(toMark([v2, v1], server)), [], 'with one, Hush 1’s music comes first');
+  assert.deepEqual(titles(toMusic([v2, v1], server)), ['Hush 1']);
+  can.music = false;
+  can.account = false;
 });
 
 test('music that keeps failing rests on its own, apart from marks and notes', () => {
   can.music = true;
+  can.account = true;
   const b = book('Resting');
   const server = new Map([[b.sha256, marked()]]);
   musicFailures.set(b.sha256, { count: 1, next: Date.now() + 60_000 });
@@ -84,6 +102,7 @@ test('music that keeps failing rests on its own, apart from marks and notes', ()
   musicFailures.clear();
   assert.deepEqual(titles(toMusic([b], server)), ['Resting']);
   can.music = false;
+  can.account = false;
 });
 
 test('the music’s credit goes before the research’s, or last when there’s none', () => {

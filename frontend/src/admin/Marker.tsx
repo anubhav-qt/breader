@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../lib/springs';
 import { ago, modelName, span, toneOf, until } from './format';
 import { Dots, Label, Monogram, PartDots, Percent, Seg, Stepper, Switch } from './parts';
-import { stepsFor, TASK_NAMES, type Admin, type Marker, type MarkerSettings, type Task, type Waiting, type Working } from './types';
+import { stepsFor, TASK_NAMES, type Admin, type Marker, type MarkerSettings, type ReaderLine, type Task, type Waiting, type Working } from './types';
 
 /*
  * The AI marker: how far through the library it is, each book it's on, step by step, with what
@@ -83,7 +83,14 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
         ))}
       </div>
 
+      {m.readers && m.readers.length > 0 && <FirstBooks readers={m.readers} admin={admin} />}
+
       <Label side={<span className="adm-count">{m.queue.length}</span>}>Waiting</Label>
+      {m.queue.length > 0 && (
+        <p className="adm-dim">
+          A series goes in order, each volume through its notes before the next starts. A volume picked to go first goes before the rest of its series. A volume that fails keeps its place and holds the rest back: Keep back lets the next one go.
+        </p>
+      )}
       {m.queue.length > 0 && (
         <Seg
           label="Show"
@@ -210,7 +217,10 @@ function QueueRow({ q, first, off, admin }: { q: Waiting; first: boolean; off: b
       <Monogram title={q.title} size="s" />
       <div className="adm-q-t">
         <b>{q.title}</b>
-        <span className="adm-chip">{TASK_NAMES[q.task]}</span>
+        <span className="adm-chips">
+          <span className="adm-chip">{TASK_NAMES[q.task]}</span>
+          {q.first && <span className="adm-chip is-first" title={`The first book of ${q.first.join(', ')}`}>First</span>}
+        </span>
         {why && <p className="adm-dim">{why}</p>}
         {q.failed && (
           <p className="adm-bad adm-one" title={q.failed.why}>
@@ -226,6 +236,50 @@ function QueueRow({ q, first, off, admin }: { q: Waiting; first: boolean; off: b
         </button>
       </div>
     </li>
+  );
+}
+
+/** Why a reader's first book is the one it is. */
+function whyFirst(r: ReaderLine): string {
+  const title = (id: string | null) => r.books.find((b) => b.id === id)?.title ?? '';
+  let why = 'Nothing picked, so their books go in turn';
+  if (r.by === 'page') why = 'Picked here';
+  else if (r.by === 'reader') why = 'Their own pick';
+  else if (r.by === 'only') why = 'Their only book that can go now';
+  if (r.first && (r.by === 'page' || r.by === 'reader')) why += `: ${title(r.first)}`;
+  return why;
+}
+
+/**
+ * Readers with more than one book waiting, and which of theirs goes first: their own pick, or one
+ * picked here over it. Every reader's first book goes before every book that isn't one.
+ */
+function FirstBooks({ readers, admin }: { readers: ReaderLine[]; admin: Admin }) {
+  return (
+    <>
+      <Label side={<span className="adm-count">{readers.length}</span>}>First books</Label>
+      <ul className="adm-firsts">
+        {readers.map((r) => {
+          const theirs = r.books.find((b) => b.id === r.picked);
+          let left = 'Left to them: nothing picked';
+          if (theirs) left = `Left to them: ${theirs.title}`;
+          return (
+            <li key={r.id}>
+              <div>
+                <b>{r.name}</b>
+                <span className="adm-dim">{whyFirst(r)}</span>
+              </div>
+              <select className="adm-pick" aria-label={`${r.name}: first book`} value={r.page ?? ''} onChange={(e) => admin.first(r.id, e.target.value || null)}>
+                <option value="">{left}</option>
+                {r.books.map((b) => (
+                  <option key={b.id} value={b.id}>{b.title}</option>
+                ))}
+              </select>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 

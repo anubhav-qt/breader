@@ -1,9 +1,9 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { TRACK_ID, trackKey, type AiCastResponse, type AiEntry, type AiFile, type AiMusicResponse, type AiStatus, type AiVoicesResponse, type MusicLink, type RevisitResponse } from '@breader/shared';
+import { AiFirst, TRACK_ID, trackKey, type AiCastResponse, type AiEntry, type AiFile, type AiMusicResponse, type AiStatus, type AiVoicesResponse, type MusicLink, type RevisitResponse } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { castFor, cutAt, musicFor, revisitFor, voicesFor } from '../lib/ai.ts';
-import { ApiError } from '../lib/errors.ts';
+import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
 
 /*
@@ -20,6 +20,7 @@ export function aiRoutes(deps: Deps) {
   const { db, storage } = deps;
   const r = new Hono<AppEnv>();
   r.use('/books/:bookId/*', requireLibrary(deps));
+  r.use('/ai/first', requireLibrary(deps));
 
   /**
    * The book's notes, if this library may have them: its own copy, still on its shelf, with the
@@ -103,6 +104,42 @@ export function aiRoutes(deps: Deps) {
     if (!row || !row.id || !TRACK_ID.test(row.id)) throw noMusic();
     c.header('Cache-Control', 'private, no-store');
     return c.json((await storage.downloadLink(trackKey(row.id))) satisfies MusicLink);
+  });
+
+  /**
+   * The book this library wants done first, of those it let an AI read: the AI marker takes each
+   * library's first book before any library's others (ai/tools/marker.ts). One a library no longer
+   * has, or no longer has with the switch on, is no one's first.
+   */
+  r.get('/ai/first', async (c) => {
+    const { rows: [row] } = await db.execute<{ book_id: string }>(sql`
+      SELECT f.book_id FROM ai_first f
+        JOIN library_items li ON li.library_id = f.library_id AND li.book_id = f.book_id AND li.removed_at IS NULL
+       WHERE f.library_id = ${c.var.library.id}
+    `);
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ bookId: row?.book_id ?? null } satisfies AiFirst);
+  });
+
+  r.post('/ai/first', async (c) => {
+    const { bookId } = parse(AiFirst, await readJson(c));
+    const lib = c.var.library.id;
+    if (bookId === null) {
+      await db.execute(sql`DELETE FROM ai_first WHERE library_id = ${lib}`);
+      return c.json({ bookId: null } satisfies AiFirst);
+    }
+    const { rows: [item] } = await db.execute<{ ok: boolean }>(sql`
+      SELECT true AS ok FROM library_items li
+        LEFT JOIN blobs b ON b.id = li.file_id
+       WHERE li.library_id = ${lib} AND li.book_id = ${bookId} AND li.removed_at IS NULL AND NOT li.shared_only
+         AND (li.ai OR EXISTS (SELECT 1 FROM ai_books a WHERE a.sha256 = b.sha256))
+    `);
+    if (!item) throw new ApiError(404, 'not_found', 'That book isn’t in this library with its AI switch on.');
+    await db.execute(sql`
+      INSERT INTO ai_first (library_id, book_id) VALUES (${lib}, ${bookId})
+      ON CONFLICT (library_id) DO UPDATE SET book_id = EXCLUDED.book_id, at = now()
+    `);
+    return c.json({ bookId } satisfies AiFirst);
   });
 
   return r;
