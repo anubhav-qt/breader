@@ -6,7 +6,7 @@ import { readLocal, writeLocal } from '../../lib/store';
 
 export type Style = 'book' | 'modern';
 export type ThemeName = 'auto' | 'day' | 'warm' | 'dusk' | 'night';
-export type FontKey = 'dongle' | 'oxanium' | 'literata' | 'garamond' | 'atkinson';
+export type FontKey = 'dongle' | 'libron' | 'oxanium' | 'literata' | 'garamond' | 'atkinson';
 export type Layout = 'pages' | 'scroll';
 /** A manga can be read a panel at a time too, each fitted to the screen (MangaView.tsx). */
 export type MangaLayout = Layout | 'panels';
@@ -57,6 +57,7 @@ export interface ReaderSettings {
 /** Reading typefaces. New faces get added here as they arrive. */
 export const FONTS: Array<{ key: FontKey; label: string; family: string; note?: string }> = [
   { key: 'dongle', label: 'Dongle', family: 'var(--read)', note: 'default' },
+  { key: 'libron', label: 'Libron', family: 'var(--libron)' },
   { key: 'oxanium', label: 'Oxanium', family: 'var(--oxanium)' },
   { key: 'literata', label: 'Literata', family: 'var(--serif)' },
   { key: 'garamond', label: 'EB Garamond', family: 'var(--garamond)' },
