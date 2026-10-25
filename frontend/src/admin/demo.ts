@@ -1,5 +1,6 @@
 import type { AiAccount } from '@breader/shared/accounts';
-import { STEPS, type Admin, type Job, type Marker, type MarkerSettings, type PartState, type ReaderLine, type Snapshot, type Status, type Task, type Waiting, type Working } from './types';
+import { modelName } from './format';
+import { STEPS, type Admin, type Job, type Marker, type MarkerSettings, type ModelLine, type Models, type PartState, type ReaderLine, type Snapshot, type Stage, type StagePick, type Status, type Task, type Waiting, type Working } from './types';
 
 /*
  * A pretend server, in the page (admin/?demo): the marker working through its books, step by step and
@@ -40,7 +41,40 @@ const book = (id: string) => BOOKS.find((b) => b.id === id)!;
 /** A volume waiting for the one before it in its series, by id. */
 const AFTER: Record<string, string> = { b03: 'b02' };
 
-const MODELS: Record<MarkerSettings['first'], string> = { 'kimi-k3': 'Kimi K3', nemotron: 'Nemotron 3 Ultra' };
+/** NVIDIA's models as a day of checks might find them: answered of 7, seconds to start, tokens a second. */
+const NIM: Array<[string, number, number, number]> = [
+  ['moonshotai/kimi-k2.6', 7, 4.1, 62],
+  ['nvidia/nemotron-3-ultra-550b-a55b', 7, 2.3, 48],
+  ['z-ai/glm-5.3', 6, 1.8, 91],
+  ['z-ai/glm-5.3-flash', 7, 0.6, 184],
+  ['deepseek-ai/deepseek-v4.1-flash', 5, 9.4, 70],
+  ['minimaxai/minimax-m3.1-flash', 7, 1.1, 132],
+  ['stepfun-ai/step-5-preview', 3, 22, 40],
+  ['nvidia/nemotron-3-super-120b-a12b', 7, 0.9, 150],
+  ['openai/gpt-oss-20b', 7, 0.4, 260],
+  ['moonshotai/kimi-k3', 0, 0, 0],
+  ['nvidia/nv-embedqa-mistral-7b-v2', 0, 0, 0],
+];
+
+function modelsFor(): Models {
+  const day = 86_400;
+  const models: ModelLine[] = NIM.map(([id, ok, firstS, tps], i) => {
+    const line: ModelLine = { id, seenAt: at(-30 * day), checks: [] };
+    if (id.includes('embed')) return { ...line, noChat: true };
+    if (id === 'moonshotai/kimi-k3') {
+      line.checks = [{ at: at(-3 * 3600), ok: false, kind: 'gone', why: 'HTTP 410 The model has reached its end of life' }];
+      return line;
+    }
+    if (id === 'stepfun-ai/step-5-preview') line.seenAt = at(-2 * day);
+    for (let d = 0; d < 7; d++) {
+      const up = d >= 7 - ok;
+      const wobble = 1 + ((i + d) % 3) * 0.12;
+      line.checks.push(up ? { at: at(-d * day - 3600 - i * 20), ok: true, firstS: Math.round(firstS * wobble * 10) / 10, tps: Math.round(tps / wobble) } : { at: at(-d * day - 3600), ok: false, kind: 'busy', why: 'HTTP 503 overloaded' });
+    }
+    return line;
+  });
+  return { firstListAt: at(-40 * day), listedAt: at(-3600), sweptAt: at(-3000), checking: null, models, gemini: ['gemini-4-argon', 'gemini-3.8-pro-high', 'gemini-3.8-flash-high', 'gemini-3.8-flash-low', 'gemini-3.1-pro-high'] };
+}
 
 /** The steps a book goes through this time, without the ones it skips. */
 const stepsOf = (w: Working) => STEPS[w.task].filter((s) => !w.skipped.includes(s.key));
@@ -84,8 +118,8 @@ function partway(id: string, task: Task, step: string, done: number, settings: M
     w.parts = parts;
   }
   w.log = [
-    { at: at(-30), text: `Part ${done} done by Kimi K3` },
-    { at: at(-75), text: `Part ${done - 1} done by Kimi K3` },
+    { at: at(-30), text: `Part ${done} done by Kimi K2.6` },
+    { at: at(-75), text: `Part ${done - 1} done by Kimi K2.6` },
     { at: at(-minutes * 20), text: `Started: ${s.name.toLowerCase()}` },
     { at: at(-minutes * 60), text: 'Started: fetching the book' },
   ];
@@ -96,7 +130,8 @@ const SETTINGS: MarkerSettings = {
   paused: false,
   tasks: { marks: true, music: true, notes: true },
   atOnce: { marks: 4, music: 2, notes: 2 },
-  first: 'kimi-k3',
+  first: 'moonshotai/kimi-k2.6',
+  second: 'nvidia/nemotron-3-ultra-550b-a55b',
   research: true,
   retryCapMinutes: 60,
 };
@@ -170,9 +205,9 @@ function markerFor(scene: Scene): Marker | null {
     { id: 'lib-ana', name: 'ana@example.com', books: [line('b10'), line('b02'), line('b03')], first: 'b10', by: 'reader', page: null, picked: 'b10' },
     { id: 'lib-kai', name: 'kai@example.com', books: [line('b07'), line('b11')], first: null, by: null, page: null, picked: null },
   ];
-  const marker: Marker = { at: at(0), books: 41, finished: 33, working, queue, readers, settings };
+  const marker: Marker = { at: at(0), books: 41, finished: 33, working, queue, readers, settings, stages: {}, stagesFor: {}, models: modelsFor() };
   if (scene === 'trouble') {
-    queue[4].failed = { times: 3, next: at(95), why: 'Kimi K3’s answer for part 9 didn’t parse: it stopped halfway through a line.' };
+    queue[4].failed = { times: 3, next: at(95), why: 'Kimi K2.6’s answer for part 9 didn’t parse: it stopped halfway through a line.' };
     marker.limitedUntil = at(2 * 3600 + 14 * 60);
     queue[2].waitsFor = 'Gemini, which every Antigravity account is out of for now';
     queue[3].waitsFor = 'Gemini, which every Antigravity account is out of for now';
@@ -258,7 +293,7 @@ export function demoAdmin(scene: Scene): Admin {
     }
     const thinking = ['cast', 'mark', 'check', 'redo', 'settle', 'plan', 'score', 'roster', 'write', 'review'];
     if (thinking.includes(w.step)) {
-      w.model = MODELS[m.settings.first];
+      w.model = modelName(m.settings.first);
       w.account = 'NVIDIA';
       return;
     }
@@ -316,7 +351,7 @@ export function demoAdmin(scene: Scene): Admin {
       // While Kimi is busy, Nemotron takes the odd part, to be marked again later.
       if (w.step === 'mark' && Math.random() < 0.12) {
         done = 'backup';
-        by = 'Nemotron 3 Ultra, as Kimi K3 was busy';
+        by = 'Nemotron 3 Ultra, as Kimi K2.6 was busy';
       }
       w.parts[now] = done;
       say(w, `Part ${now + 1} done by ${by}`);
@@ -415,6 +450,42 @@ export function demoAdmin(scene: Scene): Admin {
       if (!marker) return;
       marker.settings = { ...marker.settings, ...patch };
       push();
+    },
+    stages(picks, ids) {
+      if (!marker) return;
+      const put = (into: Partial<Record<Stage, StagePick>>) => {
+        const out = { ...into };
+        for (const [k, v] of Object.entries(picks) as Array<[Stage, StagePick | null]>) {
+          if (v) out[k] = v;
+          else delete out[k];
+        }
+        return out;
+      };
+      if (!ids) marker.stages = put(marker.stages ?? {});
+      else {
+        const all = { ...marker.stagesFor };
+        for (const id of ids) {
+          const mine = put(all[id] ?? {});
+          if (Object.keys(mine).length) all[id] = mine;
+          else delete all[id];
+        }
+        marker.stagesFor = all;
+      }
+      push();
+    },
+    checkModels(id) {
+      const ms = marker?.models;
+      if (!ms) return;
+      const line = ms.models.find((x) => x.id === (id ?? 'moonshotai/kimi-k2.6'));
+      if (!line) return;
+      ms.checking = line.id;
+      push();
+      window.setTimeout(() => {
+        ms.checking = null;
+        if (!line.goneAt) line.checks = [{ at: at(0), ok: true, firstS: 1.2, tps: 120 }, ...line.checks].slice(0, 7);
+        if (!id) ms.sweptAt = at(0);
+        push();
+      }, 1500);
     },
     next(id, task) {
       const q = waiting(id, task);

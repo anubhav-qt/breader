@@ -1,9 +1,11 @@
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SHRINKS } from './kimi.ts';
+import { LADDER, nimRung, PRIMARY, SHRINKS } from './kimi.ts';
 import { chat, CallError, type Failure, type Judge, type Msg, type Reply } from './nim.ts';
 import { callOut, current, partOf, whilePaused } from './jobs.ts';
 import { WORK } from './lib.ts';
+import { FIRST_MODEL, proxy } from './proxy.ts';
+import { pickFor, stageOf } from './stages.ts';
 
 /*
  * A small load balancer for the marking calls, after spoin's (a ladder of models, strongest first,
@@ -34,6 +36,8 @@ import { WORK } from './lib.ts';
  *   is being marked, so a new book's marks go before anyone's notes.
  * - Inside one of the marker's jobs (jobs.ts), a call waits while the admin page has it paused, gives
  *   up when the book is stopped, and counts as the book's while it's out.
+ * - The admin page can pick who does a stage (stages.ts): another NVIDIA model, or Gemini through
+ *   CLIProxyAPI. That one goes first for the stage's calls, the usual ones behind it.
  *
  * Every call is logged to ai/work/_calls.jsonl (timings and token counts, never text), which is
  * how the numbers above get checked.
@@ -49,7 +53,15 @@ export interface Rung {
   maxInFlight: number;
   /** One of the top models, sharing the calls with the others as an equal. */
   primary?: boolean;
+  /** Gemini on Antigravity, through CLIProxyAPI (proxy.ts), not NVIDIA. */
+  gemini?: boolean;
 }
+
+/** Gemini's longest answer. */
+const GEMINI_MAX_TOKENS = 65_000;
+
+/** A rung for one of Antigravity's Gemini models. */
+export const geminiRung = (model: string): Rung => ({ model, name: model, maxTokens: GEMINI_MAX_TOKENS, maxInFlight: 8, gemini: true });
 
 export interface Options {
   /** How long the top models may be cooling before a weaker one takes the call. */
@@ -92,6 +104,14 @@ interface State {
 
 /** Each model's state, by model, shared by every Balancer in the process. */
 const STATES = new Map<string, State>();
+const stateOf = (r: Rung): State => {
+  let s = STATES.get(r.model);
+  if (!s) {
+    s = { name: r.name, inFlight: 0, coolUntil: 0, strikes: 0, gone: false };
+    STATES.set(r.model, s);
+  }
+  return s;
+};
 
 export interface Answer {
   reply: Reply;
@@ -116,16 +136,30 @@ export class Balancer {
   constructor(
     public ladder: Rung[],
     private opts: Options = { waitForTopS: 300, strikesToFall: 3, maxTries: 12 },
-  ) {
-    for (const r of ladder) {
-      if (!STATES.has(r.model)) STATES.set(r.model, { name: r.name, inFlight: 0, coolUntil: 0, strikes: 0, gone: false });
-    }
+  ) {}
+
+  /**
+   * The ladder for one call: as it is now (the admin page picks the first and second models,
+   * kimi.ts), with the model the page picked for the call's stage first.
+   */
+  private ladderFor(label: Record<string, unknown>): Rung[] {
+    // A balancer on the first model alone marks again what the second did (marker.ts, top).
+    const pick = pickFor(stageOf(label, this.ladder === PRIMARY));
+    if (!pick) return this.ladder;
+    let head: Rung;
+    if (pick.provider === 'gemini') head = geminiRung(pick.model ?? FIRST_MODEL);
+    else if (pick.model) head = nimRung(pick.model);
+    else return this.ladder;
+    head.primary = true;
+    // Marking again is the first model's alone; everything else falls back to the usual ones.
+    if (this.ladder === PRIMARY) return [head];
+    return [head, ...LADDER.filter((r) => r.model !== head.model).map((r) => ({ ...r, primary: false }))];
   }
 
-  /** The top rungs: the primary ones at the start of the ladder, or just the first. As it is now: the admin page can put another model first (kimi.ts, setFirst). */
-  private get top(): Rung[] {
-    const lead = this.ladder.findIndex((r) => !r.primary);
-    return this.ladder.slice(0, lead < 0 ? this.ladder.length : Math.max(1, lead));
+  /** The top rungs: the primary ones at the start of the ladder, or just the first. */
+  private static top(ladder: Rung[]): Rung[] {
+    const lead = ladder.findIndex((r) => !r.primary);
+    return ladder.slice(0, lead < 0 ? ladder.length : Math.max(1, lead));
   }
 
   /** The models refusing the key, by name, until one of them answers again. */
@@ -134,17 +168,18 @@ export class Balancer {
   }
 
   /** The rung to call now, or how long to wait before asking again. `skip`: models this call won't ask, and why. */
-  private pick(now: number, skip: Map<string, string>): Rung | number {
-    const st = (r: Rung) => STATES.get(r.model)!;
+  private pick(ladder: Rung[], now: number, skip: Map<string, string>): Rung | number {
+    const st = stateOf;
     const usable = (r: Rung) => {
       if (skip.has(r.model)) return false;
       if (st(r).gone && !this.opts.patient) return false;
       return true;
     };
-    const top = this.top.filter(usable);
-    const rest = this.ladder.slice(this.top.length).filter(usable);
+    const lead = Balancer.top(ladder);
+    const top = lead.filter(usable);
+    const rest = ladder.slice(lead.length).filter(usable);
     if (!top.length && !rest.length) {
-      const why = this.ladder.map((r) => skip.get(r.model) ?? `${r.name} refuses the key`);
+      const why = ladder.map((r) => skip.get(r.model) ?? `${r.name} refuses the key`);
       throw new Error(`No model left to ask: ${why.join('; ')}.`);
     }
 
@@ -173,21 +208,21 @@ export class Balancer {
   }
 
   /** Waits for a model free for this call, and first, for a low call, until holdLow is off. */
-  private async next(skip: Map<string, string>): Promise<Rung> {
+  private async next(ladder: () => Rung[], skip: Map<string, string>): Promise<Rung> {
     for (;;) {
       await whilePaused();
       if (this.opts.low && Balancer.holdLow) {
         await sleep(jitter(10_000));
         continue;
       }
-      const r = this.pick(Date.now(), skip);
+      const r = this.pick(ladder(), Date.now(), skip);
       if (typeof r !== 'number') return r;
       await sleep(jitter(r));
     }
   }
 
   private cool(r: Rung, e: CallError) {
-    const s = STATES.get(r.model)!;
+    const s = stateOf(r);
     if (e.kind === 'gone') {
       s.gone = true;
       if (this.opts.patient) s.coolUntil = Date.now() + jitter(GONE_S) * 1000;
@@ -220,15 +255,15 @@ export class Balancer {
     // How small each model is asked: each starts at full size.
     const levels = new Map<string, number>();
     for (let tries = 1; ; tries++) {
-      const r = await this.next(skip);
-      const s = STATES.get(r.model)!;
+      const r = await this.next(() => this.ladderFor(label), skip);
+      const s = stateOf(r);
       const level = levels.get(r.model) ?? 0;
       s.inFlight++;
-      const back = callOut(r.name, 'NVIDIA', partOf(label));
+      const back = callOut(r.name, r.gemini ? 'Antigravity' : 'NVIDIA', partOf(label));
       const at = new Date().toISOString();
       let pause = 0;
       try {
-        const reply = await chat(r.model, sized(level), { maxTokens: r.maxTokens, extra: r.extra, judge, signal: current()?.controller.signal });
+        const reply = await chat(r.model, sized(level), { maxTokens: r.maxTokens, extra: r.extra, judge, signal: current()?.controller.signal, endpoint: endpointOf(r) });
         s.strikes = 0;
         s.coolUntil = 0;
         s.gone = false;
@@ -271,6 +306,14 @@ export class Balancer {
       if (pause) await sleep(pause);
     }
   }
+}
+
+/** Where a rung's calls go: CLIProxyAPI for Gemini, NVIDIA otherwise. */
+function endpointOf(r: Rung): { url: string; key: string } | undefined {
+  if (!r.gemini) return undefined;
+  const p = proxy();
+  if (!p) throw new CallError('gone', 'there’s no CLIProxyAPI for Gemini');
+  return { url: `${p.url}/v1/chat/completions`, key: p.apiKey };
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;

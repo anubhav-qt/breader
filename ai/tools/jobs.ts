@@ -19,6 +19,8 @@ export interface LogLine {
 
 export interface JobCtx {
   key: string;
+  /** The book file's SHA-256, for the stages the admin page picked for it (stages.ts). */
+  id?: string;
   title: string;
   /** Its task, which the admin page can pause by itself. */
   group: string;
@@ -39,8 +41,8 @@ const PAUSED_LOOK_MS = 2_000;
 
 const store = new AsyncLocalStorage<JobCtx>();
 
-export function newJob(key: string, title: string, group: string): JobCtx {
-  return { key, title, group, controller: new AbortController(), calls: 0, parts: new Map(), model: null, account: null, log: [] };
+export function newJob(key: string, title: string, group: string, id?: string): JobCtx {
+  return { key, id, title, group, controller: new AbortController(), calls: 0, parts: new Map(), model: null, account: null, log: [] };
 }
 
 /** Runs `fn` as the job's: every call it makes, however deep, counts as the job's. */

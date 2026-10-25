@@ -39,7 +39,7 @@ RUN cpu=$TARGETARCH && if [ "$cpu" = amd64 ]; then cpu=x64; fi \
 # image's platform, checked against the checksums its release lists.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS cliproxy
 ARG TARGETARCH
-ARG CLIPROXY=8.0.5
+ARG CLIPROXY=8.0.42
 WORKDIR /cliproxy
 RUN arch=amd64 && sum=1424923a52a62e3db3b6871e5f97b046da6d000ba071b1c2fe28013668d7b54b \
   && if [ "$TARGETARCH" = arm64 ]; then arch=aarch64 && sum=3b255caee58136dff328be9a1e307f4d887b1bce5da5549951e7d8ebf3017ce2; fi \

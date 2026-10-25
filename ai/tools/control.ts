@@ -10,7 +10,7 @@ import { readAdminState, takeCommands, type Command } from '../../server/src/lib
  */
 
 const LOOK_MS = 2_000;
-export const MARKER_COMMANDS = ['retry', 'stop', 'redo', 'watching'];
+export const MARKER_COMMANDS = ['retry', 'stop', 'redo', 'watching', 'models'];
 
 /** The page's settings as last read. */
 export let control: AdminState = ADMIN_DEFAULTS;

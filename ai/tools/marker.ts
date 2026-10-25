@@ -15,10 +15,11 @@ import { castFromFile, fetchBook } from './fetch.ts';
 import { waitingForLimits } from './harness.ts';
 import { castsOnServer, checkFile, fileOnServer, live, loadOne, onServer, replace, upsert, wanted } from './import.ts';
 import { current, newJob, note, pauses, paused, runIn, stopIfStopped, whilePaused, type JobCtx, type LogLine } from './jobs.ts';
-import { castByFile, castOf, fitBy, LADDER, marksLedger, mins, notesBy, notesLedger, notesLedgerFile, PRIMARY, setFirst } from './kimi.ts';
+import { castByFile, castOf, fitBy, LADDER, marksLedger, mins, notesBy, notesLedger, notesLedgerFile, PRIMARY, setModels } from './kimi.ts';
 import { bookDir, isFetched, loadBook, marksFiles, OUT, QUEUE, readJson, WORK, writeJson, type Book, type QueueBook } from './lib.ts';
 import { listBooks } from './library.ts';
 import { markBook, stageOf } from './mark.ts';
+import { askModels, modelsLoop } from './models.ts';
 import { GATHERING, musicBy, musicLedger, musicLedgerFile, musicStage, noDownloads, noMusic, saveSoundtrack, scoreBook } from './music.ts';
 import { nvidiaKey } from './nim.ts';
 import { writeNotes } from './notes.ts';
@@ -174,14 +175,14 @@ export function balancers(): Balancers {
   const patient = { waitForTopS: 300, strikesToFall: 3, maxTries: Infinity, patient: true };
   const kimiOnly = { waitForTopS: Infinity, strikesToFall: Infinity, patient: true };
   return {
-    // The cast pass and the marks: Kimi K3, and Nemotron while Kimi is down (kimi.ts).
+    // The cast pass and the marks: the first model, and the second while it's down (kimi.ts).
     lb: new Balancer(LADDER, patient),
-    // Nemotron's parts again, by Kimi only. After 6 tries a part keeps Nemotron's marks.
+    // The second model's parts again, by the first only. After 6 tries a part keeps the second's marks.
     top: new Balancer(PRIMARY, { ...kimiOnly, maxTries: 6 }),
     // Music and notes, which wait while a book is being marked.
     music: new Balancer(LADDER, { ...patient, low: true }),
     notes: new Balancer(LADDER, { ...patient, low: true }),
-    // The notes' read-through, Kimi's however long it takes.
+    // The notes' read-through, the first model's however long it takes.
     review: new Balancer(PRIMARY, { ...kimiOnly, maxTries: Infinity, low: true }),
   };
 }
@@ -759,7 +760,7 @@ async function uploadJob(b: QueueBook) {
  * how it went. A book the admin page stopped, or sent back to do its step again, hasn't failed.
  */
 function start(b: QueueBook, phase: Phase, work: () => Promise<void>, pool: pg.Pool) {
-  const job: Job = { b, phase, since: Date.now(), ctx: newJob(b.key, b.title, phase), step: '', stepSince: Date.now() };
+  const job: Job = { b, phase, since: Date.now(), ctx: newJob(b.key, b.title, phase, b.sha256), step: '', stepSince: Date.now() };
   running.set(b.sha256, job);
   hold();
   const t0 = Date.now();
@@ -948,12 +949,12 @@ function doneParts(key: string, phase: Phase): Map<number, string> {
 /** Every part of a book on a step done part by part, in order. */
 export function partStates(j: { b: { key: string }; phase: Phase; ctx: JobCtx }, parts: number[]): PartState[] {
   const done = doneParts(j.b.key, j.phase);
-  const primaries = new Set(PRIMARY.map((r) => r.name));
+  const backups = new Set(LADDER.filter((r) => !r.primary).map((r) => r.name));
   return parts.map((n) => {
     if (j.ctx.parts.has(n)) return 'now';
     const model = done.get(n);
     if (model === undefined) return 'wait';
-    if (j.phase === 'marks' && model && !primaries.has(model)) return 'backup';
+    if (j.phase === 'marks' && backups.has(model)) return 'backup';
     return 'done';
   });
 }
@@ -1197,14 +1198,14 @@ function wake() {
   if (wakeUp) wakeUp();
 }
 
-/** The admin page's settings, taken in: pauses, the first model, and a round to start what they let start. */
+/** The admin page's settings, taken in: pauses, the first and second models, and a round to start what they let start. */
 function applySettings(s: AdminState) {
   pauses.all = s.marker.paused;
   pauses.groups.clear();
   for (const t of MARKER_TASKS) {
     if (!s.marker.tasks[t]) pauses.groups.add(t);
   }
-  setFirst(s.marker.first);
+  setModels(s.marker.first, s.marker.second);
   hold();
   wake();
 }
@@ -1213,6 +1214,10 @@ function applySettings(s: AdminState) {
 function asked(c: Command) {
   if (c.kind === 'watching') {
     watchedUntil = Date.now() + WATCHED_FOR_S * 1000;
+    return;
+  }
+  if (c.kind === 'models') {
+    askModels(typeof c.args.id === 'string' ? c.args.id : undefined);
     return;
   }
   const id = String(c.args.id ?? '');
@@ -1430,6 +1435,7 @@ export async function runMarker(dry: boolean) {
   console.log(`${clock()} The marker is running: a look about every ${POLL_S} s, up to ${at.marks} books marked, ${at.music} scored and ${at.notes} given notes at once.`);
   void liveLoop(pool);
   void controlLoop(pool, applySettings, asked);
+  void modelsLoop(pool);
   for (;;) {
     try {
       await round(lbs, pool);

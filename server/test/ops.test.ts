@@ -147,11 +147,36 @@ describe('admin controls', () => {
     const s = await readAdminState(primary.pool);
     expect(s.marker.paused).toBe(true);
     expect(s.marker.atOnce.marks).toBe(6);
-    expect(s.marker.first).toBe('kimi-k3');
+    expect(s.marker.first).toBe('moonshotai/kimi-k2.6');
+    await post('/admin/settings', { first: 'z-ai/glm-5.3', second: 'moonshotai/kimi-k2.6' });
+    expect((await readAdminState(primary.pool)).marker).toMatchObject({ first: 'z-ai/glm-5.3', second: 'moonshotai/kimi-k2.6' });
+    expect((await post('/admin/settings', { first: 'not a model' })).status).toBe(400);
     expect((await post('/admin/settings', { atOnce: { marks: 99, music: 1, notes: 1 } })).status).toBe(400);
     expect((await post('/admin/settings', { color: 'red' })).status).toBe(400);
     await post('/admin/settings', { paused: false });
     expect((await readAdminState(primary.pool)).marker).toMatchObject({ paused: false, atOnce: { marks: 6 } });
+  });
+
+  it('picks who does a stage, for books to come or some books, and asks the marker to check the models', async () => {
+    await fresh();
+    await post('/admin/stages', { picks: { 'marks.mark': { provider: 'gemini', model: 'gemini-3.8-flash-high' }, research: { provider: 'nim' } } });
+    await post('/admin/stages', { ids: [id], picks: { 'notes.write': { provider: 'nim', model: 'z-ai/glm-5.3' } } });
+    let s = await readAdminState(primary.pool);
+    expect(s.stages).toEqual({ 'marks.mark': { provider: 'gemini', model: 'gemini-3.8-flash-high' }, research: { provider: 'nim' } });
+    expect(s.stagesFor[id]).toEqual({ 'notes.write': { provider: 'nim', model: 'z-ai/glm-5.3' } });
+    await post('/admin/stages', { picks: { research: null } });
+    await post('/admin/stages', { ids: [id], picks: { 'notes.write': null } });
+    s = await readAdminState(primary.pool);
+    expect(s.stages).toEqual({ 'marks.mark': { provider: 'gemini', model: 'gemini-3.8-flash-high' } });
+    expect(s.stagesFor[id]).toBeUndefined();
+    expect((await post('/admin/stages', { picks: { 'marks.mark': { provider: 'gemini', model: 'moonshotai/kimi-k2.6' } } })).status).toBe(400);
+    expect((await post('/admin/stages', { picks: { 'marks.nope': { provider: 'nim' } } })).status).toBe(400);
+    expect((await post('/admin/models/check', {})).status).toBe(202);
+    expect((await post('/admin/models/check', { id: 'z-ai/glm-5.3' })).status).toBe(202);
+    expect(await commands()).toEqual([
+      { kind: 'models', args: {} },
+      { kind: 'models', args: { id: 'z-ai/glm-5.3' } },
+    ]);
   });
 
   it('puts a book next, keeps it back, lets it go, and asks the marker to retry, stop or redo it', async () => {

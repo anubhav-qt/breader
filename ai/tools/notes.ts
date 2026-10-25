@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { join } from 'node:path';
 import type { AiFile } from '../../shared/src/ai.ts';
 import type { Balancer } from './balancer.ts';
-import { castOf, castText, context, isCastLine, mergeCast, mins, notesDone, notesLedger, notesLedgerFile, packBy, text, TOP, type Done, type NotesLedger } from './kimi.ts';
+import { castOf, castText, context, isCastLine, mergeCast, mins, notesDone, notesLedger, notesLedgerFile, packBy, LADDER, text, type Done, type NotesLedger } from './kimi.ts';
 import { AI, blockAt, bookDir, cmp, count, inPart, loadBook, loadQueue, OUT, parsePos, partName, posText, QUEUE, readJson, writeJson, type Book, type Pos, type QueueBook } from './lib.ts';
 import type { Msg } from './nim.ts';
 import { packBook } from './pack.ts';
@@ -634,7 +634,7 @@ export async function writeNotes(key: string, lb: Balancer, top: Balancer, flags
       const r = await fix(book, d, lb, earlier, led, ROUNDS, 'fix');
       const gone = clear(book, d, earlier);
       if (gone.length) console.log(`  ${gone.length} entries check still rejected are left out: ${gone.join(', ')}`);
-      led.fixed = done(r?.model ?? TOP.name, r?.secs ?? 0);
+      led.fixed = done(r?.model ?? LADDER[0].name, r?.secs ?? 0);
       save(book, led);
     } else {
       d = fromNotes(readJson<Notes>(notesFile(book)));

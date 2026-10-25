@@ -1,4 +1,7 @@
 import type { AiAccount } from '@breader/shared/accounts';
+import type { Stage, StagePick } from '@breader/shared/admin';
+
+export type { Stage, StagePick };
 
 /*
  * What the admin page shows, as /admin/stream pushes it (server/src/routes/admin.ts): the server's
@@ -26,9 +29,9 @@ export const STEPS: Record<Task, Step[]> = {
     { key: 'fetch', name: 'Fetching the book', about: 'Takes the book’s file from the file store and splits it into its parts.' },
     { key: 'research', name: 'Researching it on the web', about: 'Gemini, on an Antigravity account, looks up the book and its series: who’s in it, and how each of them talks.' },
     { key: 'cast', name: 'Reading the cast from the book', about: 'Lists everyone who speaks, by the names the book gives them as it goes.' },
-    { key: 'mark', name: 'Marking who speaks, part by part', about: 'Every line gets its speaker. Kimi K3 marks the parts; Nemotron takes one when Kimi is busy.', parts: true },
+    { key: 'mark', name: 'Marking who speaks, part by part', about: 'Every line gets its speaker. The first model marks the parts; the second takes one while the first is down.', parts: true },
     { key: 'check', name: 'Checking the marks', about: 'Looks for lines with no speaker or the wrong one, and fixes them, a round at a time.' },
-    { key: 'redo', name: 'Marking again what the backup model did', about: 'The parts Nemotron marked go to Kimi K3 again, so the whole book is marked the same way.', parts: true },
+    { key: 'redo', name: 'Marking again what the backup model did', about: 'The parts the second model marked go to the first again, so the whole book is marked the same way.', parts: true },
     { key: 'settle', name: 'Settling unsure lines', about: 'Lines the two models read differently are asked about twice more, and the answer that agrees wins.' },
     { key: 'voices', name: 'Casting the voices', about: 'Everyone gets a voice of each model, the same one they had in the series’ earlier books.' },
     { key: 'save', name: 'Saving', about: 'Packs the marks and puts them on the server, where readers’ phones fetch them.' },
@@ -47,7 +50,7 @@ export const STEPS: Record<Task, Step[]> = {
     { key: 'fetch', name: 'Fetching the book', about: 'Takes the book’s file from the server and the book from the file store, and checks they read the same.' },
     { key: 'research', name: 'Researching it on the web', about: 'Gemini, on an Antigravity account, looks up the book and its series, for the notes to lean on.' },
     { key: 'roster', name: 'Listing who’s who', about: 'Starts from the earlier volumes’ notes: everyone, and what’s already known about them.' },
-    { key: 'write', name: 'Writing notes, part by part', about: 'Kimi K3 writes Revisit’s notes for each part, knowing only what the reader has read by then.', parts: true },
+    { key: 'write', name: 'Writing notes, part by part', about: 'The first model writes Revisit’s notes for each part, knowing only what the reader has read by then.', parts: true },
     { key: 'check', name: 'Checking the notes', about: 'Looks for anything said before the book says it, and for names that drift, and fixes them.' },
     { key: 'review', name: 'Reading them over', about: 'One last pass over the whole book’s notes, for what reads oddly next to the rest.' },
     { key: 'save', name: 'Saving', about: 'Puts the notes on the server, where Revisit reads them.' },
@@ -136,8 +139,9 @@ export interface MarkerSettings {
   tasks: Record<Task, boolean>;
   /** How many books at once, for each task. */
   atOnce: Record<Task, number>;
-  /** The model that marks and writes first; the other is the backup. */
-  first: 'kimi-k3' | 'nemotron';
+  /** The NVIDIA model that marks and writes first, by its id there; the second steps in while it's down. */
+  first: string;
+  second: string;
   /** Web research before marking and music, on Antigravity. */
   research: boolean;
   /** A failed book waits 2 minutes, doubling each time, up to this many. */
@@ -158,6 +162,59 @@ export interface Marker {
   /** Readers with more than one book waiting (missing from a marker that doesn't say yet). */
   readers?: ReaderLine[];
   settings: MarkerSettings;
+  /** Who does each stage for books to come, and for single books, where the page picked. */
+  stages?: Partial<Record<Stage, StagePick>>;
+  stagesFor?: Record<string, Partial<Record<Stage, StagePick>>>;
+  /** NVIDIA's models as the marker last checked them (ai/tools/models.ts). */
+  models?: Models | null;
+}
+
+/** One check of an NVIDIA model: did it answer, and how fast. */
+export interface ModelCheck {
+  at: string;
+  ok: boolean;
+  kind?: string;
+  why?: string;
+  /** Seconds to the first token. */
+  firstS?: number;
+  secs?: number;
+  /** Tokens a second once it started. */
+  tps?: number;
+}
+
+export interface ModelLine {
+  id: string;
+  seenAt: string;
+  goneAt?: string;
+  noChat?: boolean;
+  /** Newest first. */
+  checks: ModelCheck[];
+}
+
+export interface Models {
+  firstListAt: string | null;
+  listedAt: string | null;
+  sweptAt: string | null;
+  checking: string | null;
+  models: ModelLine[];
+  /** Antigravity's Gemini models, newest first. */
+  gemini?: string[];
+}
+
+/** The stages that ask a model, each task's in order, with what they're called here. */
+export const STAGES: Record<Task, Stage[]> = {
+  marks: ['research', 'marks.cast', 'marks.mark', 'marks.check', 'marks.redo', 'marks.settle', 'marks.voices'],
+  music: ['research', 'music.gather', 'music.plan', 'music.score', 'music.check'],
+  notes: ['research', 'notes.roster', 'notes.write', 'notes.check', 'notes.review'],
+};
+/** Stages done with tools: Gemini's unless picked otherwise. */
+export const TOOL_STAGES: Stage[] = ['research', 'music.gather'];
+
+/** A stage's step, as STEPS names it. */
+export function stageStep(stage: Stage): Step {
+  if (stage === 'research') return STEPS.marks[1];
+  const [task, key] = stage.split('.') as [Task, string];
+  return STEPS[task].find((s) => s.key === key)!;
 }
 
 export interface Job {
@@ -201,6 +258,10 @@ export interface Admin {
    */
   watch: (on: (s: Snapshot) => void, link?: (l: Link) => void, error?: (message: string) => void) => () => void;
   settings: (patch: Partial<MarkerSettings>) => void;
+  /** Who does these stages: for these books, or (no ids) for books to come. Null puts a stage back to the usual. */
+  stages: (picks: Partial<Record<Stage, StagePick | null>>, ids?: string[]) => void;
+  /** NVIDIA's models checked now: all of them, or one. */
+  checkModels: (id?: string) => void;
   /** A waiting book: next in line, kept back or let go, or tried again now. */
   next: (id: string, task: Task) => void;
   hold: (id: string, task: Task, held: boolean) => void;

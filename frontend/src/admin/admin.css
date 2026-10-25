@@ -272,3 +272,31 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 @media (prefers-reduced-motion: reduce) {
   .adm-live.is-on i, .adm-steps .is-now > i, .adm-parts .is-now, .adm-job.is-running > i, .adm-log li:first-child { animation: none; }
 }
+
+/* NVIDIA's models and who does each stage, over the page. */
+.adm-modal { display: grid; }
+.adm-mods, .adm-stg { display: grid; gap: 14px; min-width: 0; }
+.adm-mods-h, .adm-stg-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.adm-stg-h { flex-direction: column; gap: 8px; }
+.adm-mods-f { display: flex; flex-wrap: wrap; gap: 10px; }
+.adm-mods-l { list-style: none; margin: 0; padding: 0; }
+.adm-mod { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.adm-mod-t { flex: 1; min-width: 0; display: grid; justify-items: start; gap: 5px; }
+.adm-mod-t b { font: 700 23px/0.9 var(--read); }
+.adm-mod-t .adm-one, .adm-mod-t p { max-width: 100%; }
+.adm-mod-acts { flex: none; display: flex; align-items: center; gap: 6px; }
+.adm-stg-g { display: grid; }
+.adm-stg-t { margin: 6px 0 2px; font: var(--ui-w) 11px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.adm-stg-r { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); }
+.adm-stg-r > div { display: grid; gap: 3px; min-width: 0; }
+.adm-stg-r b { font: var(--ui-w-strong) 13px/1.4 var(--ui); }
+.adm-stg-r .adm-pick { flex: 0 0 280px; }
+
+@media (max-width: 720px) {
+  .adm-mods-h { flex-direction: column; }
+  .adm-mod { flex-wrap: wrap; }
+  .adm-mod-acts { width: 100%; flex-wrap: wrap; }
+  .adm-stg-r { flex-direction: column; align-items: stretch; gap: 8px; }
+  .adm-stg-r .adm-pick { flex: none; width: 100%; }
+  .adm-set-line { flex-wrap: wrap; }
+}

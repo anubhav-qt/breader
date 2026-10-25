@@ -121,16 +121,19 @@ export async function jobRows(pool: pg.Pool): Promise<JobRow[]> {
   return all<JobRow>(pool, 'SELECT name, last_ok_at, last_error, last_error_at, running_since, detail FROM job_runs ORDER BY name');
 }
 
+/** The marker's own rows, shown on its card rather than with the jobs. */
+const MARKER_ROWS = ['ai-marker', 'nim-models'];
+
 /** The jobs as the page lists them: running or not, and switched off from it or not. */
 export function jobsOf(rows: JobRow[], state: AdminState) {
-  return rows.map((j) => ({
+  return rows.filter((j) => j.name !== 'nim-models').map((j) => ({
     name: j.name,
     last_ok_at: j.last_ok_at,
     last_error: j.last_error,
     last_error_at: j.last_error_at,
     running: !!j.running_since,
     off: state.jobsOff.includes(j.name),
-    detail: j.name === 'ai-marker' ? null : j.detail,
+    detail: MARKER_ROWS.includes(j.name) ? null : j.detail,
   }));
 }
 
@@ -168,7 +171,9 @@ export function markerOf(rows: JobRow[], state: AdminState) {
   });
   const keyOf = (q: QueueItem) => queueKey(q.id ?? '', q.task);
   const ordered = MARKER_TASKS.flatMap((t) => nextFirst(queue.filter((q) => q.task === t), keyOf, state.next));
-  return { ...d, queue: ordered, readers, settings: state.marker };
+  // NVIDIA's models as the marker last checked them (ai/tools/models.ts).
+  const models = rows.find((j) => j.name === 'nim-models')?.detail ?? null;
+  return { ...d, queue: ordered, readers, settings: state.marker, stages: state.stages, stagesFor: state.stagesFor, models };
 }
 
 export interface Snapshot {

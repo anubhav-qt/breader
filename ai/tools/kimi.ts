@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { MARKER_DEFAULTS } from '../../shared/src/admin.ts';
 import { builtInVoice, VOICE_MODELS } from '../../shared/src/voices.ts';
 import type { Rung } from './balancer.ts';
 import { bookDir, cmp, parsePos, partName, posText, readJson, writeJson, type Book, type Gender } from './lib.ts';
@@ -11,38 +12,55 @@ import type { Cast } from './validate.ts';
  */
 
 // A book's parts all go at once, so each model takes as many calls as a long book has parts. The
-// primary ones share the calls as equals; Nemotron steps in only while they're all down. DeepSeek V4.1
-// Flash was a primary for Vol. 9 of Mushoku; its name stays in LONG for the packs it marked.
-// maxTokens: every model answers with at most 130,000 tokens. NVIDIA caps Kimi K3 at 131,072
-// since 2026-10-11 (it took 1,048,576 the day before), and Kimi counts the prompt in a limit of its
-// own. A call turned down for asking too much is asked again for what the refusal allows (nim.ts),
-// so a cap NVIDIA moves again costs one refused call, not the call.
+// first model takes the calls; the second steps in only while it's down. Which two is the admin
+// page's to say (shared/src/admin.ts, first and second), from every model NVIDIA lists (models.ts).
+// maxTokens: every model answers with at most 130,000 tokens. NVIDIA caps Kimi at 131,072 since
+// 2026-10-11, and Kimi counts the prompt in a limit of its own. A call turned down for asking too
+// much is asked again for what the refusal allows (nim.ts), so a cap NVIDIA moves again, or a
+// model with a smaller one, costs one refused call, not the call.
+const MAX_TOKENS = 130_000;
+const IN_FLIGHT = 24;
+
+/** What some models are asked with besides the prompt, by NVIDIA id. */
+const EXTRA: Record<string, Record<string, unknown>> = {
+  'moonshotai/kimi-k3': { reasoning_effort: 'high' },
+  'moonshotai/kimi-k2.6': { reasoning_effort: 'high' },
+};
+
+/** Short names, for logs and the ledgers, of models whose ids say less. */
+const SHORT: Record<string, string> = {
+  'moonshotai/kimi-k3': 'kimi-k3',
+  'nvidia/nemotron-3-ultra-550b-a55b': 'nemotron-3-ultra',
+};
+
+/** A model's short name: "kimi-k2.6" for "moonshotai/kimi-k2.6". */
+export const shortName = (model: string) => SHORT[model] ?? model.split('/').pop()!;
+
+/** The rung for an NVIDIA model, by its id there. */
+export function nimRung(model: string): Rung {
+  const r: Rung = { model, name: shortName(model), maxTokens: MAX_TOKENS, maxInFlight: IN_FLIGHT };
+  if (EXTRA[model]) r.extra = EXTRA[model];
+  return r;
+}
+
 export const LADDER: Rung[] = [
-  { model: 'moonshotai/kimi-k3', name: 'kimi-k3', extra: { reasoning_effort: 'high' }, maxTokens: 130_000, maxInFlight: 24, primary: true },
-  { model: 'nvidia/nemotron-3-ultra-550b-a55b', name: 'nemotron-3-ultra', maxTokens: 130_000, maxInFlight: 24 },
+  { ...nimRung(MARKER_DEFAULTS.first), primary: true },
+  nimRung(MARKER_DEFAULTS.second),
 ];
-export const TOP = LADDER[0];
 export const PRIMARY = LADDER.filter((r) => r.primary);
 
-/** The admin page's names for the models it can put first, and theirs here. */
-const FIRST: Record<string, string> = { 'kimi-k3': 'kimi-k3', 'nemotron': 'nemotron-3-ultra' };
-
 /**
- * Puts a model first, as the admin page asks (the marker's "First model"): it marks and writes,
- * and the other only steps in while it's down. LADDER and PRIMARY change in place, so every
- * balancer already made follows them from its next call.
+ * The first and second models, as the admin page asks. LADDER and PRIMARY change in place, so
+ * every balancer already made follows them from its next call.
  */
-export function setFirst(first: string) {
-  const name = FIRST[first] ?? first;
-  const i = LADDER.findIndex((r) => r.name === name);
-  if (i < 0) return;
-  if (i === 0 && LADDER[0].primary) return;
-  const [r] = LADDER.splice(i, 1);
-  LADDER.unshift(r);
-  LADDER.forEach((rung, k) => { rung.primary = k === 0; });
-  PRIMARY.splice(0, PRIMARY.length, ...LADDER.filter((rung) => rung.primary));
+export function setModels(first: string, second: string) {
+  if (LADDER[0].model === first && LADDER[1]?.model === second) return;
+  const rungs: Rung[] = [{ ...nimRung(first), primary: true }];
+  if (second !== first) rungs.push(nimRung(second));
+  LADDER.splice(0, LADDER.length, ...rungs);
+  PRIMARY.splice(0, PRIMARY.length, LADDER[0]);
 }
-const LONG: Record<string, string> = { 'kimi-k3': 'Kimi K3 (reasoning high, NVIDIA)', 'deepseek-v4.1-flash': 'DeepSeek V4.1 Flash (thinking, NVIDIA)' };
+const LONG: Record<string, string> = { 'kimi-k3': 'Kimi K3 (reasoning high, NVIDIA)', 'kimi-k2.6': 'Kimi K2.6 (reasoning high, NVIDIA)', 'deepseek-v4.1-flash': 'DeepSeek V4.1 Flash (thinking, NVIDIA)' };
 /** A model's long name for the pack's "by". */
 export const longName = (model: string) => LONG[model] ?? model;
 

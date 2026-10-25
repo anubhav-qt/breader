@@ -2,14 +2,20 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { springs } from '../lib/springs';
 import { ago, modelName, span, toneOf, until } from './format';
+import { ModelsDialog, StagesDialog } from './Models';
 import { Dots, Label, Monogram, PartDots, Percent, Seg, Stepper, Switch } from './parts';
-import { stepsFor, TASK_NAMES, type Admin, type Marker, type MarkerSettings, type ReaderLine, type Task, type Waiting, type Working } from './types';
+import { pickable, statsLine, statsOf } from './stats';
+import { stepsFor, TASK_NAMES, type Admin, type Marker, type MarkerSettings, type Models, type ReaderLine, type Task, type Waiting, type Working } from './types';
 
 /*
  * The AI marker: how far through the library it is, each book it's on, step by step, with what
  * each step does, who's doing it and what it just did; then the queue, to reorder, keep back or try
- * again. Its settings open at the top.
+ * again. Its settings open at the top, and from there NVIDIA's models; who does each stage opens
+ * from the top for every book, or from a book for that one.
  */
+
+/** What's open over the card: NVIDIA's models, or the stages, for every book or one. */
+type Dialog = { kind: 'models' } | { kind: 'stages'; book?: { id: string; title: string } } | null;
 
 const keyOf = (x: { id: string; task: Task }) => `${x.id}:${x.task}`;
 
@@ -29,7 +35,9 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
   const [open, setOpen] = useState<string | null>(() => (m.working[0] ? keyOf(m.working[0]) : null));
   const [setting, setSetting] = useState(false);
   const [filter, setFilter] = useState<'all' | Task>('all');
+  const [dialog, setDialog] = useState<Dialog>(null);
   const paused = m.settings.paused;
+  const stagesOf = (id: string, title: string) => () => setDialog({ kind: 'stages', book: { id, title } });
 
   // One dot a book, while there's room for them; past that, a meter out of a hundred.
   let library = <Dots on={m.finished} of={m.books} label="Books done" />;
@@ -53,6 +61,9 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
             <span>{paused ? 'Paused' : 'Running'}</span>
             <Switch on={!paused} label="The marker runs" onChange={(on) => admin.settings({ paused: !on })} />
           </span>
+          <button type="button" className="btn btn-quiet adm-small" aria-haspopup="dialog" onClick={() => setDialog({ kind: 'stages' })}>
+            Stages
+          </button>
           <button type="button" className={`btn btn-quiet adm-small${setting ? ' is-on' : ''}`} aria-expanded={setting} onClick={() => setSetting(!setting)}>
             Settings
           </button>
@@ -63,7 +74,7 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
       <AnimatePresence initial={false}>
         {setting && (
           <motion.div key="settings" className="adm-fold" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springs.snappy}>
-            <Settings s={m.settings} onChange={admin.settings} />
+            <Settings s={m.settings} models={m.models ?? null} onChange={admin.settings} onModels={() => setDialog({ kind: 'models' })} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -78,6 +89,8 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
             paused={paused || !m.settings.tasks[w.task]}
             open={open === keyOf(w)}
             onOpen={() => setOpen(open === keyOf(w) ? null : keyOf(w))}
+            onStages={stagesOf(w.id, w.title)}
+            own={!!m.stagesFor?.[w.id]}
             admin={admin}
           />
         ))}
@@ -107,15 +120,19 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
       {!shown.length && <p className="adm-none">Nothing.</p>}
       <ol className="adm-queue">
         {shown.map((q) => (
-          <QueueRow key={keyOf(q)} q={q} first={m.queue.find((x) => x.task === q.task) === q} off={!m.settings.tasks[q.task]} admin={admin} />
+          <QueueRow key={keyOf(q)} q={q} first={m.queue.find((x) => x.task === q.task) === q} off={!m.settings.tasks[q.task]} own={!!m.stagesFor?.[q.id]} onStages={stagesOf(q.id, q.title)} admin={admin} />
         ))}
       </ol>
+      <AnimatePresence>
+        {dialog?.kind === 'models' && <ModelsDialog key="models" m={m} admin={admin} onClose={() => setDialog(null)} />}
+        {dialog?.kind === 'stages' && <StagesDialog key={dialog.book?.id ?? 'all'} m={m} admin={admin} book={dialog.book} onClose={() => setDialog(null)} />}
+      </AnimatePresence>
     </section>
   );
 }
 
 /** A book being worked on: one line, and opened, every step of its task. */
-function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: boolean; open: boolean; onOpen: () => void; admin: Admin }) {
+function WorkingBook({ w, paused, open, onOpen, onStages, own, admin }: { w: Working; paused: boolean; open: boolean; onOpen: () => void; onStages: () => void; own: boolean; admin: Admin }) {
   const all = stepsFor(w);
   const steps = all.filter((s) => !w.skipped.includes(s.key));
   const at = Math.max(0, steps.findIndex((s) => s.key === w.step));
@@ -195,6 +212,7 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
                 </ol>
               </div>
               <div className="adm-acts">
+                <button type="button" className={`btn btn-quiet adm-small${own ? ' is-on' : ''}`} aria-haspopup="dialog" title={own ? 'It has stages of its own' : undefined} onClick={onStages}>Stages</button>
                 <button type="button" className="btn btn-quiet adm-small" onClick={() => admin.redoStep(w.id, w.task)}>Redo step</button>
                 <button type="button" className="btn btn-ghost adm-small" onClick={() => admin.stop(w.id, w.task)}>Stop</button>
               </div>
@@ -207,7 +225,7 @@ function WorkingBook({ w, paused, open, onOpen, admin }: { w: Working; paused: b
 }
 
 /** A waiting book, with why it's waiting and what can be done about it. */
-function QueueRow({ q, first, off, admin }: { q: Waiting; first: boolean; off: boolean; admin: Admin }) {
+function QueueRow({ q, first, off, own, onStages, admin }: { q: Waiting; first: boolean; off: boolean; own: boolean; onStages: () => void; admin: Admin }) {
   let why: string | null = null;
   if (q.held) why = 'Kept back';
   else if (off) why = 'Switched off';
@@ -220,6 +238,7 @@ function QueueRow({ q, first, off, admin }: { q: Waiting; first: boolean; off: b
         <span className="adm-chips">
           <span className="adm-chip">{TASK_NAMES[q.task]}</span>
           {q.first && <span className="adm-chip is-first" title={`The first book of ${q.first.join(', ')}`}>First</span>}
+          {own && <span className="adm-chip">Own stages</span>}
         </span>
         {why && <p className="adm-dim">{why}</p>}
         {q.failed && (
@@ -231,6 +250,7 @@ function QueueRow({ q, first, off, admin }: { q: Waiting; first: boolean; off: b
       <div className="adm-q-acts">
         {q.failed && <button type="button" className="btn btn-primary adm-small" onClick={() => admin.retry(q.id, q.task)}>Try now</button>}
         {!first && !q.failed && <button type="button" className="btn btn-quiet adm-small" onClick={() => admin.next(q.id, q.task)}>Do next</button>}
+        <button type="button" className="btn btn-ghost adm-small" aria-haspopup="dialog" onClick={onStages}>Stages</button>
         <button type="button" className="btn btn-ghost adm-small" onClick={() => admin.hold(q.id, q.task, !q.held)}>
           {q.held ? 'Let go' : 'Keep back'}
         </button>
@@ -285,9 +305,26 @@ function FirstBooks({ readers, admin }: { readers: ReaderLine[]; admin: Admin })
 
 const RETRY_CAPS = [15, 60, 360];
 
+/** A pick of NVIDIA model: the ones that chat and answered, with how they did, and the one picked whatever it is. */
+function ModelPick({ label, value, models, onChange }: { label: string; value: string; models: Models | null; onChange: (id: string) => void }) {
+  const lines = (models?.models ?? []).filter((x) => pickable(x) && (!x.checks.length || x.checks.some((c) => c.ok) || x.id === value));
+  const known = lines.some((x) => x.id === value);
+  return (
+    <select className="adm-pick" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      {!known && <option value={value}>{modelName(value)}</option>}
+      {lines.map((x) => (
+        <option key={x.id} value={x.id}>{modelName(x.id)} · {statsLine(statsOf(x))}</option>
+      ))}
+    </select>
+  );
+}
+
 /** How the marker works, to change from here. */
-function Settings({ s, onChange }: { s: MarkerSettings; onChange: (patch: Partial<MarkerSettings>) => void }) {
+function Settings({ s, models, onChange, onModels }: { s: MarkerSettings; models: Models | null; onChange: (patch: Partial<MarkerSettings>) => void; onModels: () => void }) {
   const tasks: Task[] = ['marks', 'music', 'notes'];
+  // Picking the other one swaps them, so the two are never the same.
+  const pickFirst = (id: string) => onChange(id === s.second ? { first: id, second: s.first } : { first: id });
+  const pickSecond = (id: string) => onChange(id === s.first ? { first: s.second, second: id } : { second: id });
   return (
     <div className="adm-set">
       <div className="adm-set-row is-head">
@@ -303,8 +340,25 @@ function Settings({ s, onChange }: { s: MarkerSettings; onChange: (patch: Partia
         </div>
       ))}
       <div className="adm-set-line">
-        <b>First model</b>
-        <Seg label="First model" value={s.first} onChange={(v) => onChange({ first: v })} options={[{ v: 'kimi-k3', label: 'Kimi K3' }, { v: 'nemotron', label: 'Nemotron' }]} />
+        <div>
+          <b>First model</b>
+          <span className="adm-dim">Marks and writes, on NVIDIA</span>
+        </div>
+        <ModelPick label="First model" value={s.first} models={models} onChange={pickFirst} />
+      </div>
+      <div className="adm-set-line">
+        <div>
+          <b>Second model</b>
+          <span className="adm-dim">Steps in while the first is down</span>
+        </div>
+        <ModelPick label="Second model" value={s.second} models={models} onChange={pickSecond} />
+      </div>
+      <div className="adm-set-line">
+        <div>
+          <b>NVIDIA’s models</b>
+          <span className="adm-dim">{models?.sweptAt ? `Each checked ${ago(models.sweptAt)}, once a day` : 'Checked once a day'}</span>
+        </div>
+        <button type="button" className="btn btn-quiet adm-small" aria-haspopup="dialog" onClick={onModels}>Compare</button>
       </div>
       <div className="adm-set-line">
         <b>Web research</b>

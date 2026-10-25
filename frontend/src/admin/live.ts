@@ -241,6 +241,8 @@ export function liveAdmin(token: string): Admin {
       };
     },
     settings: (patch) => fire('POST', '/admin/settings', patch),
+    stages: (picks, ids) => fire('POST', '/admin/stages', ids ? { picks, ids } : { picks }),
+    checkModels: (id) => fire('POST', '/admin/models/check', id ? { id } : {}),
     next: (id, task) => queue('next', id, task),
     hold: (id, task, held) => queue('hold', id, task, held),
     retry: (id, task) => queue('retry', id, task),

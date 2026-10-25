@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { ACCOUNT_KINDS, FirstAction, MarkerPatch, MusicImport, QueueAction, musicImportKey, musicImportProblems, queueKey } from '@breader/shared';
+import { ACCOUNT_KINDS, FirstAction, MarkerPatch, MusicImport, QueueAction, StagesAction, musicImportKey, musicImportProblems, queueKey, withStages } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ADMIN_JOBS, addCommand, changeAdminState, runKind } from '../lib/admin.ts';
 import { adminHub, inUseOrder } from '../lib/admin-live.ts';
@@ -17,6 +17,7 @@ const FinishRequest = z.object({ state: State, redirectUrl: z.string().min(1).ma
 const CancelRequest = z.object({ state: State });
 const JobName = z.string().refine((n) => ADMIN_JOBS.includes(n), 'No such job.');
 const JobOn = z.object({ on: z.boolean() });
+const ModelCheck = z.object({ id: z.string().regex(/^[\w.-]+\/[\w.:-]+$/).optional() });
 /** How many books asked to go next are remembered, the latest first. */
 const NEXT_KEPT = 200;
 /** A comment down the stream this often, so nothing between here and the page takes it for idle. */
@@ -102,6 +103,22 @@ export function adminRoutes(deps: Deps) {
     const patch = parse(MarkerPatch, await readJson(c));
     const s = await changeAdminState(pool, (st) => ({ ...st, marker: { ...st.marker, ...patch } }));
     return c.json({ settings: s.marker });
+  });
+
+  // Who does which stages of the pipeline: for some books, or for books to come.
+  r.post('/admin/stages', control, async (c) => {
+    checkToken(c);
+    const a = parse(StagesAction, await readJson(c));
+    const s = await changeAdminState(pool, (st) => withStages(st, a));
+    return c.json({ stages: s.stages });
+  });
+
+  // NVIDIA's models checked now, all of them or one, by the marker (ai/tools/models.ts).
+  r.post('/admin/models/check', control, async (c) => {
+    checkToken(c);
+    const { id } = parse(ModelCheck, await readJson(c));
+    await addCommand(pool, 'models', id ? { id } : {});
+    return c.json({ ok: true }, 202);
   });
 
   r.post('/admin/queue', control, async (c) => {

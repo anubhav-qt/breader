@@ -114,8 +114,8 @@ test('the cast comes from the book alone, and research.md says so', async () => 
   assert.deepEqual(cast.filter((p) => !p.generic).map((p) => `${p.id} ${p.gender}`), ['elena F', 'marlo M', 'masked-knight M', 'ines F']);
   assert.deepEqual(cast.find((p) => p.id === 'masked-knight')?.changes?.map((c) => `${c.at} ${c.gender}`), ['1:3 F']);
   assert.equal(cast.find((p) => p.id === 'marlo')?.changes, undefined, 'a change at a paragraph the book doesn’t have is left out');
-  assert.match(readFileSync(join(bookDir(b.key), 'research.md'), 'utf8'), /^# Research: The Test Lantern\n\nFrom the book alone, by kimi-k3/);
-  assert.equal(readJson<{ model: string }>(castByFile(book)).model, 'kimi-k3');
+  assert.match(readFileSync(join(bookDir(b.key), 'research.md'), 'utf8'), /^# Research: The Test Lantern\n\nFrom the book alone, by kimi-k2.6/);
+  assert.equal(readJson<{ model: string }>(castByFile(book)).model, 'kimi-k2.6');
 });
 
 test('then marked and packed into a file the server takes', async () => {
@@ -123,7 +123,7 @@ test('then marked and packed into a file the server takes', async () => {
   assert.ok(existsSync(outFile));
   const f = readJson<AiFile>(outFile);
   assert.deepEqual(checkFile(`${sha256}.json`, f).problems, []);
-  assert.equal(f.by, 'Kimi K3 (reasoning high, NVIDIA) parts 1; cast by Kimi K3 (reasoning high, NVIDIA)');
+  assert.equal(f.by, 'Kimi K2.6 (reasoning high, NVIDIA) parts 1; cast by Kimi K2.6 (reasoning high, NVIDIA)');
   assert.equal(f.voices.spans.length, 9);
   const voiced = f.voices.cast.filter((p) => p.voice).map((p) => `${p.id} ${p.voice!.piper} ${p.voice!.kokoro}`);
   assert.deepEqual(voiced, ['elena lessac af_heart', 'marlo ryan am_michael', 'masked-knight alan bm_george', 'ines alba bf_isabella']);
@@ -143,7 +143,7 @@ test('then notes, merged into the server’s file with anyone they added to the 
   assert.deepEqual(f.voices.cast.slice(0, row.voices.cast.length), row.voices.cast, 'the marks’ cast keeps its order');
   assert.deepEqual(f.voices.cast.slice(row.voices.cast.length).map((p) => p.id), ['gate-keeper']);
   assert.deepEqual(f.voices.spans, row.voices.spans);
-  assert.equal(f.by, 'Kimi K3 (reasoning high, NVIDIA) parts 1; notes by Kimi K3 (reasoning high, NVIDIA); cast by Kimi K3 (reasoning high, NVIDIA)');
+  assert.equal(f.by, 'Kimi K2.6 (reasoning high, NVIDIA) parts 1; notes by Kimi K2.6 (reasoning high, NVIDIA); cast by Kimi K2.6 (reasoning high, NVIDIA)');
   assert.equal(needs(b, new Map([[sha256, { made: f.made, by: f.by, notes: 4 }]])), null);
 });
 

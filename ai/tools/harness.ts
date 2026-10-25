@@ -6,7 +6,10 @@ import { estimateContextTokens, estimateMessageTokens, streamSimple, toToolDecla
 import { backoffS, jitter, log } from './balancer.ts';
 import { callOut, current, stopIfStopped, whilePaused } from './jobs.ts';
 import { WORK } from './lib.ts';
-import { geminiModels, geminiOpensAt, noHarness, proxy, THINKING } from './proxy.ts';
+import { nimAlias } from '../../shared/src/admin.ts';
+import { LADDER } from './kimi.ts';
+import { geminiModels, geminiOpensAt, modelFor, noHarness, proxy, THINKING } from './proxy.ts';
+import { pickFor, stageOf } from './stages.ts';
 
 /*
  * The harness: a Gemini model on Antigravity (proxy.ts) working through a task with tools, on
@@ -91,6 +94,30 @@ export async function brain(): Promise<Brain> {
     stream: streamSimple,
     opensAt: () => geminiOpensAt(p),
   };
+}
+
+/** An NVIDIA model's window as the harness counts it, through CLIProxyAPI: compacted well before most fill. */
+const NIM_WINDOW = 128_000;
+const NIM_MAX_TOKENS = 16_000;
+
+/**
+ * The brain with the model the admin page picked for the task's stage first (stages.ts): another
+ * Gemini, or an NVIDIA model that CLIProxyAPI serves beside them. The Gemini models stay behind it.
+ */
+export function routed(b: Brain, label: Record<string, unknown>): Brain {
+  const pick = pickFor(stageOf(label));
+  const p = proxy();
+  if (!pick || !p) return b;
+  let id: string;
+  if (pick.provider === 'nim') id = nimAlias(pick.model ?? LADDER[0].model);
+  else if (pick.model) id = pick.model;
+  else return b;
+  let head = b.models.find((m) => m.id === id);
+  if (!head) {
+    head = modelFor(p, id);
+    if (pick.provider === 'nim') head = { ...head, name: pick.model ?? LADDER[0].model, contextWindow: NIM_WINDOW, maxTokens: NIM_MAX_TOKENS };
+  }
+  return { ...b, models: [head, ...b.models.filter((m) => m.id !== id)] };
 }
 
 /** A tool whose answer is text. An error it throws goes back to the model, so its message should say what to do instead. */
@@ -432,7 +459,7 @@ const noEvents = () => {};
 export async function runAgent(task: Task, given?: Brain): Promise<string> {
   let b = given;
   if (!b) b = await brain();
-  const using = b;
+  const using = routed(b, task.label);
 
   // Set by finish: an object, since the loop's callbacks read it as it changes.
   const outcome: { summary: string | null } = { summary: null };

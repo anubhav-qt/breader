@@ -13,7 +13,8 @@ import { unseal } from './seal.ts';
  * never printed.
  */
 
-const URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+export const NIM_BASE = 'https://integrate.api.nvidia.com/v1';
+const URL = `${NIM_BASE}/chat/completions`;
 export const SEALED = join(AI, 'nvidia-key.enc');
 
 export interface Key {
@@ -147,11 +148,15 @@ export interface ChatOptions {
   idleS?: number;
   /** Cuts the call off: the admin page stopped its book (jobs.ts). */
   signal?: AbortSignal;
+  /** Another OpenAI-style endpoint than NVIDIA's: CLIProxyAPI, for Gemini (balancer.ts). */
+  endpoint?: { url: string; key: string };
+  /** A check that the model answers (models.ts): an answer cut short or all thinking still counts. */
+  probe?: boolean;
 }
 
 function kindOf(status: number): Failure {
   if (status === 429) return 'rate';
-  if (status === 401 || status === 403 || status === 404) return 'gone';
+  if (status === 401 || status === 403 || status === 404 || status === 410) return 'gone';
   if (status === 504 || status === 408) return 'slow';
   if (status >= 500) return 'busy';
   return 'bad';
@@ -196,10 +201,10 @@ async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Rep
   let finish = '';
   let usage: { prompt_tokens?: number; completion_tokens?: number } = {};
   try {
-    const res = await fetch(URL, {
+    const res = await fetch(o.endpoint?.url ?? URL, {
       method: 'POST',
       signal: ctl.signal,
-      headers: { Authorization: `Bearer ${nvidiaKey().key}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: { Authorization: `Bearer ${o.endpoint?.key ?? nvidiaKey().key}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({
         model,
         messages,
@@ -269,8 +274,9 @@ async function once(model: string, messages: Msg[], o: ChatOptions): Promise<Rep
   }
 
   text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  if (o.probe && (text || thinkChars)) finish = finish === 'length' ? 'stop' : finish;
   if (finish === 'length') throw new CallError('cut', `the answer hit max_tokens (${o.maxTokens})`);
-  if (!text) throw new CallError('empty', `an empty answer (finish ${finish || 'none'}, ${thinkChars} characters of thinking)`);
+  if (!text && !(o.probe && thinkChars)) throw new CallError('empty', `an empty answer (finish ${finish || 'none'}, ${thinkChars} characters of thinking)`);
   if (o.judge) {
     const wrong = o.judge(text, true);
     if (wrong) throw new CallError('bad', wrong);

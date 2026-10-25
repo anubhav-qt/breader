@@ -14,6 +14,7 @@
     "music": "tsx tools/cli/music.ts",
     "pipeline": "tsx tools/cli/pipeline.ts",
     "audit": "tsx tools/cli/audit.ts",
+    "models": "tsx tools/cli/models.ts",
     "pack": "tsx tools/cli/pack.ts",
     "import": "tsx tools/cli/import.ts",
     "marker": "tsx tools/cli/marker.ts",
