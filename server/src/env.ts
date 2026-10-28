@@ -145,8 +145,8 @@ const Env = z.object({
 export type Env = z.infer<typeof Env>;
 
 /**
- * The ThinkPad, in production: the laptop that is MACHINE=laptop (the backup on Oracle is
- * MACHINE=oracle, and Render the fallback). Its SSD has the room to keep manga by the tens of GB.
+ * The ThinkPad, in production: the laptop that is MACHINE=laptop (Render is the fallback). Its SSD
+ * has the room to keep manga by the tens of GB.
  */
 export const onThinkPad = (env: Pick<Env, 'ROLE' | 'MACHINE' | 'NODE_ENV'>) =>
   env.ROLE === 'laptop' && env.MACHINE === 'laptop' && env.NODE_ENV === 'production';
