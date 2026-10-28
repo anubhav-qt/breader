@@ -25,9 +25,9 @@ import { makeFileMirror } from './mirror/files.ts';
  * the proxy for its AI accounts. It never runs on the fallback. The admin page can switch each job
  * off, or run it now (lib/admin.ts), and sees which are running.
  *
- * The backup on Oracle Cloud runs the same stack as the laptop. Both keep their own copy, file
- * mirror, Suwayomi and yt-dlp current, but the jobs that must happen once (the backup, clean-up,
- * the storage check, pruning the feed, the AI marker) go to whichever holds the lease (jobs/lease.ts).
+ * If a second machine ever runs the same stack, each keeps its own copy, file mirror, Suwayomi and
+ * yt-dlp current, but the jobs that must happen once (the backup, clean-up, the storage check,
+ * pruning the feed, the AI marker) go to whichever holds the lease (jobs/lease.ts).
  */
 startReporting('worker');
 const env = loadEnv();

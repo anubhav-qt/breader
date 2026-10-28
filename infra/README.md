@@ -241,8 +241,7 @@ that fails (bad settings, a migration that can't run) shows there too.
 
 ### 7. The laptop
 
-Only one laptop runs the stack at a time (see *Moving the laptop* below). A backup machine may run
-it too, the same way (see *The backup on Oracle Cloud* below).
+Only one laptop runs the stack at a time (see *Moving the laptop* below).
 
 On a Mac:
 
@@ -290,22 +289,6 @@ Then, on either:
 The update check pulls images, not this repository: after a change to `infra/compose.yml` or
 `infra/update.sh`, run `git pull` in the laptop's checkout, then `docker compose -f
 infra/compose.yml up -d`.
-
-### The backup on Oracle Cloud
-
-An Always Free Ampere (arm64) machine runs the very same stack, so api.breader.example answers
-whenever either machine is up. Set it up like the laptop on Linux (Ubuntu: `apt install
-docker.io docker-compose-v2 git`), with a copy of the laptop's `infra/.env` and these changes:
-
-- `MACHINE=oracle`. Each worker keeps its own copy, file mirror and Suwayomi, but the jobs that
-  must happen once (the backup, clean-up, the storage check, pruning the feed, the AI marker) go to
-  one machine at a time, whichever took them first (server/src/jobs/lease.ts).
-- `HEARTBEAT_URL=` left empty, so the monitor still tells you when the laptop's worker stops.
-- The same `TUNNEL_TOKEN`: both machines connect to one tunnel, and Cloudflare sends readers to
-  whichever is up.
-
-Then `docker compose -f infra/compose.yml up -d`, `infra/update.sh --install`, and install
-Suwayomi's extensions as in *Manga sources: Suwayomi* (MangaFire, Weeb Central, Asura Scans).
 
 ### 8. Render
 
