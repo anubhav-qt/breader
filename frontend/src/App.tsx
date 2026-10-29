@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
@@ -110,6 +110,26 @@ function foundOf(b: BookRecord): MangaFound[] | null {
 const devTools = import.meta.env.DEV;
 /** Where the eye over manga's covers is kept, on this device. */
 const COVERS_ONLY = 'breader.manga.coversOnly.v1';
+/** Light or dark, once the sun-or-moon button has picked one, on this device (read early by index.html too). */
+const THEME = 'breader.theme.v1';
+const DARK = '(prefers-color-scheme: dark)';
+
+/** The device is dark, kept up as it changes. */
+function useDeviceDark(): boolean {
+  return useSyncExternalStore(
+    (change) => {
+      const m = window.matchMedia(DARK);
+      m.addEventListener('change', change);
+      return () => m.removeEventListener('change', change);
+    },
+    () => window.matchMedia(DARK).matches,
+  );
+}
+
+function readTheme(): AppTheme {
+  const v = readLocal<unknown>(THEME, 'auto');
+  return v === 'light' || v === 'dark' ? v : 'auto';
+}
 
 function readParam<T extends string>(name: string, allowed: readonly T[], fallback: T): T {
   const v = new URLSearchParams(window.location.search).get(name) as T | null;
@@ -250,7 +270,10 @@ export default function App() {
   const [visited, setVisited] = useState<ReadonlySet<Category>>(() => new Set([category]));
   if (!visited.has(category)) setVisited(new Set([...visited, category]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
-  const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
+  // The device's until the sun-or-moon button is first tapped, then that one. The preview bar's ?theme= wins.
+  const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, readTheme()) : readTheme()));
+  const deviceDark = useDeviceDark();
+  const dark = theme === 'dark' || (theme === 'auto' && deviceDark);
   const labels = useLabels();
   /** Manga's covers without their titles: off until the reader turns it on, then kept on this device. */
   const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
@@ -286,7 +309,12 @@ export default function App() {
     const root = document.documentElement;
     if (theme === 'auto') delete root.dataset.theme;
     else root.dataset.theme = theme;
-    writeParam('theme', theme, 'auto');
+    // The browser's bars go with the page, not only with the device.
+    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
+      if (theme === 'auto') m.content = m.media.includes('dark') ? '#000000' : '#FFFFFF';
+      else m.content = theme === 'dark' ? '#000000' : '#FFFFFF';
+    });
+    if (devTools) writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
 
@@ -1267,6 +1295,12 @@ export default function App() {
               />
             )}
             ownMenu={() => <OwnLibraryMenu key="own" name={labels.mine} count={items.mine.length} category={category} />}
+            dark={dark}
+            onTheme={() => {
+              const next = dark ? 'light' : 'dark';
+              setTheme(next);
+              writeLocal(THEME, next);
+            }}
             settings={(
               <SettingsMenu
                 account={account}

@@ -6,6 +6,7 @@ import { LibraryEdit } from './LibraryEdit';
 import { LibrarySwitch } from './LibrarySwitch';
 import { Logo } from './Logo';
 import { ShelfSwitch } from './ShelfSwitch';
+import { ThemeToggle } from './ThemeToggle';
 import './header.css';
 
 /** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened by its button, not a tab. */
@@ -38,6 +39,9 @@ interface Props {
   libraries: (close: () => void) => ReactNode;
   /** The reader's own library's dropdown, to rename it (features/shared/OwnLibraryMenu.tsx). */
   ownMenu: (close: () => void) => ReactNode;
+  /** The page is dark, picked by the sun-or-moon button or, until it's first tapped, by the device. */
+  dark: boolean;
+  onTheme: () => void;
   /** Settings: manga's covers on their own, the library key, and logging in or out. */
   settings: ReactNode;
   /** Starts picking books to act on together, where the library showing has any: Select is greyed out where not. */
@@ -48,10 +52,10 @@ interface Props {
 
 /**
  * The library header: the switch between the reader's own library and the shared ones at the
- * start, with the pencil for the one showing; books-or-manga and the + button, Select and settings
- * at the end. On phones books-or-manga floats at the bottom instead (ShelfSwitch).
+ * start, with the pencil for the one showing; books-or-manga and the + button, Select, light or dark
+ * and settings at the end. On phones books-or-manga floats at the bottom instead (ShelfSwitch).
  */
-export function Header({ category, onCategory, tab, counts, browse, labels, onTab, onAdd, onBrowse, libraries, ownMenu, settings, onSelect, bulk }: Props) {
+export function Header({ category, onCategory, tab, counts, browse, labels, onTab, onAdd, onBrowse, libraries, ownMenu, dark, onTheme, settings, onSelect, bulk }: Props) {
   const manga = category === 'manga';
 
   // On every library, empty ones too, which also have their own centred button.
@@ -78,6 +82,7 @@ export function Header({ category, onCategory, tab, counts, browse, labels, onTa
             <IconSelect />
           </button>
         )}
+        <ThemeToggle dark={dark} onToggle={onTheme} />
         {settings}
       </div>
     </header>

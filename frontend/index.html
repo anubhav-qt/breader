@@ -14,6 +14,16 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Breader" />
     <title>Breader</title>
+    <!-- Light or dark as last picked with the sun-or-moon button (App.tsx), before anything is drawn. -->
+    <script>
+      try {
+        var t = JSON.parse(localStorage.getItem('breader.theme.v1'));
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.dataset.theme = t;
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.content = t === 'dark' ? '#000000' : '#FFFFFF'; });
+        }
+      } catch (e) { /* storage blocked: the device's */ }
+    </script>
     <!-- The typefaces come from Google Fonts, declared in src/styles/fonts.css. -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   </head>
