@@ -330,3 +330,7 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .tgrow + .p-seats { margin: -8px 0 16px; }
 .seat-offer p { margin: 0; font: var(--ui-w) 14px/1.5 var(--ui); }
 .seat-offer-b { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.cb-ask { margin: 0; font-size: 18px; line-height: 1.3; }
+.cb-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.rd .cb .btn-quiet { background: var(--fill); color: var(--ink); }

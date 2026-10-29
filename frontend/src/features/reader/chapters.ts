@@ -79,7 +79,7 @@ export const numbered = (title: string) =>
   /^\s*(chapter|ch\.|part|book|section|letter|canto|act|stave)(\b|\s)/i.test(title) || /^\s*([IVXLCDM]+|\d+)[.:)]/.test(title);
 
 /** "07 · The Pool of Tears", or just the title when it's already numbered. */
-export const chapterName = (chapters: Chapter[], i: number) => {
+export const chapterName = (chapters: Array<Pick<Chapter, 'title'>>, i: number) => {
   const c = chapters[i];
   if (!c) return '';
   return numbered(c.title) ? c.title : `${pad2(i + 1)} · ${c.title}`;
