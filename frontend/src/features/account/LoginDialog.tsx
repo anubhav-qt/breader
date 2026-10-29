@@ -7,6 +7,7 @@ import { checkGoogle, logIn, logInWithGoogle, loginError, refreshAccount, reques
 import { springs } from '../../lib/springs';
 import '../add/add.css';
 import './account.css';
+import { Loader } from '../../components/Loader';
 
 /*
  * Logging in, and what happens to this browser's books after (data/sync.ts enterAccount):
@@ -223,7 +224,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
 
           {step.mode === 'entering' && (
             <div className="add-busy">
-              <span className="add-spinner" aria-hidden="true" />
+              <Loader />
               <span>{step.claim ? 'Moving your books…' : 'Opening your library…'}</span>
             </div>
           )}

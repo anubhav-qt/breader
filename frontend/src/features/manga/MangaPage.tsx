@@ -12,6 +12,7 @@ import { springs } from '../../lib/springs';
 import { readLocal, writeLocal } from '../../lib/store';
 import { alsoOf, alsoUrls, copyKey, inOrder, sharpest, urlOf, useCopies, type Copy, type Place } from './copies';
 import './manga.css';
+import { Loader } from '../../components/Loader';
 
 /*
  * A series' page, with an address of its own (#/manga/<id>), so a chapter read from it comes back
@@ -525,7 +526,7 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
         <section className="mdc" aria-label="Copies">
           <div className="mds-ch-head">
             <span>{copiesTitle}</span>
-            {!settled && <span className="mdc-note"><span className="add-spinner" /> Measuring pages</span>}
+            {!settled && <span className="mdc-note"><Loader /> Measuring pages</span>}
           </div>
           <div className={`mdc-pick${listOpen ? ' is-open' : ''}`}>
             <button
@@ -589,7 +590,7 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
             )}
           </span>
         </div>
-        {list.state === 'loading' && <p className="mds-wait"><span className="add-spinner" /> Finding its chapters…</p>}
+        {list.state === 'loading' && <p className="mds-wait"><Loader /> Finding its chapters…</p>}
         {list.state === 'error' && <p className="mds-error">{list.message}</p>}
         {chapters.length > 0 && (
           <ol className="mds-chapters">

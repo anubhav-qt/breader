@@ -8,6 +8,7 @@ import { useLabels } from '../../data/labels';
 import { LANGS, langName, mangadex, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
 import { entriesOf, viewOf } from './found';
 import './manga.css';
+import { Loader } from '../../components/Loader';
 
 /*
  * The Manga shelf's Browse, opened by its button in the header: one search across every place Breader's computer looks (MangaDex
@@ -330,7 +331,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
             </li>
           ))}
         </ul>
-        <div ref={end} className="mdx-end">{found.next || found.coming ? <span className="add-spinner" /> : null}</div>
+        <div ref={end} className="mdx-end">{found.next || found.coming ? <Loader /> : null}</div>
       </>
     );
   }

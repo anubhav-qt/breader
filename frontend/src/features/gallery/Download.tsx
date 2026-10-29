@@ -6,6 +6,7 @@ import type { RemoteChapter } from '../../books/types';
 import type { ShelfItem } from '../../data/useLibrary';
 import { readMangaPrefs } from '../../lib/mangadex';
 import { IconDownload } from '../../components/icons';
+import { Loader } from '../../components/Loader';
 
 /** About how big a MangaDex page is, and its data-saver copy: to say how much a whole series takes. */
 const PAGE_MB = 0.35;
@@ -99,7 +100,7 @@ export function Download({ book }: { book: ShelfItem }) {
     actions = <button type="button" className="ep-mini" onClick={stopKeeping}>Stop</button>;
   } else if (plan?.state === 'counting') {
     note = 'Counting its chapters…';
-    actions = <span className="add-spinner" aria-hidden />;
+    actions = <Loader />;
   } else if (plan?.state === 'error') {
     note = plan.text;
     actions = <button type="button" className="ep-mini" onClick={() => void ask()}>Try again</button>;

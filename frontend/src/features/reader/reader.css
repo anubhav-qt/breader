@@ -293,11 +293,8 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-pg img.is-waiting { opacity: 0; }
 .mg-wait { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
 .mg-wait-in { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 12px; text-align: center; }
-.mg-spin { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--r-line); border-top-color: var(--r-mu); animation: mg-spin 0.9s linear infinite; }
-@keyframes mg-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .mg-spin { animation: none; }
-}
+/* The loader in the reader's colours, its turning page on the grey box. */
+.mg-wait .ld { color: var(--r-fg); --ld-bg: var(--r-fill); }
 /* A tall page in the scroll is many screens long: the label stays in the middle of the screen while the page is in view, and in the middle of a page shorter than that. */
 .mg-scroll .mg-wait-in { position: sticky; top: calc(50% - 49px); bottom: calc(50% - 49px); }
 /* A click on a picture brings its panel closer (MangaView.tsx); on a touch screen, two taps. */

@@ -11,6 +11,7 @@ import { MangaZoom, type Look } from './MangaZoom';
 import type { MangaDir, MangaLayout } from './settings';
 import { WHOLE, shownOf, stepsOf } from './steps';
 import { runTurn } from './turn';
+import { Loader } from '../../components/Loader';
 
 /*
  * A manga's pages. Scrolled, they're a column read downwards, with no gaps between them, each
@@ -818,11 +819,11 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     void pics.retry(i).then((url) => setSrcs((m) => new Map(m).set(i, url)));
   };
 
-  /** A small spinner and the page's number, in a page's box while its picture is on its way. */
+  /** The loader and the page’s number, in a page’s box while its picture is on its way. */
   const waiting = (i: number) => (
     <span className="mg-wait" role="status">
       <span className="mg-wait-in">
-        <span className="mg-spin" aria-hidden="true" />
+        <Loader size="large" />
         Loading page {i + 1}
       </span>
     </span>

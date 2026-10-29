@@ -42,6 +42,7 @@ import { genreOf, mangadex, readMangaPrefs, sources, type MangaPrefs } from './l
 import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
+import { Loader } from './components/Loader';
 
 /** The library; a book open (#/read/<id>); or a series' page (#/manga/<id>, by the id of the place it was picked in). */
 type Route = { name: 'library' } | { name: 'read'; id: string } | { name: 'series'; id: string };
@@ -1376,7 +1377,7 @@ export default function App() {
 
       {shown && shownRec && (
         <div className={`rd-host${leaving ? ' is-leaving' : ''}`} ref={hostRef}>
-          <Suspense fallback={<div className="loading"><span className="add-spinner" /> Opening…</div>}>
+          <Suspense fallback={<div className="loading"><Loader /> Opening…</div>}>
           <Reader
             key={shown.id}
             record={shownRec}
@@ -1402,7 +1403,7 @@ export default function App() {
         </div>
       )}
       {route.name === 'read' && !reading && !opening && (
-        <div className="loading"><span className="add-spinner" /> Opening…</div>
+        <div className="loading"><Loader /> Opening…</div>
       )}
 
       <AnimatePresence>
@@ -1421,7 +1422,7 @@ export default function App() {
               if (loadedId.current === opening.id) finishOpen(opening.id);
             }}
           >
-            {loaded?.id !== opening.id && <span className="opening-note"><span className="add-spinner" /> Opening…</span>}
+            {loaded?.id !== opening.id && <span className="opening-note"><Loader /> Opening…</span>}
           </motion.div>
         )}
       </AnimatePresence>

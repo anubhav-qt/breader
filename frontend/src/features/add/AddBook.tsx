@@ -17,6 +17,7 @@ import { BulkAdd } from './BulkAdd';
 import { FreshKey } from './FreshKey';
 import { WhoReads } from './WhoReads';
 import './add.css';
+import { Loader } from '../../components/Loader';
 
 type Step =
   | { kind: 'choose' }
@@ -201,7 +202,7 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
 
           {step.kind === 'reading' && (
             <div className="add-busy">
-              <span className="add-spinner" aria-hidden="true" />
+              <Loader />
               <span>Reading {step.name}…</span>
             </div>
           )}
