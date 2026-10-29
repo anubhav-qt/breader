@@ -116,6 +116,16 @@ npm --prefix ai run panels-guess-mac
 
 Guesses again with the latest round, on the Mac.
 
+```bash
+npm --prefix ai run panels-corners-mac -- 8
+```
+
+How far round 8's corners land from the labelled ones, in pixels, straight panels and slanted ones
+apart (`-- live` for `model/live.onnx`). Its score after training doesn't say: it forgives a corner
+by how big its panel is, so round 7 scored 0.99 with slanted panels' corners 50 to 200 pixels off,
+learned square. Since then a corner's allowed less (`SIGMA` in `train.py`). Check this before a
+round goes live.
+
 ### Labelled here, trained there
 
 Commit and push the labels and page lists here, and the pictures in `data/pages`, which is a repo of

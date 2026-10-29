@@ -33,6 +33,10 @@ BASE = os.environ.get("PANELS_BASE", "yolo11s-pose.pt")
 EPOCHS = 200
 # A panel cut down to less than this, in pixels, by a strip's window isn't one in that window.
 LEAST = 8
+# How far off a corner may be, as a share of its panel's size, before it costs (Ultralytics' OKS
+# sigma, for the loss and the score). Its own for 4 corners is 1/4, so a corner 80 px off a 600 px
+# panel scored 0.97 and slanted panels were learned square (round 7); at 0.08 it scores 0.71.
+SIGMA = 0.08
 
 
 def lines():
@@ -79,7 +83,7 @@ def dataset(rows):
     # and the real test is the next pages labelled, which the model has never seen.
     (WORK / "panels.yaml").write_text(
         f"path: {WORK}\ntrain: images/train\nval: images/train\n"
-        "kpt_shape: [4, 3]\nflip_idx: [1, 0, 3, 2]\nnames:\n  0: panel\n"
+        f"kpt_shape: [4, 3]\nflip_idx: [1, 0, 3, 2]\nkpt_oks_sigmas: {[SIGMA] * 4}\nnames:\n  0: panel\n"
     )
     return count
 

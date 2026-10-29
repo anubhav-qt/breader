@@ -29,7 +29,8 @@
     "panels-train": "npm run panels-export && docker compose -f panels/model/compose.yml run --rm --build train",
     "panels-guess": "docker compose -f panels/model/compose.yml run --rm --build guess",
     "panels-train-mac": "npm run panels-export && sh panels/model/mac.sh train.py",
-    "panels-guess-mac": "sh panels/model/mac.sh guess.py"
+    "panels-guess-mac": "sh panels/model/mac.sh guess.py",
+    "panels-corners-mac": "sh panels/model/mac.sh corners.py"
   },
   "dependencies": {
     "@google/genai": "2.21.0",
