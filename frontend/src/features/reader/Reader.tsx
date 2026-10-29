@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
+import { AnimatePresence } from 'motion/react';
 import type { BookRecord, LoadedBook, Position, ReadMark, ReadState, TocItem } from '../../books/types';
-import { markTracker, screenWords } from '../../books/mark';
+import { markTracker, screenWords, type Place } from '../../books/mark';
 import { remoteOf } from '../../books/remote';
 import { Toast, type ToastMessage } from '../../components/Toast';
 import { paintBars } from '../../lib/bars';
+import { behindMark, chapterTitles, isAway, leave, markOrder, readingOrder, resume, type Visit } from './chapterBack';
 import { chapterAt, chapterName, chaptersOf } from './chapters';
+import { ChapterBack } from './chrome/ChapterBack';
 import { ChapterTail } from './chrome/Comments';
 import { InstrumentChrome } from './chrome/Instrument';
 import { opens, readTo, threadOf, useTalk } from './comments';
@@ -498,12 +501,37 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   );
   /** Opened well past the mark: the way back to it, offered until taken, closed, or not needed. */
   const [away, setAway] = useState<ReadMark | null>(null);
+  /** Reading on into a chapter well behind the mark: the two chapters, to ask which to keep. */
+  const [behind, setBehind] = useState<{ here: number; mark: number } | null>(null);
+  // Which chapter is being read, and whether the reader's been asked since they last jumped. A series
+  // opened a few chapters at a time opens again at the next chapter, so what was left carries over.
+  const [visit] = useState<Visit>(() => resume(record.id));
+  const jumped = useRef(false);
+  const leaving = useRef(closing);
+  leaving.current = closing;
+  useEffect(() => {
+    const id = record.id;
+    return () => leave(id, leaving.current ? null : visit);
+  }, [record.id, visit]);
   const here = useRef<Loc | null>(null);
   // When the place last saved was read. Opening at the place kept isn't reading there anew, so it
   // keeps its time until the reader moves on, and can't overrule a place read later on another
   // device that's still on its way here. A chapter picked to open at is read there now.
   const savedAt = useRef(latest?.lastOpened ?? 0);
   const picked = useRef(!!initial?.pos && !samePos(initial.pos, latest?.pos));
+  /** Reading on from one chapter into the next, behind the mark, and not yet asked about since a jump: the chapters to ask about. */
+  const askedAt = useCallback((l: Loc, mark: ReadMark) => {
+    const v = visit;
+    if (jumped.current) v.asked = false;
+    jumped.current = false;
+    const from = v.chapter;
+    const to = readingOrder(book, chapters, l.section);
+    v.chapter = to;
+    const at = markOrder(book, chapters, mark.pos);
+    if (v.asked || !behindMark(from, to, at)) return null;
+    v.asked = true;
+    return { here: to!, mark: at! };
+  }, [book, chapters, visit]);
   const onLocation = useCallback((l: Loc) => {
     setLoc(l);
     here.current = l;
@@ -521,9 +549,13 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
     onSave({ pos, progress: l.progress, line: l.line, lastOpened, words: book.words, wordsRead: wordsRead.current, mark });
     const screen = screenWords(l.screen);
     const ahead = (l.progress - mark.progress) * book.words;
-    if (first && before && ahead > Math.max(500, screen * 2)) setAway(before);
+    const asks = askedAt(l, mark);
+    if (asks) {
+      setAway(null);
+      setBehind(asks);
+    } else if (first && before && ahead > Math.max(500, screen * 2)) setAway(before);
     else if (ahead <= screen) setAway(null);
-  }, [onSave, book.words, marker]);
+  }, [onSave, book.words, marker, askedAt]);
   // Read on further on another device while the book was open here: it goes there too, unless
   // it's being read aloud or lit up here. Words read and the mark only go forward either way.
   useEffect(() => {
@@ -535,23 +567,47 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
     const p = latest.pos;
     // Where it lands is where it opens again, not pages read.
     lastAt.current = null;
+    jumped.current = true;
     view.current?.listen.reach({ section: p.section, block: p.block, start: p.offset, end: p.offset, text: '' }, 0);
   }, [latest, marker, narration.playing, pacing.running]);
   const goBack = useCallback(() => {
+    jumped.current = true;
     if (away) view.current?.listen.reach({ section: away.pos.section, block: away.pos.block, start: away.pos.offset, end: away.pos.offset, text: '' }, 0);
     setAway(null);
   }, [away]);
+  /** Moves the mark to this page, the way `move` says, and saves it. */
+  const markHere = useCallback((move: (p: Omit<Place, 'screen'>) => ReadMark) => {
+    const l = here.current;
+    if (!l) return;
+    const pos = { section: l.section, block: l.block, offset: l.offset };
+    const mark = move({ pos, progress: l.progress, line: l.line });
+    savedAt.current = Date.now();
+    onSave({ pos, progress: l.progress, line: l.line, lastOpened: savedAt.current, words: book.words, wordsRead: wordsRead.current, mark });
+  }, [onSave, book.words]);
   /** Read up to here after all: the mark comes to this page. */
   const stayHere = useCallback(() => {
-    const l = here.current;
-    if (l) {
-      const pos = { section: l.section, block: l.block, offset: l.offset };
-      const mark = marker.set({ pos, progress: l.progress, line: l.line });
-      savedAt.current = Date.now();
-      onSave({ pos, progress: l.progress, line: l.line, lastOpened: savedAt.current, words: book.words, wordsRead: wordsRead.current, mark });
-    }
+    markHere(marker.set);
     setAway(null);
-  }, [marker, onSave, book.words]);
+  }, [marker, markHere]);
+  /** Keep reading from here: a new reading, so the mark going back holds on every device. */
+  const keepHere = useCallback(() => {
+    markHere(marker.restart);
+    setBehind(null);
+  }, [marker, markHere]);
+  /** Back to the mark: where it is among the pages open, or by opening the series again there. */
+  const backToMark = useCallback(() => {
+    const m = marker.get();
+    const at = behind;
+    setBehind(null);
+    if (!m || !at) return;
+    jumped.current = true;
+    if (isAway(book, at.mark)) {
+      window.dispatchEvent(new CustomEvent('breader:reopen', { detail: { pos: m.pos } }));
+      return;
+    }
+    view.current?.listen.reach({ section: m.pos.section, block: m.pos.block, start: m.pos.offset, end: m.pos.offset, text: '' }, 0);
+  }, [marker, behind, book]);
+  const names = (i: number) => chapterName(chapterTitles(book, chapters), i);
   const awayToast = useMemo<ToastMessage | null>(() => {
     if (!away) return null;
     // A series from a catalogue keeps its places by chapter: its pages can move between openings.
@@ -657,7 +713,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       const key = MEDIA_KEYS[e.key];
       if (key) { mediaKey.current(key); e.preventDefault(); return; }
       if (e.key === 'Escape' && (e.target as HTMLElement).closest?.('[data-aside] :is(input, textarea)')) { (e.target as HTMLElement).blur(); return; }
-      if (e.key === 'Escape') { if (panel) openPanel(null); else if (choosing) setAsking(false); else onBack(); return; }
+      if (e.key === 'Escape') { if (behind) return; if (panel) openPanel(null); else if (choosing) setAsking(false); else onBack(); return; }
       // The browser's own find sees only the chapter on screen: this one reads the whole book.
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'f') { e.preventDefault(); openPanel('find'); return; }
       const target = e.target as HTMLElement;
@@ -682,7 +738,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [panel, choosing, layout, rtl, onBack, openPanel, closing]);
+  }, [panel, choosing, layout, rtl, onBack, openPanel, closing, behind]);
 
   // The phone's status bar takes the page's colour while the book is open.
   const theme: ThemeName = settings.theme;
@@ -692,8 +748,12 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
     return paintBars(bg);
   }, [theme, closing]);
 
-  const onGo = useCallback((item: TocItem) => view.current?.goTo(item.section, item.anchor), []);
+  const onGo = useCallback((item: TocItem) => {
+    jumped.current = true;
+    view.current?.goTo(item.section, item.anchor);
+  }, []);
   const onPick = useCallback((f: number) => {
+    jumped.current = true;
     if (chapters.length < 3) { view.current?.goToFraction(f); return; }
     let at = 0;
     chapters.forEach((c, i) => { if (c.start <= f) at = i; });
@@ -830,7 +890,10 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
           <InstrumentChrome {...chromeProps} />
         </div>
       </div>
-      <Toast className="rd-toast" toast={closing ? null : awayToast} onDone={() => setAway(null)} />
+      <Toast className="rd-toast" toast={closing || behind ? null : awayToast} onDone={() => setAway(null)} />
+      <AnimatePresence>
+        {behind && !closing && <ChapterBack here={names(behind.here)} mark={names(behind.mark)} onKeep={keepHere} onBack={backToMark} onClose={() => setBehind(null)} />}
+      </AnimatePresence>
       {panels && <SeatOffer />}
     </div>
   );
