@@ -3,14 +3,16 @@ import { createStore, del, get, keys, set } from 'idb-keyval';
 import { flush } from '../data/sync';
 import { ApiError } from '../lib/api';
 import { mangadex, readMangaPrefs, sources } from '../lib/mangadex';
+import { filesOf, typeOf, type Page } from './manga';
 import type { RemoteChapter } from './types';
 
 /*
- * Manga chapters kept to read offline (books/remote.ts): each page's picture in this browser, in a
- * database of their own, as they're many and big, with a note per series of the chapters kept.
- * Bytes, not Blobs, as Safari on iPhone can lose a Blob kept in IndexedDB (lib/store.ts). A series
- * taken out of the library lets go of its chapters the next time the app opens (sweepKept), so
- * taking it out can still be undone.
+ * Manga chapters kept to read offline (books/remote.ts): each chapter a CBZ in this browser, in a
+ * database of their own, as they're many and big, with a note per series of the chapters kept. Its
+ * pages are kept one by one while it comes, then packed into the CBZ and read from that in place.
+ * Chapters kept before that, a page each, still read as they were. Bytes, not Blobs, as Safari on
+ * iPhone can lose a Blob kept in IndexedDB (lib/store.ts). A series taken out of the library lets go
+ * of its chapters the next time the app opens (sweepKept), so taking it out can still be undone.
  */
 
 let db: ReturnType<typeof createStore> | null = null;
@@ -21,16 +23,70 @@ try {
 }
 
 interface Bytes { bytes: ArrayBuffer; type: string }
-/** A series' chapters kept here, by chapter id: their pages, their size, and whether they're all in. */
-export type Kept = Record<string, { pages: number; bytes: number; done: boolean }>;
+/**
+ * A series' chapters kept here, by chapter id: their pages, their size, and whether they're all in.
+ * Their label and number, as saving them in order needs them without the laptop (not on those kept
+ * before that was noted).
+ */
+export type Kept = Record<string, { pages: number; bytes: number; done: boolean; label?: string; number?: number | null }>;
 
 const pageKey = (chapter: string, n: number) => `${chapter}:${n}`;
+const cbzKey = (chapter: string) => `cbz:${chapter}`;
 const noteKey = (series: string) => `series:${series}`;
+
+const CBZ = 'application/vnd.comicbook+zip';
+const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
+
+/** Page n of `of` in a chapter's CBZ: "007.jpg", numbered so the names sort in reading order. */
+export function pageName(n: number, of: number, type: string): string {
+  return `${String(n + 1).padStart(Math.max(3, String(of).length), '0')}.${EXTENSIONS[type] ?? 'jpg'}`;
+}
+
+/** A chapter's CBZ and its pages in order, or null when it isn't kept as one. */
+interface Opened { blob: Blob; pages: Page[] }
+
+/** The few CBZs read last, listed once: the next page of one is asked for straight after this one. */
+const OPEN = 4;
+const opened = new Map<string, Promise<Opened | null>>();
+
+async function readCbz(chapter: string, store: NonNullable<typeof db>): Promise<Opened | null> {
+  const v = await get<Bytes | Blob>(cbzKey(chapter), store);
+  if (!v) return null;
+  const blob = v instanceof Blob ? v : new Blob([v.bytes], { type: v.type });
+  const pages = (await filesOf(blob)).filter((f) => typeOf(f.name)).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return { blob, pages };
+}
+
+function cbzOf(chapter: string): Promise<Opened | null> {
+  if (!db) return Promise.resolve(null);
+  let o = opened.get(chapter);
+  if (o) opened.delete(chapter);
+  else {
+    const read = readCbz(chapter, db);
+    // One that wouldn't read is tried again next time.
+    read.catch(() => { if (opened.get(chapter) === read) opened.delete(chapter); });
+    o = read;
+  }
+  opened.set(chapter, o);
+  if (opened.size > OPEN) opened.delete(opened.keys().next().value!);
+  return o;
+}
+
+/** A chapter's CBZ, if it's kept as one. */
+export async function keptCbz(chapter: string): Promise<Blob | undefined> {
+  try {
+    return (await cbzOf(chapter))?.blob;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Page n of a chapter kept here, if it is. */
 export async function keptPage(chapter: string, n: number): Promise<Blob | undefined> {
   if (!db) return undefined;
   try {
+    const cbz = await cbzOf(chapter);
+    if (cbz) return cbz.pages[n]?.read(typeOf(cbz.pages[n].name)!);
     const v = await get<Bytes>(pageKey(chapter, n), db);
     return v ? new Blob([v.bytes], { type: v.type }) : undefined;
   } catch {
@@ -63,8 +119,10 @@ export async function pageFor(chapter: string, n: number): Promise<Blob> {
   return (await keptPage(chapter, n)) ?? fetchPage(chapter, n);
 }
 
-/** A source's chapter's pages, as it counts them. A library made a moment ago signs in with its first sync. */
+/** A chapter's pages: as kept here, or as its source counts them. A library made a moment ago signs in with its first sync. */
 export async function countPages(chapter: string): Promise<number> {
+  const cbz = await cbzOf(chapter).catch(() => null);
+  if (cbz) return cbz.pages.length;
   try {
     return await sources.pages(chapter);
   } catch (e) {
@@ -84,6 +142,22 @@ async function noteOf(series: string): Promise<Kept> {
   } catch {
     return {};
   }
+}
+
+/** A chapter's pages as one CBZ, kept. The pictures are packed already, so they're only stored in it. Its size. */
+async function pack(chapter: string, pages: Blob[], store: NonNullable<typeof db>): Promise<number> {
+  const JSZip = (await import('jszip')).default;
+  const zip = new JSZip();
+  pages.forEach((p, n) => zip.file(pageName(n, pages.length, p.type), p));
+  const cbz = await zip.generateAsync({ type: 'blob', compression: 'STORE', mimeType: CBZ });
+  await set(cbzKey(chapter), { bytes: await cbz.arrayBuffer(), type: CBZ } satisfies Bytes, store);
+  opened.delete(chapter);
+  return cbz.size;
+}
+
+/** Lets go of a chapter's pages kept one by one. */
+async function dropPages(chapter: string, pages: number, store: NonNullable<typeof db>) {
+  for (let n = 0; n < pages; n++) await del(pageKey(chapter, n), store).catch(() => {});
 }
 
 /* ---- Keeping chapters, one page at a time, in the background ---- */
@@ -125,9 +199,11 @@ async function run() {
       if (!pages && onSource(chapter.id)) pages = await countPages(chapter.id);
       if (!pages) throw new Error(`${chapter.label} has no pages to keep.`);
       now = { ...now, of: pages };
-      note[chapter.id] = { pages, bytes: note[chapter.id]?.bytes ?? 0, done: false };
+      const label = { label: chapter.label, number: chapter.number };
+      note[chapter.id] = { pages, bytes: note[chapter.id]?.bytes ?? 0, done: false, ...label };
       await set(noteKey(series), note, store);
       tell();
+      const got: Blob[] = [];
       for (let n = 0; n < pages; n++) {
         if (stopped) break;
         let blob = await keptPage(chapter.id, n);
@@ -138,15 +214,21 @@ async function run() {
           await set(pageKey(chapter.id, n), { bytes: await blob.arrayBuffer(), type: blob.type } satisfies Bytes, store);
         }
         bytes += blob.size;
+        got.push(blob);
         now = { ...now, done: n + 1 };
         tell();
       }
       if (gone.delete(series)) {
-        for (let n = 0; n < pages; n++) await del(pageKey(chapter.id, n), store).catch(() => {});
+        await dropPages(chapter.id, pages, store);
         continue;
       }
+      // All in: packed into the CBZ, and the pages kept one by one, for stopping and starting again, let go.
+      if (!stopped) {
+        bytes = await pack(chapter.id, got, store);
+        await dropPages(chapter.id, pages, store);
+      }
       const after = await noteOf(series);
-      after[chapter.id] = { pages, bytes, done: !stopped };
+      after[chapter.id] = { pages, bytes, done: !stopped, ...label };
       await set(noteKey(series), after, store);
       missed = 0;
     } catch (e) {
@@ -196,7 +278,9 @@ export async function letGo(series: string, chapters?: string[]) {
   const note = await noteOf(series);
   for (const [id, c] of Object.entries(note)) {
     if (chapters && !chapters.includes(id)) continue;
-    for (let n = 0; n < c.pages; n++) await del(pageKey(id, n), store).catch(() => {});
+    await dropPages(id, c.pages, store);
+    await del(cbzKey(id), store).catch(() => {});
+    opened.delete(id);
     delete note[id];
   }
   if (Object.keys(note).length) await set(noteKey(series), note, store);
