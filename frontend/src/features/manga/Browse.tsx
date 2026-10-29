@@ -76,6 +76,15 @@ const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 let kept: { text: string; found: Extract<Found, { state: 'ready' }>; top: number } | null = null;
 
 /**
+ * The last few searches shown (an order, the dots, a search typed), by askKey, and when each was
+ * last asked of the server. Going back to one shows it at once and asks again quietly, what's new
+ * joining the end; one older than LOT_MS is asked afresh, as Popular and Updated move on.
+ */
+const lots = new Map<string, { found: Extract<Found, { state: 'ready' }>; at: number }>();
+const LOTS = 6;
+const LOT_MS = 10 * 60_000;
+
+/**
  * What's shown, with what's come since added: the cards already shown stay where they are, as a
  * reader may be looking at them, and new ones follow, those going by the very name searched for
  * ahead of the rest.
@@ -163,21 +172,32 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     if (found === restored.current && found.ask === askKey && !tries) return;
     let live = true;
     back.current = 0;
-    setFound({ state: 'loading' });
-    scroller.current?.scrollTo({ top: 0 });
-    // The first lot shows as each place brings its series, not once the slowest has.
     const ask = askKey;
+    const hit = lots.get(ask);
+    const had = hit && Date.now() - hit.at < LOT_MS && !tries ? hit.found : null;
+    setFound(had ?? { state: 'loading' });
+    scroller.current?.scrollTo({ top: 0 });
+    // The first lot shows as each place brings its series, not once the slowest has. Over one
+    // shown from before, what's new joins quietly, and the next lot is still where it had got to.
     const add = (items: MangaFound[], next: string | null, coming: boolean) => {
       if (!live) return;
       setFound((f) => {
+        if (had && f.state === 'ready' && f.ask === ask) return { ...f, items: joined(f.items, items, q) };
         let shown: MangaFound[] = [];
         if (f.state === 'ready' && f.ask === ask) shown = f.items;
         return { state: 'ready', ask, items: joined(shown, items, q), next, coming };
       });
     };
     mangadex.searchAsItComes(searchOf(null), (items) => add(items, null, true)).then(
-      (r) => add(r.items, r.next, false),
-      (e) => { if (live) setFound({ state: 'error', message: messageOf(e) }); },
+      (r) => {
+        const l = lots.get(ask);
+        if (l) l.at = Date.now();
+        add(r.items, r.next, false);
+      },
+      (e) => {
+        // One shown from before stays, rather than going to an error.
+        if (live) setFound((f) => (had && f.state === 'ready' && f.ask === ask ? f : { state: 'error', message: messageOf(e) }));
+      },
     );
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,6 +229,10 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   useEffect(() => {
     if (found.state !== 'ready' || found.coming) return;
     kept = { text, found, top: kept?.found.ask === found.ask ? kept.top : 0 };
+    const at = lots.get(found.ask)?.at ?? Date.now();
+    lots.delete(found.ask);
+    lots.set(found.ask, { found, at });
+    if (lots.size > LOTS) lots.delete(lots.keys().next().value!);
   }, [text, found]);
 
   // The next lot is asked for as soon as one comes, so it's mostly here before the end is.
