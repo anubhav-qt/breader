@@ -169,7 +169,7 @@ export function framesOfPanels(w: number, h: number, quads: Array<Array<[number,
     const ys = q.map((c) => c[1]);
     const x = Math.min(...xs) / w;
     const y = Math.min(...ys) / h;
-    return { x, y, w: Math.max(...xs) / w - x, h: Math.max(...ys) / h - y };
+    return { x, y, w: Math.max(...xs) / w - x, h: Math.max(...ys) / h - y, quad: q.map(([cx, cy]) => [cx / w, cy / h] as [number, number]) };
   });
   return { groups: panels.map((b) => ({ box: b, panels: [b] })), panels };
 }

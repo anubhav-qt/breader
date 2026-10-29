@@ -75,11 +75,31 @@ function aroundOf(b: Box): Box {
   return { x, y, w: right - x, h: bottom - y };
 }
 
-/** The clip showing just a part of the page, and the page around it. */
+/**
+ * A panel's corners from its top left round to its bottom left, each moved out AROUND either way,
+ * as far as the page goes: so every clip has its corners in the same order, and one glides into the next.
+ */
+function cornersOf(b: Box): Array<[number, number]> {
+  if (!b.quad || b.quad.length !== 4) {
+    const a = aroundOf(b);
+    return [[a.x, a.y], [a.x + a.w, a.y], [a.x + a.w, a.y + a.h], [a.x, a.y + a.h]];
+  }
+  const cx = b.quad.reduce((t, c) => t + c[0], 0) / 4;
+  const cy = b.quad.reduce((t, c) => t + c[1], 0) / 4;
+  // Clockwise on the screen, from the corner nearest the top left.
+  const round = [...b.quad].sort((p, q) => Math.atan2(p[1] - cy, p[0] - cx) - Math.atan2(q[1] - cy, q[0] - cx));
+  const first = round.reduce((k, c, i) => (c[0] + c[1] < round[k][0] + round[k][1] ? i : k), 0);
+  const fit = (v: number) => Math.min(1, Math.max(0, v));
+  return [0, 1, 2, 3].map((i) => {
+    const [x, y] = round[(first + i) % 4];
+    return [fit(x + Math.sign(x - cx) * AROUND), fit(y + Math.sign(y - cy) * AROUND)];
+  });
+}
+
+/** The clip showing just a part of the page, a slanted panel in its own shape, and the page around it. */
 export function clipOf(b: Box | null): string {
-  if (!b) return 'inset(0% 0% 0% 0%)';
-  const a = aroundOf(b);
-  return `inset(${pct(a.y)} ${pct(1 - a.x - a.w)} ${pct(1 - a.y - a.h)} ${pct(a.x)})`;
+  const corners: Array<[number, number]> = b ? cornersOf(b) : [[0, 0], [1, 0], [1, 1], [0, 1]];
+  return `polygon(${corners.map(([x, y]) => `${pct(x)} ${pct(y)}`).join(', ')})`;
 }
 
 /** The room kept around a part fitted to a screen this wide. */

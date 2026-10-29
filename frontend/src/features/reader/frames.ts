@@ -18,6 +18,8 @@ export interface Box {
   y: number;
   w: number;
   h: number;
+  /** A panel's own four corners, in the same fractions, where the panel model found them: a slanted panel's aren't its box's. */
+  quad?: Array<[number, number]>;
 }
 
 /** Panels drawn together, and each panel in them. */
