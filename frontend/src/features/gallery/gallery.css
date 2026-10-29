@@ -513,6 +513,7 @@
 .ep-mini.is-quiet:hover { color: var(--ink); background: var(--fill); }
 .ep-mini.is-go { background: var(--ink); color: var(--paper); }
 .ep-mini.is-go:hover { background: var(--ink); opacity: 0.88; }
+.ep-mini:disabled { opacity: 0.45; pointer-events: none; }
 .ep-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .ep-act {
   flex: 1 1 0;

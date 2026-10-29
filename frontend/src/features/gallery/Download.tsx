@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { chaptersOf, makeCbz, makeSeriesPdf, saveFile, type Made } from '../../books/exportManga';
 import { keepChapters, letGo, stopKeeping, useKept } from '../../books/kept';
 import { remoteOf, wholeSeries } from '../../books/remote';
 import type { RemoteChapter } from '../../books/types';
@@ -37,12 +38,15 @@ function sizeNote(chapters: RemoteChapter[]): string {
 /**
  * A manga's ⋯: the whole series downloaded to read offline, in this browser. Every chapter as Read
  * lays it out, other copies filling in what its own hasn't got (books/remote.ts), kept a page at a
- * time while Breader is open (books/kept.ts). Asked first, saying how much it takes.
+ * time while Breader is open (books/kept.ts). Asked first, saying how much it takes. What's
+ * downloaded can be saved to the device as a CBZ or a PDF (books/exportManga.ts).
  */
 export function Download({ book }: { book: ShelfItem }) {
   const key = remoteOf(book.url)?.key;
   const { kept, now, queued, failed } = useKept(key);
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [making, setMaking] = useState<{ what: 'CBZ' | 'PDF'; done: number; of: number } | null>(null);
+  const [trouble, setTrouble] = useState<string | null>(null);
   if (!key) return null;
 
   const done = Object.values(kept).filter((k) => k.done);
@@ -67,8 +71,25 @@ export function Download({ book }: { book: ShelfItem }) {
     setPlan(null);
   };
 
+  /** Saves what's downloaded to the device, as a CBZ or a PDF. */
+  const save = async (what: 'CBZ' | 'PDF') => {
+    setTrouble(null);
+    setMaking({ what, done: 0, of: 0 });
+    try {
+      const chapters = await chaptersOf(book.url, kept);
+      const progress = (done: number, of: number) => setMaking({ what, done, of });
+      const made: Made = await (what === 'CBZ' ? makeCbz : makeSeriesPdf)(book.title, chapters, progress);
+      saveFile(made);
+    } catch (e) {
+      setTrouble(e instanceof Error ? e.message : 'It couldn’t be made just now.');
+    } finally {
+      setMaking(null);
+    }
+  };
+
   let note: string | null = null;
   let actions: ReactNode;
+  let saves: ReactNode = null;
   if (going) {
     const of = done.length + queued + (now ? 1 : 0);
     note = `${done.length} of ${plural(of, 'chapter')} downloaded${now ? `, ${now.label} ${now.done} of ${now.of} pages` : ''}`;
@@ -88,12 +109,19 @@ export function Download({ book }: { book: ShelfItem }) {
       </>
     );
   } else if (done.length) {
-    note = `${plural(done.length, 'chapter')} downloaded, ${sizeOf(mb)}.${failed ? ` Not all came: ${failed}` : ''}`;
+    note = `${plural(done.length, 'chapter')} downloaded, ${sizeOf(mb)}.${failed ? ` Not all came: ${failed}` : ''}${trouble ? ` Not saved: ${trouble}` : ''}`;
+    if (making) note = `Making the ${making.what}…${making.of ? ` ${making.done.toLocaleString()} of ${plural(making.of, 'page')}` : ''}`;
     actions = (
       <>
-        <button type="button" className="ep-mini is-quiet" onClick={() => void letGo(key)}>Remove</button>
-        <button type="button" className="ep-mini" onClick={() => void ask()}>Get the rest</button>
+        <button type="button" className="ep-mini is-quiet" disabled={making !== null} onClick={() => void letGo(key)}>Remove</button>
+        <button type="button" className="ep-mini" disabled={making !== null} onClick={() => void ask()}>Get the rest</button>
       </>
+    );
+    saves = (
+      <span className="ep-off-b">
+        <button type="button" className="ep-mini" disabled={making !== null} onClick={() => void save('CBZ')}>Save as CBZ</button>
+        <button type="button" className="ep-mini" disabled={making !== null} onClick={() => void save('PDF')}>Save as PDF</button>
+      </span>
     );
   } else {
     actions = <button type="button" className="ep-mini" onClick={() => void ask()}><IconDownload />Download</button>;
@@ -106,6 +134,7 @@ export function Download({ book }: { book: ShelfItem }) {
         <span className="ep-off-b">{actions}</span>
       </div>
       {note && <p className="ep-note">{note}</p>}
+      {saves}
     </div>
   );
 }
