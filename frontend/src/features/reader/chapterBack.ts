@@ -26,10 +26,10 @@ export function leave(id: string, visit: Visit | null) {
 /** The visit the book left, or a new one. */
 export const resume = (id: string): Visit => ({ ...(left.get(id) ?? { chapter: null, asked: false }) });
 
-/** The titles of a book's chapters, in order: all of a series from a catalogue, else those open. */
+/** The short names of a book's chapters, in order: all of a series from a catalogue, else those open. */
 export function chapterTitles(book: LoadedBook, chapters: Chapter[]): Array<Pick<Chapter, 'title'>> {
   if (book.kind !== 'manga' || !book.remote) return chapters;
-  return book.remote.chapters.map((c) => ({ title: c.number !== null && c.title ? `${c.label} · ${c.title}` : c.label }));
+  return book.remote.chapters.map((c) => ({ title: c.label }));
 }
 
 /** The order of the chapter the reader is in, or null when it can't be told. */
