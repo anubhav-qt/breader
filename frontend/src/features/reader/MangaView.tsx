@@ -104,10 +104,24 @@ interface At {
   end: boolean;
 }
 
+/** Offsets up to this are thousandths of a page, as the first versions kept them. */
+const COARSE = 1000;
+/** A scrolled place kept finer: this, and then the millionths of a page down it. */
+const FINE = COARSE + 1;
+
+function encodeFrac(frac: number): number {
+  return FINE + Math.round(Math.max(0, Math.min(1, frac)) * 1_000_000);
+}
+
+function decodeFrac(offset: number): number {
+  if (offset <= COARSE) return Math.max(0, Math.min(1, offset / COARSE));
+  return Math.max(0, Math.min(1, (offset - FINE) / 1_000_000));
+}
+
 function startAt(start: Start, total: number, book: MangaBook): At {
   if (start.kind === 'pos') {
     const page = book.locate ? book.locate(start.pos) : start.pos.section;
-    return { page: Math.max(0, Math.min(total - 1, page)), frac: Math.max(0, Math.min(1, start.pos.offset / 1000)), end: false };
+    return { page: Math.max(0, Math.min(total - 1, page)), frac: decodeFrac(start.pos.offset), end: false };
   }
   const x = Math.max(0, Math.min(0.9999, start.value)) * total;
   return { page: Math.floor(x), frac: x - Math.floor(x), end: false };
@@ -298,10 +312,14 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   /** Scrolled: the page is moving, or still gliding from a flick, and a finger's on it. */
   const moving = useRef(false);
   const touching = useRef(false);
+  /** Scrolled: where the layout last put the page, until the scroll that follows is seen. */
+  const wrote = useRef<number | null>(null);
   const restTimer = useRef(0);
   /** Scrolled: the place to say next, and when it was said last. */
   const place = useRef<At>(at);
   const placedAt = useRef(0);
+  /** Scrolled: the place the reader was last told. */
+  const told = useRef<At>(at);
   /** Scrolled: shapes found for pages above the screen while it moved, taken once it rests. */
   const later = useRef(new Map<number, { r: number; guess: boolean }>());
   /** Pages: the page a turn is on its way to, so turns pressed quickly follow on from it. */
@@ -435,14 +453,13 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     const frac = Math.max(0, Math.min(1, (y - tops[i]) / heights[i]));
     anchor.current = { page: i, frac, top: tops[i], into: y - tops[i], h: heights[i], sized: !!ratios[i] };
     const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
-    // A tenth of a page at a time: close enough for the place kept, without a render a pixel.
-    place.current = { page: i, frac: Math.floor(frac * 10) / 10, end };
+    place.current = { page: i, frac, end };
     if (!moving.current || performance.now() - placedAt.current >= PLACE_EVERY) say();
     const from = pageAt(tops, el.scrollTop - BEHIND * el.clientHeight);
     const to = pageAt(tops, el.scrollTop + AHEAD * el.clientHeight);
     setWin((w) => (w[0] === from && w[1] === to ? w : [from, to]));
   };
-  /** Says the place: in the controls, and kept. */
+  /** Says the place: in the controls, and kept. Only called at rest or every PLACE_EVERY while moving, so the exact place costs no render a pixel. */
   const say = () => {
     placedAt.current = performance.now();
     const p = place.current;
@@ -463,6 +480,12 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     restTimer.current = window.setTimeout(rest, REST);
   };
   const onScroll = () => {
+    const el = scrollRef.current;
+    // The place put back is not the reader moving, and was told where it is when it was put back.
+    if (el && wrote.current !== null && Math.abs(el.scrollTop - wrote.current) < 1) {
+      wrote.current = null;
+      return;
+    }
     moving.current = true;
     restSoon();
     placeFromScroll();
@@ -497,11 +520,19 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     let to = tops[a.page] + into - BAR;
     if (laidIn.current === el && a.top !== undefined && a.into !== undefined) to = el.scrollTop + tops[a.page] + into - (a.top + a.into);
     laidIn.current = el;
+    const raw = to;
     to = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, Math.round(to)));
     // On a phone, the place written again, even the same one, stops a flick of the finger dead: it's
     // written only when it moved, as pages coming in below as they're read never move it.
-    if (Math.abs(el.scrollTop - to) >= 1) el.scrollTop = to;
+    if (Math.abs(el.scrollTop - to) >= 1) {
+      el.scrollTop = to;
+      wrote.current = to;
+    }
     placeFromScroll();
+    // The screen holds whole pixels, the place doesn't: it keeps the exact line, so laying out again
+    // and again doesn't walk it off by a pixel at a time.
+    const b = anchor.current;
+    if (b.page === a.page && Math.abs(to - raw) <= 0.5) anchor.current = { ...b, frac: (raw + BAR - tops[b.page]) / heights[b.page], into: raw + BAR - tops[b.page] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, tops, heights, colW]);
 
@@ -550,12 +581,14 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     }
   }, [srcs, at.page, pics, layout]);
 
-  useEffect(() => {
-    const shown = paged ? spread : [at.page];
+  /** Tells the reader where the place is, and keeps what it told. */
+  const report = (a: At) => {
+    told.current = a;
+    const shown = paged ? spread : [a.page];
     const first = shown[0];
     const last = shown[shown.length - 1];
-    const end = paged ? last >= total - 1 : at.end;
-    const exact = layout === 'scroll' ? at.page + at.frac : first;
+    const end = paged ? last >= total - 1 : a.end;
+    const exact = layout === 'scroll' ? a.page + a.frac : first;
     // Of a series opened a few chapters at a time, how far through all of it.
     const progress = book.progressOf ? book.progressOf(exact, end) : end ? 1 : exact / total;
     const nextAt = book.toc.find((t) => t.section > first && !t.reopen)?.section ?? total;
@@ -564,7 +597,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     onLocationRef.current({
       section: first,
       block: book.anchor?.(first) ?? 0,
-      offset: layout === 'scroll' ? Math.round(at.frac * 1000) : 0,
+      offset: layout === 'scroll' ? encodeFrac(a.frac) : 0,
       progress,
       sectionWordsLeft: Math.round(Math.max(1, nextAt - exact) * per),
       bookWordsLeft: book.progressOf ? Math.round((1 - progress) * book.words) : end ? 0 : Math.round((total - (paged ? last + 1 : exact)) * per),
@@ -573,9 +606,33 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       pages: total,
       screen: Math.round(shown.length * per),
     });
+  };
+  const reportRef = useRef(report);
+  reportRef.current = report;
+  useEffect(() => {
+    report(at);
     // The spread is new each time pages change shape; its first and last pages are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [at, layout, paged, spread[0], spread[spread.length - 1], total, per, book]);
+
+  // Scrolled: leaving mid-scroll, or the tab hidden before it rests, the place at that moment is kept.
+  useEffect(() => {
+    if (layout !== 'scroll') return;
+    const keep = () => {
+      const p = place.current;
+      const t = told.current;
+      if (t.page === p.page && t.frac === p.frac && t.end === p.end) return;
+      reportRef.current(p);
+    };
+    const hidden = () => { if (document.visibilityState === 'hidden') keep(); };
+    window.addEventListener('pagehide', keep);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      window.removeEventListener('pagehide', keep);
+      document.removeEventListener('visibilitychange', hidden);
+      keep();
+    };
+  }, [layout]);
 
   // Opened a few chapters at a time: nearing the last of them, the next few open, and the pages carry
   // on past these as though they'd been there all along. Once a book: if they won't open, its last
@@ -745,8 +802,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
       onScreen: (sn) => sn.section === at.page,
       clear: () => {},
       section: async () => null,
-      // Back to a place kept: scrolled, `start` is how far down its page, in thousandths.
-      reach: (sn) => void goTo(book.locate ? book.locate({ section: sn.section, block: sn.block, offset: sn.start }) : sn.section, sn.start / 1000),
+      // Back to a place kept: scrolled, `start` is how far down its page, as encodeFrac keeps it.
+      reach: (sn) => void goTo(book.locate ? book.locate({ section: sn.section, block: sn.block, offset: sn.start }) : sn.section, decodeFrac(sn.start)),
     },
   }), [goTo, turn, total, at.page, book]);
 
