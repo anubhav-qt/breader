@@ -51,7 +51,8 @@ def main():
     for f in sorted((DATA / "labels").glob("*.json")):
         label = json.loads(f.read_text("utf8"))
         page = listed.get(label["page"])
-        picture = cv2.imread(str(DATA / "pages" / label["file"]), cv2.IMREAD_COLOR) if page else None
+        file = DATA / "pages" / label["file"]
+        picture = cv2.imread(str(file), cv2.IMREAD_COLOR) if page and file.exists() else None
         if picture is None or picture.shape[:2] != (label["height"], label["width"]):
             continue
         found = guess(model, picture, label["width"], label["height"])
