@@ -391,7 +391,8 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const typical = useMemo(() => typicalOf(ratios), [ratios]);
   const ratio = useCallback((i: number) => ratios[i] || typical, [ratios, typical]);
   const strip = typical > STRIP;
-  const side = sideOf(size.w);
+  // Panels go edge to edge: the sides only step, and a panel takes all the width it can.
+  const side = layout === 'panels' ? 0 : sideOf(size.w);
   const areaW = Math.max(0, size.w - 2 * side);
   const areaH = Math.max(0, size.h - 2 * BAR);
   // Two side by side when each can be nearly as tall as one alone, unless the reader keeps to one.
