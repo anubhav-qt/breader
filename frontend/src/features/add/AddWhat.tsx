@@ -13,7 +13,7 @@ interface Props {
 /** The + button's question, on either shelf: a book from a file or pasted, or manga from Browse. */
 export function AddWhat({ onBooks, onManga, onClose }: Props) {
   return (
-    <Modal title="Add" onClose={onClose} width={420}>
+    <Modal title="Add" onClose={onClose} width={480}>
       <div className="add-choices">
         <button type="button" className="add-choice" onClick={onBooks}>
           <IconAddBook />

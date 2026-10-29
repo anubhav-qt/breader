@@ -19,7 +19,8 @@
 .login-note { margin: 0 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--fill); font: var(--ui-w) 12.5px/1.45 var(--ui); }
 
 /* Header: settings, and its menu */
-.acct { position: relative; }
+/* As tall as its button, like the other header buttons, not a line of text. */
+.acct { position: relative; display: flex; }
 .acct-menu {
   position: absolute;
   top: calc(100% + 8px);

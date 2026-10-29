@@ -19,6 +19,8 @@
 .lsw-name { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Under both halves' names as it slides from one to the other, over the pill. */
 .lsw-on { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
+/* As tall as its button, like the other header buttons, not a line of text. */
+.le { display: flex; }
 .le-btn.is-open { background: var(--fill); }
 @media (max-width: 720px) {
   .lsw-tab { width: 100px; }
