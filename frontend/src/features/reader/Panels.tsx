@@ -17,7 +17,7 @@ import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO
 /* Contents */
 
 /** A series from MangaDex: chapters kept in this browser to read offline, and keeping more. */
-function Offline({ remote, at, kept, now, queued, failed }: { remote: NonNullable<MangaBook['remote']>; at: number } & ReturnType<typeof useKept>) {
+function Offline({ remote, at, kept, now, queued, failed, full }: { remote: NonNullable<MangaBook['remote']>; at: number } & ReturnType<typeof useKept>) {
   const hosted = remote.chapters.filter((c) => c.pages > 0);
   const from = Math.max(0, hosted.findIndex((c) => c.first + c.pages > at));
   const next = hosted.slice(from, from + 5).filter((c) => !kept[c.id]?.done);
@@ -25,11 +25,13 @@ function Offline({ remote, at, kept, now, queued, failed }: { remote: NonNullabl
   const mb = Math.max(1, Math.round(done.reduce((n, k) => n + k.bytes, 0) / 1_000_000));
   const text = now
     ? `Keeping ${now.label}: ${now.done} of ${now.of} pages${queued ? `, then ${queued} more` : ''}`
-    : failed
-      ? `Not all of them came: ${failed}`
-      : done.length
-        ? `${done.length === 1 ? '1 chapter' : `${done.length} chapters`} kept to read offline, ${mb} MB`
-        : 'Keep chapters in this browser to read them offline.';
+    : full
+      ? 'This device is out of room. Save what’s kept as a CBZ or PDF from its ⋯ menu in the library, then let go of it here.'
+      : failed
+        ? `Not all of them came: ${failed}`
+        : done.length
+          ? `${done.length === 1 ? '1 chapter' : `${done.length} chapters`} kept to read offline, ${mb} MB`
+          : 'Keep chapters in this browser to read them offline.';
   return (
     <div className="p-offline" aria-live="polite">
       <span>{text}</span>

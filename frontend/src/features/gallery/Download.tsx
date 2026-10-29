@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { chaptersOf, makeCbz, makeSeriesPdf, saveFile, type Made } from '../../books/exportManga';
-import { keepChapters, letGo, stopKeeping, useKept } from '../../books/kept';
+import { FULL, keepChapters, letGo, outOfRoom, stopKeeping, useKept } from '../../books/kept';
 import { remoteOf, wholeSeries } from '../../books/remote';
 import type { RemoteChapter } from '../../books/types';
 import type { ShelfItem } from '../../data/useLibrary';
@@ -43,7 +43,7 @@ function sizeNote(chapters: RemoteChapter[]): string {
  */
 export function Download({ book }: { book: ShelfItem }) {
   const key = remoteOf(book.url)?.key;
-  const { kept, now, queued, failed } = useKept(key);
+  const { kept, now, queued, failed, full } = useKept(key);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [making, setMaking] = useState<{ what: 'CBZ' | 'PDF'; done: number; of: number } | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
@@ -81,7 +81,10 @@ export function Download({ book }: { book: ShelfItem }) {
       const made: Made = await (what === 'CBZ' ? makeCbz : makeSeriesPdf)(book.title, chapters, progress);
       saveFile(made);
     } catch (e) {
-      setTrouble(e instanceof Error ? e.message : 'It couldn’t be made just now.');
+      // A PDF holds every page made again; a CBZ only stores them, so it takes less.
+      if (outOfRoom(e) && what === 'PDF') setTrouble('It’s too big to make as a PDF on this device. Save it as a CBZ instead.');
+      else if (outOfRoom(e)) setTrouble('It’s too big to make on this device.');
+      else setTrouble(e instanceof Error ? e.message : 'It couldn’t be made just now.');
     } finally {
       setMaking(null);
     }
@@ -110,6 +113,7 @@ export function Download({ book }: { book: ShelfItem }) {
     );
   } else if (done.length) {
     note = `${plural(done.length, 'chapter')} downloaded, ${sizeOf(mb)}.${failed ? ` Not all came: ${failed}` : ''}${trouble ? ` Not saved: ${trouble}` : ''}`;
+    if (full && !trouble) note = `${plural(done.length, 'chapter')} downloaded, ${sizeOf(mb)}. ${FULL}`;
     if (making) note = `Making the ${making.what}…${making.of ? ` ${making.done.toLocaleString()} of ${plural(making.of, 'page')}` : ''}`;
     actions = (
       <>
@@ -124,6 +128,7 @@ export function Download({ book }: { book: ShelfItem }) {
       </span>
     );
   } else {
+    if (full) note = 'This device is out of room to download it.';
     actions = <button type="button" className="ep-mini" onClick={() => void ask()}><IconDownload />Download</button>;
   }
 

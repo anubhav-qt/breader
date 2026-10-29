@@ -173,6 +173,8 @@ export interface Keeping {
 let queue: Array<{ series: string; chapter: RemoteChapter }> = [];
 let now: Keeping | null = null;
 let failed: string | null = null;
+/** The device ran out of room for more: nothing more is kept until the reader makes some. */
+let full = false;
 let stopped = false;
 /** Chapters that wouldn't come, one after another: past GIVE_UP, the rest wait for another try too. */
 let missed = 0;
@@ -232,6 +234,11 @@ async function run() {
       await set(noteKey(series), after, store);
       missed = 0;
     } catch (e) {
+      if (outOfRoom(e)) {
+        full = true;
+        queue = [];
+        continue;
+      }
       failed = e instanceof Error ? e.message : 'A page wouldn’t come.';
       missed += 1;
       if (missed >= GIVE_UP) queue = [];
@@ -243,12 +250,22 @@ async function run() {
   tell();
 }
 
+/** The browser's room for what it keeps is used up, or the device's memory for packing a chapter. */
+export function outOfRoom(e: unknown): boolean {
+  if (e instanceof RangeError) return true;
+  return e instanceof DOMException && e.name === 'QuotaExceededError';
+}
+
+/** What the reader's told when the device is out of room: to save what's here to it, then let it go. */
+export const FULL = 'This device is out of room. Save what’s downloaded as a CBZ or PDF, then remove it here to make room.';
+
 /**
  * Keeps these chapters of a series here, after any already being kept. A source's chapter not
  * opened yet (no pages) is counted when its turn comes.
  */
 export function keepChapters(series: string, chapters: RemoteChapter[]) {
   failed = null;
+  full = false;
   const queued = new Set(queue.map((q) => q.chapter.id));
   for (const c of chapters) {
     if (!(c.pages > 0 || onSource(c.id)) || queued.has(c.id) || now?.chapter === c.id) continue;
@@ -305,13 +322,13 @@ export async function sweepKept(live: ReadonlySet<string>) {
 /** What a series has kept here, and what's being kept now. */
 export function useKept(series: string | undefined) {
   const [kept, setKept] = useState<Kept>({});
-  const [state, setState] = useState<{ now: Keeping | null; queued: number; failed: string | null }>({ now: null, queued: 0, failed: null });
+  const [state, setState] = useState<{ now: Keeping | null; queued: number; failed: string | null; full: boolean }>({ now: null, queued: 0, failed: null, full: false });
   useEffect(() => {
     if (!series) return;
     let live = true;
     const update = () => {
       void noteOf(series).then((k) => { if (live) setKept(k); });
-      setState({ now: now?.series === series ? now : null, queued: queue.filter((q) => q.series === series).length, failed });
+      setState({ now: now?.series === series ? now : null, queued: queue.filter((q) => q.series === series).length, failed, full });
     };
     update();
     listeners.add(update);
