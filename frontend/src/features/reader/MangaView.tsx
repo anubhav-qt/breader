@@ -510,6 +510,9 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   useLayoutEffect(() => { pics.book = book; }, [pics, book]);
   useEffect(() => () => pics.keep(1, 0), [pics]);
   const [srcs, setSrcs] = useState<ReadonlyMap<number, string | null>>(() => new Map());
+  // The picture, by page, that its image has finished with (drawn, or failed): until then the page says it's loading.
+  const [settled, setSettled] = useState<ReadonlyMap<number, string>>(() => new Map());
+  const settle = (i: number, src: string) => setSettled((m) => (m.get(i) === src ? m : new Map(m).set(i, src)));
   const s = spreadAt[Math.min(total - 1, at.page)];
   const [wantFrom, wantTo] = paged
     ? [spreads[Math.max(0, s - 1)]?.[0] ?? 0, spreads[Math.min(spreads.length - 1, s + 2)]?.slice(-1)[0] ?? total - 1]
@@ -757,9 +760,19 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     void pics.retry(i).then((url) => setSrcs((m) => new Map(m).set(i, url)));
   };
 
+  /** A small spinner and the page's number, in a page's box while its picture is on its way. */
+  const waiting = (i: number) => (
+    <span className="mg-wait" role="status">
+      <span className="mg-wait-in">
+        <span className="mg-spin" aria-hidden="true" />
+        Loading page {i + 1}
+      </span>
+    </span>
+  );
+
   const picture = (i: number) => {
     const src = srcs.get(i);
-    if (src === undefined) return null;
+    if (src === undefined) return waiting(i);
     if (src === null) {
       return (
         <span className="mg-broken">
@@ -768,7 +781,21 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
         </span>
       );
     }
-    return <img src={src} alt={`Page ${i + 1}`} draggable={false} decoding="async" onLoad={(e) => measured(i, e.currentTarget)} />;
+    const loading = settled.get(i) !== src;
+    return (
+      <>
+        <img
+          src={src}
+          alt={`Page ${i + 1}`}
+          className={loading ? 'is-waiting' : undefined}
+          draggable={false}
+          decoding="async"
+          onLoad={(e) => { measured(i, e.currentTarget); settle(i, src); }}
+          onError={() => settle(i, src)}
+        />
+        {loading && waiting(i)}
+      </>
+    );
   };
 
   // A page looked at closely (MangaZoom.tsx).
