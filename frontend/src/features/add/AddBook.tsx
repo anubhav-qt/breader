@@ -191,7 +191,7 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
               <label className="add-label" htmlFor="paste-title">Title</label>
               <input id="paste-title" className="add-input" placeholder="Taken from the first line if empty" value={pasteTitle} onChange={(e) => setPasteTitle(e.target.value)} />
               <label className="add-label" htmlFor="paste-text">Text</label>
-              <textarea id="paste-text" className="add-text" autoFocus placeholder="Paste an article, a chapter or your own writing. Markdown works too." value={pasteText} onChange={(e) => setPasteText(e.target.value)} />
+              <textarea id="paste-text" className="add-text" autoFocus value={pasteText} onChange={(e) => setPasteText(e.target.value)} />
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setStep({ kind: 'choose' })}>Back</button>
                 <button type="button" className="btn btn-primary" disabled={!pasteText.trim()} onClick={() => void readPaste()}>Continue</button>

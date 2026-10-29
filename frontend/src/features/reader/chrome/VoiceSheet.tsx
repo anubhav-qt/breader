@@ -8,7 +8,7 @@ import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, useGpu, type Engine, type Mode, type VoiceInfo } from '../voice/catalog';
 import { refreshVoices } from '../voice/list';
 import { unlockMusic } from '../music';
-import { hung, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
+import { hung, MUSIC_VOLUME, PACE, pairFor, pickedEngine, pickSide, RATES, readsOnServer, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
 import { missingAll, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { SheetAi } from '../../ai/AiStatus';
@@ -95,7 +95,9 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   const load = useLoadState();
   const mode = prefs.mode;
   const speech = useSpeech();
-  const server = speech.allowed && prefs.server;
+  const server = readsOnServer(prefs, speech.allowed);
+  // A heavy voice reads on this device only, so the server switch sits off.
+  const heavy = pickedEngine(prefs) === 'kokoro';
   // Immersive where the GPU can't run Kokoro offers only Piper (prefs.ts, voiceFor).
   const gpu = useGpu();
   const fallback = mode === 'immersive' && gpu === false && !server;
@@ -251,13 +253,16 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       <SheetAi p={ai} book={bookId} elsewhere={aiElsewhere} onAi={onAi} />
       <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
       {speech.allowed && (
-        <div className="ctl tgrow">
-          <span className="clbl">Read on the server</span>
-          <button type="button" className="tg" role="switch" aria-checked={prefs.server} aria-label="Read aloud on Breader’s own computer" onClick={() => {
-            if (!prefs.server && api.away) sayAway('it can’t read aloud on the server');
-            setVoicePrefs({ server: !prefs.server });
-          }} />
-        </div>
+        <>
+          <div className="ctl tgrow">
+            <span className="clbl">Read on the server</span>
+            <button type="button" className="tg" role="switch" aria-checked={server} disabled={heavy} aria-label="Read aloud on Breader’s own computer" onClick={() => {
+              if (!prefs.server && api.away) sayAway('it can’t read aloud on the server');
+              setVoicePrefs({ server: !prefs.server });
+            }} />
+          </div>
+          {heavy && <p className="p-note vs-about">Piper voices only.</p>}
+        </>
       )}
       {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}
       {pace}
@@ -330,15 +335,14 @@ export function NotYet({ what, off, onAi, onClose }: { what: Soon; off: boolean;
         data-panel
         role="dialog"
         aria-modal="true"
-        aria-labelledby="vs-soon-t"
+        aria-labelledby="vs-soon-h"
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97, y: 4, transition: { duration: 0.15 } }}
         transition={springs.snappy}
       >
         <CloseDots onClick={onClose} />
-        <div className="pnl-h">{SOON[what]}</div>
-        <p className="vs-soon-t" id="vs-soon-t">Not quite yet</p>
+        <div className="pnl-h" id="vs-soon-h">{SOON[what]}</div>
         {asked ? (
           <>
             <div className="ctl tgrow vs-soon-ai">

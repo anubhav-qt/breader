@@ -204,10 +204,10 @@
 .i3-scrim { position: absolute; inset: 0; z-index: 7; }
 .i3-drop {
   position: absolute;
-  top: 66px;
+  top: 84px;
   z-index: 8;
   width: min(380px, calc(100% - 24px));
-  max-height: calc(100% - 140px);
+  max-height: calc(100% - 168px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -565,7 +565,6 @@
   box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
 }
 .vs-soon .pnl-h { margin-bottom: 12px; }
-.vs-soon-t { margin: 0 32px 14px 0; font-family: var(--read); font-size: 28px; line-height: 0.95; color: var(--book-mark); }
 .vs-soon .p-note { margin: 0 0 10px; font-size: 13px; color: var(--r-fg); }
 .vs-soon .p-note:last-of-type { color: var(--r-mu); }
 .vs-soon .vs-go { width: 100%; margin-top: 18px; }
@@ -701,7 +700,7 @@
 .i3-rv.is-open .i3-caret { transform: rotate(180deg); }
 @media (hover: hover) { .i3-rv:hover { color: var(--r-fg); background: var(--r-fill); } }
 
-.i3-drop.is-revisit { top: auto; bottom: 66px; left: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(320px, calc(100% - 24px)); }
+.i3-drop.is-revisit { top: auto; bottom: 84px; left: max(12px, calc(50% - var(--pw) / 2 - 24px)); width: min(320px, calc(100% - 24px)); }
 .rv-about { margin: -6px 0 0; }
 .rv-scopes { margin-top: 14px; }
 .rd .rv-scope { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }

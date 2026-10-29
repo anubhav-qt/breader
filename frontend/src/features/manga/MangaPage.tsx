@@ -591,7 +591,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
         </div>
         {list.state === 'loading' && <p className="mds-wait"><span className="add-spinner" /> Finding its chapters…</p>}
         {list.state === 'error' && <p className="mds-error">{list.message}</p>}
-        {list.state === 'ready' && chapters.length === 0 && <p className="mds-wait">No chapters here yet.</p>}
         {chapters.length > 0 && (
           <ol className="mds-chapters">
             {order.map((i) => {

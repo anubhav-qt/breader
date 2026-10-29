@@ -10,8 +10,8 @@ import { caretAt, charRect, collectBlocks, firstCharWhere, firstRect, offsetIn, 
 import { pad2 } from './chapters';
 import { lookLeft, useLook } from './look';
 import { light, sentencesIn, type Listen, type Paragraph, type Sentence } from './narration';
-import { fontFamily, type Style, type StyleSettings } from './settings';
-import { curves, runTurn, swaps, type TurnStyle } from './turn';
+import { fontFamily, weightsOf, type Style, type StyleSettings } from './settings';
+import { curves, runTurn, swaps, turning, type TurnStyle } from './turn';
 
 /** Gap between columns (and between page views). */
 export const GAP = 80;
@@ -467,7 +467,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, size.w, size.h, pagesMode, viewW, colW, s.font, s.size, s.lh, s.justify, style, fontTick, drawn, hasAside]);
+  }, [section, size.w, size.h, pagesMode, viewW, colW, s.font, s.weight, s.size, s.lh, s.justify, style, fontTick, drawn, hasAside]);
 
   // The aside growing (a thread opened, comments arriving) adds pages after the text: counted,
   // without moving the page on screen.
@@ -764,14 +764,54 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
     }
   };
 
+  // Only words picked in the book's text hold a tap; a stray selection elsewhere doesn't.
+  const textSelected = () => {
+    const picked = window.getSelection();
+    const flow = flowRef.current;
+    if (!picked || picked.isCollapsed || !flow) return false;
+    return flow.contains(picked.anchorNode) || flow.contains(picked.focusNode);
+  };
+
+  // A press on a zone starts no selection, as a double click would pick the word of the text behind it.
+  const noSelect = (e: MouseEvent) => e.preventDefault();
+
   const onZone = (dir: 1 | -1) => {
-    if (window.getSelection()?.toString()) return;
+    if (textSelected()) return;
     turn(dir);
   };
 
+  // While a turn's transition plays, the page under a press is the document itself: a second quick
+  // tap would be lost and, as a double click, would pick a word, which then holds every tap after.
+  // So no press starts a selection then, and one that lands in a zone's place still turns.
+  const onZoneRef = useRef(onZone);
+  onZoneRef.current = onZone;
+  useEffect(() => {
+    if (!pagesMode) return;
+    const down = (e: globalThis.MouseEvent) => {
+      if (turning()) e.preventDefault();
+    };
+    const click = (e: globalThis.MouseEvent) => {
+      if (e.target !== document.documentElement || !turning()) return;
+      const prev = rootRef.current?.querySelector('.fv-zone.is-prev')?.getBoundingClientRect();
+      const next = rootRef.current?.querySelector('.fv-zone.is-next')?.getBoundingClientRect();
+      const inside = (r: DOMRect | undefined) => !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (inside(prev)) onZoneRef.current(-1);
+      else if (inside(next)) onZoneRef.current(1);
+    };
+    document.addEventListener('mousedown', down, true);
+    document.addEventListener('click', click);
+    return () => {
+      document.removeEventListener('mousedown', down, true);
+      document.removeEventListener('click', click);
+    };
+  }, [pagesMode]);
+
   const title = book.sections[section]?.title ?? '';
+  const weights = weightsOf(s.font, s.weight);
   const cssVars = {
     '--rf': fontFamily(s.font),
+    '--rw': weights.text,
+    '--rws': weights.strong,
     '--rs': `${s.size}px`,
     '--rl': s.lh,
     '--cw': `${colW}px`,
@@ -818,8 +858,8 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       {pagesMode && (
         <>
           <div className="fv-folio">{pages > 1 ? `${page + 1} of ${pages}` : ''}</div>
-          <button type="button" tabIndex={-1} className="fv-zone is-prev" aria-label="Previous page" onClick={() => onZone(-1)}><span>‹</span></button>
-          <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label="Next page" onClick={() => onZone(1)}><span>›</span></button>
+          <button type="button" tabIndex={-1} className="fv-zone is-prev" aria-label="Previous page" onMouseDown={noSelect} onClick={() => onZone(-1)}><span>‹</span></button>
+          <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label="Next page" onMouseDown={noSelect} onClick={() => onZone(1)}><span>›</span></button>
         </>
       )}
     </div>

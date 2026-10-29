@@ -12,7 +12,7 @@ import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
 import { usePanelModel } from './panelModel';
 import { answerSeatOffer, setPanelsNotify, setServerPanels, useServerPanels } from './serverPanels';
-import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, styleFor, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
+import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, styleFor, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
 
@@ -104,7 +104,6 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
         <span>{loc ? (loc.bookWordsLeft ? `${duration(minutesFor(loc.bookWordsLeft))} left` : 'Finished') : ''}</span>
       </div>
       <div className="p-list" ref={listRef}>
-        {items.length === 0 && <p className="p-empty">This book has no table of contents.</p>}
         {items.map((it, i) => {
           const state = i < current ? 'done' : i === current ? 'now' : 'next';
           // Not open this time (a series from the reader's own server opens a few chapters at a time): it opens again there.
@@ -176,6 +175,8 @@ export interface MangaControls {
   pair: (pages: 1 | 2) => void;
   saver: boolean;
   panels: boolean;
+  /** It only scrolls (settings.ts scrollOnly), so there is no layout to pick. */
+  strip: boolean;
 }
 
 export function Segmented<T extends string | number>({ label, value, options, onChange }: {
@@ -260,7 +261,6 @@ function ServerPanels() {
           </div>
         </>
       )}
-      {on && s.seated && <p className="p-note p-seats">{s.used}/{s.seats} readers are using it.</p>}
     </>
   );
 }
@@ -297,14 +297,15 @@ export function SeatOffer() {
  * A manga's layout, the way its pages turn, how wide they scroll, and whether they turn two at a
  * time on a wide screen. On a narrow screen it opens scrolled, and keeps a layout there apart from
  * wider ones; the column of pages is as wide as the screen, and pages turn one at a time.
- * Panels, and finding them on the server, are for manga from Japan only.
+ * Panels, and finding them on the server, are for manga from Japan only, and a manhwa or manhua has
+ * no layout to pick: it only scrolls.
  */
-function MangaLookControls({ look, pick, widen, pair, saver, panels }: MangaControls) {
+function MangaLookControls({ look, pick, widen, pair, saver, panels, strip }: MangaControls) {
   const layouts: Array<{ v: MangaLayout; label: string }> = [{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }];
   if (panels) layouts.push({ v: 'panels', label: 'Panels' });
   return (
     <>
-      <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={layouts} />
+      {!strip && <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={layouts} />}
       <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
       {!look.narrow && look.layout === 'scroll' && (
         <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
@@ -380,6 +381,7 @@ export function AppearancePanel({ settings, kind, update, two = false, manga }: 
               <button type="button" aria-label="Larger text" disabled={cur.size >= SIZE_MAX} onClick={() => set({ size: Math.min(SIZE_MAX, cur.size + 1) })}>A+</button>
             </div>
           </div>
+          <Segmented label="Weight" value={cur.weight} onChange={(v) => set({ weight: v })} options={WEIGHTS} />
           <div className="two">
             <Segmented label="Spacing" value={cur.lh} onChange={(v) => set({ lh: v })} options={SPACING.map((o, i) => ({ v: o.v, label: o.label, content: lines(4 + i) }))} />
             <Segmented label="Margins" value={cur.measure} onChange={(v) => set({ measure: v })} options={MEASURES.map((o, i) => ({ v: o.v, label: o.label, content: margins(4 + i * 2) }))} />

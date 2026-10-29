@@ -41,8 +41,8 @@
 
 /* What sat just over the bottom line now sits over the row. */
 .rd.has-play .rd-chrome > .i3-hint { bottom: calc(var(--foot) + 8px); }
-.rd.has-play .i3-drop { max-height: calc(100% - 72px - var(--foot)); }
-.rd.has-play .i3-drop.is-up { top: auto; bottom: calc(var(--foot) + 6px); }
+.rd.has-play .i3-drop { max-height: calc(100% - 92px - var(--foot)); }
+.rd.has-play .i3-drop.is-up { top: auto; bottom: calc(var(--foot) + 8px); }
 .rd.has-play .i3-drop.is-voice.is-up { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); }
 .rd.has-play .fv-next { padding-bottom: calc(var(--foot) + 20px); }
 .rd.has-play .fv.is-pages .fv-flow :is(img, svg) { max-height: calc(100dvh - 114px - var(--foot)); }

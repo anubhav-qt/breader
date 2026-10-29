@@ -102,7 +102,6 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
                 <button type="button" className="lm-pick" aria-current={on} onClick={() => { onShow(which); onClose(); }}>
                   <span className="lm-name">{name}</span>
                   <span className="lm-sub">
-                    {which === 'own' ? 'Yours, ' : ''}
                     {closed ? 'its key has changed' : count === null ? 'opening…' : `${count} ${count === 1 ? 'book' : 'books'}`}
                     {choosing && isDefault ? ', opens first' : ''}
                     {theirs && theirs !== name ? <>, “{theirs}” to its owner</> : null}

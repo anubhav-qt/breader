@@ -47,6 +47,9 @@ type DocVT = Document & { startViewTransition?: (update: () => void | Promise<vo
 
 let running: VT | null = null;
 
+/** Whether a turn's transition is still moving. */
+export const turning = () => running !== null;
+
 const WIPE = ['--wipe-l', '--wipe-r', '--wipe-lr', '--wipe-rr'];
 
 /**

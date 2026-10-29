@@ -40,8 +40,15 @@ const KINDS: Array<{ v: MangaKind; label: string; about: string }> = [
   { v: 'manga', label: 'Manga', about: 'Manga: from Japan' },
   { v: 'manhwa', label: 'Manhwa', about: 'Manhwa: from Korea, mostly webtoons' },
   { v: 'manhua', label: 'Manhua', about: 'Manhua: from China' },
-  { v: 'comics', label: 'Comics', about: 'Comics: from everywhere else' },
 ];
+const SHOWN_KINDS = KINDS.map((k) => k.v);
+
+/** The kinds a saved choice still asks for, as Comics isn't offered; with none left, every kind shown. */
+function shownKinds(saved: MangaKind[]): MangaKind[] {
+  const kept = saved.filter((k) => SHOWN_KINDS.includes(k));
+  if (kept.length === 0) return SHOWN_KINDS;
+  return kept;
+}
 
 /**
  * ask: the search these are for (askKey), so a lot asked for by an earlier one is never added.
@@ -107,10 +114,12 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   /** The next lot, asked for as soon as the one before it came: the search it's for, and where it starts. */
   const ahead = useRef<{ ask: string; at: string; lot: Promise<Lot> } | null>(null);
 
+  const kinds = shownKinds(prefs.kinds);
+
   // Searching, the best match comes first; otherwise the order picked.
   let sort: MangaSort = prefs.sort;
   if (q) sort = 'relevance';
-  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds: prefs.kinds });
+  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds });
 
   // A pause in typing searches.
   useEffect(() => {
@@ -122,7 +131,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
    * A lot of results from every place, from where the search had got to. Only series that can be
    * read here show, and a slow place shows with the next lot, so a lot can be short or even empty.
    */
-  const searchOf = (next: string | null) => ({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds: prefs.kinds, next: next ?? undefined });
+  const searchOf = (next: string | null) => ({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds, next: next ?? undefined });
   const fetchLot = async (next: string | null): Promise<Lot> => {
     const r = await mangadex.search(searchOf(next));
     return { items: r.items, next: r.next };
@@ -267,16 +276,16 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   };
 
   const flipKind = (kind: MangaKind) => {
-    const on = prefs.kinds.includes(kind);
+    const on = kinds.includes(kind);
     // One kind stays on, as a search for none would find nothing.
-    if (on && prefs.kinds.length === 1) return;
-    let kinds: MangaKind[];
-    if (on) kinds = prefs.kinds.filter((k) => k !== kind);
-    else kinds = MANGA_KINDS.filter((k) => k === kind || prefs.kinds.includes(k));
-    set({ kinds });
+    if (on && kinds.length === 1) return;
+    let next: MangaKind[];
+    if (on) next = kinds.filter((k) => k !== kind);
+    else next = MANGA_KINDS.filter((k) => k === kind || kinds.includes(k));
+    set({ kinds: next });
   };
 
-  let nothing = 'Nothing here yet.';
+  let nothing = '';
   if (q) {
     nothing = `Nothing goes by “${q}”`;
     if (prefs.lang) nothing += ` in ${langName(prefs.lang)}`;
@@ -298,7 +307,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       </div>
     );
   } else if (items.length === 0 && !found.next) {
-    body = <div className="mdx-note"><p>{nothing}</p></div>;
+    if (q) body = <div className="mdx-note"><p>{nothing}</p></div>;
   } else {
     body = (
       <>
@@ -343,7 +352,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
           <div className="mdx-right">
             <div className="mdx-dots" role="group" aria-label="Show">
               {KINDS.map((k) => (
-                <button key={k.v} type="button" className="mdx-dot" aria-pressed={prefs.kinds.includes(k.v)} title={k.about} onClick={() => flipKind(k.v)}>
+                <button key={k.v} type="button" className="mdx-dot" aria-pressed={kinds.includes(k.v)} title={k.about} onClick={() => flipKind(k.v)}>
                   <span className="mdx-led" />
                   {k.label}
                 </button>

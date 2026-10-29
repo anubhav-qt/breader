@@ -4,7 +4,7 @@ import { lookAt, lookFor, stopLook } from './look';
 import { unlockMusic } from './music';
 import { checkGpu, type Mode, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
-import { askFirst, onServer, pairFor, rateOf, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
+import { askFirst, onServer, pairFor, rateOf, readsOnServer, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
 import { useSpeech } from './voice/server';
@@ -701,7 +701,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   // A new voice or speed takes over mid-sentence, and so does the server's voice or this device's.
   const prefs = useVoicePrefs();
   const speech = useSpeech();
-  const server = prefs.server && speech.allowed;
+  const server = readsOnServer(prefs, speech.allowed);
   const picked = voiceFor(prefs.mode).key;
   const speed = rateOf(prefs);
   // 2 voices: on or off, the pair, and who reads with no point of view, as the loop sees them.

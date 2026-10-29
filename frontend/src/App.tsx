@@ -1208,18 +1208,24 @@ export default function App() {
     <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconPlus /> Browse</button>
   );
   /** An empty shared library, of manga or books: the reader's own, with a way to add; someone else's, why it's empty. */
-  const emptyShelf = (manga: boolean) => showing === 'own' ? (
-    <div className="gallery-empty">
-      <p>Nothing shared yet.</p>
-      {manga ? browseButton : <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>}
-    </div>
-  ) : others?.state === 'closed' ? (
-    <div className="gallery-empty">
-      <p>This key doesn’t open {libraryName(sharing, showing)} any more.</p>
-    </div>
-  ) : (
-    <div className="gallery-empty"><p>{others?.state === 'ready' ? `Nothing is shared in ${libraryName(sharing, showing)} yet.` : 'Opening…'}</p></div>
-  );
+  const emptyShelf = (manga: boolean) => {
+    if (showing === 'own') {
+      return (
+        <div className="gallery-empty">
+          {manga ? browseButton : <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>}
+        </div>
+      );
+    }
+    if (others?.state === 'closed') {
+      return (
+        <div className="gallery-empty">
+          <p>This key doesn’t open {libraryName(sharing, showing)} any more.</p>
+        </div>
+      );
+    }
+    if (others?.state === 'ready') return <div className="gallery-empty" />;
+    return <div className="gallery-empty"><p>Opening…</p></div>;
+  };
   // Every library seen, on every shelf seen: all but the one showing are hidden.
   const galleries: Array<{ c: Category; t: 'mine' | 'shelf' }> = [];
   for (const c of CATEGORIES) {
@@ -1228,10 +1234,9 @@ export default function App() {
       if (seen.has(t)) galleries.push({ c, t });
     }
   }
-  /** No manga yet, and Browse to find some. */
+  /** An empty manga shelf: Browse, to find some. */
   const emptyManga = (
     <div className="gallery-empty">
-      <p>No manga yet.</p>
       {browseButton}
     </div>
   );

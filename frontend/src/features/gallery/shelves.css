@@ -29,7 +29,6 @@
 .view-line { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 1px; background: var(--ink); }
 
 .shelf-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; margin-top: 12px; }
-.shelf-empty { margin: 14px 0 0; font: var(--ui-w) 13px/1.5 var(--ui); color: var(--ink-2); }
 .shelf-more { height: 1px; margin-top: -26px; }
 
 /* A shelf's heading: its name, how many, and arrows at the right */

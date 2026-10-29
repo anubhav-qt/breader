@@ -375,7 +375,7 @@ function TailLine({ view, section, label, open }: { view: TalkView; section: num
     ? 'Opens once you’ve read to the end of this chapter.'
     : info
       ? <>{glimpse(info.last.body)}<em> · {censorName(info.last.name)}</em></>
-      : 'Nothing yet. Be the first to say something.';
+      : null;
   return (
     <div className={`cm-tail-one${shown ? ' is-open' : ''}`}>
       <button type="button" className="cm-tail-h" aria-expanded={shown} onClick={() => setShown(!shown)}>

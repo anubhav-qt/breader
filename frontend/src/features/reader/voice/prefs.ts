@@ -138,9 +138,6 @@ export const useVoicePrefs = () => useSyncExternalStore(
   () => prefs,
 );
 
-/** Reading with the server's voices: picked, and open to this account. */
-export const onServer = () => prefs.server && speechAllowed();
-
 /** A voice by its key, of these engines, if it's still there. */
 function find(key: string, engines: Engine[]): VoiceInfo | undefined {
   const built = [...BUILT_IN.normal, ...BUILT_IN.immersive].find((v) => v.key === key);
@@ -151,6 +148,25 @@ function find(key: string, engines: Engine[]): VoiceInfo | undefined {
 
 /** The kinds of voice a mode reads with: Normal's, and in Immersive the heavy ones too. */
 const enginesOf = (mode: Mode): Engine[] => (mode === 'normal' ? ['piper'] : ['piper', 'kokoro']);
+
+/** The kind of voice picked in the mode in use: hers, when it reads in 2 voices. */
+export function pickedEngine(p: VoicePrefs): Engine | undefined {
+  let key = p.voice[p.mode];
+  if (p.count[p.mode] === 2) key = p.pair[p.mode].F;
+  return find(key, enginesOf(p.mode))?.engine;
+}
+
+/**
+ * Reading with the server's voices: switched on and open to this account (`allowed`), and not with
+ * a heavy voice, which the switch is for Normal's alone. The switch itself is kept as it was, so
+ * going back to a Normal voice reads on the server again.
+ */
+export function readsOnServer(p: VoicePrefs, allowed: boolean): boolean {
+  if (!p.server || !allowed) return false;
+  return pickedEngine(p) !== 'kokoro';
+}
+
+export const onServer = () => readsOnServer(prefs, speechAllowed());
 
 /**
  * The voice a mode reads with: the one picked, or the default when that one has gone. A heavy
