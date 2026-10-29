@@ -281,6 +281,17 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-broken { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 12px; text-align: center; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
 .mg-broken button { height: 34px; padding: 0 14px; border-radius: 10px; background: var(--r-fill); box-shadow: 0 0 0 1px var(--r-line); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
 .mg-broken button:hover { background: var(--r-line); }
+/* A page whose picture is still on its way says so, over its grey box; the picture waits unseen until it's drawn. */
+.mg-pg img.is-waiting { opacity: 0; }
+.mg-wait { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
+.mg-wait-in { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 12px; text-align: center; }
+.mg-spin { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--r-line); border-top-color: var(--r-mu); animation: mg-spin 0.9s linear infinite; }
+@keyframes mg-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mg-spin { animation: none; }
+}
+/* A tall page in the scroll is many screens long: the label stays in the middle of the screen while the page is in view, and in the middle of a page shorter than that. */
+.mg-scroll .mg-wait-in { position: sticky; top: calc(50% - 49px); bottom: calc(50% - 49px); }
 /* A click on a picture brings its panel closer (MangaView.tsx); on a touch screen, two taps. */
 .mg-pg img { cursor: zoom-in; }
 .mg-scroll { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
