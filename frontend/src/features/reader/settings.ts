@@ -42,16 +42,13 @@ export interface ReaderSettings {
   book: StyleSettings;
   modern: StyleSettings;
   pdfLayout: Layout;
-  /** Manga: scrolled down a column of pages, turned a page (or two, side by side) at a time, or read a panel at a time. */
-  mangaLayout: MangaLayout;
   mangaDir: MangaDir;
   /**
-   * Each manga's own layout and direction, by its id: `layout` on a wide screen, `narrow` on a narrow
-   * one (NARROW). Those without start as the last picked there.
+   * Each manga's own direction, and the layout picked for it, by its id: scrolled down a column of
+   * pages, turned a page (or two, side by side) at a time, or read a panel at a time. `layout` on a
+   * wide screen, `narrow` on a narrow one (NARROW); every manga scrolls on either until one's picked.
    */
-  mangaOwn?: Record<string, { layout: MangaLayout; dir: MangaDir; narrow?: MangaLayout }>;
-  /** The layout last picked for a manga on a narrow screen; scrolled until one is. */
-  mangaNarrow?: MangaLayout;
+  mangaOwn?: Record<string, { dir: MangaDir; layout?: MangaLayout; narrow?: MangaLayout }>;
   /** Manga scrolled on a wide screen: how wide the column of pages is (MANGA_WIDTHS). */
   mangaWidth?: number;
   /** Manga in pages on a wide screen: one at a time, or two side by side where they fit (the default). */
@@ -143,9 +140,8 @@ const DEFAULTS: ReaderSettings = {
   book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: false, weight: 'regular' },
   modern: { font: 'dongle', size: 22, lh: 1.65, measure: 620, layout: 'scroll', justify: false, weight: 'regular' },
   pdfLayout: 'pages',
-  mangaLayout: 'scroll',
   mangaDir: 'rtl',
-  v: 3,
+  v: 4,
 };
 
 /** The style a layout reads in: pages are a book's, scrolling is modern. */
@@ -182,6 +178,17 @@ function loadSettings(): ReaderSettings {
     s.modern = { ...s.modern, layout: 'scroll' };
     s.v = 3;
     if (saved.book || saved.modern || saved.style) changedOnLoad = s;
+  }
+  // 4: Every manga scrolls until a layout is picked for it, and a layout picked is that manga's
+  // alone. Before, the last one picked was every new manga's too, and each kept the one it was
+  // first opened in, so the layouts kept are let go; each keeps its direction.
+  if ((saved.v ?? 1) < 4) {
+    const old = s as ReaderSettings & { mangaLayout?: unknown; mangaNarrow?: unknown };
+    delete old.mangaLayout;
+    delete old.mangaNarrow;
+    if (s.mangaOwn) s.mangaOwn = Object.fromEntries(Object.entries(s.mangaOwn).map(([id, own]) => [id, { dir: own.dir }]));
+    s.v = 4;
+    if (saved.v) changedOnLoad = s;
   }
   return s;
 }
@@ -262,33 +269,29 @@ export interface MangaLook {
 }
 
 /**
- * As this manga was last read on a screen this wide or narrow, or as the last one picked there; on a
- * narrow screen, scrolled until one is. One that can't be read in `panels` (panelled) scrolls instead,
- * and so does one that is `strip` (scrollOnly), whatever it saved.
+ * As picked for this manga on a screen this wide or narrow, or scrolled. One that can't be read in
+ * `panels` (panelled) scrolls instead, and so does one that is `strip` (scrollOnly), whatever it saved.
  */
 export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean, panels = true, strip = false): MangaLook {
   const own = s.mangaOwn?.[id];
-  let layout = own?.layout ?? s.mangaLayout;
-  if (narrow) layout = own?.narrow ?? s.mangaNarrow ?? 'scroll';
+  let layout = (narrow ? own?.narrow : own?.layout) ?? 'scroll';
   if (layout === 'panels' && !panels) layout = 'scroll';
   if (strip) layout = 'scroll';
   return { layout, dir: own?.dir ?? s.mangaDir, width: s.mangaWidth ?? MANGA_WIDTH, pages: s.mangaPages === 1 ? 1 : 2, narrow };
 }
 
 /**
- * A manga's own layout (on a screen as `narrow` as this, or not) and direction, changed by `patch`;
- * the next new one starts with them too.
+ * A manga's own layout (on a screen as `narrow` as this, or not) and direction, changed by `patch`.
+ * The layout is that manga's alone; the next new one starts in the direction picked.
  */
 export function withMangaLook(s: ReaderSettings, id: string, patch: { layout?: MangaLayout; dir?: MangaDir }, narrow = false): ReaderSettings {
-  const own = s.mangaOwn?.[id] ?? { layout: s.mangaLayout, dir: s.mangaDir };
+  const own = s.mangaOwn?.[id] ?? { dir: s.mangaDir };
   const next = { ...own, dir: patch.dir ?? own.dir };
   if (patch.layout && narrow) next.narrow = patch.layout;
   else if (patch.layout) next.layout = patch.layout;
   return {
     ...s,
-    mangaLayout: next.layout,
     mangaDir: next.dir,
-    ...(narrow && patch.layout ? { mangaNarrow: patch.layout } : {}),
     mangaOwn: { ...s.mangaOwn, [id]: next },
   };
 }

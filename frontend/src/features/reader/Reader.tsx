@@ -77,18 +77,13 @@ const MEDIA_KEYS: Record<string, 'play' | 'pause' | 'toggle'> = { MediaPlayPause
 
 export function Reader({ record, title, color, book, initial, latest, closing = false, onBack, onSave, onReadTime = noTime, onRemove, ai = false, aiElsewhere = false, onAi, onBook, series }: Props) {
   const [settings, update] = useReaderSettings();
-  // Each manga keeps its own layout and direction, a layout for narrow screens (scrolled, until
-  // another's picked) apart from wide ones. Opened, it keeps the one it opened in. Only manga from
-  // Japan is read a panel at a time, and a manhwa or manhua is only scrolled.
+  // Each manga scrolls until a layout is picked for it, and keeps the one picked, for narrow screens
+  // apart from wide ones. Only manga from Japan is read a panel at a time, and a manhwa or manhua is
+  // only scrolled.
   const narrow = useNarrow();
   const panels = book.kind === 'manga' && panelled(book);
   const strip = book.kind === 'manga' && scrollOnly(book);
   const mangaLook = mangaLookOf(settings, record.id, narrow, panels, strip);
-  const own = settings.mangaOwn?.[record.id];
-  const ownLook = narrow ? !!own?.narrow : !!own;
-  useEffect(() => {
-    if (book.kind === 'manga' && !ownLook && !strip) update((s) => withMangaLook(s, record.id, { layout: mangaLookOf(s, record.id, narrow, panels).layout }, narrow));
-  }, [book.kind, narrow, ownLook, panels, strip, record.id, update]);
   const [panel, setPanel] = useState<PanelName | null>(null);
   const [lastPanel, setLastPanel] = useState<PanelName>('toc');
   const [loc, setLoc] = useState<Loc | null>(null);
