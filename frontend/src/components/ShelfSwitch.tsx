@@ -10,8 +10,8 @@ interface Props {
   /** Books or manga: the libraries, their counts and the + button are the category's. */
   category: Category;
   onCategory: (c: Category) => void;
-  /** The + button at the end: Add book, or Browse, with its word on wide screens. */
-  plus: PlusButton | null;
+  /** The + button at the end, Add, with its word on wide screens. */
+  plus: PlusButton;
 }
 
 /**
@@ -49,12 +49,10 @@ export function ShelfSwitch({ category, onCategory, plus }: Props) {
             </button>
           ))}
         </div>
-        {plus && (
-          <button type="button" className="ls-plus" aria-label={plus.label} aria-pressed={plus.pressed} onClick={plus.run}>
-            <IconPlus />
-            <span className="ls-plus-word">{plus.word}</span>
-          </button>
-        )}
+        <button type="button" className="ls-plus" aria-label="Add" aria-haspopup="dialog" aria-pressed={plus.pressed} onClick={plus.run}>
+          <IconPlus />
+          <span className="ls-plus-word">Add</span>
+        </button>
       </div>
     </div>
   );

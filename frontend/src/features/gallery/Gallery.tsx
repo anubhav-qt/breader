@@ -48,7 +48,7 @@ interface Props {
   onKeepAll?: (books: ShelfItem[], series: string) => void;
   /** A series from MangaDex: its page, for its chapters and their language. */
   onChapters?: (book: ShelfItem) => void;
-  /** What an empty library says, in place of its Add button. */
+  /** What an empty library says, in place of its Add a book or Add a manga button. */
   empty?: ReactNode;
   /** Picking books to favourite or remove together: the ones ticked. Absent while not picking. */
   picked?: ReadonlySet<string>;
@@ -122,7 +122,7 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
       <div {...panel} className="gallery is-empty">
         {empty ?? (
           <button type="button" className="btn btn-primary gallery-add" onClick={onAdd}>
-            <IconPlus /> Add a book
+            <IconPlus /> {manga ? 'Add a manga' : 'Add a book'}
           </button>
         )}
       </div>

@@ -11,7 +11,8 @@
 .gallery > * { max-width: 1400px; margin-inline: auto; }
 .gallery[hidden] { display: none; }
 .gallery.is-empty:not([hidden]) { display: grid; place-items: center; padding-bottom: 76px; }
-.gallery-add { height: 50px; padding: 0 22px; border-radius: 14px; font-size: 15px; }
+/* Every empty library's one button, Add a book or Add a manga: one size, whichever it says. */
+.gallery-add { min-width: 176px; height: 50px; padding: 0 22px; border-radius: 14px; font-size: 15px; }
 .gallery-add svg { width: 18px; height: 18px; }
 /* An empty shared library: why, and what to do. */
 .gallery-empty { display: grid; justify-items: center; gap: 18px; max-width: 420px; padding: 0 16px; text-align: center; }

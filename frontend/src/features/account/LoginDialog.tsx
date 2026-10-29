@@ -237,7 +237,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
                 <button type="button" className="add-choice" onClick={() => go({ mode: 'entering', claim: true })}>
                   <IconUpload />
                   <span><b>Move {step.books === 1 ? 'it' : 'them'} to my account</b><span>Your account keeps them from now on, with your other books.</span></span>
-                  <IconChevron className="login-go" />
+                  <IconChevron className="add-go" />
                 </button>
                 <button type="button" className="add-choice" onClick={() => go({ mode: 'entering', claim: false })}>
                   <IconKey />
@@ -245,7 +245,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
                     <b>Keep {step.books === 1 ? 'it' : 'them'} separate</b>
                     <span>{localKey ? `Only the key ${localKey} opens ${step.books === 1 ? 'it' : 'them'}. Copy it first if you haven’t kept it.` : 'They stay in their own library.'}</span>
                   </span>
-                  <IconChevron className="login-go" />
+                  <IconChevron className="add-go" />
                 </button>
               </div>
             </>

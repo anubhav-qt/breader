@@ -4,10 +4,11 @@ import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { BulkBar, type BulkAction } from './components/BulkBar';
 import { Header, type Tab } from './components/Header';
-import { IconAddBook, IconLock, IconPeople, IconPlus, IconStar, IconTrash } from './components/icons';
+import { IconAddBook, IconLock, IconPeople, IconStar, IconTrash } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { DesignBar } from './features/design/DesignBar';
 import { Toast, type ToastMessage } from './components/Toast';
+import { AddWhat } from './features/add/AddWhat';
 import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
@@ -239,19 +240,21 @@ export default function App() {
   useEffect(() => { writeLocal('breader.category.v1', category); }, [category]);
   /** The laptop has MangaDex (null until it says), and how this device looks through it. */
   const [mdOn, setMdOn] = useState<boolean | null>(null);
+  /** The + button's question: books or manga. */
+  const [choosing, setChoosing] = useState(false);
   const [mdPrefs, setMdPrefs] = useState<MangaPrefs>(readMangaPrefs);
   /** A series' page, over the library, and under the reader while a chapter read from it is open. */
   const [sheet, setSheet] = useState<SeriesAt | null>(() => seriesNow(parseHash()));
   /** A chapter picked on a series' page: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
   useEffect(loadSoon, []);
-  // Whether the Manga shelf has its Browse button: the laptop says. Out of reach, it stays and Browse says so.
+  // Whether Add can open Browse: the laptop says. Out of reach, it stays and Browse says so.
   useEffect(() => {
-    if (category !== 'manga' || mdOn !== null) return;
+    if ((category !== 'manga' && !choosing) || mdOn !== null) return;
     let live = true;
     mangadex.state().then((st) => { if (live) setMdOn(st.on); }, () => { if (live) setMdOn(true); });
     return () => { live = false; };
-  }, [category, mdOn]);
+  }, [category, choosing, mdOn]);
   if ((category !== 'manga' || mdOn === false) && tab === 'browse') setTab('mine');
   /**
    * Picking books to act on together: where (the shelf, the library and, for a shared one, which)
@@ -1231,19 +1234,12 @@ export default function App() {
     setCoversOnly(next);
     writeLocal(COVERS_ONLY, next);
   };
-  /** Manga is found in Browse, which this opens, where the laptop has anywhere to look. */
-  const browseButton = mdOn !== false && (
-    <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconPlus /> Browse</button>
-  );
-  /** An empty shared library, of manga or books: the reader's own, with a way to add; someone else's, why it's empty. */
-  const emptyShelf = (manga: boolean) => {
-    if (showing === 'own') {
-      return (
-        <div className="gallery-empty">
-          {manga ? browseButton : <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>}
-        </div>
-      );
-    }
+  /**
+   * An empty shared library, of manga or books: the reader's own has the Add a book or Add a manga
+   * button every empty library has; someone else's says why it's empty.
+   */
+  const emptyShelf = () => {
+    if (showing === 'own') return undefined;
     if (others?.state === 'closed') {
       return (
         <div className="gallery-empty">
@@ -1262,12 +1258,10 @@ export default function App() {
       if (seen.has(t)) galleries.push({ c, t });
     }
   }
-  /** An empty manga shelf: Browse, to find some. */
-  const emptyManga = (
-    <div className="gallery-empty">
-      {browseButton}
-    </div>
-  );
+  /** An empty library's Add a book opens Add book; its Add a manga opens Browse, where the laptop has anywhere to look. */
+  const addTo = (c: Category) => (c === 'manga' ? () => setTab('browse') : () => setAdding({ mode: 'file' }));
+  /** Nowhere to find manga: an empty manga library, without its button. */
+  const noBrowse = <div className="gallery-empty" />;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -1279,11 +1273,9 @@ export default function App() {
             onCategory={setCategory}
             tab={tab}
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
-            browse={mdOn !== false}
             labels={labels}
             onTab={setTab}
-            onAdd={() => setAdding({ mode: 'file' })}
-            onBrowse={() => setTab('browse')}
+            onAdd={() => setChoosing(true)}
             libraries={(close) => (
               <LibraryMenu
                 key="libraries"
@@ -1330,14 +1322,14 @@ export default function App() {
               labelledBy={`tab-${t}`}
               hidden={t !== tab || c !== category}
               onOpen={(b, rect) => void onOpen(b, rect)}
-              onAdd={() => setAdding({ mode: 'file' })}
+              onAdd={addTo(c)}
               onEdit={(id, patch) => void editBook(id, patch)}
               // Reading shows only in My books.
               onFinish={t === 'mine' ? (b, finished) => lib.setFinished(b.id, finished, b) : undefined}
               onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
               onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
               onChapters={chaptersOf}
-              empty={t === 'shelf' ? emptyShelf(c === 'manga') : c === 'manga' ? emptyManga : undefined}
+              empty={(t === 'shelf' ? emptyShelf() : undefined) ?? (c === 'manga' && mdOn === false ? noBrowse : undefined)}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
                 // Out of their books already: not shared either, it's nowhere, so it goes.
@@ -1441,6 +1433,14 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {choosing && (
+          <AddWhat
+            key="add-what"
+            onBooks={() => { setChoosing(false); setCategory('books'); setAdding({ mode: 'file' }); }}
+            onManga={mdOn === false ? null : () => { setChoosing(false); setCategory('manga'); setTab('browse'); }}
+            onClose={() => setChoosing(false)}
+          />
+        )}
         {adding && (
           <Suspense key="add" fallback={null}>
           <AddBook

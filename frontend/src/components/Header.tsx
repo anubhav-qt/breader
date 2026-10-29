@@ -9,17 +9,14 @@ import { ShelfSwitch } from './ShelfSwitch';
 import { ThemeToggle } from './ThemeToggle';
 import './header.css';
 
-/** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened by its button, not a tab. */
+/** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened from Add, not a tab. */
 export type Tab = 'mine' | 'shelf' | 'browse';
 
-/** The + button: Add book on the Books shelf, Browse on the Manga one. */
+/** The + button, Add on either shelf: it asks books or manga (features/add/AddWhat.tsx). */
 export interface PlusButton {
-  label: string;
-  /** The word beside the + on wide screens: Add, or Browse. */
-  word: string;
   run: () => void;
   /** Browse is open. */
-  pressed?: boolean;
+  pressed: boolean;
 }
 
 interface Props {
@@ -28,13 +25,11 @@ interface Props {
   onCategory: (c: Category) => void;
   tab: Tab;
   counts: Record<'mine' | 'shelf', number>;
-  /** The laptop has places to find manga, so the Manga shelf has its Browse button. */
-  browse: boolean;
   /** The names of the switch between libraries, and of the reader's own library. */
   labels: LibraryLabels;
   onTab: (t: Tab) => void;
+  /** Asks books or manga, then opens Add book or Browse. */
   onAdd: () => void;
-  onBrowse: () => void;
   /** The list of shared libraries (features/shared/LibraryMenu.tsx). */
   libraries: (close: () => void) => ReactNode;
   /** The reader's own library's dropdown, to rename it (features/shared/OwnLibraryMenu.tsx). */
@@ -55,13 +50,8 @@ interface Props {
  * start, with the pencil for the one showing; books-or-manga and the + button, Select, light or dark
  * and settings at the end. On phones books-or-manga floats at the bottom instead (ShelfSwitch).
  */
-export function Header({ category, onCategory, tab, counts, browse, labels, onTab, onAdd, onBrowse, libraries, ownMenu, dark, onTheme, settings, onSelect, bulk }: Props) {
-  const manga = category === 'manga';
-
-  // On every library, empty ones too, which also have their own centred button.
-  let plus: PlusButton | null = null;
-  if (manga && browse) plus = { label: 'Browse', word: 'Browse', run: onBrowse, pressed: tab === 'browse' };
-  if (!manga) plus = { label: 'Add book', word: 'Add', run: onAdd };
+export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd, libraries, ownMenu, dark, onTheme, settings, onSelect, bulk }: Props) {
+  const plus: PlusButton = { run: onAdd, pressed: tab === 'browse' };
 
   return (
     <header className="hdr">

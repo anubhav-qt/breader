@@ -52,8 +52,7 @@
 .ls-tab:hover, .ls-tab[aria-checked="true"] { color: var(--ink); }
 .ls-tab .ls-name { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ls-on { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--canvas); box-shadow: 0 0 0 1px var(--tile-border), 0 1px 2px rgba(0, 0, 0, 0.06); }
-/* The + button, filled, as tall as the halves: Add on the Books shelf and Browse on the Manga one,
-   one width, so switching shelves leaves the switch as it was. */
+/* The + button, Add, filled, as tall as the halves: it asks books or manga. */
 .ls-plus {
   flex: none;
   display: flex;
