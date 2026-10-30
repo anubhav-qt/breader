@@ -5,9 +5,12 @@ import {
   LIBRARY_NAME_CHARS,
   normalizeKey,
   SHELF_LIMIT,
+  SharedAddRequest,
   SharedBooksRequest,
   SharedLinkRequest,
   SharedOpenRequest,
+  type Mutation,
+  type SharedAddResponse,
   type SharedBooksResponse,
   type SharedOpenResponse,
 } from '@breader/shared';
@@ -18,10 +21,11 @@ import { rateLimit } from '../lib/http.ts';
 import { sessionLibrary } from '../lib/library.ts';
 import { hashKey } from '../lib/session.ts';
 import { readable, sharedToken, tokenLibrary } from '../lib/shelf.ts';
+import { applyMutation } from '../sync/apply.ts';
 
 /*
  * Shared libraries (lib/shelf.ts): anyone with a library's key sees the books it shares, opens
- * them, and copies them into their own library, but can't change or remove them. The key is traded
+ * them, copies them into their own library and adds to them, but can't change or remove them. The key is traded
  * once for a token, which is all the rest takes. Nothing here needs a library of one's own, so a
  * reader new to Breader can open a friend's books first.
  */
@@ -111,6 +115,35 @@ export function shelfRoutes(deps: Deps) {
     });
     c.header('Cache-Control', 'private, no-store');
     return c.json({ name: await nameOf(lib.id), books } satisfies SharedBooksResponse);
+  });
+
+  /**
+   * A book someone with the key adds. It joins the library's shared books and stays out of its
+   * owner's own. A file must be shared by the one adding it (applyMutation's checkFile), and goes if
+   * they stop sharing it. The same book again changes nothing.
+   */
+  r.post('/shared/add', async (c) => {
+    const { token, book } = parse(SharedAddRequest, await readJson(c));
+    const lib = await opened(token);
+    if (book.source === 'sample') throw new ApiError(400, 'bad_book', 'A bundled sample can’t be added to a library.');
+    if (book.source === 'file' && !book.fileId) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
+    const added = await db.transaction(async (tx) => {
+      const [{ rev }] = await tx.select({ rev: libraries.rev }).from(libraries).where(eq(libraries.id, lib.id)).for('update');
+      const sameBook = [eq(libraryItems.bookId, book.id)];
+      if (book.origin) sameBook.push(and(eq(libraryItems.origin, book.origin), isNull(libraryItems.removedAt))!);
+      if (book.source === 'remote' && book.url) sameBook.push(and(eq(libraryItems.url, book.url), isNull(libraryItems.removedAt))!);
+      const [had] = await tx
+        .select({ id: libraryItems.bookId })
+        .from(libraryItems)
+        .where(and(eq(libraryItems.libraryId, lib.id), or(...sameBook)));
+      if (had) return false;
+      const next = rev + 1;
+      const put: Mutation = { id: 1, type: 'book.put', book: { ...book, shared: true, sharedOnly: true, progress: 0 } };
+      await applyMutation(tx, lib.id, next, put);
+      await tx.update(libraries).set({ rev: next }).where(eq(libraries.id, lib.id));
+      return true;
+    });
+    return c.json({ added } satisfies SharedAddResponse);
   });
 
   /** A signed download link for one of a library's shared books, or its cover. */

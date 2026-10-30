@@ -24,6 +24,7 @@ import { useLabels } from './data/labels';
 import { addLibrary, keepShelfCover, libraryName, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
+import { AddWhere, type Where } from './features/add/AddWhere';
 import { KeyDialog } from './features/add/KeyDialog';
 import { SettingsMenu } from './features/account/SettingsMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
@@ -536,10 +537,26 @@ export default function App() {
     if (found) openSeries(found, labels.mine);
   }, [openSeries, labels.mine]);
 
+  /** A series' pages need a library to go to, so a reader without one gets one. Two taps at once make one key. */
+  const makingKey = useRef<Promise<void> | null>(null);
+  const ensureKey = useCallback(async () => {
+    if (lib.key) return;
+    if (!makingKey.current) {
+      const key = newLibraryKey();
+      makingKey.current = lib.setKey(key).then(() => setFreshKey(key));
+    }
+    try {
+      await makingKey.current;
+    } finally {
+      makingKey.current = null;
+    }
+  }, [lib]);
+
   const startLoad = useCallback(async (id: string, given?: BookRecord, at?: Position) => {
     const rec = given ?? recordById.get(id);
     if (!rec) return null;
     try {
+      if (rec.source === 'remote') await ensureKey();
       // A series from a Suwayomi source opens a few chapters around its place.
       const book = await loadRecord(rec, at ?? lib.reads[id]?.pos);
       loadedId.current = id;
@@ -560,7 +577,7 @@ export default function App() {
       else say(text);
       return null;
     }
-  }, [recordById, lib, say, chaptersOf]);
+  }, [recordById, lib, say, chaptersOf, ensureKey]);
 
   const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect) => {
     openAnimDone.current = false;
@@ -667,13 +684,9 @@ export default function App() {
     await lib.addRemote(rec, cover);
     setPreview('live');
     // As with a first book: a key gives it somewhere to sync, and its pages a library to go to.
-    if (!lib.key) {
-      const key = newLibraryKey();
-      await lib.setKey(key);
-      setFreshKey(key);
-    }
+    await ensureKey();
     return rec;
-  }, [lib]);
+  }, [lib, ensureKey]);
 
   /**
    * Series on their way into My manga, by the url they're read from. Its cover can take half a
@@ -712,10 +725,30 @@ export default function App() {
     });
   }, [lib, addSeries, startLoad, finishOpen]);
 
+  /** Where a book being added goes: only asked when the reader has other people's libraries to add to. */
+  const [askingWhere, setAskingWhere] = useState<((where: Where | null) => void) | null>(null);
+  const whereTo = useCallback((): Promise<Where | null> => {
+    if (sharing.saved.length === 0) return Promise.resolve({ tokens: [] });
+    return new Promise((resolve) => setAskingWhere(() => resolve));
+  }, [sharing.saved.length]);
+  const chooseWhere = (where: Where | null) => {
+    askingWhere?.(where);
+    setAskingWhere(null);
+  };
+  /** What a book added to these libraries says it joined. */
+  const namesOfLibraries = useCallback((tokens: string[]) => tokens.map((t) => libraryName(sharing, t)).join(', '), [sharing]);
+
   const addSeriesOnly = useCallback(async (about: About, picked: Picked) => {
+    const where = await whereTo();
+    if (!where) return;
     const rec = await addSeries(about, withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also));
+    if (where.tokens.length > 0) {
+      await lib.addToShared(rec, where.tokens);
+      say(`Added “${rec.title}” to ${namesOfLibraries(where.tokens)}`);
+      return;
+    }
     say(`Added “${rec.title}” to ${labels.mine}`);
-  }, [addSeries, say, labels.mine]);
+  }, [addSeries, say, labels.mine, whereTo, lib, namesOfLibraries]);
 
   /**
    * A series in My manga, read from another copy from now on (MangaSheet.tsx). Its place stays, as
@@ -965,15 +998,22 @@ export default function App() {
     };
   }, [route.name, adding, addFiles]);
 
-  const onAdded = useCallback(async (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean }) => {
+  const onAdded = useCallback(async (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean; tokens?: string[] }) => {
     await lib.addBook(rec, data, cover);
     if (opts?.ai) lib.editBook(rec.id, { ai: true });
     setPreview('live');
+    const tokens = opts?.tokens ?? [];
+    if (tokens.length > 0) {
+      await lib.addToShared(rec, tokens);
+      setTab('shelf');
+      say(`Added “${rec.title}” to ${namesOfLibraries(tokens)}`);
+      return;
+    }
     setTab('mine');
     const on = categoryOf(rec);
     setCategory(on);
     say(`Added “${rec.title}” to ${labels.mine}${rec.shared ? ', shared with your key' : ''}`);
-  }, [lib, say, labels.mine]);
+  }, [lib, say, labels.mine, namesOfLibraries]);
 
   /* The Key dialog's usual answer to someone's key: a shared library of its own, beside My books. */
   const openShared = useCallback(async (key: string) => {
@@ -1455,11 +1495,13 @@ export default function App() {
             genreFor={guessGenre}
             onClose={() => setAdding(null)}
             onAdded={onAdded}
+            whereTo={whereTo}
             onKey={lib.setKey}
             onLogin={loggedIn ? undefined : loginInstead}
           />
           </Suspense>
         )}
+        {askingWhere && <AddWhere key="add-where" onChoose={chooseWhere} />}
         {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
         {askingAll && (
           <RemoveDialog

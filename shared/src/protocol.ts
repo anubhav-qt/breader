@@ -280,6 +280,11 @@ export type SharedBooksResponse = z.infer<typeof SharedBooksResponse>;
 /** A signed link to one of its shared books' files, or a cover. */
 export const SharedLinkRequest = z.object({ token: SharedToken, fileId: Id });
 
+/** A book someone with a library's key adds to it. */
+export const SharedAddRequest = z.object({ token: SharedToken, book: Book });
+export const SharedAddResponse = z.object({ added: z.boolean() });
+export type SharedAddResponse = z.infer<typeof SharedAddResponse>;
+
 /** The synced setting a library's own name is kept in, which the people it's shared with see. */
 export const LIBRARY_NAME = 'libraryName';
 export const LIBRARY_NAME_CHARS = 60;

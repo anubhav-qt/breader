@@ -11,6 +11,7 @@ import { normColor, pickColor } from './colors';
 import { sampleRecords } from './library';
 import { newId, newLibraryKey } from '../lib/key';
 import { countLocked } from './readTime';
+import { queueSharedAdd, sendSharedAdds } from './sharedAdds';
 import { shelfCover } from './shelf';
 import { adopt, editFromWire, enterAccount, fromWire, queueLocked, startSync, toWire, type LibraryData, type SyncHost } from './sync';
 
@@ -323,11 +324,13 @@ const host: SyncHost = {
     tell('library');
     show();
   },
-  linked: (bookId, ids) =>
-    change(
+  async linked(bookId, ids) {
+    await change(
       (d) => ({ records: d.records.map((r) => (r.id === bookId ? { ...r, ...ids } : r)) }),
       [{ type: 'book.files', bookId, fileId: ids.fileId, coverId: ids.coverId ?? null }],
-    ),
+    );
+    void sendWaitingAdds();
+  },
   cover: (bookId, blob) => storeCover(bookId, blob, false),
   lapsed(ids) {
     if (ids.length === lapsed.size && ids.every((id) => lapsed.has(id))) return;
@@ -607,6 +610,16 @@ function setSharedOnly(id: string, sharedOnly: boolean) {
   put(next);
 }
 
+const sendWaitingAdds = () => sendSharedAdds((id) => view.records.find((r) => r.id === id));
+
+/** Sends a book of the reader's to the shared libraries they picked, as shared and out of their own books. */
+async function addToShared(rec: BookRecord, tokens: string[]) {
+  setShared(rec.id, true);
+  setSharedOnly(rec.id, true);
+  await queueSharedAdd(rec.id, tokens);
+  void sendWaitingAdds();
+}
+
 function put(next: BookRecord) {
   void change((d) => ({ records: d.records.map((r) => (r.id === next.id ? next : r)) }), [{ type: 'book.put', book: toWire(next) }]);
 }
@@ -651,9 +664,11 @@ const getView = () => view;
 export function useLibrary(opts: { onNotice?: (text: string) => void } = {}) {
   const { onNotice } = opts;
   useEffect(() => { notice = onNotice; }, [onNotice]);
-  useEffect(() => { started ??= start(); }, []);
+  useEffect(() => {
+    started ??= start().then(sendWaitingAdds);
+  }, []);
   const state = useSyncExternalStore(subscribe, getView);
-  return { ...state, nextColor, addBook, addRemote, setRemoteUrl, setCover, startShelfBook, removeBook, restoreBook, saveRead, setFinished, addReadTime, editBook, setShared, setSharedOnly, setKey, joinAccount, reset };
+  return { ...state, nextColor, addBook, addRemote, setRemoteUrl, setCover, startShelfBook, removeBook, restoreBook, saveRead, setFinished, addReadTime, editBook, setShared, setSharedOnly, addToShared, setKey, joinAccount, reset };
 }
 
 export type Library = ReturnType<typeof useLibrary>;

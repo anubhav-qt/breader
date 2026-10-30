@@ -15,6 +15,7 @@ import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
 import { GenreField } from '../gallery/GenreField';
 import { BulkAdd } from './BulkAdd';
 import { FreshKey } from './FreshKey';
+import type { Where } from './AddWhere';
 import { WhoReads } from './WhoReads';
 import './add.css';
 import { Loader } from '../../components/Loader';
@@ -45,7 +46,9 @@ interface Props {
   genreFor: (book: { author: string; series?: string; subjects?: string[] }) => string;
   onClose: () => void;
   /** `ai`: the reader let an AI read along with them (books/ai.ts). */
-  onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean }) => Promise<void>;
+  onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean; tokens?: string[] }) => Promise<void>;
+  /** Asks where it goes when the reader has shared libraries to add to; null when they cancel. */
+  whereTo: () => Promise<Where | null>;
   onKey: (key: string) => Promise<void>;
   /** Logged out: the new key's step offers to log in instead. */
   onLogin?: () => void;
@@ -54,7 +57,7 @@ interface Props {
 const MB = 1024 * 1024;
 const sizeText = (b: number) => (b >= MB ? `${(b / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextColor, defaultShared = false, knownSeries, genreFor, onClose, onAdded, onKey, onLogin }: Props) {
+export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextColor, defaultShared = false, knownSeries, genreFor, onClose, onAdded, whereTo, onKey, onLogin }: Props) {
   const [step, setStep] = useState<Step>(initialMode === 'paste' ? { kind: 'paste' } : { kind: 'choose' });
   const [shared, setShared] = useState(defaultShared);
   const [inSeries, setInSeries] = useState(false);
@@ -125,6 +128,8 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
 
   const add = async () => {
     if (step.kind !== 'decide') return;
+    const where = await whereTo();
+    if (!where) return;
     const { book, data, format, color } = step;
     const rec = recordFromBook(book, format, shared, color);
     // Standalone unless it's in a series, whatever its file says.
@@ -139,7 +144,7 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
     if (genre) rec.genre = genre;
     const cover = await coverOf(book);
     book.cleanup?.();
-    await onAdded(rec, data, cover, { ai: readAlong && format !== 'CBZ' });
+    await onAdded(rec, data, cover, { ai: readAlong && format !== 'CBZ', tokens: where.tokens });
     await afterAdding(rec.title);
   };
 
@@ -259,6 +264,7 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
               nextColor={nextColor}
               genreFor={genreFor}
               onAdded={onAdded}
+              whereTo={whereTo}
               onBack={() => setStep({ kind: 'choose' })}
               onDone={(count, first, failed) => { if (count && (!hasKey || !failed)) void afterAdding(first, count); }}
             />
