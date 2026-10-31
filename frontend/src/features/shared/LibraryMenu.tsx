@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { IconClose, IconPencil, IconStar } from '../../components/icons';
-import { addLibrary, libraryName, removeLibrary, renameLibrary, setDefaultLibrary, type Shared, type Showing } from '../../data/shelf';
+import { IconClose, IconKey, IconPencil, IconPlus, IconStar } from '../../components/icons';
+import { addLibrary, createLibrary, libraryKey, libraryName, removeLibrary, renameLibrary, setDefaultLibrary, type Shared, type Showing } from '../../data/shelf';
 import { ApiError } from '../../lib/api';
 import { springs } from '../../lib/springs';
 import './shared.css';
@@ -20,7 +20,8 @@ interface Props {
  * The shared libraries tab's list: the libraries opened with someone's key, Shared 1, 2 and on,
  * then the reader's own shared books, Shared. Each can be named; others' come off the list with ×.
  * The star picks the one the tab opens at, the first unless the reader picks another. A key pasted
- * below adds one. Others see the reader's shared books by the name they give their own.
+ * below adds one, and a name makes a new one only to share, with its own key. Others see the
+ * reader's shared books by the name they give their own.
  */
 export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) {
   const [renaming, setRenaming] = useState<Showing | null>(null);
@@ -28,6 +29,8 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A new library's name, while one is being made. */
+  const [making, setMaking] = useState<string | null>(null);
 
   const rows: Array<{ which: Showing; count: number | null; closed: boolean }> = [
     ...sharing.saved.map((l) => ({ which: l.token, count: sharing.libs[l.token]?.books.length ?? null, closed: sharing.libs[l.token]?.state === 'closed' })),
@@ -61,6 +64,41 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
       setError(err instanceof ApiError ? err.message : 'Couldn’t open that library. Check your connection and try again.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const make = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!making?.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await createLibrary(making);
+      setMaking(null);
+      onShow(r.token);
+      await navigator.clipboard.writeText(r.key).then(
+        () => say(`Made “${r.label}”. Its key is copied: give it to the people it’s for.`),
+        () => say(`Made “${r.label}”. Its key: ${r.key}`),
+      );
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Couldn’t make that library. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Copies a library's key to give to more people, when it's one made only to share. */
+  const copyKey = async (which: string, name: string) => {
+    try {
+      const k = await libraryKey(which);
+      if (!k) return say(`Only the owner of “${name}” can give out its key.`);
+      await navigator.clipboard.writeText(k).then(
+        () => say(`Copied the key to “${name}”`),
+        () => say(`The key to “${name}”: ${k}`),
+      );
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : 'Couldn’t get that key. Check your connection and try again.');
     }
   };
 
@@ -120,6 +158,11 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
                   <IconStar />
                 </button>
               )}
+              {which !== 'own' && !closed && (
+                <button type="button" className="lm-icon" title="Copy its key" aria-label={`Copy the key to ${name}`} onClick={() => void copyKey(which, name)}>
+                  <IconKey />
+                </button>
+              )}
               <button type="button" className="lm-icon" title="Rename" aria-label={`Rename ${name}`} onClick={() => startRename(which)}>
                 <IconPencil />
               </button>
@@ -150,6 +193,26 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
         />
         <button type="submit" className="btn btn-primary" disabled={!key.trim() || busy}>{busy ? 'Opening…' : 'Open'}</button>
       </form>
+      {making === null ? (
+        <button type="button" className="lm-new" onClick={() => { setMaking(''); setError(null); }}>
+          <IconPlus />
+          New shared library
+        </button>
+      ) : (
+        <form className="lm-add" onSubmit={(e) => void make(e)}>
+          <input
+            className="lm-input"
+            autoFocus
+            value={making}
+            maxLength={60}
+            placeholder="Its name, like Book club"
+            aria-label="Name for the new shared library"
+            onChange={(e) => setMaking(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setMaking(null); } }}
+          />
+          <button type="submit" className="btn btn-primary" disabled={!making.trim() || busy}>{busy ? 'Making…' : 'Make'}</button>
+        </form>
+      )}
       {error && <p className="lm-error" role="alert">{error}</p>}
       <p className="lm-note">
         Your key opens your whole library. Give it only to people you trust.

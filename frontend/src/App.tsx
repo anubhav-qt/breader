@@ -21,7 +21,7 @@ import { useMangaPreview } from './data/mangaPreview';
 import type { AccountResponse } from '@breader/shared/protocol';
 import { namesOf, type MangaFound } from '@breader/shared/manga';
 import { useLabels } from './data/labels';
-import { addLibrary, keepShelfCover, libraryName, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
+import { addLibrary, keepShelfCover, libraryName, sharedNow, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
 import { AddWhere, type Where } from './features/add/AddWhere';
@@ -731,21 +731,31 @@ export default function App() {
     });
   }, [lib, addSeries, startLoad, finishOpen]);
 
-  /** Where a book being added goes: only asked when the reader has other people's libraries to add to. */
+  /**
+   * Where a book being added goes: Personal or a shared library. Always asked for a series; for a
+   * book only when the reader has shared libraries to add to.
+   */
   const [askingWhere, setAskingWhere] = useState<((where: Where | null) => void) | null>(null);
-  const whereTo = useCallback((): Promise<Where | null> => {
-    if (sharing.saved.length === 0) return Promise.resolve({ tokens: [] });
+  const whereTo = useCallback((always = false): Promise<Where | null> => {
+    if (!always && sharing.saved.length === 0) return Promise.resolve({ tokens: [] });
     return new Promise((resolve) => setAskingWhere(() => resolve));
   }, [sharing.saved.length]);
+  /** A library made while adding: its key goes on the clipboard, to give to the people it's for. */
+  const madeLibrary = useCallback((label: string, key: string) => {
+    navigator.clipboard.writeText(key).then(
+      () => say(`Made “${label}”. Its key is copied: give it to the people it’s for.`),
+      () => say(`Made “${label}”. Its key: ${key}`),
+    );
+  }, [say]);
   const chooseWhere = (where: Where | null) => {
     askingWhere?.(where);
     setAskingWhere(null);
   };
   /** What a book added to these libraries says it joined. */
-  const namesOfLibraries = useCallback((tokens: string[]) => tokens.map((t) => libraryName(sharing, t)).join(', '), [sharing]);
+  const namesOfLibraries = useCallback((tokens: string[]) => tokens.map((t) => libraryName(sharedNow(), t)).join(', '), []);
 
   const addSeriesOnly = useCallback(async (about: About, picked: Picked) => {
-    const where = await whereTo();
+    const where = await whereTo(true);
     if (!where) return;
     const rec = await addSeries(about, withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also));
     if (where.tokens.length > 0) {
@@ -1509,7 +1519,7 @@ export default function App() {
           />
           </Suspense>
         )}
-        {askingWhere && <AddWhere key="add-where" onChoose={chooseWhere} />}
+        {askingWhere && <AddWhere key="add-where" onChoose={chooseWhere} onCreated={madeLibrary} />}
         {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
         {askingAll && (
           <RemoveDialog

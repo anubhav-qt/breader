@@ -289,6 +289,16 @@ export type SharedAddResponse = z.infer<typeof SharedAddResponse>;
 export const LIBRARY_NAME = 'libraryName';
 export const LIBRARY_NAME_CHARS = 60;
 
+/** A library made only to share, by its name: anyone given its key sees and adds to it. */
+export const SharedCreateRequest = z.object({ name: z.string().trim().min(1).max(LIBRARY_NAME_CHARS) });
+export const SharedCreateResponse = z.object({ token: SharedToken, name: z.string(), key: z.string() });
+export type SharedCreateResponse = z.infer<typeof SharedCreateResponse>;
+
+/** The key of a library made only to share, to give to more people; null for anyone's own library. */
+export const SharedKeyRequest = z.object({ token: SharedToken });
+export const SharedKeyResponse = z.object({ key: z.string().nullable() });
+export type SharedKeyResponse = z.infer<typeof SharedKeyResponse>;
+
 /* ---- Voice list ---- */
 
 /** A voice as the voice list shows it. */

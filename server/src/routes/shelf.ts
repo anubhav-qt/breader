@@ -1,23 +1,31 @@
-import { and, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, desc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import {
   LIBRARY_NAME,
   LIBRARY_NAME_CHARS,
+  LIMITS,
+  newLibraryKey,
   normalizeKey,
   SHELF_LIMIT,
   SharedAddRequest,
   SharedBooksRequest,
+  SharedCreateRequest,
+  SharedKeyRequest,
   SharedLinkRequest,
   SharedOpenRequest,
   type Mutation,
   type SharedAddResponse,
   type SharedBooksResponse,
+  type SharedCreateResponse,
+  type SharedKeyResponse,
   type SharedOpenResponse,
 } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { blobs, libraries, librarySettings, libraryItems } from '../db/schema.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { rateLimit } from '../lib/http.ts';
+import { seal, unseal } from '../lib/seal.ts';
 import { sessionLibrary } from '../lib/library.ts';
 import { hashKey } from '../lib/session.ts';
 import { readable, sharedToken, tokenLibrary } from '../lib/shelf.ts';
@@ -32,6 +40,11 @@ import { applyMutation } from '../sync/apply.ts';
 
 const badKey = () => new ApiError(400, 'bad_key', 'That isn’t a Breader key. Keys look like BRDR-XXXX-XXXX-XXXX-XXXX-XXXX.');
 const unknownKey = () => new ApiError(404, 'unknown_key', 'That key doesn’t open a library. Check it and try again.');
+const DAY = 86_400_000;
+
+/** Made only to share (/shared/create): no account owns it, yet its key is kept sealed. Key libraries keep only a hash, account ones an owner. */
+const madeToShare = (lib: { ownerAccountId: string | null; keySealed: string | null }) => lib.ownerAccountId === null && lib.keySealed !== null;
+
 const closed = () => new ApiError(404, 'shared_closed', 'This library isn’t open with that key any more. Its owner may have a new key.');
 
 export function shelfRoutes(deps: Deps) {
@@ -50,8 +63,46 @@ export function shelfRoutes(deps: Deps) {
   const opened = async (token: string) => {
     const lib = await tokenLibrary(db, token, env.KEY_PEPPER);
     if (!lib) throw closed();
+    // A library made only to share has no one signed in to it: its use keeps it from expiring.
+    if (madeToShare(lib) && Date.now() - lib.lastActiveAt.getTime() > DAY) {
+      await db.update(libraries).set({ lastActiveAt: new Date() }).where(and(eq(libraries.id, lib.id), lt(libraries.lastActiveAt, new Date(Date.now() - DAY))));
+    }
     return lib;
   };
+
+  /**
+   * A library made only to share (no one's own), by its name. Its key is kept sealed, so whoever
+   * it's shared with can give it to more people from any browser.
+   */
+  r.post('/shared/create', rateLimit({ name: 'shared-create', max: 10, windowMs: 3_600_000 }), async (c) => {
+    const { name } = parse(SharedCreateRequest, await readJson(c));
+    const key = newLibraryKey();
+    const lib = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(libraries)
+        .values({
+          id: randomUUID(),
+          keyHash: hashKey(key, env.KEY_PEPPER),
+          keySealed: seal(key, env.KEY_PEPPER),
+          quotaBytes: LIMITS.key.quotaBytes,
+          fileBytes: LIMITS.key.fileBytes,
+        })
+        .returning();
+      await tx.insert(librarySettings).values({ libraryId: row.id, prefs: { [LIBRARY_NAME]: name }, rev: 0 });
+      return row;
+    });
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ token: sharedToken(lib, env.KEY_PEPPER), name, key } satisfies SharedCreateResponse);
+  });
+
+  /** The key of a library made only to share, for anyone it's open to; anyone's own library's stays theirs. */
+  r.post('/shared/key', async (c) => {
+    const lib = await opened(parse(SharedKeyRequest, await readJson(c)).token);
+    let key: string | null = null;
+    if (madeToShare(lib)) key = unseal(lib.keySealed, env.KEY_PEPPER);
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ key } satisfies SharedKeyResponse);
+  });
 
   /** A key, for the token that opens its library's shared books. */
   r.post('/shared/open', rateLimit({ name: 'shared-open', max: 10, windowMs: 60_000 }), async (c) => {

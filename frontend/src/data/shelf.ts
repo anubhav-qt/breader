@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { LIBRARY_NAME, LIBRARY_NAME_CHARS } from '@breader/shared/protocol';
-import type { SharedBooksResponse, SharedOpenResponse, ShelfBook } from '@breader/shared/protocol';
+import type { SharedBooksResponse, SharedCreateResponse, SharedKeyResponse, SharedOpenResponse, ShelfBook } from '@breader/shared/protocol';
 import type { BookRecord } from '../books/types';
 import { readSetting, writeSetting } from '../features/reader/settings';
 import { api, ApiError } from '../lib/api';
@@ -193,6 +193,23 @@ export async function addLibrary(key: string): Promise<{ own: boolean; label: st
   return { own: false, label: libraryName(shared, r.token), token: r.token };
 }
 
+/**
+ * Makes a new library only to share, by its name, adds it to the list and shows it. Its key, to give
+ * to the people it's for, comes back with it, and from libraryKey() any time after.
+ */
+export async function createLibrary(name: string): Promise<{ token: string; key: string; label: string }> {
+  const r = await api.post<SharedCreateResponse>('/v1/shared/create', { name: name.trim() });
+  keepSaved([...shared.saved, { token: r.token, n: freeNumber(shared.saved), at: Date.now() }]);
+  setLib(r.token, { name: r.name, books: [], state: 'ready' });
+  fetched.set(r.token, Date.now());
+  return { token: r.token, key: r.key, label: libraryName(shared, r.token) };
+}
+
+/** The key of a library made only to share, to give out; null for someone's own library, whose key stays theirs. */
+export async function libraryKey(token: string): Promise<string | null> {
+  return (await api.post<SharedKeyResponse>('/v1/shared/key', { token })).key;
+}
+
 /** Takes a library off the list. Copies of its books already in the reader's library stay. */
 export function removeLibrary(token: string) {
   if (readSetting(DEFAULT) === libraryOf(token)) writeSetting(DEFAULT, null);
@@ -211,11 +228,11 @@ export function renameLibrary(which: Showing, name: string) {
   keepSaved(shared.saved.map((l) => (l.token === which ? { ...l, name: clean || undefined } : l)));
 }
 
-/** A library's name: the reader's own for it, or Shared for their own and Shared N for someone else's. */
+/** A library's name: the reader's own for it, else what its owner named it, or Shared for their own and Shared N for someone else's. */
 export function libraryName(s: Shared, which: Showing): string {
   if (which === 'own') return s.ownName ?? 'Shared';
   const l = s.saved.find((x) => x.token === which);
-  return l?.name ?? `Shared ${l?.n ?? ''}`.trim();
+  return l?.name ?? s.libs[which]?.name ?? `Shared ${l?.n ?? ''}`.trim();
 }
 
 /** A library in the list that shares this file, to fetch it through, for a book not yet the reader's own. */
@@ -278,6 +295,9 @@ function start() {
   window.addEventListener('focus', again);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') again(); });
 }
+
+/** The shared libraries as they are this moment, for code that runs after an await. */
+export const sharedNow = (): Shared => shared;
 
 const subscribe = (fn: () => void) => {
   subscribers.add(fn);

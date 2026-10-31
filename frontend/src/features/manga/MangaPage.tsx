@@ -555,7 +555,7 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
               <span className="mds-in"><IconCheck /> In {labels.mine}</span>
             ) : (
               <button type="button" className="btn btn-quiet" disabled={!a || busy} onClick={() => a && once(() => onAdd(a, pickedNow))}>
-                {busy ? 'Adding…' : `Add to ${labels.mine}`}
+                {busy ? 'Adding…' : 'Add to library'}
               </button>
             )}
           </div>

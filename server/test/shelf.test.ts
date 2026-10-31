@@ -34,6 +34,32 @@ async function tokenFor(key: string, b = browser()) {
 const ids = async (token: string) => (await browser().post('/v1/shared/books', { token })).body.books.map((x: { id: string }) => x.id) as string[];
 
 describe('shared libraries', () => {
+  it('make a library only to share, by its name, whose key anyone it’s open to can pass on', async () => {
+    const maker = browser();
+    const made = await maker.post('/v1/shared/create', { name: '  Book club  ' });
+    expect(made.status, JSON.stringify(made.body)).toBe(200);
+    expect(made.body.name).toBe('Book club');
+    expect(made.body.key).toMatch(/^BRDR-/);
+    // Its key opens it as anyone else's library, with its name.
+    const friend = browser();
+    const token = await tokenFor(made.body.key, friend);
+    const list = await friend.post('/v1/shared/books', { token });
+    expect(list.body).toMatchObject({ name: 'Book club', books: [] });
+    // Both can add to it, and see what's added.
+    const url = 'mangadex:12345678-1234-1234-1234-123456789099:en';
+    const added = await friend.post('/v1/shared/add', { token, book: book({ source: 'remote', format: 'CBZ', url }) });
+    expect(added.body.added).toBe(true);
+    expect(await ids(made.body.token)).toHaveLength(1);
+    // Its key goes to whoever it's open to, and no one's own library's does.
+    expect((await friend.post('/v1/shared/key', { token })).body.key).toBe(made.body.key);
+    const { key } = await sharer();
+    expect((await browser().post('/v1/shared/key', { token: await tokenFor(key) })).body.key).toBeNull();
+  });
+
+  it('turn away a library to share with no name', async () => {
+    expect((await browser().post('/v1/shared/create', { name: '   ' })).status).toBe(400);
+  });
+
   it('open one library’s shared books with its key, and nobody else’s', async () => {
     const one = await sharer();
     const two = await sharer();
