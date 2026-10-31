@@ -408,7 +408,8 @@ export interface Fill {
 
 /**
  * A copy's chapters, picked one of each, with those it hasn't got (or only links to on its
- * publisher's site) from the next copies in turn, each one credited with its site. Only numbered
+ * publisher's site) from the next copies in turn, credited with the groups that made them, as
+ * Breader's own: which site it came from isn't said. Only numbered
  * chapters fill in: extras go by their names, which sites write differently.
  */
 export function filledIn(own: MangaChapter[], fills: Fill[]): MangaChapter[] {
@@ -422,8 +423,7 @@ export function filledIn(own: MangaChapter[], fills: Fill[]): MangaChapter[] {
       const k = keyOf(c);
       const had = at.get(k);
       if (had && !had.external) continue;
-      const groups = c.groups.length ? c.groups.map((g) => ({ ...g, name: `${g.name} · ${f.site}` })) : [{ id: f.site, name: f.site }];
-      at.set(k, { ...c, groups });
+      at.set(k, c);
       added = true;
     }
   }

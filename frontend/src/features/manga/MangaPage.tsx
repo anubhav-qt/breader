@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { namesIn, seriesName, type AniCard, type AniListAbout, type AniRelation, type MangaChapter, type MangaFound, type MangaSeries, type SourceSeries } from '@breader/shared/manga';
-import { IconBack, IconCheck, IconChevron, IconOrder, IconOut } from '../../components/icons';
+import { IconBack, IconCheck, IconOrder, IconOut } from '../../components/icons';
 import { useLabels } from '../../data/labels';
-import { keptNote } from '../../books/kept';
 import { filledIn, laidOut, listOf, madeBy, pickChapters, remoteOf, startOf, type Fill } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
@@ -12,17 +11,19 @@ import { springs } from '../../lib/springs';
 import { readLocal, writeLocal } from '../../lib/store';
 import { AniTile } from './AniTile';
 import { useAniFound, type AniShown } from './aniPick';
-import { alsoOf, alsoUrls, copyKey, inOrder, sharpest, urlOf, useCopies, type Copy, type Place } from './copies';
+import { alsoOf, alsoUrls, copyKey, sharpest, urlOf, useCopies, type Copy, type Place } from './copies';
 import './manga.css';
 import { Loader } from '../../components/Loader';
 
 /*
  * A series' page, with an address of its own (#/manga/<id>), so a chapter read from it comes back
- * to it: what it is, its copies, and its chapters in the copy it's read in, each with the group
- * that made it. Found in several places (found.ts), each place, and each group that made most of
- * it there, is a copy (copies.ts). The sharpest is read unless the reader picks another; one in My
- * manga stays in its copy until the reader moves it, its place kept. Read starts it (or carries
- * on) in the reader, adding it to My manga; a chapter tapped starts there. A MangaDex chapter its
+ * to it: what it is, and its chapters, each with the group that made it. Found in several places
+ * (found.ts), each place, and each group that made most of it there, is a copy (copies.ts), and
+ * readers don't pick one: Breader reads each chapter from the sharpest copy that has it, the
+ * sharpest copy's own and the rest filled in from the next sharpest in turn. One in My manga is
+ * read from what it was until every copy's measured, and from the best of them once it's read
+ * again, its place kept, as places go by chapter number. Read starts it (or carries on) in the
+ * reader, adding it to My manga; a chapter tapped starts there. A MangaDex chapter its
  * publisher puts up itself opens on their site. The chapters go oldest or newest first, as the
  * reader last had them on this device.
  */
@@ -54,8 +55,6 @@ interface Props {
   placeOf: (rec: BookRecord) => number | null;
   onRead: (about: About, picked: Picked, had: BookRecord | undefined, from: Position | undefined, rect: DOMRect | undefined) => Promise<void> | void;
   onAdd: (about: About, picked: Picked) => Promise<void> | void;
-  /** A series in My manga, read from another copy from now on. site: where that is, for saying so. */
-  onMove: (rec: BookRecord, picked: Picked, site: string) => void;
   /** What its Back goes back to: Browse, My manga, or the series it was opened from. */
   from: string;
   /** Its AniList id, when it was picked from AniList: what's related to it and like it, at once. */
@@ -120,37 +119,7 @@ function startLang(found: MangaFound[], recordOf: Props['recordOf'], prefs: Mang
   return langs[0];
 }
 
-/** A copy as the sheet lists it. waiting: still being measured. */
-interface Row {
-  key: string;
-  site: string;
-  group: string;
-  chapters: string;
-  width: string;
-  best: boolean;
-  waiting: boolean;
-}
-
-function RowBody({ row }: { row: Row }) {
-  return (
-    <>
-      <span className="mdx-led" />
-      <span className="mdc-site">{row.site}</span>
-      <span className="mdc-group">{row.group}</span>
-      <span className="mdc-ch">{row.chapters}</span>
-      <span className="mdc-px">{row.width}</span>
-      <span className="mdc-best">{row.best ? 'Sharpest' : ''}</span>
-    </>
-  );
-}
-
-/** "402 chapters", or "444 of 484" when the place has more than this copy. */
-function chaptersText(c: Copy): string {
-  if (c.chapters >= c.of) return `${c.chapters} ch`;
-  return `${c.chapters} of ${c.of} ch`;
-}
-
-export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, onMove, from, al, onOpen, covered, onBack }: Props) {
+export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, from, al, onOpen, covered, onBack }: Props) {
   const labels = useLabels();
   const main = start[0];
   const pageRef = useRef<HTMLDivElement>(null);
@@ -161,10 +130,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
   const [about, setAbout] = useState<Load<About>>({ state: 'loading' });
   const [lang, setLang] = useState(() => startLang(start, recordOf, prefs));
   const [list, setList] = useState<Load<MangaChapter[]>>({ state: 'loading' });
-  const [chosen, setChosen] = useState<string | null>(null);
-  const [asking, setAsking] = useState<Copy | null>(null);
-  const [listOpen, setListOpen] = useState(false);
-  const [kept, setKept] = useState(0);
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
@@ -180,7 +145,7 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
     if (!covered) pageRef.current?.focus({ preventScroll: true });
   }, [covered]);
 
-  // Escape closes the copies open, or the question about moving, before it leaves the page.
+  // Escape leaves the page.
   const backRef = useRef(onBack);
   backRef.current = onBack;
   useEffect(() => {
@@ -189,13 +154,11 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       // A dialog over the page closes on its own.
       if (document.querySelector('[role="dialog"]')) return;
-      if (listOpen) setListOpen(false);
-      else if (asking) setAsking(null);
-      else backRef.current();
+      backRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [covered, listOpen, asking]);
+  }, [covered]);
 
   useEffect(() => {
     const root = pageRef.current;
@@ -271,12 +234,11 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
   if (hadAt && hadAt.kind === 'mangadex') hadKey = copyKey(hadAt.series, hadAt.group);
   else if (hadAt) hadKey = copyKey(hadAt.id, hadAt.group);
 
-  // The copy read: the one in My manga, or the one picked, or the sharpest once all are measured.
+  // The copy read: the sharpest once all are measured; until then the one in My manga, or where it was found.
   const best = sharpest(places);
   let shownKey = main.card.id;
-  if (hadKey) shownKey = hadKey;
-  else if (chosen) shownKey = chosen;
-  else if (settled && best) shownKey = best.key;
+  if (settled && best) shownKey = best.key;
+  else if (hadKey) shownKey = hadKey;
   const shownCopy = copyAt(shownKey, places);
   let shown = main;
   let group: string | null = null;
@@ -287,8 +249,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
     const p = places.find((x) => x.found.card.id === placeIdOf(shownKey));
     if (p) shown = p.found;
   }
-  let lit = placeIdOf(shownKey);
-  if (shownCopy) lit = shownCopy.key;
 
   useEffect(() => {
     let live = true;
@@ -302,21 +262,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
     );
     return () => { live = false; };
   }, [shown.kind, shown.card.id, lang]);
-
-  // Moving, the chapters kept offline from where it's read now would need keeping again.
-  const keptFrom = hadAt?.key;
-  useEffect(() => {
-    if (!asking || !keptFrom) return;
-    let live = true;
-    void keptNote(keptFrom).then((note) => {
-      let n = 0;
-      for (const c of Object.values(note)) {
-        if (c.done) n += 1;
-      }
-      if (live) setKept(n);
-    });
-    return () => { live = false; };
-  }, [asking, keptFrom]);
 
   // The chapters it hasn't got, from the next best copies elsewhere, once every copy's measured. Until
   // then, one in My manga fills in from those it did last time.
@@ -347,28 +292,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
   const { chapters, total } = useMemo(() => laidOut(picked), [picked]);
   const rect = () => coverRef.current?.getBoundingClientRect();
   const pickedNow: Picked = { found: shown, group, lang, also };
-
-  /** A place's name: as found, or, opened from My manga before a search found it, as its sheet says. */
-  const siteOf = (f: MangaFound) => {
-    if (f.source) return f.source;
-    if (a && a.kind === 'source' && a.series.id === f.card.id) return a.series.source;
-    return 'Its site';
-  };
-
-  // Not in My manga, a copy picked is read. In it, moving there is asked first.
-  const pick = (key: string) => {
-    setListOpen(false);
-    if (!had) {
-      setChosen(key);
-      return;
-    }
-    if (key === lit) return;
-    let to = copyAt(key, places);
-    // A place not measured is read as it comes.
-    const p = places.find((x) => x.found.card.id === key);
-    if (!to && p) to = { key, found: p.found, group: null, chapters: 0, of: 0, width: null };
-    if (to) setAsking(to);
-  };
 
   // What's known of it: from where it was picked once that answers, from its card until then.
   let cover: string | null = null;
@@ -433,41 +356,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
     if (hadAt && hadAt.kind === 'mangadex' && shown.kind === 'mangadex' && hadAt.lang !== lang) readLabel = 'Read';
   }
 
-  // The copies, in the order they were found while they're measured, then sharpest first.
-  const rows: Row[] = [];
-  const waitingRow = (p: Place) => {
-    let text = 'Measuring…';
-    if (p.state === 'failed') text = 'Not measured';
-    rows.push({ key: p.found.card.id, site: siteOf(p.found), group: p.found.edition ?? '', chapters: '', width: text, best: false, waiting: p.state === 'measuring' });
-  };
-  const copyRow = (c: Copy) => {
-    const named: string[] = [];
-    if (c.group) named.push(c.group.name);
-    if (c.found.edition) named.push(c.found.edition);
-    let width = 'Not measured';
-    if (c.width !== null) width = `${c.width} px`;
-    rows.push({ key: c.key, site: siteOf(c.found), group: named.join(' · '), chapters: chaptersText(c), width, best: settled && best?.key === c.key, waiting: false });
-  };
-  if (settled) {
-    for (const c of inOrder(places)) copyRow(c);
-    for (const p of places) {
-      if (p.state !== 'ready') waitingRow(p);
-    }
-  } else {
-    for (const p of places) {
-      if (p.state === 'ready') p.copies.forEach(copyRow);
-      else waitingRow(p);
-    }
-  }
-
-  let copiesTitle = `${rows.length} copies`;
-  if (rows.length === 1) copiesTitle = '1 copy';
-
-  // The copy read shows on its own; the others drop down under it.
-  const others = rows.filter((r) => r.key !== lit);
-  let current = rows.find((r) => r.key === lit);
-  if (!current) current = { key: lit, site: siteOf(shown), group: '', chapters: '', width: '', best: false, waiting: false };
-
   // In My manga: the chapter it's at, lit, those before it read, and a way down to it in a long list.
   const here = had ? placeOf(had) : null;
   let hereAt = -1;
@@ -475,22 +363,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
   const toHere = () => {
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     hereRef.current?.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
-  };
-
-  let askText = '';
-  if (asking) {
-    askText = `Read it from ${siteOf(asking.found)}`;
-    if (asking.group) askText += `, ${asking.group.name}`;
-    askText += ', from now on?';
-    if (kept === 1) askText += ' Its offline chapter downloads again.';
-    else if (kept > 1) askText += ` Its ${kept} offline chapters download again.`;
-  }
-  const move = () => {
-    if (!had || !asking) return;
-    let movedGroup: string | null = null;
-    if (asking.group) movedGroup = asking.group.id;
-    onMove(had, { found: asking.found, group: movedGroup, lang, also: alsoUrls(alsoOf(places, asking.found.card.id), lang) }, siteOf(asking.found));
-    setAsking(null);
   };
 
   // Counted as the reader counts them ("Ch. 12 of 147"): by whole numbers, the halves and extras besides.
@@ -502,8 +374,10 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
     else count = extras ? `${plural(whole, 'chapter')} · ${plural(extras, 'extra')}` : plural(whole, 'chapter');
   }
 
-  let credit = `From ${siteOf(shown)}.`;
-  if (shown.kind === 'mangadex') credit = 'From MangaDex.';
+  // Every copy's in one, as Breader's own.
+  const ready = places.filter((p) => p.state === 'ready').length;
+  let copiesNote = '';
+  if (settled && ready > 1) copiesNote = `Each chapter from the sharpest of ${ready} copies`;
 
   // Oldest first, as they're read; newest first, the numbered ones turned round, the extras after them still.
   const order = chapters.map((_, i) => i);
@@ -561,42 +435,12 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
           </div>
         </div>
 
-        <section className="mdc" aria-label="Copies">
+        <section className="mdc" aria-label="Where it’s read from">
           <div className="mds-ch-head">
-            <span>{copiesTitle}</span>
-            {!settled && <span className="mdc-note"><Loader /> Measuring pages</span>}
+            <span>From Breader</span>
+            {!settled && <span className="mdc-note"><Loader /> Finding the best of each chapter</span>}
+            {copiesNote && <span className="mdc-note">{copiesNote}</span>}
           </div>
-          <div className={`mdc-pick${listOpen ? ' is-open' : ''}`}>
-            <button
-              type="button"
-              className="mdc-row is-current"
-              aria-expanded={listOpen}
-              aria-controls="mdc-others"
-              disabled={others.length === 0}
-              onClick={() => setListOpen(!listOpen)}
-            >
-              <RowBody row={current} />
-              {others.length > 0 && <IconChevron className="mdc-go" aria-hidden="true" />}
-            </button>
-            {listOpen && (
-              <ol className="mdc-list" id="mdc-others">
-                {others.map((r) => (
-                  <li key={r.key}>
-                    <button type="button" className="mdc-row" disabled={r.waiting && !had} onClick={() => pick(r.key)}>
-                      <RowBody row={r} />
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-          {asking && (
-            <div className="mdc-ask" role="group" aria-label="Move it">
-              <p>{askText}</p>
-              <button type="button" className="btn btn-primary" onClick={move}>Move</button>
-              <button type="button" className="btn btn-quiet" onClick={() => setAsking(null)}>Cancel</button>
-            </div>
-          )}
         </section>
 
         {about.state === 'error' && <p className="mds-error">{about.message}</p>}
@@ -663,7 +507,6 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
             })}
           </ol>
         )}
-        <p className="mds-credit">{credit}</p>
       </div>
     </motion.div>
   );

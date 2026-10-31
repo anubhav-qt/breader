@@ -6,7 +6,8 @@ import { mangadex, sources, type MangaPrefs } from '../../lib/mangadex';
 /*
  * A series' copies, for its page (MangaPage.tsx): everywhere it's found, by the same name looked
  * for again, and in each place each group that made most of it, its pages measured by the laptop.
- * The sharpest is read unless the reader picks another. A place's copies are asked once a visit.
+ * Each chapter is read from the sharpest copy that has it (alsoOf), as one copy, Breader's. A
+ * place's copies are asked once a visit.
  */
 
 /** One way to read the series: a group's uploads in one place, or the place's as they come. */
@@ -70,6 +71,22 @@ async function lookFor(title: string, names: string[], prefs: MangaPrefs): Promi
   return out;
 }
 
+/** Whether two places share a name whole, not just one's title starting the other's. */
+const wholly = (a: MangaFound, b: MangaFound) => a.keys.some((k) => b.keys.includes(k));
+
+/**
+ * The places that are this series, as its chapters are read from all of them: those going by a name
+ * of a place before them whole. Browse puts "Vagabond - … Exhibition Catalog" on Vagabond's card,
+ * by its title starting the same and its author, but not one of its chapters is Vagabond's.
+ */
+function ofOneSeries(found: MangaFound[]): MangaFound[] {
+  const out: MangaFound[] = [];
+  for (const f of found) {
+    if (out.length === 0 || out.some((x) => wholly(x, f))) out.push(f);
+  }
+  return out;
+}
+
 /**
  * The places known, with what a search found added: the same series, or a place already known
  * found again, which knows more of itself than one opened from My manga.
@@ -82,7 +99,7 @@ function withFound(known: MangaFound[], items: MangaFound[]): MangaFound[] {
   }
   for (const f of items) {
     if (out.some((x) => x.card.id === f.card.id)) continue;
-    if (sameSeries(out, f)) out.push(f);
+    if (sameSeries(out, f) && out.some((x) => wholly(x, f))) out.push(f);
   }
   return out;
 }
@@ -98,7 +115,7 @@ function sharper(a: Copy, b: Copy): boolean {
   return a.chapters > b.chapters;
 }
 
-/** The copy read unless the reader picks another: the sharpest measured, an edition (Color) only when there's nothing else. */
+/** The copy read first: the sharpest measured, an edition (Color) only when there's nothing else. */
 export function sharpest(places: Place[]): Copy | null {
   let best: Copy | null = null;
   let bestEdition: Copy | null = null;
@@ -136,8 +153,8 @@ export function inOrder(places: Place[]): Copy[] {
   return [...plain.sort(order), ...editions.sort(order)];
 }
 
-/** Copies filling in at most: past the third, a chapter none of them has is one no site has. */
-const MOST_ALSO = 3;
+/** Copies filling in at most: past the sixth, a chapter none of them has is one no site has. */
+const MOST_ALSO = 6;
 
 /**
  * The copies filling in the chapters the one read (in the place `read`) hasn't got, in turn: the
@@ -163,7 +180,7 @@ export const alsoUrls = (also: Copy[], lang: string) => also.map((c) => urlOf(c.
  * and every place measured, or failed to be. lang: the language MangaDex's copies are in.
  */
 export function useCopies(title: string, start: MangaFound[], prefs: MangaPrefs, lang: string): { places: Place[]; settled: boolean } {
-  const [found, setFound] = useState<MangaFound[]>(start);
+  const [found, setFound] = useState<MangaFound[]>(() => ofOneSeries(start));
   const [looking, setLooking] = useState(true);
   const [answers, setAnswers] = useState<Map<string, MangaCopies | 'failed'>>(new Map());
 

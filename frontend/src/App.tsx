@@ -766,15 +766,6 @@ export default function App() {
     say(`Added “${rec.title}” to ${labels.mine}`);
   }, [addSeries, say, labels.mine, whereTo, lib, namesOfLibraries]);
 
-  /**
-   * A series in My manga, read from another copy from now on (MangaSheet.tsx). Its place stays, as
-   * places go by chapter number; what it kept offline goes the next time the app opens (sweepKept).
-   */
-  const moveSeries = useCallback((rec: BookRecord, picked: Picked, site: string) => {
-    lib.setRemoteUrl(rec.id, withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also));
-    say(`“${rec.title}” is read from ${site} now.`);
-  }, [lib, say]);
-
   const recordOf = useCallback((id: string) => remoteSeries.get(id), [remoteSeries]);
 
   /** The number of the chapter a series in My manga is at. */
@@ -1426,7 +1417,6 @@ export default function App() {
             placeOf={placeOf}
             onRead={(about, picked, had, from, rect) => readSeries(about, picked, had, from, rect)}
             onAdd={(about, picked) => addSeriesOnly(about, picked)}
-            onMove={moveSeries}
             onBack={leaveSeries}
           />
           </Suspense>
