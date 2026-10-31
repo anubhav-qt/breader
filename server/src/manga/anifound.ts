@@ -34,6 +34,21 @@ function entriesOf(items: MangaFound[]): MangaFound[][] {
   return entries;
 }
 
+/** Years a site's start year may be off AniList's and still be the same series. */
+const YEARS_OFF = 1;
+
+/**
+ * Whether a site's series is the one AniList means: it goes by one of AniList's names whole, not
+ * just one starting the same ("Vagabond - … Exhibition Catalog" isn't Vagabond), and it started
+ * when AniList says, where both say.
+ */
+export function isCardsSeries(card: AniCard, f: MangaFound, names = keysOf(card)): boolean {
+  if (!f.keys.some((k) => names.includes(k))) return false;
+  const year = f.kind === 'mangadex' ? f.card.year : null;
+  if (card.year && year && Math.abs(card.year - year) > YEARS_OFF) return false;
+  return true;
+}
+
 /** Everywhere it was found, the first the one it opens at; none when no site has it. */
 export async function copiesOfCard(card: AniCard, search: Search, lang: string | undefined, adult: boolean): Promise<MangaFound[]> {
   const names = keysOf(card);
@@ -43,7 +58,8 @@ export async function copiesOfCard(card: AniCard, search: Search, lang: string |
   if (other) asks.push(other);
   for (const q of asks) {
     const r = await search({ q, lang, adult, doujinshi: false, names });
-    const entries = entriesOf(r.items).filter((e) => !e[0].card.side && sameKind(e[0].card.kind, card.kind));
+    const items = r.items.filter((f) => isCardsSeries(card, f, names));
+    const entries = entriesOf(items).filter((e) => !e[0].card.side && sameKind(e[0].card.kind, card.kind));
     if (entries.length === 0) continue;
     entries.sort((a, b) => b.length - a.length);
     return entries[0];

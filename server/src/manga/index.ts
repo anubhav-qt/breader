@@ -6,7 +6,7 @@ import { copiesOf, measure } from './copies.ts';
 import { Covers, type Cover, type CoverWidth } from './covers.ts';
 import { Disk, type Picture } from './disk.ts';
 import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
-import { copiesOfCard } from './anifound.ts';
+import { copiesOfCard, isCardsSeries } from './anifound.ts';
 import { makeAniList, type AniList, type AniListAsk } from './anilist.ts';
 import { makeMangaDex } from './mangadex.ts';
 import type { Curate, Tab } from './curate.ts';
@@ -211,7 +211,14 @@ export function makeManga(opts: MangaOptions): Manga {
       const card = await anilist.card(alId);
       if (card.adult && !adult) throw new ApiError(404, 'anilist_not_found', 'AniList doesn’t have that.');
       const wide = adult || card.adult;
-      return aniFoundMemo.get(`${alId}:${lang ?? 'any'}:${wide ? 1 : 0}`, () => copiesOfCard(card, (q) => self.search(q), lang, wide));
+      const key = `${alId}:${lang ?? 'any'}:${wide ? 1 : 0}`;
+      const look = () => copiesOfCard(card, (q) => self.search(q), lang, wide);
+      const found = await aniFoundMemo.get(key, look);
+      const right = found.filter((f) => isCardsSeries(card, f));
+      // Kept before matching was this strict, with another series in it: looked for again now,
+      // the rest of what's kept staying as it is.
+      if (right.length < found.length) return aniFoundMemo.get(key, look, true);
+      return right;
     },
 
     async search(q, onSome) {
