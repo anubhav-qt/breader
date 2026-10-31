@@ -125,6 +125,14 @@ const Env = z.object({
   MANGA_CACHE_DIR: z.string().default('/data/manga'),
   MANGA_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).optional(),
   /**
+   * Everything fetched from AniList, MangaDex and the sources, kept for good apart from the page
+   * cache (lib/archive.ts): every answer, and the pages and covers read. In MANGA_ARCHIVE_DIR (in the
+   * manga volume, so it needs nothing new), up to MANGA_ARCHIVE_MB: 50 GB by default on the
+   * ThinkPad, 1 GB on another laptop, and none on the fallback, whose disk doesn't last. 0 turns it off.
+   */
+  MANGA_ARCHIVE_DIR: z.string().default('/data/manga/archive'),
+  MANGA_ARCHIVE_MB: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  /**
    * Keeps every library's manga on the disk ahead of its readers (manga/keeper.ts): the chapter
    * each series is read to and the next ones. On by default on the ThinkPad only.
    */
@@ -153,6 +161,9 @@ export const onThinkPad = (env: Pick<Env, 'ROLE' | 'MACHINE' | 'NODE_ENV'>) =>
 
 /** Manga pages kept on disk, in MB: MANGA_CACHE_MB, or 100 GB on the ThinkPad and 2 GB elsewhere. */
 export const mangaCacheMb = (env: Env) => env.MANGA_CACHE_MB ?? (onThinkPad(env) ? 102_400 : 2048);
+
+/** The archive's budget, in MB (MANGA_ARCHIVE_MB); 0 when there's none. */
+export const mangaArchiveMb = (env: Env) => env.MANGA_ARCHIVE_MB ?? (onThinkPad(env) ? 51_200 : env.ROLE === 'laptop' ? 1024 : 0);
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   // A blank line in .env (HEARTBEAT_URL=) means "not set".

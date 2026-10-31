@@ -2,12 +2,13 @@ import { serve } from '@hono/node-server';
 import { makeApp } from './app.ts';
 import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
-import { loadEnv, mangaCacheMb, onThinkPad } from './env.ts';
+import { loadEnv, mangaArchiveMb, mangaCacheMb, onThinkPad } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
 import { fillBlanks } from './jobs/fill.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
 import { asJob, runKind, takeCommands } from './lib/admin.ts';
-import { connectRedis, MemoryStore, type Redis } from './lib/cache.ts';
+import { Archive } from './lib/archive.ts';
+import { archiveTo, connectRedis, MemoryStore, type Redis } from './lib/cache.ts';
 import { makeGemini } from './lib/gemini.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
@@ -35,6 +36,13 @@ const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(en
 // Manga on both: the fallback reads Suwayomi's sources through the one on AWS (SUWAYOMI_URL), or MangaDex alone without it.
 const mangaOn = env.MANGADEX;
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: mangaCacheMb(env) * 1024 * 1024, store: redis };
+// Everything fetched, kept for good on the laptop (lib/archive.ts).
+const archiveMb = mangaArchiveMb(env);
+if (archiveMb > 0) {
+  const archive = new Archive(env.MANGA_ARCHIVE_DIR, archiveMb * 1024 * 1024);
+  archiveTo(archive);
+  mangaOptions.archive = archive;
+}
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
 // Gemini, through the worker's proxy for the AI accounts, on the laptop only (lib/gemini.ts). Both
 // servers go by what it has said, kept in Supabase: which series found are one (manga/same.ts) and

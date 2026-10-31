@@ -50,18 +50,25 @@ export class Disk {
   private fetching = new Map<string, Promise<Picture>>();
   private readonly ready: Promise<void>;
   private readonly dir: string;
-  private readonly budget: number;
+  private readonly budgetOf: () => number;
+  /** Where everything kept here is kept too, for good (lib/archive.ts), and looked for before fetching again. */
+  private readonly behind: Disk | null;
   private readonly typeOf: (b: Uint8Array) => string | null;
   /** The disk's room, as last asked, and when. */
   private room = { free: Infinity, at: 0 };
   /** When it last said it was nearly full, and that it let pages go. */
   private said = { nearly: 0, trimmed: 0 };
 
-  /** typeOf: what the kept bytes are, or null when they've gone bad. Pictures by default; the server voice keeps its sound here too. */
-  constructor(dir: string, budget: number, typeOf: (b: Uint8Array) => string | null = pictureType) {
+  /**
+   * typeOf: what the kept bytes are, or null when they've gone bad. Pictures by default; the server
+   * voice keeps its sound here too. budget: bytes, or what they are each time it's asked (the
+   * archive's pages get what its data leaves). behind: the archive.
+   */
+  constructor(dir: string, budget: number | (() => number), typeOf: (b: Uint8Array) => string | null = pictureType, behind: Disk | null = null) {
     this.dir = dir;
-    this.budget = budget;
+    this.budgetOf = typeof budget === 'number' ? () => budget : budget;
     this.typeOf = typeOf;
+    this.behind = behind;
     this.ready = this.scan().catch((err) => log.warn({ err, dir }, 'manga cache unreadable; pages won’t be kept'));
   }
 
@@ -91,6 +98,19 @@ export class Disk {
 
   /** quiet: not counted as used, for checks that aren't a reader's (keeper.ts). */
   async get(key: string, quiet = false): Promise<Picture | null> {
+    const hit = await this.here(key, quiet);
+    if (hit) {
+      // Read before there was an archive: it's kept there too now.
+      if (this.behind && !quiet) void this.behind.has(key).then((has) => (has ? undefined : this.behind?.put(key, hit.data)));
+      return hit;
+    }
+    // Gone from here, or never kept here, but in the archive: back it comes, without asking anyone.
+    const kept = this.behind ? await this.behind.get(key, quiet) : null;
+    if (kept) await this.put(key, kept.data, false);
+    return kept;
+  }
+
+  private async here(key: string, quiet: boolean): Promise<Picture | null> {
     await this.ready;
     const name = this.nameOf(key);
     const e = this.index.get(name);
@@ -113,10 +133,12 @@ export class Disk {
     }
   }
 
-  async put(key: string, data: Uint8Array): Promise<void> {
+  /** archive: kept in the archive too, unless it came from there. */
+  async put(key: string, data: Uint8Array, archive = true): Promise<void> {
+    if (archive && this.behind) void this.behind.put(key, data);
     await this.ready;
     // Nothing near the whole budget is worth keeping.
-    if (data.byteLength > this.budget / 4) return;
+    if (data.byteLength > this.budgetOf() / 4) return;
     const name = this.nameOf(key);
     const path = join(this.dir, name);
     const part = `${path}.${randomBytes(4).toString('hex')}.part`;
@@ -171,7 +193,7 @@ export class Disk {
   /** The budget, or less while the disk is short of room: what's kept now and what's free past FREE. */
   private async allowed(): Promise<number> {
     const free = await this.free();
-    return Math.min(this.budget, this.total + free - FREE);
+    return Math.min(this.budgetOf(), this.total + free - FREE);
   }
 
   /** Over budget: down to nine tenths of it, so it isn't trimmed again with every page. */
@@ -195,7 +217,7 @@ export class Disk {
   private say(what: keyof Disk['said'], message: string) {
     if (Date.now() - this.said[what] < SAY_EVERY) return;
     this.said[what] = Date.now();
-    log.warn({ dir: this.dir, bytes: this.total, budget: this.budget }, message);
+    log.warn({ dir: this.dir, bytes: this.total, budget: this.budgetOf() }, message);
     report(new Error(message), { dir: this.dir });
   }
 

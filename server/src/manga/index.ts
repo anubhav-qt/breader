@@ -4,7 +4,8 @@ import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { copiesOf, measure } from './copies.ts';
 import { Covers, type Cover, type CoverWidth } from './covers.ts';
-import { Disk, type Picture } from './disk.ts';
+import type { Archive } from '../lib/archive.ts';
+import { Disk, pictureType, type Picture } from './disk.ts';
 import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
 import { copiesOfCard, isCardsSeries } from './anifound.ts';
 import { makeAniList, type AniList, type AniListAsk } from './anilist.ts';
@@ -67,6 +68,8 @@ export interface MangaOptions {
   same?: Same | null;
   /** Which cards don't belong in Browse's tabs, as Gemini told (curate.ts). */
   curate?: Curate | null;
+  /** Where every page and cover is kept for good, behind the cache (lib/archive.ts). */
+  archive?: Archive | null;
 }
 
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
@@ -90,7 +93,7 @@ const ANI_WARM_AT_ONCE = 3;
 const BROWSE_KINDS: readonly MangaKind[] = ['manga', 'manhwa', 'manhua'];
 
 export function makeManga(opts: MangaOptions): Manga {
-  const disk = new Disk(opts.dir, opts.cacheBytes);
+  const disk = new Disk(opts.dir, opts.cacheBytes, pictureType, opts.archive?.pages ?? null);
   const store = opts.store ?? null;
   const covers = new Covers(disk, store ?? new MemoryStore(20_000));
   const pace = opts.pace?.api;

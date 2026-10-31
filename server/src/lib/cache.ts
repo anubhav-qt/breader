@@ -144,6 +144,22 @@ interface Aged {
 
 const isAged = (x: unknown): x is Aged => typeof x === 'object' && x !== null && '@at' in x && 'v' in x;
 
+/** Where answers are kept for good, on the laptop (lib/archive.ts): every answer fetched, and given when a site won't answer. */
+export interface Archived {
+  keep(kind: string, key: string, v: unknown): void;
+  find(kind: string, key: string): Promise<{ at: number; v: unknown } | undefined>;
+}
+
+let archive: Archived | null = null;
+
+/** Every Memo's answers go to the archive from now on (api.ts); null stops it. */
+export function archiveTo(a: Archived | null): void {
+  archive = a;
+}
+
+/** Answers that go stale sooner (MangaDex's page addresses) aren't worth keeping for good. */
+const ARCHIVE_PAST = 3_600_000;
+
 /** Inside freshly(): an answer past its time is fetched again and waited for, not shown as it is. */
 const sure = new AsyncLocalStorage<boolean>();
 
@@ -200,6 +216,7 @@ export class Memo<T> {
 
   /** Keeps an answer found some other way (a series that came in a search). */
   set(key: string, value: T): void {
+    this.archive(key, value);
     void this.put(key, value);
   }
 
@@ -235,11 +252,26 @@ export class Memo<T> {
       .finally(() => this.refreshing.delete(key));
   }
 
-  /** make()'s answer, kept. A failure isn't kept: make() throws past this. */
+  /**
+   * make()'s answer, kept, and archived. A failure isn't kept: make() throws past this, unless the
+   * archive has an answer from before, which does instead.
+   */
   private async fetch(key: string, make: () => Promise<T>): Promise<T> {
-    const value = await make();
+    let value: T;
+    try {
+      value = await make();
+    } catch (err) {
+      const kept = this.keep >= ARCHIVE_PAST ? await archive?.find(this.kind, key).catch(() => undefined) : undefined;
+      if (kept) return kept.v as T;
+      throw err;
+    }
+    this.archive(key, value);
     await this.put(key, value);
     return value;
+  }
+
+  private archive(key: string, value: T) {
+    if (this.keep >= ARCHIVE_PAST) archive?.keep(this.kind, key, value);
   }
 
   private put(key: string, value: T): Promise<void> {
