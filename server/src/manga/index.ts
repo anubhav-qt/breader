@@ -1,11 +1,13 @@
-import { MANGA_KINDS, type MangaChapter, type MangaChapters, type MangaCopies, type MangaCopy, type MangaFound, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
-import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
+import { ANILIST_SORTS, MANGA_KINDS, type MangaChapter, type MangaChapters, type MangaCopies, type MangaCopy, type MangaFound, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
+import { both, Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { copiesOf, measure } from './copies.ts';
 import { Covers, type Cover, type CoverWidth } from './covers.ts';
 import { Disk, type Picture } from './disk.ts';
 import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
+import { copiesOfCard } from './anifound.ts';
+import { makeAniList, type AniList } from './anilist.ts';
 import { makeMangaDex } from './mangadex.ts';
 import type { Curate, Tab } from './curate.ts';
 import type { Same } from './same.ts';
@@ -40,7 +42,11 @@ export interface Manga {
   sourcePage(chapterId: string, n: number, quiet?: boolean): Promise<Picture>;
   /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:…) in its own. */
   copies(id: string, lang: string): Promise<MangaCopies>;
-  /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi. */
+  /** AniList: Browse's lists, and what a series' page says is related to it and like it (anilist.ts). */
+  anilist: AniList;
+  /** Where a series AniList knows (by its id) can be read: its copies found on the sites, none when no site has it (anifound.ts). */
+  aniFound(alId: number, lang: string | undefined, adult: boolean): Promise<MangaFound[]>;
+  /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi, then finds where the first page of each AniList list is read in English. */
   warm(): Promise<void>;
 }
 
@@ -74,6 +80,9 @@ const SEARCH_WITHIN = 19_000;
 const COPIES_FOR = 24 * 3_600_000;
 /** And kept on after, given at once while they're measured again (lib/cache.ts). */
 const COPIES_KEPT = 3 * COPIES_FOR;
+/** How long where an AniList series is read is fresh: sites add series now and then; given at once after, while it's looked for again. */
+const ANI_FOUND_FOR = 24 * 3_600_000;
+const ANI_FOUND_KEPT = 14 * ANI_FOUND_FOR;
 
 export function makeManga(opts: MangaOptions): Manga {
   const disk = new Disk(opts.dir, opts.cacheBytes);
@@ -81,6 +90,7 @@ export function makeManga(opts: MangaOptions): Manga {
   const covers = new Covers(disk, store ?? new MemoryStore(20_000));
   const pace = opts.pace?.api;
   const dex = makeMangaDex({ disk, covers, fetch: opts.fetch, pace: opts.pace, store });
+  const anilist = makeAniList({ covers, fetch: opts.fetch, store });
   let suwayomi: Suwayomi | null = null;
   if (opts.suwayomi) suwayomi = makeSuwayomi({ url: opts.suwayomi, disk, covers, fetch: opts.fetch, pace, store, browseWithin: opts.browseWithin });
 
@@ -93,6 +103,7 @@ export function makeManga(opts: MangaOptions): Manga {
   let copyStore: Store = new MemoryStore(500);
   if (store) copyStore = store;
   const copyMemo = new Memo<MangaCopies>(copyStore, 'manga:v1:copies', COPIES_FOR, COPIES_KEPT);
+  const aniFoundMemo = new Memo<MangaFound[]>(both(new MemoryStore(20_000), copyStore), 'manga:v1:al-found', ANI_FOUND_FOR, ANI_FOUND_KEPT);
 
   /** A series' chapters, and how to count and fetch a chapter's pages, wherever it is. */
   async function readFrom(id: string, lang: string) {
@@ -143,7 +154,41 @@ export function makeManga(opts: MangaOptions): Manga {
     return { chapters: total, copies };
   }
 
-  return {
+  /**
+   * Where the first page of Browse's AniList lists is read in English, looked for ahead of readers a
+   * few at a time, so the first to open a tab doesn't wait on each card's search. Kept a day, so
+   * after the first time this asks only what's past its time.
+   */
+  async function warmAniList() {
+    for (const sort of ANILIST_SORTS) {
+      let cards;
+      try {
+        cards = (await anilist.list({ sort, page: 1, adult: false, adultOnly: false, kinds: [...MANGA_KINDS] })).items;
+      } catch (err) {
+        log.warn({ err, sort }, 'AniList’s list couldn’t be fetched to warm');
+        continue;
+      }
+      let i = 0;
+      const worker = async () => {
+        while (i < cards.length) {
+          const c = cards[i++];
+          await self.aniFound(c.id, 'en', false).catch(() => {});
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+    }
+  }
+
+  const self: Manga = {
+    anilist,
+
+    async aniFound(alId, lang, adult) {
+      const card = await anilist.card(alId);
+      if (card.adult && !adult) throw new ApiError(404, 'anilist_not_found', 'AniList doesn’t have that.');
+      const wide = adult || card.adult;
+      return aniFoundMemo.get(`${alId}:${lang ?? 'any'}:${wide ? 1 : 0}`, () => copiesOfCard(card, (q) => self.search(q), lang, wide));
+    },
+
     async search(q, onSome) {
       const began = Date.now();
       const same = opts.same ?? null;
@@ -202,6 +247,7 @@ export function makeManga(opts: MangaOptions): Manga {
     async warm() {
       if (suwayomi) await suwayomi.warm();
       else await dex.warm();
+      await warmAniList();
     },
 
     sourceSeries: (id, adult) => onSuwayomi().series(id, adult),
@@ -212,4 +258,5 @@ export function makeManga(opts: MangaOptions): Manga {
 
     copies: (id, lang) => copyMemo.get(`${id}:${lang}`, () => measureCopies(id, lang)),
   };
+  return self;
 }

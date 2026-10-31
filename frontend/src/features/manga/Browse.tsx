@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
-import { MANGA_KINDS, seriesName, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
+import { ANILIST_SORTS, MANGA_KINDS, seriesName, type AniCard, type AniListSort, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
 import { Modal } from '../../components/Modal';
 import { useLabels } from '../../data/labels';
-import { LANGS, langName, mangadex, writeMangaPrefs, type MangaPrefs } from '../../lib/mangadex';
+import { anilist, LANGS, langName, mangadex, writeMangaPrefs, type BrowseSort, type MangaPrefs } from '../../lib/mangadex';
+import { AniTile } from './AniTile';
+import { useAniFound } from './aniPick';
 import { entriesOf, viewOf } from './found';
 import './manga.css';
 
@@ -17,6 +19,9 @@ import './manga.css';
  * dot that lights when it's on, sliding sideways where it doesn't all fit. Series for adults show only once 18+ is on, which asks
  * whether they show alone or mixed in with the rest. Picking one opens its
  * page (MangaPage.tsx), to pick a copy, read it or add it to My manga.
+ * Popular, Trending and Top rated are AniList's lists, which hold series rather than copies: a card
+ * from one is looked for in every place when it's picked (AniTile.tsx). Updated is the sites' own,
+ * as only they know what's just had a chapter.
  */
 
 interface Props {
@@ -25,13 +30,14 @@ interface Props {
   have: ReadonlySet<string>;
   prefs: MangaPrefs;
   onPrefs: (p: MangaPrefs) => void;
-  /** A series picked: everywhere it was found, the first the one it opens at. */
-  onPick: (found: MangaFound[]) => void;
+  /** A series picked: everywhere it was found, the first the one it opens at; al: its AniList id, picked from AniList. */
+  onPick: (found: MangaFound[], al?: number) => void;
 }
 
 // No New: a source has no list of series just added, so New was its latest list, the same series Updated shows.
-const SORTS: Array<{ v: MangaSort; label: string }> = [
+const SORTS: Array<{ v: BrowseSort; label: string }> = [
   { v: 'popular', label: 'Popular' },
+  { v: 'trending', label: 'Trending' },
   { v: 'latest', label: 'Updated' },
   { v: 'rated', label: 'Top rated' },
 ];
@@ -67,6 +73,14 @@ const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
  */
 let kept: { text: string; found: Extract<Found, { state: 'ready' }>; top: number } | null = null;
 
+/** An AniList list's cards as far as they've been shown. ask: the list they're of (aniKey). */
+type AniFound = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; ask: string; items: AniCard[]; next: number | null };
+/** The AniList list last shown, and how far down it was, as kept is for the sites'. */
+let keptAni: { found: Extract<AniFound, { state: 'ready' }>; top: number } | null = null;
+
+/** Whether an order is one of AniList's lists. */
+const isAni = (sort: BrowseSort): sort is AniListSort => (ANILIST_SORTS as readonly string[]).includes(sort);
+
 /**
  * What's shown, with what's come since added: the cards already shown stay where they are, as a
  * reader may be looking at them, and new ones follow, those going by the very name searched for
@@ -91,9 +105,11 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   const [text, setText] = useState(() => kept?.text ?? '');
   const [q, setQ] = useState(() => kept?.text.trim() ?? '');
   const [found, setFound] = useState<Found>(() => kept?.found ?? { state: 'loading' });
+  const [ani, setAni] = useState<AniFound>(() => keptAni?.found ?? { state: 'loading' });
   /** Where to scroll back to, once Browse is on screen, and what it came back with. */
-  const back = useRef(kept?.top ?? 0);
+  const back = useRef(!kept?.text.trim() && isAni(prefs.sort) ? keptAni?.top ?? 0 : kept?.top ?? 0);
   const restored = useRef(kept?.found);
+  const aniRestored = useRef(keptAni?.found);
   const [tries, setTries] = useState(0);
   /** 18+ being turned on: asked whether it's those series alone, or mixed in with the rest. */
   const [asking18, setAsking18] = useState(false);
@@ -107,10 +123,15 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   /** The next lot, asked for as soon as the one before it came: the search it's for, and where it starts. */
   const ahead = useRef<{ ask: string; at: string; lot: Promise<Lot> } | null>(null);
 
-  // Searching, the best match comes first; otherwise the order picked.
-  let sort: MangaSort = prefs.sort;
+  // Searching, the best match comes first; otherwise the order picked. AniList's lists aren't searches.
+  const aniSort: AniListSort | null = !q && isAni(prefs.sort) ? prefs.sort : null;
+  let sort: MangaSort = prefs.sort === 'trending' ? 'popular' : prefs.sort;
   if (q) sort = 'relevance';
   const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds: prefs.kinds });
+  const aniKey = JSON.stringify({ sort: aniSort, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds: prefs.kinds });
+  const aniPage = (page: number) => anilist.list({ sort: aniSort ?? 'popular', page, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds: prefs.kinds });
+  const aniCards = useMemo(() => (ani.state === 'ready' && ani.ask === aniKey ? ani.items : []), [ani, aniKey]);
+  const { shown: aniShown, settled: aniSettled } = useAniFound(aniCards, prefs);
 
   // A pause in typing searches.
   useEffect(() => {
@@ -149,6 +170,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   };
 
   useEffect(() => {
+    if (aniSort) return;
     // Back from a chapter, with what was showing: it stays.
     if (found === restored.current && found.ask === askKey && !tries) return;
     let live = true;
@@ -171,7 +193,53 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     );
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [askKey, tries]);
+  }, [askKey, tries, aniSort]);
+
+  // An AniList list: its first page, then the rest as the end comes near, as the sites' lots are.
+  useEffect(() => {
+    if (!aniSort) return;
+    if (ani === aniRestored.current && ani.state === 'ready' && ani.ask === aniKey && !tries) return;
+    let live = true;
+    back.current = 0;
+    setAni({ state: 'loading' });
+    scroller.current?.scrollTo({ top: 0 });
+    aniPage(1).then(
+      (r) => { if (live) setAni({ state: 'ready', ask: aniKey, items: r.items, next: r.next }); },
+      (e) => { if (live) setAni({ state: 'error', message: messageOf(e) }); },
+    );
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aniKey, tries]);
+
+  useEffect(() => {
+    if (ani.state !== 'ready') return;
+    keptAni = { found: ani, top: keptAni?.found.ask === ani.ask ? keptAni.top : 0 };
+  }, [ani]);
+
+  useEffect(() => {
+    const el = end.current;
+    if (!aniSort || !el || ani.state !== 'ready' || !ani.next || hidden || !aniSettled) return;
+    if (ani.ask !== aniKey) return;
+    const ask = ani.ask;
+    const page = ani.next;
+    const io = new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting || loadingMore.current === ask) return;
+      loadingMore.current = ask;
+      aniPage(page).then(
+        (r) => setAni((f) => {
+          if (f.state !== 'ready' || f.ask !== ask || f.next !== page) return f;
+          const seen = new Set(f.items.map((c) => c.id));
+          return { ...f, items: [...f.items, ...r.items.filter((c) => !seen.has(c.id))], next: r.next };
+        }),
+        () => setAni((f) => (f.state === 'ready' && f.ask === ask ? { ...f, next: null } : f)),
+      ).finally(() => {
+        if (loadingMore.current === ask) loadingMore.current = null;
+      });
+    }, { root: scroller.current, rootMargin: '150% 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ani, hidden, aniKey, aniSettled]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -204,7 +272,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   // The next lot is asked for as soon as one comes, so it's mostly here before the end is.
   const ready = found.state === 'ready' ? found : null;
   useEffect(() => {
-    if (!ready?.next || hidden) return;
+    if (aniSort || !ready?.next || hidden) return;
     if (ready.ask !== askKey) return;
     void lotAt(ready.ask, ready.next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,7 +283,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   // flipped, say) may have got just as far, so a lot is added only to the search it's for.
   useEffect(() => {
     const el = end.current;
-    if (!el || !ready?.next || hidden) return;
+    if (aniSort || !el || !ready?.next || hidden) return;
     if (ready.ask !== askKey) return;
     const ask = ready.ask;
     const at = ready.next;
@@ -284,7 +352,41 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   }
 
   let body;
-  if (found.state === 'error') {
+  if (aniSort) {
+    if (ani.state === 'error') {
+      body = (
+        <div className="mdx-note">
+          <p>{ani.message}</p>
+          <button type="button" className="btn btn-quiet" onClick={() => setTries((n) => n + 1)}>Try again</button>
+        </div>
+      );
+    } else if (ani.state === 'loading' || ani.ask !== aniKey || (aniShown.length === 0 && (!aniSettled || ani.next))) {
+      // Shown only once a site has it: until the first is found, as a list loading.
+      body = (
+        <>
+          <div className="mdx-grid" aria-busy="true">
+            {Array.from({ length: 12 }, (_, i) => <span key={i} className="mdx-card is-ghost"><span className="mdx-cover" /></span>)}
+          </div>
+          {ani.state === 'ready' && ani.ask === aniKey && <div ref={end} className="mdx-end" />}
+        </>
+      );
+    } else if (aniShown.length === 0) {
+      body = <div className="mdx-note"><p>Nothing here yet.</p></div>;
+    } else {
+      body = (
+        <>
+          <ul className="mdx-grid">
+            {aniShown.map(({ card, found: f }) => (
+              <li key={card.id}>
+                <AniTile card={card} onPick={() => onPick(f, card.id)} sizes="(max-width: 720px) 32vw, 190px" />
+              </li>
+            ))}
+          </ul>
+          <div ref={end} className="mdx-end">{ani.next || !aniSettled ? <span className="add-spinner" /> : null}</div>
+        </>
+      );
+    }
+  } else if (found.state === 'error') {
     body = (
       <div className="mdx-note">
         <p>{found.message}</p>
@@ -327,7 +429,10 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   }
 
   return (
-    <section aria-label="Browse" hidden={hidden} className="gallery mdx" ref={scroller} onScroll={(e) => { if (kept) kept.top = e.currentTarget.scrollTop; }}>
+    <section aria-label="Browse" hidden={hidden} className="gallery mdx" ref={scroller} onScroll={(e) => {
+      const top = e.currentTarget.scrollTop;
+      if (aniSort) { if (keptAni) keptAni.top = top; } else if (kept) kept.top = top;
+    }}>
       <div className="mdx-bar">
         <label className="mdx-search">
           <IconSearch />
@@ -349,7 +454,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
                 </button>
               ))}
               <span className="mdx-rule" />
-              <button type="button" className="mdx-dot" aria-pressed={prefs.doujinshi} title="Doujinshi (fan-made works) and anthologies too" onClick={() => set({ doujinshi: !prefs.doujinshi })}>
+              <button type="button" className="mdx-dot" aria-pressed={prefs.doujinshi} disabled={!!aniSort} title={aniSort ? 'AniList’s lists have no doujinshi' : 'Doujinshi (fan-made works) and anthologies too'} onClick={() => set({ doujinshi: !prefs.doujinshi })}>
                 <span className="mdx-led" />
                 Doujin
               </button>
@@ -372,7 +477,8 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       {body}
 
       <p className="mdx-credit">
-        From <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a> and Suwayomi’s sites.
+        {aniSort ? <>Lists from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a>, read from </> : 'From '}
+        <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a> and Suwayomi’s sites.
       </p>
 
       {createPortal(

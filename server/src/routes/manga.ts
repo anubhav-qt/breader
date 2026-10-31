@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type MangaSearchEvent, type MangaState } from '@breader/shared';
+import { AniListAboutQuery, AniListFindQuery, AniListFoundQuery, AniListId, AniListQuery, MANGA_KINDS, MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type MangaSearchEvent, type MangaState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, signedOut } from '../lib/errors.ts';
 import { readSession } from '../lib/session.ts';
@@ -106,6 +106,39 @@ export function mangaRoutes(deps: Deps) {
   r.get('/manga/cover/:id/:file{[\\w-]{1,80}\\.(?:jpe?g|png|webp|gif)}', async (c) => {
     const { size } = parse(MangaCoverQuery, c.req.query());
     return cover(c, await manga!.cover(id(c), c.req.param('file'), size));
+  });
+
+  // AniList's lists for Browse, and what it says of a series: kept a while on the laptop (manga/anilist.ts).
+  r.get('/manga/anilist', async (c) => {
+    const q = parse(AniListQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=600');
+    let kinds = [...MANGA_KINDS];
+    if (q.kinds) kinds = MANGA_KINDS.filter((k) => q.kinds!.includes(k));
+    return c.json(await manga!.anilist.list({ sort: q.sort, page: q.page, adult: !!q.adult || !!q.adultOnly, adultOnly: !!q.adultOnly, kinds }));
+  });
+
+  r.get('/manga/anilist/find', async (c) => {
+    const q = parse(AniListFindQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=3600');
+    return c.json({ about: await manga!.anilist.find(q.title, !!q.adult) });
+  });
+
+  r.get('/manga/anilist/cover/:id', async (c) => {
+    const { size } = parse(MangaCoverQuery, c.req.query());
+    return cover(c, await manga!.anilist.cover(parse(AniListId, c.req.param('id')), Number(size) as 256 | 512));
+  });
+
+  // Where it can be read: its names looked for on the sites, once a day at most for everyone (manga/anifound.ts).
+  r.get('/manga/anilist/:id/found', async (c) => {
+    const { lang, adult } = parse(AniListFoundQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=600');
+    return c.json({ found: await manga!.aniFound(parse(AniListId, c.req.param('id')), lang, !!adult) });
+  });
+
+  r.get('/manga/anilist/:id', async (c) => {
+    const { adult } = parse(AniListAboutQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=3600');
+    return c.json(await manga!.anilist.about(parse(AniListId, c.req.param('id')), !!adult));
   });
 
   // A series on one of Suwayomi's sources, by its source and address (SourceId).

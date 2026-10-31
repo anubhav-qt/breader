@@ -65,7 +65,8 @@ function hashOf(route: Route): string {
 }
 
 /** A series' page: everywhere the series was found, the first the one picked, and what its Back says. */
-type SeriesAt = { found: MangaFound[]; from: string };
+/** al: its AniList id, when picked from AniList. fromSeries: opened from another series' page, which Back goes back to. */
+type SeriesAt = { found: MangaFound[]; from: string; al?: number; fromSeries?: boolean };
 
 /**
  * What the app keeps with a place in the browser's history, so Back and Forward, and a reload, find
@@ -358,10 +359,15 @@ export default function App() {
   }, []);
 
   /** A series' page, over the library. from: what its Back says. */
-  const openSeries = useCallback((found: MangaFound[], from: string) => {
-    goTo({ name: 'series', id: found[0].card.id }, { found, from });
+  const openSeries = useCallback((found: MangaFound[], from: string, more: { al?: number; fromSeries?: boolean } = {}) => {
+    goTo({ name: 'series', id: found[0].card.id }, { found, from, ...more });
   }, [goTo]);
   const leaveSeries = useCallback(() => {
+    // Opened from another series' page: back to it, as the browser's history has it.
+    if (sheet?.fromSeries && keptNow().inApp) {
+      window.history.back();
+      return;
+    }
     // Back where it was picked, a reload since or not.
     if (sheet?.from === 'Browse') {
       setCategory('manga');
@@ -369,7 +375,7 @@ export default function App() {
     }
     goBack({ name: 'library' }, null);
   }, [goBack, sheet]);
-  const pickInBrowse = useCallback((found: MangaFound[]) => openSeries(found, 'Browse'), [openSeries]);
+  const pickInBrowse = useCallback((found: MangaFound[], al?: number) => openSeries(found, 'Browse', { al }), [openSeries]);
 
   /* Data for the current view */
   const previewSets = useMemo(
@@ -1330,6 +1336,8 @@ export default function App() {
           <MangaPage
             found={sheet.found}
             from={sheet.from}
+            al={sheet.al}
+            onOpen={(found, card) => openSeries(found, sheet.found[0].card.title, { al: card.id, fromSeries: true })}
             covered={route.name === 'read'}
             prefs={mdPrefs}
             recordOf={recordOf}

@@ -1,4 +1,4 @@
-import { MANGA_KINDS, type MangaChapters, type MangaCopies, type MangaFound, type MangaKind, type MangaSearchEvent, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
+import { MANGA_KINDS, type AniListAbout, type AniListPage, type AniListSort, type MangaChapters, type MangaCopies, type MangaFound, type MangaKind, type MangaSearchEvent, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
 import { api, ApiError, mangaUrl } from './api';
 import { readLocal, writeLocal } from './store';
 
@@ -105,6 +105,18 @@ export const mangadex = {
   },
 };
 
+/** AniList, through the laptop (server manga/anilist.ts): Browse's lists, and what a series is related to and like. */
+export const anilist = {
+  list: (s: { sort: AniListSort; page: number; adult: boolean; adultOnly: boolean; kinds: MangaKind[] }) =>
+    ask(() => api.manga.get<AniListPage>(`/v1/manga/anilist${query({ sort: s.sort, page: s.page, adult: s.adult ? 1 : undefined, adultOnly: s.adultOnly ? 1 : undefined, kinds: kindsOf(s.kinds) })}`, 20_000)),
+  about: (id: number, adult: boolean) => ask(() => api.manga.get<AniListAbout>(`/v1/manga/anilist/${id}${adult ? '?adult=1' : ''}`, 20_000)),
+  find: (title: string, adult: boolean) => ask(() => api.manga.get<{ about: AniListAbout | null }>(`/v1/manga/anilist/find${query({ title, adult: adult ? 1 : undefined })}`, 20_000)),
+  coverUrl: (id: number, size: 256 | 512) => mangaUrl(`/v1/manga/anilist/cover/${id}?size=${size}`),
+  /** Where it can be read: its copies on the sites, none when no site has it. Looking takes a site search or two the first time. */
+  found: (id: number, lang: string, adult: boolean) =>
+    ask(() => api.manga.get<{ found: MangaFound[] }>(`/v1/manga/anilist/${id}/found${query({ lang: lang || undefined, adult: adult ? 1 : undefined })}`, 60_000)).then((r) => r.found),
+};
+
 /**
  * A series on one of Breader's Suwayomi sources, by its id (sw:<source>:<address>), and its chapters
  * (their ids that and their own address) and its pages.
@@ -142,6 +154,9 @@ export const sources = {
  * How this device looks for manga: in what language and order, which kinds, whether 18+ series (or
  * only they) and doujinshi (and anthologies) show, and data saver.
  */
+/** Browse's orders: the sites', and AniList's Trending. */
+export type BrowseSort = MangaSort | 'trending';
+
 export interface MangaPrefs {
   lang: string;
   adult: boolean;
@@ -151,7 +166,8 @@ export interface MangaPrefs {
   doujinshi: boolean;
   /** At least one, in MANGA_KINDS' order. */
   kinds: MangaKind[];
-  sort: MangaSort;
+  /** Browse's order: Popular, Trending and Top rated are AniList's lists, Updated the sites'. */
+  sort: BrowseSort;
   saver: boolean;
 }
 

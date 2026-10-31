@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import type { MangaChapter, MangaFound, MangaSeries, SourceSeries } from '@breader/shared/manga';
+import { namesIn, seriesName, type AniCard, type AniListAbout, type AniRelation, type MangaChapter, type MangaFound, type MangaSeries, type SourceSeries } from '@breader/shared/manga';
 import { IconBack, IconCheck, IconChevron, IconOrder, IconOut } from '../../components/icons';
 import { useLabels } from '../../data/labels';
 import { keptNote } from '../../books/kept';
 import { filledIn, laidOut, listOf, madeBy, pickChapters, remoteOf, startOf, type Fill } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
-import { byLang, KIND_NAME, langName, mangadex, RATING_NAME, sources, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
+import { anilist, byLang, KIND_NAME, langName, mangadex, RATING_NAME, sources, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
 import { springs } from '../../lib/springs';
 import { readLocal, writeLocal } from '../../lib/store';
+import { AniTile } from './AniTile';
+import { useAniFound, type AniShown } from './aniPick';
 import { alsoOf, alsoUrls, copyKey, inOrder, sharpest, urlOf, useCopies, type Copy, type Place } from './copies';
 import './manga.css';
 
@@ -53,8 +55,12 @@ interface Props {
   onAdd: (about: About, picked: Picked) => Promise<void> | void;
   /** A series in My manga, read from another copy from now on. site: where that is, for saying so. */
   onMove: (rec: BookRecord, picked: Picked, site: string) => void;
-  /** What its Back goes back to: Browse, or My manga. */
+  /** What its Back goes back to: Browse, My manga, or the series it was opened from. */
   from: string;
+  /** Its AniList id, when it was picked from AniList: what's related to it and like it, at once. */
+  al?: number;
+  /** A related or similar series picked, found where it can be read. */
+  onOpen: (found: MangaFound[], card: AniCard) => void;
   /** Under the reader, a chapter read from it open over it. */
   covered: boolean;
   onBack: () => void;
@@ -143,7 +149,7 @@ function chaptersText(c: Copy): string {
   return `${c.chapters} of ${c.of} ch`;
 }
 
-export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, onMove, from, covered, onBack }: Props) {
+export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, onMove, from, al, onOpen, covered, onBack }: Props) {
   const labels = useLabels();
   const main = start[0];
   const pageRef = useRef<HTMLDivElement>(null);
@@ -211,6 +217,38 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
     return () => { live = false; };
   }, [main.kind, main.card.id, prefs.adult]);
   const a = about.state === 'ready' ? about.value : null;
+
+  // What AniList says came before and after it, and is like it: by its AniList id when that's known
+  // (picked from AniList, or in MangaDex's links), or else by its title, if AniList's series goes by
+  // one of its names.
+  let alId: number | null = al ?? null;
+  if (alId === null && a?.kind === 'mangadex') {
+    for (const l of a.series.links) {
+      const m = /anilist\.co\/manga\/(\d+)/.exec(l.url);
+      if (m) alId = Number(m[1]);
+    }
+  }
+  const waitAbout = alId === null && about.state === 'loading';
+  const [rel, setRel] = useState<AniListAbout | null>(null);
+  useEffect(() => {
+    if (waitAbout) return;
+    let live = true;
+    let going: Promise<AniListAbout | null>;
+    if (alId !== null) {
+      going = anilist.about(alId, prefs.adult);
+    } else {
+      const mine = new Set(namesIn(start));
+      going = anilist.find(main.card.title, prefs.adult).then((r) => {
+        if (!r.about) return null;
+        if (!r.about.names.some((n) => mine.has(seriesName(n).key))) return null;
+        return r.about;
+      });
+    }
+    going.then((v) => { if (live) setRel(v); }, () => {});
+    return () => { live = false; };
+    // The names it's found by are its first place's, which don't change on its page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alId, waitAbout, main.card.title, prefs.adult]);
 
   /**
    * Adding a series takes as long as its cover does (half a minute from some sites), and it isn't
@@ -568,6 +606,7 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
           </div>
         )}
         <Links about={a} />
+        {rel && <Related about={rel} prefs={prefs} onOpen={onOpen} />}
 
         <div className="mds-ch-head is-chapters">
           <span>{count}</span>
@@ -627,6 +666,52 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
         <p className="mds-credit">{credit}</p>
       </div>
     </motion.div>
+  );
+}
+
+const RELATION_NAME: Record<AniRelation, string> = {
+  prequel: 'Prequel',
+  sequel: 'Sequel',
+  parent: 'Main story',
+  side_story: 'Side story',
+  spin_off: 'Spin-off',
+  alternative: 'Alternative',
+  character: 'Same characters',
+  summary: 'Summary',
+  other: 'Related',
+};
+
+/** What came before and after it and beside it, and what readers say is like it, as AniList has them: each opens where it can be read. */
+function Related({ about, prefs, onOpen }: { about: AniListAbout; prefs: Props['prefs']; onOpen: Props['onOpen'] }) {
+  // Each shown only once a site has it (aniPick.ts).
+  const related = useAniFound(about.related, prefs).shown;
+  const similar = useAniFound(about.similar, prefs).shown;
+  if (related.length === 0 && similar.length === 0) return null;
+  const row = <C extends AniCard>(cards: AniShown<C>[], label: (c: C) => string | undefined) => (
+    <ul className="mds-rel-row">
+      {cards.map(({ card, found }) => (
+        <li key={card.id}>
+          <AniTile card={card} label={label(card)} onPick={() => onOpen(found, card)} sizes="132px" />
+        </li>
+      ))}
+    </ul>
+  );
+  return (
+    <>
+      {related.length > 0 && (
+        <section className="mds-rel" aria-label="Related">
+          <div className="mds-ch-head"><span>Related</span></div>
+          {row(related, (c) => RELATION_NAME[c.relation])}
+        </section>
+      )}
+      {similar.length > 0 && (
+        <section className="mds-rel" aria-label="Similar">
+          <div className="mds-ch-head"><span>Similar</span></div>
+          {row(similar, () => undefined)}
+        </section>
+      )}
+      <p className="mds-credit">Related and similar series from <a href={`https://anilist.co/manga/${about.id}`} target="_blank" rel="noopener noreferrer">AniList</a>.</p>
+    </>
   );
 }
 

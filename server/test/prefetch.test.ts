@@ -114,6 +114,8 @@ describe('the daily prefetch', () => {
       sourcePages: vi.fn(async (id: string) => { asked.push(`pages ${id}`); return 3; }),
       sourcePage: say('page'),
       warm: async () => {},
+      anilist: {} as never,
+    aniFound: async () => [],
     } satisfies Manga;
     return { manga, asked };
   }

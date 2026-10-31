@@ -440,3 +440,68 @@ export function placeChapter(pos: { block: number } | undefined | null): number 
   if (!pos || pos.block < PLACE_PER) return null;
   return (Math.floor(pos.block / PLACE_PER) - 1) / 100;
 }
+
+/*
+ * AniList (graphql.anilist.co), through the laptop: Browse's Popular, Trending and Top rated lists,
+ * and what a series' page says came before and after it and what's like it. AniList knows series,
+ * not where to read them, so a card from it is opened by looking for its names in the places a
+ * search looks (the app's found.ts).
+ */
+
+/** Browse's lists AniList makes. */
+export const ANILIST_SORTS = ['popular', 'trending', 'rated'] as const;
+export type AniListSort = (typeof ANILIST_SORTS)[number];
+
+/** AniList's ids are numbers. */
+export const AniListId = z.string().regex(/^\d{1,9}$/, 'Not an AniList id').transform(Number);
+
+export const AniListQuery = z.object({
+  sort: z.enum(ANILIST_SORTS).default('popular'),
+  page: z.coerce.number().int().min(1).max(100).default(1),
+  adult: Flag.optional(),
+  adultOnly: Flag.optional(),
+  kinds: Kinds.optional(),
+});
+export type AniListQuery = z.input<typeof AniListQuery>;
+
+export const AniListAboutQuery = z.object({ adult: Flag.optional() });
+/** A series looked up on AniList by its title, when nothing gave its AniList id. */
+export const AniListFindQuery = z.object({ title: z.string().trim().min(1).max(200), adult: Flag.optional() });
+/** Where a series AniList knows can be read: in this language (any, left out), 18+ copies too or not. */
+export const AniListFoundQuery = z.object({ lang: MangaLang.optional(), adult: Flag.optional() });
+
+/** A series as AniList has it. */
+export interface AniCard {
+  id: number;
+  /** Its English title, or its romaji one. */
+  title: string;
+  /** Every name it goes by: romaji, English, native and the rest, to look for it with. */
+  names: string[];
+  /** Its cover is at /v1/manga/anilist/cover/:id. */
+  cover: boolean;
+  kind: MangaKind | null;
+  /** AniList's format, as words: Manga, One shot, Novel. */
+  format: string;
+  status: MangaCard['status'];
+  year: number | null;
+  adult: boolean;
+}
+
+/** How a related series is related, from the series' side: its prequel, its sequel. */
+export type AniRelation = 'prequel' | 'sequel' | 'parent' | 'side_story' | 'spin_off' | 'alternative' | 'character' | 'summary' | 'other';
+
+export interface AniRelated extends AniCard {
+  relation: AniRelation;
+}
+
+export interface AniListPage {
+  items: AniCard[];
+  /** The next page, or null at the end. */
+  next: number | null;
+}
+
+/** What AniList says of one series: what's before and after it and beside it, and what's like it. */
+export interface AniListAbout extends AniCard {
+  related: AniRelated[];
+  similar: AniCard[];
+}

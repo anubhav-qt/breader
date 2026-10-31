@@ -61,6 +61,23 @@ export class MemoryStore implements Store {
   }
 }
 
+/** Memory first, then the shared store; what's kept goes in both, so answers hold with Redis away. Kept in memory a day at most once read back. */
+export function both(near: Store, far: Store): Store {
+  return {
+    async get(key) {
+      const hit = await near.get(key);
+      if (hit !== undefined) return hit;
+      const got = await far.get(key);
+      if (got !== undefined) await near.set(key, got, 24 * 3_600_000);
+      return got;
+    },
+    async set(key, value, ttl) {
+      await near.set(key, value, ttl);
+      await far.set(key, value, ttl).catch(() => {});
+    },
+  };
+}
+
 /** Redis at the URL, kept as JSON text. Connects in the background, and again whenever it drops. */
 export function connectRedis(url: string): Redis {
   let warned = 0;

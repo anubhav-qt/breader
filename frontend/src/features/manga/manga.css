@@ -93,6 +93,8 @@
 @keyframes mdx-wait { from { opacity: 0.5; } to { opacity: 1; } }
 .mdx-note { display: grid; justify-items: center; gap: 16px; padding: 72px 16px; text-align: center; }
 .mdx-note p { margin: 0; max-width: 460px; font-family: var(--read); font-size: 25px; line-height: 1.12; color: var(--ink-2); }
+/* How an AniList card is related to the series whose page it is on. */
+.mdx-rel { font: var(--ui-w-strong) 11px/1 var(--ui); letter-spacing: 0.02em; color: var(--accent); }
 .mdx-end { display: grid; place-items: center; min-height: 72px; }
 .mdx-credit { margin: 24px auto 0; max-width: 640px; text-align: center; font: var(--ui-w) 11.5px/1.5 var(--ui); color: var(--ink-2); }
 .mdx-credit a { color: inherit; text-underline-offset: 2px; }
@@ -209,6 +211,11 @@
 .mds-order svg { width: 16px; height: 16px; color: var(--ink-2); }
 .mds-wait, .mds-error { display: flex; align-items: center; gap: 10px; margin: 14px 0; font: var(--ui-w) 13px/1.4 var(--ui); color: var(--ink-2); }
 .mds-error { color: var(--danger); }
+/* Related and similar series: a row each, sliding sideways. */
+.mds-rel-row { list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 132px; gap: 14px; margin: 12px 0 0; padding: 0 0 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.mds-rel-row .mdx-title { font-size: 20px; }
+.mds-rel + .mds-credit { margin-top: 6px; }
+.mds-credit a { color: inherit; text-underline-offset: 2px; }
 .mds-credit { margin: 18px 0 0; font: var(--ui-w) 11.5px/1.5 var(--ui); color: var(--ink-2); }
 
 @media (max-width: 720px) {
@@ -220,6 +227,7 @@
   .mdx-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 18px 10px; }
   .mdx-title { font-size: 20px; }
   .mdx-meta { font-size: 10.5px; }
+  .mds-rel-row { grid-auto-columns: 108px; gap: 10px; margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
   .mdp { --mdp-bar: 56px; }
   .mdp-bar { padding: 0 10px; gap: 6px; }
   .mdp-name { font-size: 25px; }

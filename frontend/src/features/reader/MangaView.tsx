@@ -768,7 +768,11 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
         </span>
       );
     }
-    return <img src={src} alt={`Page ${i + 1}`} draggable={false} decoding="async" onLoad={(e) => measured(i, e.currentTarget)} />;
+    // Turned (pages and panels), a page is drawn at once: Safari leaves an image decoded on its own
+    // time out of the picture a turn wipes in, so the new page came in blank, black in the dark.
+    // Its picture is decoded before the turn (goTo), so drawing it at once costs nothing.
+    const decoding = layout === 'scroll' ? 'async' : 'sync';
+    return <img src={src} alt={`Page ${i + 1}`} draggable={false} decoding={decoding} onLoad={(e) => measured(i, e.currentTarget)} />;
   };
 
   // A page looked at closely (MangaZoom.tsx).
