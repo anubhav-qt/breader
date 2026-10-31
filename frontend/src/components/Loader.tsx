@@ -6,8 +6,8 @@ interface Props {
   className?: string;
 }
 
-const page = (back = false) => (
-  <span className={back ? 'ld-pg ld-back' : 'ld-pg'}>
+const page = () => (
+  <span className="ld-pg">
     {Array.from({ length: 12 }, (_, i) => <i key={i} />)}
   </span>
 );
@@ -22,7 +22,7 @@ export function Loader({ size = 'small', className = '' }: Props) {
       {page()}
       <span className="ld-spine" />
       {page()}
-      <span className="ld-leaf">{page()}{page(true)}</span>
+      <span className="ld-leaf">{page()}</span>
     </span>
   );
 }
