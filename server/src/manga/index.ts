@@ -1,5 +1,5 @@
-import { ANILIST_SORTS, MANGA_KINDS, type MangaChapter, type MangaChapters, type MangaCopies, type MangaCopy, type MangaFound, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
-import { both, Memo, MemoryStore, type Store } from '../lib/cache.ts';
+import { ANILIST_SORTS, MANGA_KINDS, type AniListSort, type MangaChapter, type MangaChapters, type MangaCopies, type MangaCopy, type MangaFound, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
+import { both, freshly, Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { copiesOf, measure } from './copies.ts';
@@ -7,7 +7,7 @@ import { Covers, type Cover, type CoverWidth } from './covers.ts';
 import { Disk, type Picture } from './disk.ts';
 import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
 import { copiesOfCard } from './anifound.ts';
-import { makeAniList, type AniList } from './anilist.ts';
+import { makeAniList, type AniList, type AniListAsk } from './anilist.ts';
 import { makeMangaDex } from './mangadex.ts';
 import type { Curate, Tab } from './curate.ts';
 import type { Same } from './same.ts';
@@ -83,6 +83,11 @@ const COPIES_KEPT = 3 * COPIES_FOR;
 /** How long where an AniList series is read is fresh: sites add series now and then; given at once after, while it's looked for again. */
 const ANI_FOUND_FOR = 24 * 3_600_000;
 const ANI_FOUND_KEPT = 14 * ANI_FOUND_FOR;
+/** Pages of each AniList list warmed ahead of readers (30 series a page), and series looked for at once. */
+const ANI_WARM_PAGES = 5;
+const ANI_WARM_AT_ONCE = 3;
+/** The kinds Browse offers (Comics isn't), as it asks AniList for them. */
+const BROWSE_KINDS: readonly MangaKind[] = ['manga', 'manhwa', 'manhua'];
 
 export function makeManga(opts: MangaOptions): Manga {
   const disk = new Disk(opts.dir, opts.cacheBytes);
@@ -154,29 +159,49 @@ export function makeManga(opts: MangaOptions): Manga {
     return { chapters: total, copies };
   }
 
+  /** The pages Browse's AniList lists are warmed to, as readers see them: most-read first. */
+  function aniWarmAsks(): AniListAsk[] {
+    const asks: AniListAsk[] = [];
+    const ask = (sort: AniListSort, page: number, kinds: MangaKind[]) => asks.push({ sort, page, adult: false, adultOnly: false, kinds });
+    for (const sort of ANILIST_SORTS) ask(sort, 1, [...BROWSE_KINDS]);
+    for (const kind of BROWSE_KINDS) for (const sort of ANILIST_SORTS) ask(sort, 1, [kind]);
+    for (let page = 2; page <= ANI_WARM_PAGES; page++) for (const sort of ANILIST_SORTS) ask(sort, page, [...BROWSE_KINDS]);
+    return asks;
+  }
+
   /**
-   * Where the first page of Browse's AniList lists is read in English, looked for ahead of readers a
-   * few at a time, so the first to open a tab doesn't wait on each card's search. Kept a day, so
-   * after the first time this asks only what's past its time.
+   * Where the series on Browse's AniList lists are read in English, looked for ahead of readers:
+   * the first pages of each list, and of each kind on its own, a few series at a time. A run still
+   * going isn't started again. Everything's kept a day, so after the first time a run asks only
+   * what's past its time, and waits for each (freshly), keeping to the sites' pace.
    */
-  async function warmAniList() {
-    for (const sort of ANILIST_SORTS) {
-      let cards;
-      try {
-        cards = (await anilist.list({ sort, page: 1, adult: false, adultOnly: false, kinds: [...MANGA_KINDS] })).items;
-      } catch (err) {
-        log.warn({ err, sort }, 'AniList’s list couldn’t be fetched to warm');
-        continue;
-      }
-      let i = 0;
-      const worker = async () => {
-        while (i < cards.length) {
-          const c = cards[i++];
-          await self.aniFound(c.id, 'en', false).catch(() => {});
+  let aniWarming: Promise<void> | null = null;
+  function warmAniList(): Promise<void> {
+    if (aniWarming) return aniWarming;
+    aniWarming = freshly(async () => {
+      const seen = new Set<number>();
+      for (const ask of aniWarmAsks()) {
+        let cards;
+        try {
+          cards = (await anilist.list(ask)).items.filter((c) => !c.adult && !seen.has(c.id));
+        } catch (err) {
+          log.warn({ err, sort: ask.sort, page: ask.page }, 'AniList’s list couldn’t be fetched to warm');
+          continue;
         }
-      };
-      await Promise.all([worker(), worker(), worker()]);
-    }
+        for (const c of cards) seen.add(c.id);
+        let i = 0;
+        const worker = async () => {
+          while (i < cards.length) {
+            const c = cards[i++];
+            await self.aniFound(c.id, 'en', false).catch(() => {});
+          }
+        };
+        await Promise.all(Array.from({ length: ANI_WARM_AT_ONCE }, worker));
+      }
+    }).finally(() => {
+      aniWarming = null;
+    });
+    return aniWarming;
   }
 
   const self: Manga = {
@@ -245,9 +270,9 @@ export function makeManga(opts: MangaOptions): Manga {
     cover: (mangaId, file, size, early) => dex.cover(mangaId, file, size, early),
     coversFor: (id, freshFor) => covers.listed(id, freshFor),
     async warm() {
-      if (suwayomi) await suwayomi.warm();
-      else await dex.warm();
-      await warmAniList();
+      // Side by side: shelving the sources' lists takes a while, and AniList's lists shouldn't wait on it.
+      const lists = suwayomi ? suwayomi.warm() : dex.warm();
+      await Promise.all([lists, warmAniList()]);
     },
 
     sourceSeries: (id, adult) => onSuwayomi().series(id, adult),
