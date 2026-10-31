@@ -46,11 +46,6 @@ const TABS: Array<{ v: Tab; label: string }> = [
   { v: 'places', label: 'Places' },
   { v: 'terms', label: 'Words' },
 ];
-const EMPTY: Record<Tab, string> = {
-  people: 'No one yet',
-  places: 'No places yet',
-  terms: 'No words yet',
-};
 
 type Loaded = { notes: RevisitResponse; offline: boolean };
 
@@ -197,7 +192,7 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
               </p>
             </div>
           ))}
-        {got && lists[tab].length === 0 && <p className="p-empty rv-empty">{wanted ? 'No match' : EMPTY[tab]}</p>}
+        {got && lists[tab].length === 0 && wanted && <p className="p-empty rv-empty">No match</p>}
       </div>
     </div>
   );

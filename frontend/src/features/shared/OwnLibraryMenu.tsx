@@ -82,7 +82,7 @@ export function OwnLibraryMenu({ name, count, category }: Props) {
           ) : (
             <div className="lm-pick">
               <span className="lm-name">{name}</span>
-              <span className="lm-sub">Yours, {countOf(count, category)}</span>
+              <span className="lm-sub">{countOf(count, category)}</span>
             </div>
           )}
           <button type="button" className="lm-icon" title="Rename" aria-label={`Rename ${name}`} onClick={startRename}>

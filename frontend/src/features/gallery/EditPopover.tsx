@@ -13,6 +13,7 @@ import { genreIds, joinGenres } from '@breader/shared/genres';
 import { GenreField } from './GenreField';
 import { Download } from './Download';
 import { BookAiSwitch } from '../ai/AiStatus';
+import { useAiProgress, type AiProgress } from '../ai/progress';
 import { setFirstBook, useFirstBook } from '../ai/first';
 
 interface Props {
@@ -39,17 +40,19 @@ interface Props {
   onClose: () => void;
 }
 
-/** Whether the AI does this book before the reader's others. */
-function FirstSwitch({ bookId }: { bookId: string }) {
+/** Whether the AI does this book before the reader's others; nothing once all of it is ready. */
+function FirstSwitch({ bookId, progress }: { bookId: string; progress: AiProgress }) {
   const first = useFirstBook();
   const on = first === bookId;
+  // The first look is made up, so nothing shows until the server has said.
+  if (progress.known === false || progress.stage === 'done') return null;
   return (
     <>
       <div className="ep-share">
         <span className="ep-label" id="ep-first">Do this one first</span>
         <button type="button" className="switch" role="switch" aria-checked={on} aria-labelledby="ep-first" aria-describedby="ep-first-why" onClick={() => setFirstBook(on ? null : bookId).catch(() => {})} />
       </div>
-      <p className="ep-note" id="ep-first-why">The AI reads it before your other books, and before the rest of its series.</p>
+      <p className="ep-note" id="ep-first-why">Goes before your other books. Takes a few hours.</p>
     </>
   );
 }
@@ -77,6 +80,8 @@ function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
  */
 export function EditPopover({ book, seriesNames, noSeries = false, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onChapters, canFirst = false, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  // Followed once here, for the AI switch and the one under it; a manga has no AI.
+  const progress = useAiProgress(book.id, !!book.ai && book.format !== 'CBZ');
   const [name, setName] = useState(book.title);
   const numText = book.seriesIndex !== undefined ? String(book.seriesIndex) : '';
   const [series, setSeries] = useState<SeriesValue>({ name: book.series ?? '', num: numText });
@@ -273,11 +278,12 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
           label={AI_LABEL}
           note={book.aiElsewhere ? AI_ELSEWHERE : undefined}
           why={book.ai ? undefined : AI_WHY}
+          progress={progress}
           onTurnOn={() => onChange({ ai: true })}
         />
       )}
       {/* With more than one book the AI reads, which goes first. */}
-      {book.format !== 'CBZ' && book.ai && canFirst && <FirstSwitch bookId={book.id} />}
+      {book.format !== 'CBZ' && book.ai && canFirst && <FirstSwitch bookId={book.id} progress={progress} />}
       {/* A manga read through the laptop: the whole of it, to read offline. */}
       {book.source === 'remote' && <Download book={book} />}
       <div className="ep-actions">

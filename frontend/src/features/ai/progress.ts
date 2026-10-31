@@ -31,6 +31,8 @@ export interface AiProgress {
   parts?: number;
   of?: number;
   percent?: number;
+  /** False until the server has answered: the first look is made up. */
+  known?: boolean;
   features: Record<AiFeature, FeatureState>;
 }
 
@@ -118,7 +120,7 @@ const FAKE_EVERY_MS = 3_000;
 /** A book's AI progress, asked again every little while for as long as it's on screen. */
 export function useAiProgress(id: string, on: boolean): AiProgress {
   const { fake } = useRound();
-  const [live, setLive] = useState<AiProgress>(on ? { ...OFF, stage: 'queued' } : OFF);
+  const [live, setLive] = useState<AiProgress>(on ? { ...OFF, stage: 'queued', known: false } : OFF);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {

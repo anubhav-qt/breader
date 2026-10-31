@@ -4,10 +4,12 @@ into data/guesses/<page>.json, for the labeller to start from instead of Breader
 guess is only a start: what's saved is what's on screen once it's fixed.
 
 A strip is looked at a window at a time (pages.windows), and its windows' panels joined back up.
-Panels come out in the order they're read: rows top to bottom, and across them right to left.
+Panels come out in the order they're read: rows top to bottom, and across them right to left,
+with gutters that can slant.
 """
 
 import json
+import math
 import sys
 from datetime import datetime, timezone
 
@@ -20,6 +22,12 @@ from pages import DATA, DEVICE, GUESSES, MODELS, SIZE, pages, windows, write
 SURE = 0.3
 # A panel this close to a window's cut, in pixels, may be cut by it.
 NEAR = 4
+# How sure the model has to be of a corner to take it wherever it puts it.
+CORNER = 0.5
+# A corner it's less sure of is taken this close to its panel's box, as a share of the box's shorter
+# side: a corner on the page's edge is always one, as it learned those as out of sight (training
+# crops pages), though it puts them where they are.
+ON_BOX = 0.1
 
 
 def area(b):
@@ -55,12 +63,17 @@ def shoelace(q):
 
 def quad_of(points, box, w, h):
     """
-    A panel's corners as guessed, in whole pixels on the page. A corner the model isn't sure of is
-    its box's, and all four are when they don't make a sensible panel.
+    A panel's corners as guessed, in whole pixels on the page: where the model puts them, but its
+    box's for one it's unsure of away from the box, all four when it's sure of none, and when they
+    don't make a sensible panel. The same as the app's (shared/src/panels.ts).
     """
     whole = lambda x, y: [int(min(max(round(x), 0), w)), int(min(max(round(y), 0), h))]
     square = [whole(x, y) for x, y in corners_of(box)]
-    q = [whole(x, y) if sure >= 0.5 else square[i] for i, (x, y, sure) in enumerate(points)]
+    if all(sure < CORNER for _, _, sure in points):
+        return square
+    near = ON_BOX * min(box[2] - box[0], box[3] - box[1])
+    on_box = lambda x, y: min(abs(x - box[0]), abs(x - box[2]), abs(y - box[1]), abs(y - box[3])) <= near
+    q = [whole(x, y) if sure >= CORNER or on_box(x, y) else square[i] for i, (x, y, sure) in enumerate(points)]
     if not sensible(q) or shoelace(q) < 0.6 * area(box):
         return square
     return q
@@ -89,24 +102,90 @@ def merged(found):
     return kept + joined
 
 
-def ordered(found, w, h):
-    """Panels in the order they're read: cut into rows top to bottom, then across right to left."""
-    sx, sy = 0.02 * w, 0.02 * h
+# How far a panel may reach past the gutter into the next row or column, as a share of the smaller
+# one's height (or width): the model's corners are a few pixels off, more so on bigger panels.
+SLACK = 0.1
+# The steepest a gutter between rows or columns is looked for, in degrees either way of straight.
+STEEPEST = 20
+# Two panels side by side, their heights overlapping by this share of the shorter's, are one row;
+# stacked, widths, one column.
+BESIDE = 0.5
+# Straight first, then a degree more either way at a time.
+ANGLES = [0] + [d for i in range(1, STEEPEST + 1) for d in (i, -i)]
+
+
+def span_of(q, ux, uy):
+    """How far along (ux, uy) a panel's corners reach, least and most."""
+    v = [x * ux + y * uy for x, y in q]
+    return (min(v), max(v))
+
+
+def mid(s):
+    return (s[0] + s[1]) / 2
+
+
+def beside(a, b):
+    return min(a[1], b[1]) - max(a[0], b[0]) > BESIDE * min(a[1] - a[0], b[1] - b[0])
+
+
+def ordered(found):
+    """
+    The panels the page is read in: cut into rows top to bottom, and across them right to left, by
+    their corners, so a gutter can slant. What can't be cut is read a panel at a time, each beside
+    another after the one to its right, and each below another after it (before). The same as the
+    app's (shared/src/panels.ts).
+    """
+
+    def split(items, across):
+        """
+        The first row of items (or right column, across) and the rest, split by a gutter as straight
+        as there is: every panel of the first ends before every one of the rest begins, give or take
+        SLACK. Two on either side of the gutter, neither across it from the other, mustn't sit beside
+        each other (or one above the other, across): that's a gutter through a row (or a column).
+        """
+        side = [span_of(f["quad"], 1, 0) if across else span_of(f["quad"], 0, 1) for f in items]
+        for deg in ANGLES:
+            t = deg * math.pi / 180
+            c, n = math.cos(t), math.sin(t)
+            # How far down the page square to a row's gutter (or right, square to a column's), and how far along it.
+            s = [span_of(f["quad"], c, n) if across else span_of(f["quad"], -n, c) for f in items]
+            along = [span_of(f["quad"], -n, c) if across else span_of(f["quad"], c, n) for f in items]
+            order = sorted(range(len(items)), key=lambda i: -mid(s[i]) if across else mid(s[i]))
+            for k in range(1, len(order)):
+                first, rest = order[:k], order[k:]
+                if all(
+                    (s[j][1] - s[i][0] if across else s[i][1] - s[j][0]) <= SLACK * min(s[i][1] - s[i][0], s[j][1] - s[j][0])
+                    and (min(along[i][1], along[j][1]) > max(along[i][0], along[j][0]) or not beside(side[i], side[j]))
+                    for i in first
+                    for j in rest
+                ):
+                    return [items[i] for i in first], [items[i] for i in rest]
+        return None
 
     def cut(items):
         if len(items) < 2:
             return items
-        for y in sorted({f["box"][3] for f in items}):
-            above = [f for f in items if f["box"][3] <= y + sy]
-            below = [f for f in items if f["box"][3] > y + sy]
-            if above and below and all(f["box"][1] >= y - sy for f in below):
-                return cut(above) + cut(below)
-        for x in sorted({f["box"][0] for f in items}, reverse=True):
-            right = [f for f in items if f["box"][0] >= x - sx]
-            left = [f for f in items if f["box"][0] < x - sx]
-            if right and left and all(f["box"][2] <= x + sx for f in left):
-                return cut(right) + cut(left)
-        return sorted(items, key=lambda f: (f["box"][1], -f["box"][2]))
+        parts = split(items, False) or split(items, True)
+        if parts:
+            return cut(parts[0]) + cut(parts[1])
+        ys = [span_of(f["quad"], 0, 1) for f in items]
+        xs = [span_of(f["quad"], 1, 0) for f in items]
+        at = [(sum(c[0] for c in f["quad"]) / len(f["quad"]), sum(c[1] for c in f["quad"]) / len(f["quad"])) for f in items]
+
+        def before(a, b):
+            """Of two beside each other the right one is read first, of two stacked the upper, and otherwise whichever way they're further apart says."""
+            side_by_side = beside(ys[a], ys[b])
+            stacked = beside(xs[a], xs[b])
+            across = abs(at[a][0] - at[b][0]) > abs(at[a][1] - at[b][1]) if side_by_side == stacked else side_by_side
+            return at[a][0] > at[b][0] if across else at[a][1] < at[b][1]
+
+        # Each once none left is read before it; of those that go round, the topmost.
+        left = sorted(range(len(items)), key=lambda i: at[i][1])
+        out = []
+        while left:
+            k = next((k for k, a in enumerate(left) if not any(b != a and before(b, a) for b in left)), 0)
+            out.append(items[left.pop(k)])
+        return out
 
     return cut(found)
 
@@ -126,7 +205,7 @@ def guess(model, picture, w, h):
             found.append({"box": box, "quad": quad_of(corners, box, w, h), "sure": float(s), "cut": cut})
     if len(spans) > 1:
         found = merged(found)
-    return ordered(found, w, h)
+    return ordered(found)
 
 
 def main():

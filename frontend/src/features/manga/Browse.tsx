@@ -10,6 +10,7 @@ import { AniTile } from './AniTile';
 import { useAniFound } from './aniPick';
 import { entriesOf, viewOf } from './found';
 import './manga.css';
+import { Loader } from '../../components/Loader';
 
 /*
  * The Manga shelf's Browse, opened by its button in the header: one search across every place Breader's computer looks (MangaDex
@@ -46,8 +47,15 @@ const KINDS: Array<{ v: MangaKind; label: string; about: string }> = [
   { v: 'manga', label: 'Manga', about: 'Manga: from Japan' },
   { v: 'manhwa', label: 'Manhwa', about: 'Manhwa: from Korea, mostly webtoons' },
   { v: 'manhua', label: 'Manhua', about: 'Manhua: from China' },
-  { v: 'comics', label: 'Comics', about: 'Comics: from everywhere else' },
 ];
+const SHOWN_KINDS = KINDS.map((k) => k.v);
+
+/** The kinds a saved choice still asks for, as Comics isn't offered; with none left, every kind shown. */
+function shownKinds(saved: MangaKind[]): MangaKind[] {
+  const kept = saved.filter((k) => SHOWN_KINDS.includes(k));
+  if (kept.length === 0) return SHOWN_KINDS;
+  return kept;
+}
 
 /**
  * ask: the search these are for (askKey), so a lot asked for by an earlier one is never added.
@@ -80,6 +88,15 @@ let keptAni: { found: Extract<AniFound, { state: 'ready' }>; top: number } | nul
 
 /** Whether an order is one of AniList's lists. */
 const isAni = (sort: BrowseSort): sort is AniListSort => (ANILIST_SORTS as readonly string[]).includes(sort);
+
+/**
+ * The last few searches shown (an order, the dots, a search typed), by askKey, and when each was
+ * last asked of the server. Going back to one shows it at once and asks again quietly, what's new
+ * joining the end; one older than LOT_MS is asked afresh, as Popular and Updated move on.
+ */
+const lots = new Map<string, { found: Extract<Found, { state: 'ready' }>; at: number }>();
+const LOTS = 6;
+const LOT_MS = 10 * 60_000;
 
 /**
  * What's shown, with what's come since added: the cards already shown stay where they are, as a
@@ -123,13 +140,15 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   /** The next lot, asked for as soon as the one before it came: the search it's for, and where it starts. */
   const ahead = useRef<{ ask: string; at: string; lot: Promise<Lot> } | null>(null);
 
+  const kinds = shownKinds(prefs.kinds);
+
   // Searching, the best match comes first; otherwise the order picked. AniList's lists aren't searches.
   const aniSort: AniListSort | null = !q && isAni(prefs.sort) ? prefs.sort : null;
   let sort: MangaSort = prefs.sort === 'trending' ? 'popular' : prefs.sort;
   if (q) sort = 'relevance';
-  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds: prefs.kinds });
-  const aniKey = JSON.stringify({ sort: aniSort, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds: prefs.kinds });
-  const aniPage = (page: number) => anilist.list({ sort: aniSort ?? 'popular', page, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds: prefs.kinds });
+  const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds });
+  const aniKey = JSON.stringify({ sort: aniSort, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds });
+  const aniPage = (page: number) => anilist.list({ sort: aniSort ?? 'popular', page, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds });
   const aniCards = useMemo(() => (ani.state === 'ready' && ani.ask === aniKey ? ani.items : []), [ani, aniKey]);
   const { shown: aniShown, settled: aniSettled } = useAniFound(aniCards, prefs);
 
@@ -143,7 +162,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
    * A lot of results from every place, from where the search had got to. Only series that can be
    * read here show, and a slow place shows with the next lot, so a lot can be short or even empty.
    */
-  const searchOf = (next: string | null) => ({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds: prefs.kinds, next: next ?? undefined });
+  const searchOf = (next: string | null) => ({ q, lang: prefs.lang || undefined, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds, next: next ?? undefined });
   const fetchLot = async (next: string | null): Promise<Lot> => {
     const r = await mangadex.search(searchOf(next));
     return { items: r.items, next: r.next };
@@ -175,21 +194,32 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     if (found === restored.current && found.ask === askKey && !tries) return;
     let live = true;
     back.current = 0;
-    setFound({ state: 'loading' });
-    scroller.current?.scrollTo({ top: 0 });
-    // The first lot shows as each place brings its series, not once the slowest has.
     const ask = askKey;
+    const hit = lots.get(ask);
+    const had = hit && Date.now() - hit.at < LOT_MS && !tries ? hit.found : null;
+    setFound(had ?? { state: 'loading' });
+    scroller.current?.scrollTo({ top: 0 });
+    // The first lot shows as each place brings its series, not once the slowest has. Over one
+    // shown from before, what's new joins quietly, and the next lot is still where it had got to.
     const add = (items: MangaFound[], next: string | null, coming: boolean) => {
       if (!live) return;
       setFound((f) => {
+        if (had && f.state === 'ready' && f.ask === ask) return { ...f, items: joined(f.items, items, q) };
         let shown: MangaFound[] = [];
         if (f.state === 'ready' && f.ask === ask) shown = f.items;
         return { state: 'ready', ask, items: joined(shown, items, q), next, coming };
       });
     };
     mangadex.searchAsItComes(searchOf(null), (items) => add(items, null, true)).then(
-      (r) => add(r.items, r.next, false),
-      (e) => { if (live) setFound({ state: 'error', message: messageOf(e) }); },
+      (r) => {
+        const l = lots.get(ask);
+        if (l) l.at = Date.now();
+        add(r.items, r.next, false);
+      },
+      (e) => {
+        // One shown from before stays, rather than going to an error.
+        if (live) setFound((f) => (had && f.state === 'ready' && f.ask === ask ? f : { state: 'error', message: messageOf(e) }));
+      },
     );
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,6 +297,10 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   useEffect(() => {
     if (found.state !== 'ready' || found.coming) return;
     kept = { text, found, top: kept?.found.ask === found.ask ? kept.top : 0 };
+    const at = lots.get(found.ask)?.at ?? Date.now();
+    lots.delete(found.ask);
+    lots.set(found.ask, { found, at });
+    if (lots.size > LOTS) lots.delete(lots.keys().next().value!);
   }, [text, found]);
 
   // The next lot is asked for as soon as one comes, so it's mostly here before the end is.
@@ -335,16 +369,16 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   };
 
   const flipKind = (kind: MangaKind) => {
-    const on = prefs.kinds.includes(kind);
+    const on = kinds.includes(kind);
     // One kind stays on, as a search for none would find nothing.
-    if (on && prefs.kinds.length === 1) return;
-    let kinds: MangaKind[];
-    if (on) kinds = prefs.kinds.filter((k) => k !== kind);
-    else kinds = MANGA_KINDS.filter((k) => k === kind || prefs.kinds.includes(k));
-    set({ kinds });
+    if (on && kinds.length === 1) return;
+    let next: MangaKind[];
+    if (on) next = kinds.filter((k) => k !== kind);
+    else next = MANGA_KINDS.filter((k) => k === kind || kinds.includes(k));
+    set({ kinds: next });
   };
 
-  let nothing = 'Nothing here yet.';
+  let nothing = '';
   if (q) {
     nothing = `Nothing goes by “${q}”`;
     if (prefs.lang) nothing += ` in ${langName(prefs.lang)}`;
@@ -382,7 +416,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
               </li>
             ))}
           </ul>
-          <div ref={end} className="mdx-end">{ani.next || !aniSettled ? <span className="add-spinner" /> : null}</div>
+          <div ref={end} className="mdx-end">{ani.next || !aniSettled ? <Loader /> : null}</div>
         </>
       );
     }
@@ -400,7 +434,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       </div>
     );
   } else if (items.length === 0 && !found.next) {
-    body = <div className="mdx-note"><p>{nothing}</p></div>;
+    if (q) body = <div className="mdx-note"><p>{nothing}</p></div>;
   } else {
     body = (
       <>
@@ -423,7 +457,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
             </li>
           ))}
         </ul>
-        <div ref={end} className="mdx-end">{found.next || found.coming ? <span className="add-spinner" /> : null}</div>
+        <div ref={end} className="mdx-end">{found.next || found.coming ? <Loader /> : null}</div>
       </>
     );
   }
@@ -448,7 +482,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
           <div className="mdx-right">
             <div className="mdx-dots" role="group" aria-label="Show">
               {KINDS.map((k) => (
-                <button key={k.v} type="button" className="mdx-dot" aria-pressed={prefs.kinds.includes(k.v)} title={k.about} onClick={() => flipKind(k.v)}>
+                <button key={k.v} type="button" className="mdx-dot" aria-pressed={kinds.includes(k.v)} title={k.about} onClick={() => flipKind(k.v)}>
                   <span className="mdx-led" />
                   {k.label}
                 </button>

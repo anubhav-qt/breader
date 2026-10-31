@@ -169,6 +169,13 @@
       "when": 1792881873171,
       "tag": "0023_ai_fills",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793257996864,
+      "tag": "0024_panel_order",
+      "breakpoints": true
     }
   ]
 }

@@ -22,7 +22,7 @@ const PICTURES: Record<string, string> = {
   jxl: 'image/jxl',
 };
 
-const typeOf = (name: string): string | undefined => PICTURES[name.slice(name.lastIndexOf('.') + 1).toLowerCase()];
+export const typeOf = (name: string): string | undefined => PICTURES[name.slice(name.lastIndexOf('.') + 1).toLowerCase()];
 /** The Mac's resource forks and hidden files are never pages. */
 const hidden = (name: string) => name.split('/').some((s) => s.startsWith('.') || s === '__MACOSX');
 const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
@@ -108,14 +108,14 @@ export function contentsOf(paths: string[]): TocItem[] {
   return toc.length > 1 ? toc : [];
 }
 
-interface Page {
+export interface Page {
   name: string;
   read: (type: string) => Promise<Blob>;
   start: (n: number) => Promise<Uint8Array>;
 }
 
 /** The zip's files: read in place, or through JSZip when this browser can't inflate or the zip is odd. */
-async function filesOf(blob: Blob): Promise<Page[]> {
+export async function filesOf(blob: Blob): Promise<Page[]> {
   try {
     const entries = await listZip(blob);
     if (entries.some((e) => e.method === 8) && !canInflate()) throw new Error('No inflating here');

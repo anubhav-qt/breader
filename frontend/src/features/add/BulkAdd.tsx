@@ -13,6 +13,7 @@ import { springs } from '../../lib/springs';
 import { detectSeries, seriesKey, spellSeries, type FoundSeries, type SeriesName } from '../gallery/series';
 import { SeriesField, type SeriesValue } from '../gallery/SeriesField';
 import { GenreField } from '../gallery/GenreField';
+import type { Where } from './AddWhere';
 import { WhoReads } from './WhoReads';
 
 /*
@@ -42,7 +43,8 @@ interface Props {
   /** A colour from the library's pool, leaving out those the batch has taken. */
   nextColor: (taken?: string[]) => string;
   genreFor: (book: { author: string; series?: string; subjects?: string[] }) => string;
-  onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean }) => Promise<void>;
+  onAdded: (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean; tokens?: string[] }) => Promise<void>;
+  whereTo: () => Promise<Where | null>;
   onBack: () => void;
   /** The books are in: how many, the first one's title, and whether any couldn't be added. */
   onDone: (count: number, title: string, failed: boolean) => void;
@@ -51,7 +53,7 @@ interface Props {
 const MB = 1024 * 1024;
 const sizeText = (b: number) => (b >= MB ? `${(b / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
-export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor, onAdded, onBack, onDone }: Props) {
+export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor, onAdded, whereTo, onBack, onDone }: Props) {
   const [rows, setRows] = useState<Row[]>(() => files.map((file, id) => ({ id, file, state: 'reading' })));
   const [shared, setShared] = useState(defaultShared);
   const [readAlong, setReadAlong] = useState(false);
@@ -117,6 +119,8 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
   };
 
   const addAll = async () => {
+    const where = await whereTo();
+    if (!where) return;
     const batch = ready;
     const known = [...knownSeries, ...batch.map((r) => ({ name: r.series.name.trim(), count: 1 })).filter((s) => s.name)];
     let added = 0;
@@ -137,7 +141,7 @@ export function BulkAdd({ files, defaultShared, knownSeries, nextColor, genreFor
       if (r.genre) rec.genre = r.genre;
       try {
         const cover = await coverOf(r.book);
-        await onAdded(rec, r.file, cover, { ai: readAlong && r.format !== 'CBZ' });
+        await onAdded(rec, r.file, cover, { ai: readAlong && r.format !== 'CBZ', tokens: where.tokens });
         r.book.cleanup?.();
         setRows((rs) => rs.filter((x) => x.id !== r.id));
         added++;

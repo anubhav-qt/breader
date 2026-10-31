@@ -186,9 +186,11 @@ label.clbl { display: block; }
 .fv-flow {
   font-family: var(--rf);
   font-size: var(--rs);
+  font-weight: var(--rw);
   line-height: var(--rl);
   overflow-wrap: break-word;
 }
+.fv-flow :is(b, strong, th) { font-weight: var(--rws); }
 .fv.is-pages .fv-flow { height: 100%; column-width: var(--cw); column-gap: var(--gap); column-fill: auto; }
 .fv.is-scroll .fv-flow { width: var(--cw); max-width: calc(100% - 48px); margin: 0 auto; padding: 88px 0 24px; }
 @media (max-width: 639.98px) {
@@ -198,7 +200,7 @@ label.clbl { display: block; }
 .fv-flow p { margin: 0; text-wrap: pretty; }
 .fv-flow img, .fv-flow svg { max-width: 100%; height: auto; display: block; margin: 0.8em auto; break-inside: avoid; }
 .fv.is-pages .fv-flow img, .fv.is-pages .fv-flow svg { max-height: calc(100dvh - 190px); object-fit: contain; }
-.fv-flow h1, .fv-flow h2, .fv-flow h3, .fv-flow h4 { font-weight: 700; line-height: 1.05; margin: 1.4em 0 0.6em; break-after: avoid; text-wrap: balance; }
+.fv-flow h1, .fv-flow h2, .fv-flow h3, .fv-flow h4 { font-weight: var(--rws); line-height: 1.05; margin: 1.4em 0 0.6em; break-after: avoid; text-wrap: balance; }
 .fv-flow h1 { font-size: 1.9em; }
 .fv-flow h2 { font-size: 1.6em; }
 .fv-flow h3 { font-size: 1.3em; }
@@ -219,7 +221,7 @@ label.clbl { display: block; }
 .st-book .fv-flow p + p { text-indent: 1.5em; }
 .st-book .fv-flow h1, .st-book .fv-flow h2, .st-book .fv-flow h3 { text-align: center; }
 /* A placeholder's author line isn't prose, so it never takes the drop cap. */
-.st-book .fv-flow :is(h1, h2) + p:not(.ph-author)::first-letter { -webkit-initial-letter: 2; initial-letter: 2; font-weight: 700; margin-right: 0.08em; }
+.st-book .fv-flow :is(h1, h2) + p:not(.ph-author)::first-letter { -webkit-initial-letter: 2; initial-letter: 2; font-weight: var(--rws); margin-right: 0.08em; }
 .st-modern .fv-flow p { margin-bottom: 0.8em; }
 .st-modern .fv-flow h1, .st-modern .fv-flow h2 { font-size: 2em; }
 
@@ -240,6 +242,12 @@ label.clbl { display: block; }
   align-items: center;
   z-index: 2;
   cursor: pointer;
+}
+/* A quick double tap would otherwise select the arrow, and a selection holds the next taps. */
+.fv-zone, .fv-zone * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 .fv-zone.is-prev { left: 0; justify-content: flex-start; padding-left: 18px; }
 .fv-zone.is-next { right: 0; justify-content: flex-end; padding-right: 18px; }
@@ -281,6 +289,14 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-broken { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 12px; text-align: center; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
 .mg-broken button { height: 34px; padding: 0 14px; border-radius: 10px; background: var(--r-fill); box-shadow: 0 0 0 1px var(--r-line); font: var(--ui-w) 13px/1 var(--ui); color: var(--r-fg); }
 .mg-broken button:hover { background: var(--r-line); }
+/* A page whose picture is still on its way says so, over its grey box; the picture waits unseen until it's drawn. */
+.mg-pg img.is-waiting { opacity: 0; }
+.mg-wait { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--r-mu); }
+.mg-wait-in { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 12px; text-align: center; }
+/* The loader in the reader's colours, its turning page on the grey box. */
+.mg-wait .ld { color: var(--r-fg); --ld-bg: var(--r-fill); }
+/* A tall page in the scroll is many screens long: the label stays in the middle of the screen while the page is in view, and in the middle of a page shorter than that. */
+.mg-scroll .mg-wait-in { position: sticky; top: calc(50% - 49px); bottom: calc(50% - 49px); }
 /* A click on a picture brings its panel closer (MangaView.tsx); on a touch screen, two taps. */
 .mg-pg img { cursor: zoom-in; }
 .mg-scroll { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
@@ -330,3 +346,9 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .tgrow + .p-seats { margin: -8px 0 16px; }
 .seat-offer p { margin: 0; font: var(--ui-w) 14px/1.5 var(--ui); }
 .seat-offer-b { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.cb-ask { margin: 0; font-size: 16px; line-height: 1.4; }
+.cb-actions { display: flex; gap: 8px; margin-top: 20px; }
+.cb-actions .btn { flex: 1 1 0; min-width: 0; padding: 0 12px; }
+.cb-actions .btn span { overflow: hidden; text-overflow: ellipsis; }
+.rd .cb .btn-quiet { background: var(--fill); color: var(--ink); }

@@ -259,16 +259,19 @@ export function AiSwitch({ id, label, note, why, on, locked = false, p, book, st
 }
 
 /** A book in the library: its switch, on for good once said yes to, and its progress, asked again while it shows. */
-export function BookAiSwitch({ bookId, color, on, label, note, why, onTurnOn }: {
+export function BookAiSwitch({ bookId, color, on, label, note, why, progress, onTurnOn }: {
   bookId: string;
   color: string;
   on: boolean;
   label: string;
   note?: string;
   why?: string;
+  /** Its progress, when the caller already follows it; otherwise this follows it. */
+  progress?: AiProgress;
   onTurnOn: () => void;
 }) {
-  const p = useAiProgress(bookId, on);
+  const own = useAiProgress(bookId, on && !progress);
+  const p = progress ?? own;
   return <AiSwitch id="ep-ai" label={label} note={note} why={why} on={on} locked={on} p={p} book={bookId} style={colorVars(color)} onChange={onTurnOn} />;
 }
 

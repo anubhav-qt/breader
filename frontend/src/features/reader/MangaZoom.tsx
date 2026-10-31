@@ -90,11 +90,10 @@ export const widestOf = (natural: number) => natural * SHARPEST;
 
 /**
  * Where a page goes so a part of it, with the page around it, fits a screen (or an area) vw by vh,
- * shown no wider than `most`: its width there, and its top left corner.
+ * `pad` in from its edges, shown no wider than `most`: its width there, and its top left corner.
  */
-export function fitOf(part: Box, ratio: number, most: number, vw: number, vh: number): { s: number; left: number; top: number } {
+export function fitOf(part: Box, ratio: number, most: number, vw: number, vh: number, pad = padOf(vw)): { s: number; left: number; top: number } {
   const box = aroundOf(part);
-  const pad = padOf(vw);
   const s = Math.min((vw - 2 * pad) / box.w, (vh - 2 * pad) / (box.h * ratio), most);
   const left = vw / 2 - s * (box.x + box.w / 2);
   const top = vh / 2 - s * ratio * (box.y + box.h / 2);

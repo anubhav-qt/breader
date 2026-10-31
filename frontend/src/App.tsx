@@ -1,13 +1,14 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { animate } from 'motion';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
 import { BulkBar, type BulkAction } from './components/BulkBar';
 import { Header, type Tab } from './components/Header';
-import { IconAddBook, IconLock, IconPeople, IconPlus, IconStar, IconTrash } from './components/icons';
+import { IconAddBook, IconLock, IconPeople, IconStar, IconTrash } from './components/icons';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { DesignBar } from './features/design/DesignBar';
 import { Toast, type ToastMessage } from './components/Toast';
+import { AddWhat } from './features/add/AddWhat';
 import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
@@ -23,6 +24,7 @@ import { useLabels } from './data/labels';
 import { addLibrary, keepShelfCover, libraryName, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
+import { AddWhere, type Where } from './features/add/AddWhere';
 import { KeyDialog } from './features/add/KeyDialog';
 import { SettingsMenu } from './features/account/SettingsMenu';
 import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
@@ -41,6 +43,7 @@ import { genreOf, mangadex, readMangaPrefs, sources, type MangaPrefs } from './l
 import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
+import { Loader } from './components/Loader';
 
 /** The library; a book open (#/read/<id>); or a series' page (#/manga/<id>, by the id of the place it was picked in). */
 type Route = { name: 'library' } | { name: 'read'; id: string } | { name: 'series'; id: string };
@@ -111,6 +114,26 @@ function foundOf(b: BookRecord): MangaFound[] | null {
 const devTools = import.meta.env.DEV;
 /** Where the eye over manga's covers is kept, on this device. */
 const COVERS_ONLY = 'breader.manga.coversOnly.v1';
+/** Light or dark, once the sun-or-moon button has picked one, on this device (read early by index.html too). */
+const THEME = 'breader.theme.v1';
+const DARK = '(prefers-color-scheme: dark)';
+
+/** The device is dark, kept up as it changes. */
+function useDeviceDark(): boolean {
+  return useSyncExternalStore(
+    (change) => {
+      const m = window.matchMedia(DARK);
+      m.addEventListener('change', change);
+      return () => m.removeEventListener('change', change);
+    },
+    () => window.matchMedia(DARK).matches,
+  );
+}
+
+function readTheme(): AppTheme {
+  const v = readLocal<unknown>(THEME, 'auto');
+  return v === 'light' || v === 'dark' ? v : 'auto';
+}
 
 function readParam<T extends string>(name: string, allowed: readonly T[], fallback: T): T {
   const v = new URLSearchParams(window.location.search).get(name) as T | null;
@@ -220,19 +243,21 @@ export default function App() {
   useEffect(() => { writeLocal('breader.category.v1', category); }, [category]);
   /** The laptop has MangaDex (null until it says), and how this device looks through it. */
   const [mdOn, setMdOn] = useState<boolean | null>(null);
+  /** The + button's question: books or manga. */
+  const [choosing, setChoosing] = useState(false);
   const [mdPrefs, setMdPrefs] = useState<MangaPrefs>(readMangaPrefs);
   /** A series' page, over the library, and under the reader while a chapter read from it is open. */
   const [sheet, setSheet] = useState<SeriesAt | null>(() => seriesNow(parseHash()));
   /** A chapter picked on a series' page: where its series opens, this once. */
   const [startAt, setStartAt] = useState<{ id: string; pos: Position } | null>(null);
   useEffect(loadSoon, []);
-  // Whether the Manga shelf has its Browse button: the laptop says. Out of reach, it stays and Browse says so.
+  // Whether Add can open Browse: the laptop says. Out of reach, it stays and Browse says so.
   useEffect(() => {
-    if (category !== 'manga' || mdOn !== null) return;
+    if ((category !== 'manga' && !choosing) || mdOn !== null) return;
     let live = true;
     mangadex.state().then((st) => { if (live) setMdOn(st.on); }, () => { if (live) setMdOn(true); });
     return () => { live = false; };
-  }, [category, mdOn]);
+  }, [category, choosing, mdOn]);
   if ((category !== 'manga' || mdOn === false) && tab === 'browse') setTab('mine');
   /**
    * Picking books to act on together: where (the shelf, the library and, for a shared one, which)
@@ -251,7 +276,10 @@ export default function App() {
   const [visited, setVisited] = useState<ReadonlySet<Category>>(() => new Set([category]));
   if (!visited.has(category)) setVisited(new Set([...visited, category]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
-  const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, 'auto') : 'auto'));
+  // The device's until the sun-or-moon button is first tapped, then that one. The preview bar's ?theme= wins.
+  const [theme, setTheme] = useState<AppTheme>(() => (devTools ? readParam('theme', ['auto', 'light', 'dark'] as const, readTheme()) : readTheme()));
+  const deviceDark = useDeviceDark();
+  const dark = theme === 'dark' || (theme === 'auto' && deviceDark);
   const labels = useLabels();
   /** Manga's covers without their titles: off until the reader turns it on, then kept on this device. */
   const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
@@ -287,7 +315,12 @@ export default function App() {
     const root = document.documentElement;
     if (theme === 'auto') delete root.dataset.theme;
     else root.dataset.theme = theme;
-    writeParam('theme', theme, 'auto');
+    // The browser's bars go with the page, not only with the device.
+    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
+      if (theme === 'auto') m.content = m.media.includes('dark') ? '#000000' : '#FFFFFF';
+      else m.content = theme === 'dark' ? '#000000' : '#FFFFFF';
+    });
+    if (devTools) writeParam('theme', theme, 'auto');
   }, [theme]);
   useEffect(() => { writeParam('preview', preview, 'live'); }, [preview]);
 
@@ -510,10 +543,26 @@ export default function App() {
     if (found) openSeries(found, labels.mine);
   }, [openSeries, labels.mine]);
 
+  /** A series' pages need a library to go to, so a reader without one gets one. Two taps at once make one key. */
+  const makingKey = useRef<Promise<void> | null>(null);
+  const ensureKey = useCallback(async () => {
+    if (lib.key) return;
+    if (!makingKey.current) {
+      const key = newLibraryKey();
+      makingKey.current = lib.setKey(key).then(() => setFreshKey(key));
+    }
+    try {
+      await makingKey.current;
+    } finally {
+      makingKey.current = null;
+    }
+  }, [lib]);
+
   const startLoad = useCallback(async (id: string, given?: BookRecord, at?: Position) => {
     const rec = given ?? recordById.get(id);
     if (!rec) return null;
     try {
+      if (rec.source === 'remote') await ensureKey();
       // A series from a Suwayomi source opens a few chapters around its place.
       const book = await loadRecord(rec, at ?? lib.reads[id]?.pos);
       loadedId.current = id;
@@ -534,7 +583,7 @@ export default function App() {
       else say(text);
       return null;
     }
-  }, [recordById, lib, say, chaptersOf]);
+  }, [recordById, lib, say, chaptersOf, ensureKey]);
 
   const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect) => {
     openAnimDone.current = false;
@@ -641,13 +690,9 @@ export default function App() {
     await lib.addRemote(rec, cover);
     setPreview('live');
     // As with a first book: a key gives it somewhere to sync, and its pages a library to go to.
-    if (!lib.key) {
-      const key = newLibraryKey();
-      await lib.setKey(key);
-      setFreshKey(key);
-    }
+    await ensureKey();
     return rec;
-  }, [lib]);
+  }, [lib, ensureKey]);
 
   /**
    * Series on their way into My manga, by the url they're read from. Its cover can take half a
@@ -686,10 +731,30 @@ export default function App() {
     });
   }, [lib, addSeries, startLoad, finishOpen]);
 
+  /** Where a book being added goes: only asked when the reader has other people's libraries to add to. */
+  const [askingWhere, setAskingWhere] = useState<((where: Where | null) => void) | null>(null);
+  const whereTo = useCallback((): Promise<Where | null> => {
+    if (sharing.saved.length === 0) return Promise.resolve({ tokens: [] });
+    return new Promise((resolve) => setAskingWhere(() => resolve));
+  }, [sharing.saved.length]);
+  const chooseWhere = (where: Where | null) => {
+    askingWhere?.(where);
+    setAskingWhere(null);
+  };
+  /** What a book added to these libraries says it joined. */
+  const namesOfLibraries = useCallback((tokens: string[]) => tokens.map((t) => libraryName(sharing, t)).join(', '), [sharing]);
+
   const addSeriesOnly = useCallback(async (about: About, picked: Picked) => {
+    const where = await whereTo();
+    if (!where) return;
     const rec = await addSeries(about, withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also));
+    if (where.tokens.length > 0) {
+      await lib.addToShared(rec, where.tokens);
+      say(`Added “${rec.title}” to ${namesOfLibraries(where.tokens)}`);
+      return;
+    }
     say(`Added “${rec.title}” to ${labels.mine}`);
-  }, [addSeries, say, labels.mine]);
+  }, [addSeries, say, labels.mine, whereTo, lib, namesOfLibraries]);
 
   /**
    * A series in My manga, read from another copy from now on (MangaSheet.tsx). Its place stays, as
@@ -939,15 +1004,22 @@ export default function App() {
     };
   }, [route.name, adding, addFiles]);
 
-  const onAdded = useCallback(async (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean }) => {
+  const onAdded = useCallback(async (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean; tokens?: string[] }) => {
     await lib.addBook(rec, data, cover);
     if (opts?.ai) lib.editBook(rec.id, { ai: true });
     setPreview('live');
+    const tokens = opts?.tokens ?? [];
+    if (tokens.length > 0) {
+      await lib.addToShared(rec, tokens);
+      setTab('shelf');
+      say(`Added “${rec.title}” to ${namesOfLibraries(tokens)}`);
+      return;
+    }
     setTab('mine');
     const on = categoryOf(rec);
     setCategory(on);
     say(`Added “${rec.title}” to ${labels.mine}${rec.shared ? ', shared with your key' : ''}`);
-  }, [lib, say, labels.mine]);
+  }, [lib, say, labels.mine, namesOfLibraries]);
 
   /* The Key dialog's usual answer to someone's key: a shared library of its own, beside My books. */
   const openShared = useCallback(async (key: string) => {
@@ -1209,23 +1281,22 @@ export default function App() {
     setCoversOnly(next);
     writeLocal(COVERS_ONLY, next);
   };
-  /** Manga is found in Browse, which this opens, where the laptop has anywhere to look. */
-  const browseButton = mdOn !== false && (
-    <button type="button" className="btn btn-primary" onClick={() => setTab('browse')}><IconPlus /> Browse</button>
-  );
-  /** An empty shared library, of manga or books: the reader's own, with a way to add; someone else's, why it's empty. */
-  const emptyShelf = (manga: boolean) => showing === 'own' ? (
-    <div className="gallery-empty">
-      <p>Nothing shared yet.</p>
-      {manga ? browseButton : <button type="button" className="btn btn-primary" onClick={() => setAdding({ mode: 'file' })}><IconPlus /> Add a book</button>}
-    </div>
-  ) : others?.state === 'closed' ? (
-    <div className="gallery-empty">
-      <p>This key doesn’t open {libraryName(sharing, showing)} any more.</p>
-    </div>
-  ) : (
-    <div className="gallery-empty"><p>{others?.state === 'ready' ? `Nothing is shared in ${libraryName(sharing, showing)} yet.` : 'Opening…'}</p></div>
-  );
+  /**
+   * An empty shared library, of manga or books: the reader's own has the Add a book or Add a manga
+   * button every empty library has; someone else's says why it's empty.
+   */
+  const emptyShelf = () => {
+    if (showing === 'own') return undefined;
+    if (others?.state === 'closed') {
+      return (
+        <div className="gallery-empty">
+          <p>This key doesn’t open {libraryName(sharing, showing)} any more.</p>
+        </div>
+      );
+    }
+    if (others?.state === 'ready') return <div className="gallery-empty" />;
+    return <div className="gallery-empty"><p>Opening…</p></div>;
+  };
   // Every library seen, on every shelf seen: all but the one showing are hidden.
   const galleries: Array<{ c: Category; t: 'mine' | 'shelf' }> = [];
   for (const c of CATEGORIES) {
@@ -1234,13 +1305,10 @@ export default function App() {
       if (seen.has(t)) galleries.push({ c, t });
     }
   }
-  /** No manga yet, and Browse to find some. */
-  const emptyManga = (
-    <div className="gallery-empty">
-      <p>No manga yet.</p>
-      {browseButton}
-    </div>
-  );
+  /** An empty library's Add a book opens Add book; its Add a manga opens Browse, where the laptop has anywhere to look. */
+  const addTo = (c: Category) => (c === 'manga' ? () => setTab('browse') : () => setAdding({ mode: 'file' }));
+  /** Nowhere to find manga: an empty manga library, without its button. */
+  const noBrowse = <div className="gallery-empty" />;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -1252,11 +1320,9 @@ export default function App() {
             onCategory={setCategory}
             tab={tab}
             counts={{ mine: items.mine.length, shelf: items.shelf.length }}
-            browse={mdOn !== false}
             labels={labels}
             onTab={setTab}
-            onAdd={() => setAdding({ mode: 'file' })}
-            onBrowse={() => setTab('browse')}
+            onAdd={() => setChoosing(true)}
             libraries={(close) => (
               <LibraryMenu
                 key="libraries"
@@ -1268,6 +1334,12 @@ export default function App() {
               />
             )}
             ownMenu={() => <OwnLibraryMenu key="own" name={labels.mine} count={items.mine.length} category={category} />}
+            dark={dark}
+            onTheme={() => {
+              const next = dark ? 'light' : 'dark';
+              setTheme(next);
+              writeLocal(THEME, next);
+            }}
             settings={(
               <SettingsMenu
                 account={account}
@@ -1297,14 +1369,14 @@ export default function App() {
               labelledBy={`tab-${t}`}
               hidden={t !== tab || c !== category}
               onOpen={(b, rect) => void onOpen(b, rect)}
-              onAdd={() => setAdding({ mode: 'file' })}
+              onAdd={addTo(c)}
               onEdit={(id, patch) => void editBook(id, patch)}
               // Reading shows only in My books.
               onFinish={t === 'mine' ? (b, finished) => lib.setFinished(b.id, finished, b) : undefined}
               onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
               onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
               onChapters={chaptersOf}
-              empty={t === 'shelf' ? emptyShelf(c === 'manga') : c === 'manga' ? emptyManga : undefined}
+              empty={(t === 'shelf' ? emptyShelf() : undefined) ?? (c === 'manga' && mdOn === false ? noBrowse : undefined)}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
                 // Out of their books already: not shared either, it's nowhere, so it goes.
@@ -1353,7 +1425,7 @@ export default function App() {
 
       {shown && shownRec && (
         <div className={`rd-host${leaving ? ' is-leaving' : ''}`} ref={hostRef}>
-          <Suspense fallback={<div className="loading"><span className="add-spinner" /> Opening…</div>}>
+          <Suspense fallback={<div className="loading"><Loader /> Opening…</div>}>
           <Reader
             key={shown.id}
             record={shownRec}
@@ -1379,7 +1451,7 @@ export default function App() {
         </div>
       )}
       {route.name === 'read' && !reading && !opening && (
-        <div className="loading"><span className="add-spinner" /> Opening…</div>
+        <div className="loading"><Loader /> Opening…</div>
       )}
 
       <AnimatePresence>
@@ -1398,7 +1470,7 @@ export default function App() {
               if (loadedId.current === opening.id) finishOpen(opening.id);
             }}
           >
-            {loaded?.id !== opening.id && <span className="opening-note"><span className="add-spinner" /> Opening…</span>}
+            {loaded?.id !== opening.id && <span className="opening-note"><Loader /> Opening…</span>}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1410,6 +1482,14 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {choosing && (
+          <AddWhat
+            key="add-what"
+            onBooks={() => { setChoosing(false); setCategory('books'); setAdding({ mode: 'file' }); }}
+            onManga={mdOn === false ? null : () => { setChoosing(false); setCategory('manga'); setTab('browse'); }}
+            onClose={() => setChoosing(false)}
+          />
+        )}
         {adding && (
           <Suspense key="add" fallback={null}>
           <AddBook
@@ -1423,11 +1503,13 @@ export default function App() {
             genreFor={guessGenre}
             onClose={() => setAdding(null)}
             onAdded={onAdded}
+            whereTo={whereTo}
             onKey={lib.setKey}
             onLogin={loggedIn ? undefined : loginInstead}
           />
           </Suspense>
         )}
+        {askingWhere && <AddWhere key="add-where" onChoose={chooseWhere} />}
         {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
         {askingAll && (
           <RemoveDialog

@@ -144,7 +144,6 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
           shelves={shelves}
           // Genres all show at once; series and dates come in as the library scrolls to them.
           lazy={view !== 'genre'}
-          empty={view === 'series' ? 'No series yet. Give two books the same series name and they gather here.' : undefined}
           authors={authors}
           root={root}
           now={now}
@@ -166,10 +165,9 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
 type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'picked' | 'onOpen' | 'onEdit' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
   shelves: Shelf[];
   lazy: boolean;
-  empty?: string;
 };
 
-function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
+function ShelfList({ shelves, lazy, root, ...rest }: ListProps) {
   const [limit, setLimit] = useState(PAGE);
   const end = useRef<HTMLDivElement>(null);
   const more = lazy && limit < shelves.length;
@@ -184,7 +182,6 @@ function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
     return () => io.disconnect();
   }, [more, limit, root]);
 
-  if (!shelves.length && empty) return <p className="shelf-empty">{empty}</p>;
   return (
     <>
       {(lazy ? shelves.slice(0, limit) : shelves).map((s, i) => <Row key={s.key} shelf={s} index={i} {...rest} />)}
@@ -193,7 +190,7 @@ function ShelfList({ shelves, lazy, empty, root, ...rest }: ListProps) {
   );
 }
 
-type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'empty' | 'root'> & { shelf: Shelf; index: number };
+type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'root'> & { shelf: Shelf; index: number };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
 function Row({ shelf, index, authors, now, enter, indexBase, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: RowProps) {

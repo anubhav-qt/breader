@@ -115,7 +115,7 @@ export function CastSection({ book, design, playing, engine, children }: { book:
   } else if (!people) {
     body = <p className="cs-say">Offline.</p>;
   } else if (!people.length) {
-    body = <p className="cs-say">Nobody’s spoken yet.</p>;
+    body = null;
   } else {
     const cast = castOf(book, people, engine, state);
     // Back to the AI's picks, once reshuffled, where the AI picked voices.

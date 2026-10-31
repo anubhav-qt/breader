@@ -8,6 +8,8 @@ export type Style = 'book' | 'modern';
 export type ThemeName = 'auto' | 'day' | 'warm' | 'dusk' | 'night';
 export type FontKey = 'dongle' | 'libron' | 'oxanium' | 'literata' | 'garamond' | 'atkinson';
 export type Layout = 'pages' | 'scroll';
+/** How heavy the reading text is. */
+export type Weight = 'light' | 'regular' | 'bold';
 /** A manga can be read a panel at a time too, each fitted to the screen (MangaView.tsx). */
 export type MangaLayout = Layout | 'panels';
 /**
@@ -15,6 +17,11 @@ export type MangaLayout = Layout | 'panels';
  * from (ai/panels), never a manhwa, manhua or comic. One whose catalogue doesn't say, or a file, can.
  */
 export const panelled = (book: MangaBook) => (book.remote?.origin ?? 'manga') === 'manga';
+/** A manhwa or manhua is a long strip, so it reads scrolled and has no other layout to pick. */
+export function scrollOnly(book: MangaBook): boolean {
+  const origin = book.remote?.origin;
+  return origin === 'manhwa' || origin === 'manhua';
+}
 /** Which way a manga's pages turn: right to left as manga is read, or left to right as comics are. */
 export type MangaDir = 'rtl' | 'ltr';
 
@@ -25,6 +32,7 @@ export interface StyleSettings {
   measure: number;
   layout: Layout;
   justify: boolean;
+  weight: Weight;
 }
 
 export interface ReaderSettings {
@@ -34,16 +42,13 @@ export interface ReaderSettings {
   book: StyleSettings;
   modern: StyleSettings;
   pdfLayout: Layout;
-  /** Manga: scrolled down a column of pages, turned a page (or two, side by side) at a time, or read a panel at a time. */
-  mangaLayout: MangaLayout;
   mangaDir: MangaDir;
   /**
-   * Each manga's own layout and direction, by its id: `layout` on a wide screen, `narrow` on a narrow
-   * one (NARROW). Those without start as the last picked there.
+   * Each manga's own direction, and the layout picked for it, by its id: scrolled down a column of
+   * pages, turned a page (or two, side by side) at a time, or read a panel at a time. `layout` on a
+   * wide screen, `narrow` on a narrow one (NARROW); every manga scrolls on either until one's picked.
    */
-  mangaOwn?: Record<string, { layout: MangaLayout; dir: MangaDir; narrow?: MangaLayout }>;
-  /** The layout last picked for a manga on a narrow screen; scrolled until one is. */
-  mangaNarrow?: MangaLayout;
+  mangaOwn?: Record<string, { dir: MangaDir; layout?: MangaLayout; narrow?: MangaLayout }>;
   /** Manga scrolled on a wide screen: how wide the column of pages is (MANGA_WIDTHS). */
   mangaWidth?: number;
   /** Manga in pages on a wide screen: one at a time, or two side by side where they fit (the default). */
@@ -71,6 +76,33 @@ export const THEMES: Array<{ key: ThemeName; label: string }> = [
   { key: 'dusk', label: 'Dusk' },
   { key: 'night', label: 'Night' },
 ];
+
+export const WEIGHTS: Array<{ v: Weight; label: string }> = [
+  { v: 'light', label: 'Light' },
+  { v: 'regular', label: 'Regular' },
+  { v: 'bold', label: 'Bold' },
+];
+
+/**
+ * The font weights each typeface has loaded (styles/fonts.css) for the three choices, and the
+ * heaviest it has. A face without a lighter one, or a bolder one, repeats a weight.
+ */
+const FACES: Record<FontKey, { light: number; regular: number; bold: number; heaviest: number }> = {
+  dongle: { light: 300, regular: 400, bold: 700, heaviest: 700 },
+  libron: { light: 400, regular: 400, bold: 700, heaviest: 700 },
+  oxanium: { light: 300, regular: 400, bold: 600, heaviest: 700 },
+  literata: { light: 400, regular: 400, bold: 700, heaviest: 700 },
+  garamond: { light: 400, regular: 400, bold: 600, heaviest: 600 },
+  atkinson: { light: 400, regular: 400, bold: 600, heaviest: 600 },
+};
+
+/** The weight of the reading text, and of what is bold in it: the next heavier face than the text's. */
+export function weightsOf(font: FontKey, weight: Weight): { text: number; strong: number } {
+  const face = FACES[font];
+  const text = face[weight];
+  const heavier = [face.regular, face.bold, face.heaviest].find((w) => w > text);
+  return { text, strong: heavier ?? face.heaviest };
+}
 
 export const SIZE_MIN = 15;
 export const SIZE_MAX = 32;
@@ -105,12 +137,11 @@ export const TWO_COLORS: { F: BookColor; M: BookColor } = { F: 'rose', M: 'sky' 
 const DEFAULTS: ReaderSettings = {
   style: 'book',
   theme: 'auto',
-  book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: false },
-  modern: { font: 'dongle', size: 22, lh: 1.65, measure: 620, layout: 'scroll', justify: false },
+  book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: false, weight: 'regular' },
+  modern: { font: 'dongle', size: 22, lh: 1.65, measure: 620, layout: 'scroll', justify: false, weight: 'regular' },
   pdfLayout: 'pages',
-  mangaLayout: 'scroll',
   mangaDir: 'rtl',
-  v: 3,
+  v: 4,
 };
 
 /** The style a layout reads in: pages are a book's, scrolling is modern. */
@@ -147,6 +178,17 @@ function loadSettings(): ReaderSettings {
     s.modern = { ...s.modern, layout: 'scroll' };
     s.v = 3;
     if (saved.book || saved.modern || saved.style) changedOnLoad = s;
+  }
+  // 4: Every manga scrolls until a layout is picked for it, and a layout picked is that manga's
+  // alone. Before, the last one picked was every new manga's too, and each kept the one it was
+  // first opened in, so the layouts kept are let go; each keeps its direction.
+  if ((saved.v ?? 1) < 4) {
+    const old = s as ReaderSettings & { mangaLayout?: unknown; mangaNarrow?: unknown };
+    delete old.mangaLayout;
+    delete old.mangaNarrow;
+    if (s.mangaOwn) s.mangaOwn = Object.fromEntries(Object.entries(s.mangaOwn).map(([id, own]) => [id, { dir: own.dir }]));
+    s.v = 4;
+    if (saved.v) changedOnLoad = s;
   }
   return s;
 }
@@ -227,31 +269,29 @@ export interface MangaLook {
 }
 
 /**
- * As this manga was last read on a screen this wide or narrow, or as the last one picked there; on a
- * narrow screen, scrolled until one is. One that can't be read in `panels` (panelled) scrolls instead.
+ * As picked for this manga on a screen this wide or narrow, or scrolled. One that can't be read in
+ * `panels` (panelled) scrolls instead, and so does one that is `strip` (scrollOnly), whatever it saved.
  */
-export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean, panels = true): MangaLook {
+export function mangaLookOf(s: ReaderSettings, id: string, narrow: boolean, panels = true, strip = false): MangaLook {
   const own = s.mangaOwn?.[id];
-  let layout = own?.layout ?? s.mangaLayout;
-  if (narrow) layout = own?.narrow ?? s.mangaNarrow ?? 'scroll';
+  let layout = (narrow ? own?.narrow : own?.layout) ?? 'scroll';
   if (layout === 'panels' && !panels) layout = 'scroll';
+  if (strip) layout = 'scroll';
   return { layout, dir: own?.dir ?? s.mangaDir, width: s.mangaWidth ?? MANGA_WIDTH, pages: s.mangaPages === 1 ? 1 : 2, narrow };
 }
 
 /**
- * A manga's own layout (on a screen as `narrow` as this, or not) and direction, changed by `patch`;
- * the next new one starts with them too.
+ * A manga's own layout (on a screen as `narrow` as this, or not) and direction, changed by `patch`.
+ * The layout is that manga's alone; the next new one starts in the direction picked.
  */
 export function withMangaLook(s: ReaderSettings, id: string, patch: { layout?: MangaLayout; dir?: MangaDir }, narrow = false): ReaderSettings {
-  const own = s.mangaOwn?.[id] ?? { layout: s.mangaLayout, dir: s.mangaDir };
+  const own = s.mangaOwn?.[id] ?? { dir: s.mangaDir };
   const next = { ...own, dir: patch.dir ?? own.dir };
   if (patch.layout && narrow) next.narrow = patch.layout;
   else if (patch.layout) next.layout = patch.layout;
   return {
     ...s,
-    mangaLayout: next.layout,
     mangaDir: next.dir,
-    ...(narrow && patch.layout ? { mangaNarrow: patch.layout } : {}),
     mangaOwn: { ...s.mangaOwn, [id]: next },
   };
 }

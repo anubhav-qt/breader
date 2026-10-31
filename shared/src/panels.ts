@@ -88,11 +88,26 @@ function sensible(q: Pt[]) {
 
 const shoelace = (q: Pt[]) => Math.abs(q.reduce((s, a, i) => s + a[0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * a[1], 0)) / 2;
 
-/** A panel's corners in whole pixels: its box's where the model isn't sure of one, and all four when they don't make a sensible panel. */
+/** How sure the model has to be of a corner to take it wherever it puts it. */
+const CORNER = 0.5;
+/**
+ * A corner it's less sure of is taken this close to its panel's box, as a share of the box's shorter
+ * side: a corner on the page's edge is always one, as it learned those as out of sight (training
+ * crops pages), though it puts them where they are.
+ */
+const ON_BOX = 0.1;
+
+/**
+ * A panel's corners in whole pixels: where the model puts them, but its box's for one it's unsure
+ * of away from the box, all four when it's sure of none, and when they don't make a sensible panel.
+ */
 function quadOf(points: Array<[number, number, number]>, box: Rect, w: number, h: number): Pt[] {
   const whole = (x: number, y: number): Pt => [Math.trunc(Math.min(Math.max(pyRound(x), 0), w)), Math.trunc(Math.min(Math.max(pyRound(y), 0), h))];
   const square = cornersOf(box).map(([x, y]) => whole(x, y));
-  const q = points.map(([x, y, sure], i) => (sure >= 0.5 ? whole(x, y) : square[i]));
+  if (points.every(([, , sure]) => sure < CORNER)) return square;
+  const near = ON_BOX * Math.min(box[2] - box[0], box[3] - box[1]);
+  const onBox = (x: number, y: number) => Math.min(Math.abs(x - box[0]), Math.abs(x - box[2]), Math.abs(y - box[1]), Math.abs(y - box[3])) <= near;
+  const q = points.map(([x, y, sure], i) => (sure >= CORNER || onBox(x, y) ? whole(x, y) : square[i]));
   if (!sensible(q) || shoelace(q) < 0.6 * area(box)) return square;
   return q;
 }
@@ -156,23 +171,84 @@ export function merged(found: Found[]): Found[] {
   return [...kept, ...joined];
 }
 
-/** Panels in the order they're read: cut into rows top to bottom, then across right to left. */
-export function ordered(found: Found[], w: number, h: number): Found[] {
-  const sx = 0.02 * w;
-  const sy = 0.02 * h;
+/**
+ * How far a panel may reach past the gutter into the next row or column, as a share of the smaller
+ * one's height (or width): the model's corners are a few pixels off, more so on bigger panels.
+ */
+const SLACK = 0.1;
+/** The steepest a gutter between rows or columns is looked for, in degrees either way of straight. */
+const STEEPEST = 20;
+/** Two panels side by side, their heights overlapping by this share of the shorter's, are one row; stacked, widths, one column. */
+const BESIDE = 0.5;
+
+/** How far along (ux, uy) a panel's corners reach, least and most. */
+function spanOf(q: Pt[], ux: number, uy: number): [number, number] {
+  const v = q.map(([x, y]) => x * ux + y * uy);
+  return [Math.min(...v), Math.max(...v)];
+}
+const mid = (s: [number, number]) => (s[0] + s[1]) / 2;
+const besideOf = (a: [number, number], b: [number, number]) => Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > BESIDE * Math.min(a[1] - a[0], b[1] - b[0]);
+/** Straight first, then a degree more either way at a time. */
+const ANGLES = [0, ...Array.from({ length: STEEPEST }, (_, i) => [i + 1, -(i + 1)]).flat()];
+
+/**
+ * The panels the page is read in: cut into rows top to bottom, and across them right to left, by
+ * their corners, so a gutter can slant. What can't be cut is read a panel at a time, each beside
+ * another after the one to its right, and each below another after it (before).
+ */
+export function ordered(found: Found[]): Found[] {
+  /**
+   * The first row of `items` (or right column, `across`) and the rest, split by a gutter as
+   * straight as there is: every panel of the first ends before every one of the rest begins, give
+   * or take SLACK. Two on either side of the gutter, neither across it from the other, mustn't sit
+   * beside each other (or one above the other, `across`): that's a gutter through a row (or a column).
+   */
+  const split = (items: Found[], across: boolean): [Found[], Found[]] | null => {
+    const side = items.map((f) => (across ? spanOf(f.quad, 1, 0) : spanOf(f.quad, 0, 1)));
+    for (const deg of ANGLES) {
+      const t = (deg * Math.PI) / 180;
+      const [c, n] = [Math.cos(t), Math.sin(t)];
+      // How far down the page square to a row's gutter (or right, square to a column's), and how far along it.
+      const s = items.map((f) => (across ? spanOf(f.quad, c, n) : spanOf(f.quad, -n, c)));
+      const along = items.map((f) => (across ? spanOf(f.quad, -n, c) : spanOf(f.quad, c, n)));
+      const order = items.map((_, i) => i).sort((i, j) => (across ? mid(s[j]) - mid(s[i]) : mid(s[i]) - mid(s[j])));
+      for (let k = 1; k < order.length; k++) {
+        const first = order.slice(0, k);
+        const rest = order.slice(k);
+        const apart = first.every((i) =>
+          rest.every((j) => {
+            const reach = across ? s[j][1] - s[i][0] : s[i][1] - s[j][0];
+            const facing = Math.min(along[i][1], along[j][1]) > Math.max(along[i][0], along[j][0]);
+            return reach <= SLACK * Math.min(s[i][1] - s[i][0], s[j][1] - s[j][0]) && (facing || !besideOf(side[i], side[j]));
+          }),
+        );
+        if (apart) return [first.map((i) => items[i]), rest.map((i) => items[i])];
+      }
+    }
+    return null;
+  };
   const cut = (items: Found[]): Found[] => {
     if (items.length < 2) return items;
-    for (const y of [...new Set(items.map((f) => f.box[3]))].sort((a, b) => a - b)) {
-      const above = items.filter((f) => f.box[3] <= y + sy);
-      const below = items.filter((f) => f.box[3] > y + sy);
-      if (above.length && below.length && below.every((f) => f.box[1] >= y - sy)) return [...cut(above), ...cut(below)];
+    const parts = split(items, false) ?? split(items, true);
+    if (parts) return [...cut(parts[0]), ...cut(parts[1])];
+    const ys = items.map((f) => spanOf(f.quad, 0, 1));
+    const xs = items.map((f) => spanOf(f.quad, 1, 0));
+    const at = items.map((f) => [f.quad.reduce((t, c) => t + c[0], 0) / f.quad.length, f.quad.reduce((t, c) => t + c[1], 0) / f.quad.length]);
+    /** Of two beside each other the right one is read first, of two stacked the upper, and otherwise whichever way they're further apart says. */
+    const before = (a: number, b: number) => {
+      const beside = besideOf(ys[a], ys[b]);
+      const stacked = besideOf(xs[a], xs[b]);
+      const across = beside === stacked ? Math.abs(at[a][0] - at[b][0]) > Math.abs(at[a][1] - at[b][1]) : beside;
+      return across ? at[a][0] > at[b][0] : at[a][1] < at[b][1];
+    };
+    // Each once none left is read before it; of those that go round, the topmost.
+    const left = items.map((_, i) => i).sort((i, j) => at[i][1] - at[j][1]);
+    const out: Found[] = [];
+    while (left.length) {
+      const k = left.findIndex((a) => !left.some((b) => b !== a && before(b, a)));
+      out.push(items[left.splice(Math.max(k, 0), 1)[0]]);
     }
-    for (const x of [...new Set(items.map((f) => f.box[0]))].sort((a, b) => b - a)) {
-      const right = items.filter((f) => f.box[0] >= x - sx);
-      const left = items.filter((f) => f.box[0] < x - sx);
-      if (right.length && left.length && left.every((f) => f.box[2] <= x + sx)) return [...cut(right), ...cut(left)];
-    }
-    return [...items].sort((a, b) => a.box[1] - b.box[1] || b.box[2] - a.box[2]);
+    return out;
   };
   return cut(found);
 }
@@ -217,6 +293,6 @@ export function squareOf(px: ArrayLike<number>, w: number, channels: number, [to
 export function pagePanels(outs: Array<{ out: Float32Array; n: number; fit: Fit; span: [number, number] }>, w: number, h: number): { panels: Pt[][]; sure: number[] } {
   const found: Found[] = [];
   for (const [k, o] of outs.entries()) found.push(...panelsIn(o.out, o.n, o.fit, o.span, k === outs.length - 1, k === 0, w, h));
-  const panels = ordered(outs.length > 1 ? merged(found) : found, w, h);
+  const panels = ordered(outs.length > 1 ? merged(found) : found);
   return { panels: panels.map((p) => p.quad), sure: panels.map((p) => Math.round(p.sure * 1000) / 1000) };
 }

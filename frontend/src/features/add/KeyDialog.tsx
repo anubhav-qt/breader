@@ -83,9 +83,7 @@ export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogi
               <button type="button" className="btn btn-quiet" onClick={() => void copy()}>{copied ? <><IconCheck /> Copied</> : 'Copy key'}</button>
             </div>
           </>
-        ) : (
-          <p className="add-keynote">No key yet.</p>
-        )}
+        ) : null}
         {!fresh && <>
         <div className="add-sep" />
         <label className="add-label" htmlFor="enter-key">Someone else’s key</label>

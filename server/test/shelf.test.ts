@@ -48,6 +48,46 @@ describe('shared libraries', () => {
     expect(list.body.books[0]).toMatchObject({ title: one.shared.title, fileId: one.shared.fileId, coverId: null, line: one.shared.line, origin: null });
   });
 
+  it('let someone with the key add a series, once, out of the owner’s own books', async () => {
+    const { key } = await sharer();
+    const token = await tokenFor(key);
+    const url = 'mangadex:12345678-1234-1234-1234-123456789012:en';
+    const series = book({ source: 'remote', format: 'CBZ', url, shared: false, progress: 0.5 });
+    const anon = browser();
+    const first = await anon.post('/v1/shared/add', { token, book: series });
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body.added).toBe(true);
+    const again = await anon.post('/v1/shared/add', { token, book: book({ source: 'remote', format: 'CBZ', url }) });
+    expect(again.body.added).toBe(false);
+    const list = await anon.post('/v1/shared/books', { token });
+    const got = list.body.books.filter((x: { url?: string }) => x.url === url);
+    expect(got).toHaveLength(1);
+    expect(got[0].id).toBe(series.id);
+  });
+
+  it('add a member’s file only when they share it', async () => {
+    const owner = await sharer();
+    const token = await tokenFor(owner.key);
+    const member = await sharer();
+    const shared = await member.b.post('/v1/shared/add', { token, book: { ...member.shared, id: crypto.randomUUID(), origin: member.shared.id } });
+    expect(shared.body.added).toBe(true);
+    const secret = await member.b.post('/v1/shared/add', { token, book: { ...member.mine, id: crypto.randomUUID(), origin: member.mine.id } });
+    expect(secret.status).toBe(400);
+    expect(secret.body.code).toBe('file_missing');
+    const list = await browser().post('/v1/shared/books', { token });
+    expect(list.body.books.map((x: { fileId: string }) => x.fileId)).toContain(member.shared.fileId);
+    expect(list.body.books.map((x: { fileId: string }) => x.fileId)).not.toContain(member.mine.fileId);
+  });
+
+  it('turn away an add with a forged token or no file', async () => {
+    const { key, b, shared } = await sharer();
+    const token = await tokenFor(key);
+    const forged = await b.post('/v1/shared/add', { token: `${token.slice(0, token.lastIndexOf('.'))}.${'x'.repeat(32)}`, book: shared });
+    expect(forged.body.code).toBe('shared_closed');
+    const noFile = await browser().post('/v1/shared/add', { token, book: book({ source: 'file', fileId: null }) });
+    expect(noFile.body.code).toBe('file_missing');
+  });
+
   it('turn away a wrong key, a forged token and the old public shelf', async () => {
     const { libraryId } = await registered();
     const anon = browser();

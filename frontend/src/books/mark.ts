@@ -41,6 +41,13 @@ export function markTracker(start: ReadMark | undefined, words: number) {
   /** The stretch being read without a jump: where it began, and the words read in it. */
   let run = { from: 0, read: 0 };
 
+  /** The reader is at `at` words in, as of `t`, with nothing read yet in this stretch. */
+  const settle = (at: number, t: number) => {
+    last = { at, t };
+    bank = 0;
+    run = { from: at, read: 0 };
+  };
+
   return {
     get: () => mark,
     /** The mark from another device: the later one is kept, and the next place is where the book opens. */
@@ -51,10 +58,13 @@ export function markTracker(start: ReadMark | undefined, words: number) {
     /** The reader says they've read up to here: the mark comes here, back or on, and reading on carries it. */
     set(p: Omit<Place, 'screen'>, t = Date.now()): ReadMark {
       mark = { pos: p.pos, progress: p.progress, line: p.line, ...(mark?.n ? { n: mark.n } : {}) };
-      const at = p.progress * total;
-      last = { at, t };
-      bank = 0;
-      run = { from: at, read: 0 };
+      settle(p.progress * total, t);
+      return mark;
+    },
+    /** The reader starts a new reading from here: the mark goes back, and being a later reading, stays back on every device. */
+    restart(p: Omit<Place, 'screen'>, t = Date.now()): ReadMark {
+      mark = { pos: p.pos, progress: p.progress, line: p.line, n: (mark?.n ?? 0) + 1 };
+      settle(p.progress * total, t);
       return mark;
     },
     /** The reader is somewhere new. Returns the mark, moved or not. */

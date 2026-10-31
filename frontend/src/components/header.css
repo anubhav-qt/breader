@@ -1,5 +1,5 @@
 /* The library header: the logo and the switch between libraries, with its pencil, at the start;
-   books-or-manga with the + button, Select and settings at the end. */
+   books-or-manga with the + button, Select, light or dark and settings at the end. */
 .hdr {
   position: relative;
   z-index: 10;
@@ -16,7 +16,7 @@
 /* The switch and its pencil, which the dropdown hangs under. */
 .hdr-lib { position: relative; display: flex; align-items: center; gap: 6px; }
 .hdr-actions { grid-column: 2; justify-self: end; display: flex; align-items: center; gap: 8px; }
-/* Buttons that are only an icon: the pencil, Select and settings. */
+/* Buttons that are only an icon: the pencil, Select, light or dark and settings. */
 .hdr .hdr-icon { width: 40px; padding: 0; }
 .hdr-icon svg { width: 20px; height: 20px; }
 

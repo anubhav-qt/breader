@@ -11,8 +11,8 @@ const Env = z.object({
   /** laptop: the home server, with the mirror. fallback: the free-tier copy that only knows Supabase. */
   ROLE: z.enum(['laptop', 'fallback']).default('laptop'),
   /**
-   * This machine's name, where more than one runs the laptop's stack (the ThinkPad, and the backup
-   * on Oracle Cloud): the jobs that must happen once go to one of them at a time.
+   * This machine's name, in case more than one ever runs the laptop's stack: the jobs that must
+   * happen once go to one of them at a time.
    */
   MACHINE: z.string().min(1).default('laptop'),
   PORT: z.coerce.number().int().default(8787),
@@ -145,8 +145,8 @@ const Env = z.object({
 export type Env = z.infer<typeof Env>;
 
 /**
- * The ThinkPad, in production: the laptop that is MACHINE=laptop (the backup on Oracle is
- * MACHINE=oracle, and Render the fallback). Its SSD has the room to keep manga by the tens of GB.
+ * The ThinkPad, in production: the laptop that is MACHINE=laptop (Render is the fallback). Its SSD
+ * has the room to keep manga by the tens of GB.
  */
 export const onThinkPad = (env: Pick<Env, 'ROLE' | 'MACHINE' | 'NODE_ENV'>) =>
   env.ROLE === 'laptop' && env.MACHINE === 'laptop' && env.NODE_ENV === 'production';
