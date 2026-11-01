@@ -351,7 +351,10 @@ export function AppearancePanel({ settings, kind, update, two = false, manga }: 
       {kind === 'manga' && manga ? (
         <MangaLookControls {...manga} />
       ) : kind === 'pdf' ? (
-        <Segmented label="Layout" value={settings.pdfLayout} onChange={(v) => update((s) => ({ ...s, pdfLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
+        <>
+          <Segmented label="Layout" value={settings.pdfLayout} onChange={(v) => update((s) => ({ ...s, pdfLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
+          <Segmented label="Margins" value={settings.pdfMargins ?? 'trim'} onChange={(v) => update((s) => ({ ...s, pdfMargins: v }))} options={[{ v: 'trim', label: 'Trimmed' }, { v: 'full', label: 'As printed' }]} />
+        </>
       ) : (
         <>
           <div className="ctl">
