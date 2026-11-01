@@ -17,8 +17,12 @@ export const WHOLE: Crop = { x0: 0, y0: 0, x1: 1, y1: 1 };
 
 /** How wide a page is drawn to find its print: enough to see a line of small text. */
 const PROBE_W = 240;
-/** Darker than this counts as print (0 black to 255 white). */
+/** Darker than this counts as print (0 black to 255 white), on white paper. */
 const INK = 225;
+/** On grey paper (a scan's), print must be this much darker than the paper. */
+const PAPER_GAP = 40;
+/** The paper is the tone this share of the page is at or below. */
+const PAPER_SHARE = 0.7;
 /** White kept around the print, as a part of the page's width. */
 const PAD = 0.025;
 /** Pages looked at for the book's usual margins. */
@@ -39,12 +43,49 @@ async function inkOn(page: PDFPageProxy): Promise<Crop | null> {
   ctx.fillRect(0, 0, w, h);
   await page.render({ canvasContext: ctx, viewport: vp }).promise;
   const px = ctx.getImageData(0, 0, w, h).data;
+  const n = w * h;
+  // Each pixel's brightness, and how many of each tone the page has.
+  const lum = new Uint8Array(n);
+  const tones = new Uint32Array(256);
+  for (let j = 0; j < n; j++) {
+    const i = j * 4;
+    const v = Math.round(px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11);
+    lum[j] = v;
+    tones[v]++;
+  }
+  // The paper is the tone most of the page is at or below, the brightest of its tones: a scan's
+  // paper is grey, not white, and the print is darker than that.
+  let paper = 255;
+  for (let v = 0, seen = 0; v < 256; v++) {
+    seen += tones[v];
+    if (seen >= PAPER_SHARE * n) { paper = v; break; }
+  }
+  const ink = Math.min(INK, paper - PAPER_GAP);
+  const mark = new Uint8Array(n);
   const cols = new Uint32Array(w);
-  const rows = new Uint32Array(h);
+  for (let j = 0; j < n; j++) {
+    if (lum[j] < ink) { mark[j] = 1; cols[j % w]++; }
+  }
+  // A scanner's frame and the shadow of a book's spine run the height or width of the page at its
+  // edges, dark all the way along: not print. Only the outer tenth of the page is looked at for them.
+  const outer = (i: number, size: number) => i < size * 0.1 || i >= size * 0.9;
+  const dropX = new Uint8Array(w);
+  for (let x = 0; x < w; x++) if (outer(x, w) && cols[x] > 0.6 * h) dropX[x] = 1;
+  let keptW = 0;
+  for (let x = 0; x < w; x++) if (!dropX[x]) keptW++;
+  const rowsKept = new Uint32Array(h);
   for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) if (mark[y * w + x] && !dropX[x]) rowsKept[y]++;
+  }
+  const dropY = new Uint8Array(h);
+  for (let y = 0; y < h; y++) if (outer(y, h) && rowsKept[y] > 0.6 * keptW) dropY[y] = 1;
+  // The print that's left, by column and by row.
+  const colsLeft = new Uint32Array(w);
+  const rowsLeft = new Uint32Array(h);
+  for (let y = 0; y < h; y++) {
+    if (dropY[y]) continue;
     for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11 < INK) { cols[x]++; rows[y]++; }
+      if (mark[y * w + x] && !dropX[x]) { colsLeft[x]++; rowsLeft[y]++; }
     }
   }
   // A speck or two isn't print: a scan's dust, a printer's mark.
@@ -55,8 +96,8 @@ async function inkOn(page: PDFPageProxy): Promise<Crop | null> {
     while (b > a && counts[b] < least) b--;
     return a < counts.length ? [a, b + 1] : null;
   };
-  const xs = span(cols, 2);
-  const ys = span(rows, 2);
+  const xs = span(colsLeft, 2);
+  const ys = span(rowsLeft, 2);
   if (!xs || !ys) return null;
   return { x0: xs[0] / w, x1: xs[1] / w, y0: ys[0] / h, y1: ys[1] / h };
 }
