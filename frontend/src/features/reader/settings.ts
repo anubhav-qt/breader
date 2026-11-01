@@ -9,6 +9,13 @@ export type ThemeName = 'auto' | 'day' | 'warm' | 'dusk' | 'night';
 export type FontKey = 'dongle' | 'libron' | 'oxanium' | 'literata' | 'garamond' | 'atkinson';
 export type Layout = 'pages' | 'scroll';
 export type PdfMargins = 'trim' | 'full';
+/** How one PDF is drawn, for this book alone (Aa, under the book's own heading). */
+export interface PdfLook {
+  /** Print darker and paper whiter: a scan's, where the paper is grey. */
+  sharp?: boolean;
+  /** The white left around the print when trimmed: an index into GAPS (pdfCrop.ts), usual, less or none. */
+  gap?: 0 | 1 | 2;
+}
 /** How heavy the reading text is. */
 export type Weight = 'light' | 'regular' | 'bold';
 /** A manga can be read a panel at a time too, each fitted to the screen (MangaView.tsx). */
@@ -46,6 +53,8 @@ export interface ReaderSettings {
   pdfLayout: Layout;
   /** PDF pages trimmed to their print (pdfCrop.ts), the default, or with the margins they were made with. */
   pdfMargins?: PdfMargins;
+  /** Each PDF's own look, by its id (PdfLook). */
+  pdfOwn?: Record<string, PdfLook>;
   mangaDir: MangaDir;
   /**
    * Each manga's own direction, and the layout picked for it, by its id: scrolled down a column of

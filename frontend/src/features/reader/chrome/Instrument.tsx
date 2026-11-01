@@ -262,7 +262,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
               ) : panel === 'paras' && immersion ? (
                 <ParagraphsPanel list={immersion.paragraphs} now={immersion.nowAt} onPick={(p) => { openPanel(null); immersion.pick(p); }} />
               ) : (
-                <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} manga={manga ?? undefined} />
+                <AppearancePanel settings={settings} kind={book.kind} update={update} two={two === 'ready'} manga={manga ?? undefined} pdfId={book.kind === 'pdf' ? bookId : undefined} />
               )}
             </div>
             <CloseDots onClick={() => openPanel(null)} />

@@ -8,8 +8,8 @@ import { glide } from '../../lib/glide';
 import { BAR, footOf, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
 import { sentencesIn, type Sentence } from './narration';
 import { findPictures, keepPictures } from './pictures';
-import { cropOf, usualCrop, WHOLE } from './pdfCrop';
-import { useNarrowPortrait, type Layout } from './settings';
+import { cropOf, GAPS, usualCrop, WHOLE } from './pdfCrop';
+import { useNarrowPortrait, type Layout, type PdfLook } from './settings';
 import { runTurn, swaps, type TurnStyle } from './turn';
 
 interface Props {
@@ -17,6 +17,8 @@ interface Props {
   layout: Layout;
   /** Whether pages are trimmed to their print (pdfCrop.ts), or drawn with the margins they have. */
   trim: boolean;
+  /** This book's own look: a scan's print sharpened, and less white left at its edges (settings.ts PdfLook). */
+  look?: PdfLook;
   start: Start;
   turnStyle: TurnStyle;
   onLocation: (l: Loc) => void;
@@ -34,10 +36,10 @@ interface Drawing {
  * Draws a page to fit, trimmed to its print if `trim`, and its pictures onto `pics` so dark themes
  * don't invert them.
  */
-async function draw(book: PdfBook, index: number, canvas: HTMLCanvasElement, pics: HTMLCanvasElement | null, maxW: number, maxH: number, trim: boolean, alike = false): Promise<Drawing | null> {
+async function draw(book: PdfBook, index: number, canvas: HTMLCanvasElement, pics: HTMLCanvasElement | null, maxW: number, maxH: number, trim: boolean, alike: boolean, gap: number): Promise<Drawing | null> {
   const page = await book.doc.getPage(index + 1);
   const base = page.getViewport({ scale: 1 });
-  const crop = trim ? await cropOf(book, index, base.height / base.width, alike) : WHOLE;
+  const crop = trim ? await cropOf(book, index, base.height / base.width, alike, gap) : WHOLE;
   const cw = base.width * (crop.x1 - crop.x0);
   const ch = base.height * (crop.y1 - crop.y0);
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -75,7 +77,7 @@ async function sentencesOn(book: PdfBook, page: number): Promise<Sentence[]> {
   return sentencesIn(text, 0).map(([start, end]) => ({ section: page, block: 0, start, end, text: text.slice(start, end) }));
 }
 
-export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, layout, trim, start, turnStyle, onLocation, onWidth, onTurn }, ref) {
+export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, layout, trim, look, start, turnStyle, onLocation, onWidth, onTurn }, ref) {
   const total = book.pages;
   const [page, setPage] = useState(() =>
     start.kind === 'pos' ? Math.min(total - 1, start.pos.section) : Math.max(0, Math.min(total - 1, Math.floor(start.value * total))),
@@ -86,6 +88,8 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
   const pageRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(1.3);
   const narrowPortrait = useNarrowPortrait();
+  const gap = GAPS[look?.gap ?? 0] ?? GAPS[0];
+  const sharp = !!look?.sharp;
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const picsRef = useRef<HTMLCanvasElement>(null);
@@ -117,11 +121,11 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
     let gone = false;
     void book.doc.getPage(1).then(async (p) => {
       const v = p.getViewport({ scale: 1 });
-      const c = trim ? await usualCrop(book, v.height / v.width) : WHOLE;
+      const c = trim ? await usualCrop(book, v.height / v.width, gap) : WHOLE;
       if (!gone) setRatio((v.height * (c.y1 - c.y0)) / (v.width * (c.x1 - c.x0)));
     });
     return () => { gone = true; };
-  }, [book, trim]);
+  }, [book, trim, gap]);
 
   // A phone's width is too little to give any away: pages go nearly edge to edge on narrow screens.
   // Narrow and held up, the page goes nearly edge to edge; elsewhere there's room for a margin.
@@ -149,7 +153,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
     if (layout !== 'pages' || !box.w || !box.h || !canvasRef.current) return;
     let task: Drawing | null = null;
     let cancelled = false;
-    void draw(book, page, canvasRef.current, picsRef.current, box.w, box.h, trim).then((t) => {
+    void draw(book, page, canvasRef.current, picsRef.current, box.w, box.h, trim, false, gap).then((t) => {
       if (cancelled) { t?.promise.catch(() => {}); t?.cancel(); return; }
       task = t;
       const done = () => { drawn.current?.(); drawn.current = null; };
@@ -157,7 +161,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
       else done();
     });
     return () => { cancelled = true; task?.cancel(); };
-  }, [book, page, layout, box.w, box.h, trim]);
+  }, [book, page, layout, box.w, box.h, trim, gap]);
 
   // Scroll: draw pages as they come near the viewport.
   useEffect(() => {
@@ -173,7 +177,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
         drawn.add(i);
         const [c, pics] = Array.from(e.target.querySelectorAll('canvas'));
         // Fitted to its slot, so a page of another shape can't spill into the next.
-        if (c) void draw(book, i, c, pics ?? null, pageW, pageW * ratio, trim, true).then((t) => {
+        if (c) void draw(book, i, c, pics ?? null, pageW, pageW * ratio, trim, true, gap).then((t) => {
           t?.promise.catch(() => {});
           if (gone) { t?.cancel(); return; }
           if (t) drawings.push(t);
@@ -185,7 +189,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
     if (slot) root.scrollTop = slot.offsetTop - 40;
     return () => { gone = true; io.disconnect(); drawings.forEach((d) => d.cancel()); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book, layout, pageW, ratio, trim]);
+  }, [book, layout, pageW, ratio, trim, gap]);
 
   const onScroll = () => {
     const root = scrollRef.current!;
@@ -244,7 +248,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
   }), [book, goTo, layout, page, total]);
 
   return (
-    <div ref={rootRef} className={`pdfv is-${layout}`} style={{ '--vw': `${Math.max(0, pageW)}px`, '--pg-x': `${gutter}px` } as CSSProperties}>
+    <div ref={rootRef} className={`pdfv is-${layout}${sharp ? ' is-sharp' : ''}`} style={{ '--vw': `${Math.max(0, pageW)}px`, '--pg-x': `${gutter}px` } as CSSProperties}>
       {layout === 'pages' ? (
         <>
           <div ref={pageRef} className="pdf-page"><canvas ref={canvasRef} /><canvas ref={picsRef} className="pdf-pics" /></div>

@@ -23,8 +23,8 @@ const INK = 225;
 const PAPER_GAP = 40;
 /** The paper is the tone this share of the page is at or below. */
 const PAPER_SHARE = 0.7;
-/** White kept around the print, as a part of the page's width. */
-const PAD = 0.025;
+/** White kept around the print, as a part of the page's width, for each choice of gap (PdfLook). */
+export const GAPS = [0.025, 0.008, 0.003];
 /** Pages looked at for the book's usual margins. */
 const SAMPLES = 10;
 
@@ -112,9 +112,9 @@ const union = (a: Crop, b: Crop): Crop => ({
 });
 
 /** Room around the print, kept inside the page. */
-function padded(c: Crop, ratio: number): Crop {
-  const px = PAD;
-  const py = PAD / ratio;
+function padded(c: Crop, ratio: number, gap: number): Crop {
+  const px = gap;
+  const py = gap / ratio;
   return { x0: Math.max(0, c.x0 - px), y0: Math.max(0, c.y0 - py), x1: Math.min(1, c.x1 + px), y1: Math.min(1, c.y1 + py) };
 }
 
@@ -165,16 +165,16 @@ function trimOf(book: PdfBook): Trim {
  * The part of page `index` to draw: the book's usual print, and whatever of the page's own lies
  * outside it. `alike`: every page the same, left and right ones too, as when they're scrolled in a column.
  */
-export async function cropOf(book: PdfBook, index: number, ratio: number, alike = false): Promise<Crop> {
+export async function cropOf(book: PdfBook, index: number, ratio: number, alike = false, gap = GAPS[0]): Promise<Crop> {
   const t = trimOf(book);
   const [usual, own] = await Promise.all([t.usual, t.inkAt(index)]);
   const side = alike ? usual.both : index % 2 === 0 ? usual.odd : usual.even;
   const c = side && own ? union(side, own) : side ?? own;
-  return c ? padded(c, ratio) : WHOLE;
+  return c ? padded(c, ratio, gap) : WHOLE;
 }
 
 /** The book's usual trimmed page, for sizing pages before they're drawn. */
-export async function usualCrop(book: PdfBook, ratio: number): Promise<Crop> {
+export async function usualCrop(book: PdfBook, ratio: number, gap = GAPS[0]): Promise<Crop> {
   const { both } = await trimOf(book).usual;
-  return both ? padded(both, ratio) : WHOLE;
+  return both ? padded(both, ratio, gap) : WHOLE;
 }

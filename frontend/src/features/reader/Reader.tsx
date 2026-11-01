@@ -880,7 +880,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
           ) : book.kind === 'manga' ? (
             <MangaView ref={view} book={book} layout={mangaLook.layout} dir={mangaLook.dir} width={mangaLook.width} pages={mangaLook.pages} start={start} onLocation={onLocation} onWidth={setPageW} onTap={tapPage} onGrow={onBook} />
           ) : (
-            <PdfView ref={view} book={book} layout={settings.pdfLayout} trim={settings.pdfMargins !== 'full'} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
+            <PdfView ref={view} book={book} layout={settings.pdfLayout} trim={settings.pdfMargins !== 'full'} look={settings.pdfOwn?.[record.id]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} />
           )}
         </main>
         <div className="rd-chrome">

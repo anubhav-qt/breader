@@ -12,7 +12,7 @@ import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
 import { usePanelModel } from './panelModel';
 import { answerSeatOffer, setPanelsNotify, setServerPanels, useServerPanels } from './serverPanels';
-import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, measureOf, styleFor, useNarrowPortrait, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
+import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, measureOf, styleFor, useNarrowPortrait, type MangaDir, type PdfLook, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
 
@@ -164,6 +164,8 @@ interface LookProps {
   two?: boolean;
   /** A manga: how it reads here, and the way to change that. */
   manga?: MangaControls;
+  /** A PDF: its id, for the look it has of its own (settings.ts PdfLook). */
+  pdfId?: string;
 }
 
 /** `saver`: read from MangaDex, whose pages can come smaller. `panels`: it can be read a panel at a time (settings.ts panelled). */
@@ -320,9 +322,13 @@ function MangaLookControls({ look, pick, widen, pair, saver, panels, strip }: Ma
   );
 }
 
-export function AppearancePanel({ settings, kind, update, two = false, manga }: LookProps) {
+export function AppearancePanel({ settings, kind, update, two = false, manga, pdfId }: LookProps) {
   const cur = settings[settings.style];
   const narrowPortrait = useNarrowPortrait();
+  const pdfLook: PdfLook = (pdfId && settings.pdfOwn?.[pdfId]) || {};
+  const setPdfLook = (patch: PdfLook) => {
+    if (pdfId) update((s) => ({ ...s, pdfOwn: { ...s.pdfOwn, [pdfId]: { ...s.pdfOwn?.[pdfId], ...patch } } }));
+  };
   const set = (patch: Partial<StyleSettings>) => update((s) => ({ ...s, [s.style]: { ...s[s.style], ...patch } }));
   // Immersive's voice bar, as the rest of the controls sleep (focus.ts).
   const [barHidden, setBarHidden] = useBarHidden();
@@ -355,6 +361,15 @@ export function AppearancePanel({ settings, kind, update, two = false, manga }: 
         <>
           <Segmented label="Layout" value={settings.pdfLayout} onChange={(v) => update((s) => ({ ...s, pdfLayout: v }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
           <Segmented label="Margins" value={settings.pdfMargins ?? 'trim'} onChange={(v) => update((s) => ({ ...s, pdfMargins: v }))} options={[{ v: 'trim', label: 'Trimmed' }, { v: 'full', label: 'As printed' }]} />
+          {pdfId && (
+            <>
+              <p className="p-note">Just for this book</p>
+              <Segmented label="Scan" value={pdfLook.sharp ? 'sharp' : 'plain'} onChange={(v) => setPdfLook({ sharp: v === 'sharp' })} options={[{ v: 'plain', label: 'Plain' }, { v: 'sharp', label: 'Sharper' }]} />
+              {settings.pdfMargins !== 'full' && (
+                <Segmented label="Gap" value={pdfLook.gap ?? 0} onChange={(v) => setPdfLook({ gap: v as 0 | 1 | 2 })} options={[{ v: 0, label: 'Usual' }, { v: 1, label: 'Less' }, { v: 2, label: 'None' }]} />
+              )}
+            </>
+          )}
         </>
       ) : (
         <>
