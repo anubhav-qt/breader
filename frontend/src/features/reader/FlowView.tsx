@@ -10,7 +10,7 @@ import { caretAt, charRect, collectBlocks, firstCharWhere, firstRect, offsetIn, 
 import { pad2 } from './chapters';
 import { lookLeft, useLook } from './look';
 import { light, sentencesIn, type Listen, type Paragraph, type Sentence } from './narration';
-import { fontFamily, weightsOf, type Style, type StyleSettings } from './settings';
+import { fontFamily, measureOf, useNarrowPortrait, weightsOf, type Style, type StyleSettings } from './settings';
 import { curves, runTurn, swaps, turning, type TurnStyle } from './turn';
 
 /** Gap between columns (and between page views). */
@@ -162,6 +162,7 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
   const [pages, setPages] = useState(1);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [fontTick, setFontTick] = useState(0);
+  const narrowPortrait = useNarrowPortrait();
 
   const pending = useRef<Target | null>(init.target);
   const loc = useRef({ block: 0, offset: 0 });
@@ -190,8 +191,9 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
 
   const pagesMode = s.layout === 'pages';
   // On a phone the words run to 12px from each edge: every bit of a small screen goes to the text.
-  const colW = Math.max(260, Math.min(s.measure, size.w - (size.w < 640 ? 24 : 96)));
-  const spread = style === 'book' && pagesMode && size.w >= 2 * s.measure + GAP + 160;
+  const measure = measureOf(s, narrowPortrait);
+  const colW = Math.max(260, Math.min(measure, size.w - (size.w < 640 ? 24 : 96)));
+  const spread = style === 'book' && pagesMode && size.w >= 2 * measure + GAP + 160;
   const viewW = spread ? colW * 2 + GAP : colW;
   const step = viewW + GAP;
   // Paged, the view reaches past the text this far each side for the paragraph numbers in the

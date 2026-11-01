@@ -9,7 +9,7 @@ import { BAR, footOf, type Loc, type Start, type TurnEvent, type ViewHandle } fr
 import { sentencesIn, type Sentence } from './narration';
 import { findPictures, keepPictures } from './pictures';
 import { cropOf, usualCrop, WHOLE } from './pdfCrop';
-import type { Layout } from './settings';
+import { useNarrowPortrait, type Layout } from './settings';
 import { runTurn, swaps, type TurnStyle } from './turn';
 
 interface Props {
@@ -85,6 +85,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
   const [box, setBox] = useState({ w: 0, h: 0 });
   const pageRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(1.3);
+  const narrowPortrait = useNarrowPortrait();
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const picsRef = useRef<HTMLCanvasElement>(null);
@@ -123,7 +124,8 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
   }, [book, trim]);
 
   // A phone's width is too little to give any away: pages go nearly edge to edge on narrow screens.
-  const gutter = size.w < 600 ? 10 : 48;
+  // Narrow and held up, the page goes nearly edge to edge; elsewhere there's room for a margin.
+  const gutter = narrowPortrait ? 10 : 48;
   const pageW = layout === 'pages' ? Math.min(box.w, box.h / ratio) : Math.min(860, size.w - 2 * gutter);
   useEffect(() => { if (pageW > 0) onWidth(pageW); }, [onWidth, pageW]);
 

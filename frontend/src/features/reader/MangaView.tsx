@@ -8,7 +8,7 @@ import { frameAt, type Box } from './frames';
 import { pageFramesKnown, pageFramesSoon, panelsAhead } from './serverPanels';
 import { PanelPicture, PanelsNote } from './MangaPanels';
 import { MangaZoom, type Look } from './MangaZoom';
-import type { MangaDir, MangaLayout } from './settings';
+import { useNarrowPortrait, type MangaDir, type MangaLayout } from './settings';
 import { WHOLE, shownOf, stepsOf } from './steps';
 import { runTurn } from './turn';
 import { Loader } from '../../components/Loader';
@@ -81,8 +81,8 @@ const PLACE_EVERY = 1000;
 /** A series opened a few chapters at a time opens again at a chapter outside them (App.tsx). */
 const reopen = (pos: Position) => window.dispatchEvent(new CustomEvent('breader:reopen', { detail: { pos } }));
 
-/** The space beside the pages: on a phone, none, as every bit of the screen is better spent on the page. */
-const sideOf = (w: number) => (w < 640 ? 0 : 48);
+/** The space beside the pages: on a narrow screen held up, none, as every bit of it is better spent on the page. */
+const SIDE = 48;
 const wait = (ms: number) => new Promise<null>((done) => window.setTimeout(() => done(null), ms));
 
 /** Where a picture is drawn inside its box, which can be a little off its shape until the picture says. */
@@ -290,6 +290,7 @@ function chapterOf(ch: RemoteChapter, all: RemoteChapter[]): string {
 }
 
 export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book, layout, dir, width, pages, start, onLocation, onWidth, onTurn, onTap, onGrow }, ref) {
+  const narrowPortrait = useNarrowPortrait();
   const total = book.pages;
   // A series opened a few chapters at a time counts the words of all of it, not those open.
   const per = WORDS_PER_MANGA_PAGE;
@@ -393,7 +394,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const ratio = useCallback((i: number) => ratios[i] || typical, [ratios, typical]);
   const strip = typical > STRIP;
   // Panels go edge to edge: the sides only step, and a panel takes all the width it can.
-  const side = layout === 'panels' ? 0 : sideOf(size.w);
+  const side = layout === 'panels' || narrowPortrait ? 0 : SIDE;
   const areaW = Math.max(0, size.w - 2 * side);
   const areaH = Math.max(0, size.h - 2 * BAR);
   // Two side by side when each can be nearly as tall as one alone, unless the reader keeps to one.

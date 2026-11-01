@@ -30,7 +30,8 @@ export interface StyleSettings {
   font: FontKey;
   size: number;
   lh: number;
-  measure: number;
+  /** Text width in px (MEASURES), or 'auto': the narrowest margins on a narrow portrait screen, medium otherwise (measureOf). */
+  measure: number | 'auto';
   layout: Layout;
   justify: boolean;
   weight: Weight;
@@ -119,6 +120,13 @@ export const MEASURES = [
   { v: 620, label: 'Medium margins' },
   { v: 540, label: 'Wide margins' },
 ];
+/** The narrowest margins (the widest text), and medium: what 'auto' is on a phone held up, and elsewhere. */
+export const MIN_MEASURE = MEASURES[0].v;
+export const MEDIUM_MEASURE = MEASURES[1].v;
+
+/** The text width a book is set to: as picked, or for the screen when it's on auto. */
+export const measureOf = (s: StyleSettings, narrowPortrait: boolean): number =>
+  s.measure === 'auto' ? (narrowPortrait ? MIN_MEASURE : MEDIUM_MEASURE) : s.measure;
 
 /** Scrolled manga: the column of pages, narrow to wide. */
 export const MANGA_WIDTHS = [
@@ -133,6 +141,8 @@ export const MANGA_WIDTH = 860;
  * a layout for screens this narrow apart from the one it has on wider ones.
  */
 export const NARROW = '(max-width: 899px)';
+/** A narrow screen held up: a phone or a small tablet in portrait, where the margins go to the words. */
+export const NARROW_PORTRAIT = '(max-width: 899px) and (orientation: portrait)';
 
 /** Light pink and light blue on dark pages; their deeper shades on light ones. */
 export const TWO_COLORS: { F: BookColor; M: BookColor } = { F: 'rose', M: 'sky' };
@@ -140,11 +150,11 @@ export const TWO_COLORS: { F: BookColor; M: BookColor } = { F: 'rose', M: 'sky' 
 const DEFAULTS: ReaderSettings = {
   style: 'book',
   theme: 'auto',
-  book: { font: 'dongle', size: 22, lh: 1.45, measure: 620, layout: 'pages', justify: false, weight: 'regular' },
-  modern: { font: 'dongle', size: 22, lh: 1.65, measure: 620, layout: 'scroll', justify: false, weight: 'regular' },
+  book: { font: 'dongle', size: 22, lh: 1.45, measure: 'auto', layout: 'pages', justify: false, weight: 'regular' },
+  modern: { font: 'dongle', size: 22, lh: 1.65, measure: 'auto', layout: 'scroll', justify: false, weight: 'regular' },
   pdfLayout: 'pages',
   mangaDir: 'rtl',
-  v: 4,
+  v: 5,
 };
 
 /** The style a layout reads in: pages are a book's, scrolling is modern. */
@@ -191,6 +201,16 @@ function loadSettings(): ReaderSettings {
     delete old.mangaNarrow;
     if (s.mangaOwn) s.mangaOwn = Object.fromEntries(Object.entries(s.mangaOwn).map(([id, own]) => [id, { dir: own.dir }]));
     s.v = 4;
+    if (saved.v) changedOnLoad = s;
+  }
+  // 5: Margins are set for the screen by default: the narrowest on a phone held up, medium elsewhere.
+  // Medium was the fixed default, so most saved margins are that, and were never picked: those go to
+  // auto. A narrow or wide margin picked is kept.
+  if ((saved.v ?? 1) < 5) {
+    for (const k of ['book', 'modern'] as const) {
+      if (s[k].measure === MEDIUM_MEASURE) s[k] = { ...s[k], measure: 'auto' };
+    }
+    s.v = 5;
     if (saved.v) changedOnLoad = s;
   }
   return s;
@@ -248,17 +268,27 @@ export function writeSetting(name: string, value: unknown) {
 
 export const fontFamily = (key: FontKey) => FONTS.find((f) => f.key === key)?.family ?? 'var(--read)';
 
-/** Whether the screen is narrow (NARROW), as it's resized or turned. */
-export function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(() => typeof matchMedia === 'function' && matchMedia(NARROW).matches);
+/** Whether a media query matches, as the screen is resized or turned. */
+function useMedia(query: string): boolean {
+  const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(query).matches);
   useEffect(() => {
     if (typeof matchMedia !== 'function') return;
-    const m = matchMedia(NARROW);
-    const changed = () => setNarrow(m.matches);
+    const m = matchMedia(query);
+    const changed = () => setOn(m.matches);
     m.addEventListener('change', changed);
     return () => m.removeEventListener('change', changed);
-  }, []);
-  return narrow;
+  }, [query]);
+  return on;
+}
+
+/** Whether the screen is narrow (NARROW), as it's resized or turned. */
+export function useNarrow(): boolean {
+  return useMedia(NARROW);
+}
+
+/** Whether the screen is narrow and held up (NARROW_PORTRAIT): where the margins go to the words. */
+export function useNarrowPortrait(): boolean {
+  return useMedia(NARROW_PORTRAIT);
 }
 
 /** How a manga reads: `narrow`, the screen is, so it's in the layout picked for narrow screens. */

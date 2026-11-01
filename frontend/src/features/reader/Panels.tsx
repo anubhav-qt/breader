@@ -12,7 +12,7 @@ import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
 import { usePanelModel } from './panelModel';
 import { answerSeatOffer, setPanelsNotify, setServerPanels, useServerPanels } from './serverPanels';
-import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, styleFor, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
+import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, measureOf, styleFor, useNarrowPortrait, type MangaDir, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
 
@@ -322,6 +322,7 @@ function MangaLookControls({ look, pick, widen, pair, saver, panels, strip }: Ma
 
 export function AppearancePanel({ settings, kind, update, two = false, manga }: LookProps) {
   const cur = settings[settings.style];
+  const narrowPortrait = useNarrowPortrait();
   const set = (patch: Partial<StyleSettings>) => update((s) => ({ ...s, [s.style]: { ...s[s.style], ...patch } }));
   // Immersive's voice bar, as the rest of the controls sleep (focus.ts).
   const [barHidden, setBarHidden] = useBarHidden();
@@ -387,7 +388,7 @@ export function AppearancePanel({ settings, kind, update, two = false, manga }: 
           <Segmented label="Weight" value={cur.weight} onChange={(v) => set({ weight: v })} options={WEIGHTS} />
           <div className="two">
             <Segmented label="Spacing" value={cur.lh} onChange={(v) => set({ lh: v })} options={SPACING.map((o, i) => ({ v: o.v, label: o.label, content: lines(4 + i) }))} />
-            <Segmented label="Margins" value={cur.measure} onChange={(v) => set({ measure: v })} options={MEASURES.map((o, i) => ({ v: o.v, label: o.label, content: margins(4 + i * 2) }))} />
+            <Segmented label="Margins" value={measureOf(cur, narrowPortrait)} onChange={(v) => set({ measure: v })} options={MEASURES.map((o, i) => ({ v: o.v, label: o.label, content: margins(4 + i * 2) }))} />
           </div>
           {/* Pages read as Book, scrolling as Modern, each with its own type. */}
           <Segmented label="Layout" value={cur.layout} onChange={(v) => update((s) => ({ ...s, style: styleFor(v) }))} options={[{ v: 'pages', label: 'Pages' }, { v: 'scroll', label: 'Scroll' }]} />
