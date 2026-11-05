@@ -17,6 +17,8 @@ Breader is a quiet place to read. The interface is white or black, with no colou
 
 Open [breader.site](https://breader.site), add a book, read. Nothing to install, no sign-up.
 
+![breader — pick up your book where you left off, and read it in any light](./.github/assets/breader-demo.gif)
+
 ## Reading
 
 - **Your files.** EPUB, PDF, plain text, Markdown, or text you paste. All but PDF are set in Breader's own type.
