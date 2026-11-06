@@ -1,5 +1,6 @@
 import { UNSET_GENRE, genreIds, genreName } from '@breader/shared/genres';
 import type { ShelfItem } from '../../data/useLibrary';
+import { monthOf } from '../../lib/format';
 import { finishedIn, nextIn, numberOf, seriesGenres, shelfName, type Series } from './series';
 
 /*
@@ -104,7 +105,7 @@ export function dateShelf(t: number, now: number): string {
   const months = (n.getFullYear() - d.getFullYear()) * 12 + n.getMonth() - d.getMonth();
   if (months <= 0) return 'Earlier this month';
   if (months < 12) {
-    const month = d.toLocaleDateString('en-GB', { month: 'long' });
+    const month = monthOf(t);
     return d.getFullYear() === n.getFullYear() ? month : `${month} ${d.getFullYear()}`;
   }
   // Last year's later months have their own shelves (until December, when this year's fill them).

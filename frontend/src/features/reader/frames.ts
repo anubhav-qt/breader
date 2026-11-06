@@ -125,32 +125,26 @@ interface Part {
 /** A part cut into pieces, read in order (top to bottom, or across), or one that wouldn't cut: a panel. */
 type Node = { across: boolean; kids: Node[] } | { panel: Rect };
 
-/**
- * The picture, small, as greys. Transparent parts are paper. It's drawn twice as fine first, and
- * each little square of four keeps its darkest: a panel's thin border, shrunk, would otherwise
- * fade to the paper's grey and let the paper in.
- */
-function greysOf(img: HTMLImageElement): Picture | null {
-  const nw = img.naturalWidth;
-  const nh = img.naturalHeight;
-  if (!nw || !nh) return null;
+/** The size a picture `nw` by `nh` is looked at in: a page about WIDTH across, never over TALLEST tall. */
+export function greySize(nw: number, nh: number): { w: number; h: number } | null {
+  if (!(nw > 0) || !(nh > 0)) return null;
   // A spread is looked at as two pages, each as wide as one alone.
   const pageW = Math.min(nw, nh / PAGE);
   let scale = Math.min(1, WIDTH / pageW);
   if (nh * scale > TALLEST) scale = TALLEST / nh;
   const w = Math.max(1, Math.round(nw * scale));
   const h = Math.max(1, Math.round(nh * scale));
+  return { w, h };
+}
+
+/**
+ * Greys `w` by `h` from `rgba`, the picture drawn twice as fine: each little square of four keeps
+ * its darkest, as a panel's thin border, shrunk, would otherwise fade to the paper's grey and let
+ * the paper in.
+ */
+export function greysOfFine(rgba: Uint8ClampedArray, w: number, h: number): Uint8Array {
   const fw = w * 2;
   const fh = h * 2;
-  const canvas = document.createElement('canvas');
-  canvas.width = fw;
-  canvas.height = fh;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return null;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, fw, fh);
-  ctx.drawImage(img, 0, 0, fw, fh);
-  const rgba = ctx.getImageData(0, 0, fw, fh).data;
   const luma = new Uint8Array(w * h).fill(255);
   for (let y = 0; y < fh; y++) {
     const row = (y >> 1) * w;
@@ -161,7 +155,36 @@ function greysOf(img: HTMLImageElement): Picture | null {
       if (l < luma[i]) luma[i] = l;
     }
   }
-  return { luma, w, h };
+  return luma;
+}
+
+/** A canvas to draw a picture on: a page's own, or one a worker can hold. */
+export type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
+
+/**
+ * The picture `source` (`nw` by `nh`), small, as greys, drawn on `canvas`. Transparent parts are
+ * paper. Called on the page's thread only as a last resort: on a phone it stops scrolling.
+ */
+export function greysOn(canvas: AnyCanvas, source: CanvasImageSource, nw: number, nh: number): Picture | null {
+  const size = greySize(nw, nh);
+  if (!size) return null;
+  const { w, h } = size;
+  const fw = w * 2;
+  const fh = h * 2;
+  canvas.width = fw;
+  canvas.height = fh;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!ctx) return null;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, fw, fh);
+  ctx.drawImage(source, 0, 0, fw, fh);
+  const rgba = ctx.getImageData(0, 0, fw, fh).data;
+  return { luma: greysOfFine(rgba, w, h), w, h };
+}
+
+/** The picture, small, as greys, on the page's thread. */
+function greysOf(img: HTMLImageElement): Picture | null {
+  return greysOn(document.createElement('canvas'), img, img.naturalWidth, img.naturalHeight);
 }
 
 /** The page inside any plain dark strips along its edges: a line of one even grey that isn't paper. */
@@ -866,6 +889,12 @@ const none: Frames = { groups: [], panels: [] };
 /** Pages' frames, by their picture, looked for once each, and those found already. */
 const seen = new Map<string, Promise<Frames>>();
 const known = new Map<string, Frames>();
+/**
+ * A picture sent to the worker (frames.worker.ts) with an id: as its file, which the worker opens
+ * and draws itself, or as greys drawn here.
+ */
+export type FramesAsk = { id: number; file: Blob } | { id: number; pic: Picture };
+
 /** Pages' frames being found by the worker, by the id each was sent with. */
 let worker: Worker | null | undefined;
 const asked = new Map<number, { img: HTMLImageElement; done: (f: Frames) => void }>();
@@ -901,16 +930,51 @@ function workerOf(): Worker | null {
   return worker;
 }
 
+/** The worker can open and draw a picture itself, so the page's thread never touches its pixels. */
+export function drawsInWorker(): boolean {
+  return typeof OffscreenCanvas === 'function' && typeof createImageBitmap === 'function';
+}
+
+/**
+ * A picture's file, when it's one held in this tab (a blob: address), as every manga page is: a
+ * worker opens it itself, where copying the picture shown would hold up the page's thread.
+ */
+export async function pictureFile(img: HTMLImageElement): Promise<Blob | null> {
+  const src = img.currentSrc || img.src;
+  if (!src.startsWith('blob:')) return null;
+  try {
+    const res = await fetch(src);
+    return await res.blob();
+  } catch {
+    return null;
+  }
+}
+
+/** What the worker is sent for a picture: its file where the worker can open it, its greys where not. */
+async function askFor(img: HTMLImageElement): Promise<FramesAsk | null> {
+  if (drawsInWorker()) {
+    const file = await pictureFile(img);
+    if (file) return { id: 0, file };
+  }
+  const pic = greysOf(img);
+  if (!pic) return null;
+  return { id: 0, pic };
+}
+
 async function find(img: HTMLImageElement): Promise<Frames> {
   if (!img.naturalWidth) await img.decode().catch(() => {});
-  const pic = greysOf(img);
-  if (!pic) return none;
+  if (!img.naturalWidth) return none;
   const w = workerOf();
-  if (!w) return framesIn(pic);
+  if (!w) return framesHere(img);
+  const ask = await askFor(img);
+  if (!ask) return none;
   return new Promise<Frames>((done) => {
     const id = ++lastId;
     asked.set(id, { img, done });
-    w.postMessage({ id, pic }, [pic.luma.buffer]);
+    // Greys are handed over, not copied; a file is only ever pointed at.
+    let moved: Transferable[] = [];
+    if ('pic' in ask) moved = [ask.pic.luma.buffer];
+    w.postMessage({ ...ask, id }, moved);
   });
 }
 

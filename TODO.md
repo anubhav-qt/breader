@@ -34,3 +34,8 @@
   - Asked for again, it's read from the HDD, copied back to the SSD (the whole series, in the background), and served from there.
   - Pages are kept by a hash of `page:<chapter>:…`, so the move needs a series → pages index first (or keys that start with the series).
   - The server already warns in Sentry when the SSD cache is nearly full or has to drop pages: that's the cue to do this.
+
+## Speed, measured on a slow phone (4x CPU)
+- [ ] A long manhwa strip (12000 px tall) takes the panel finder about 1.9 s in its worker. Scrolling stays smooth, but its panels come late.
+- [ ] Browse takes about 1 s to first show on a slow phone. Not looked into yet.
+- [ ] The API's database pool is 5 connections (db/client.ts). Load tests passed 100 readers and failed 150: try a larger pool, measured, before changing it.

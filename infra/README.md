@@ -23,7 +23,7 @@ or a 502/503/504/530. Every write carries an id and applies once, so the retry i
 npm install
 npm run stack      # Postgres ×2, RustFS (stands in for R2), api :8787, fallback :8788, worker
 npm run web        # the app on http://localhost:5173
-npm test           # server tests; need the stack running
+npm test           # server tests (need the stack running), then the app's
 npm run stack:down
 ```
 

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { readLocal, writeLocal } from '../../lib/store';
-import type { Frames } from './frames';
+import { pictureFile, type Frames } from './frames';
 import type { PanelsAsk, PanelsReply, PanelsWork } from './panels.worker';
 import { forget, type Want } from './voice/store';
 
@@ -191,8 +191,15 @@ const answers = new Map<string, ModelPanels>();
 async function find(img: HTMLImageElement, key: string): Promise<Frames | null> {
   if (!img.naturalWidth) await img.decode().catch(() => {});
   if (!img.naturalWidth || !worker) return null;
-  const pic = await createImageBitmap(img);
-  const r = await call({ type: 'find', pic }, [pic]);
+  // Its file where there's one, opened in the worker; otherwise the picture, copied here.
+  const file = await pictureFile(img);
+  let r: Extract<PanelsReply, { ok: true }>;
+  if (file) {
+    r = await call({ type: 'find', pic: file }, []);
+  } else {
+    const pic = await createImageBitmap(img);
+    r = await call({ type: 'find', pic }, [pic]);
+  }
   answers.set(key, { round: status.round, w: r.w!, h: r.h!, panels: r.panels!, sure: r.sure ?? [] });
   return framesOfPanels(r.w!, r.h!, r.panels!);
 }

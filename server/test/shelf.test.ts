@@ -177,6 +177,9 @@ describe('shared libraries', () => {
     expect(await ids(await tokenFor(key))).toEqual([]);
     expect(await ids(readerToken)).toEqual([]);
     expect((await reader.get('/v1/sync/pull?since=0')).body.lapsed).toEqual([copy.id]);
+    // A reader up to date hears of it too: the change was in the owner's library, not theirs.
+    const rev = (await reader.get('/v1/sync/pull?since=0')).body.rev;
+    expect((await reader.get(`/v1/sync/pull?since=${rev}`)).body).toMatchObject({ rev, books: [], lapsed: [copy.id] });
     expect((await friend.get('/v1/sync/pull?since=0')).body.lapsed).toEqual([again.id]);
     expect((await browser().post('/v1/shared/link', { token: readerToken, fileId: shared.fileId })).status).toBe(404);
     expect((await friend.get(`/v1/files/${shared.fileId}/link`)).status).toBe(404);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { namesIn, seriesName, type AniCard, type AniListAbout, type AniRelation, type MangaChapter, type MangaFound, type MangaSeries, type SourceSeries } from '@breader/shared/manga';
 import { IconBack, IconCheck, IconOrder, IconOut } from '../../components/icons';
@@ -6,10 +6,12 @@ import { useLabels } from '../../data/labels';
 import { filledIn, laidOut, listOf, madeBy, pickChapters, remoteOf, startOf, type Fill } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
+import { shortDate } from '../../lib/format';
 import { anilist, byLang, KIND_NAME, langName, mangadex, RATING_NAME, sources, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
 import { springs } from '../../lib/springs';
 import { readLocal, writeLocal } from '../../lib/store';
 import { AniTile } from './AniTile';
+import { stillCovered } from './covered';
 import { useAniFound, type AniShown } from './aniPick';
 import { alsoOf, alsoUrls, copyKey, sharpest, urlOf, useCopies, type Copy, type Place } from './copies';
 import './manga.css';
@@ -76,8 +78,6 @@ function errorText(e: unknown): string {
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
-const dateText = (at: number) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
-
 /** The place a copy key is in: sw:<source>:<address> of sw:<source>:<address>#official. */
 function placeIdOf(key: string): string {
   const hash = key.indexOf('#');
@@ -119,7 +119,7 @@ function startLang(found: MangaFound[], recordOf: Props['recordOf'], prefs: Mang
   return langs[0];
 }
 
-export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, from, al, onOpen, covered, onBack }: Props) {
+function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, from, al, onOpen, covered, onBack }: Props) {
   const labels = useLabels();
   const main = start[0];
   const pageRef = useRef<HTMLDivElement>(null);
@@ -486,7 +486,7 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
                   <span className="mds-ch-n">{c.label}</span>
                   <span className="mds-ch-t">{c.number !== null && c.title ? c.title : ''}</span>
                   <span className="mds-ch-g">{made}</span>
-                  <span className="mds-ch-d">{c.external ? <IconOut /> : dateText(picked[i].at)}</span>
+                  <span className="mds-ch-d">{c.external ? <IconOut /> : shortDate(picked[i].at)}</span>
                 </>
               );
               if (c.external) {
@@ -511,6 +511,9 @@ export function MangaPage({ found: start, prefs, recordOf, placeOf, onRead, onAd
     </motion.div>
   );
 }
+
+/** Not drawn again while the reader covers it (covered.ts). */
+export const MangaPage = memo(SeriesPage, stillCovered);
 
 const RELATION_NAME: Record<AniRelation, string> = {
   prequel: 'Prequel',

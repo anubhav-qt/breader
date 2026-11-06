@@ -1,8 +1,9 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { Mutation, PushRequest, SYNC, type PullResponse, type PushResponse, type ReadMark } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
+import type { Db } from '../db/client.ts';
 import { libraries, libraryItems, librarySettings, readingStates, syncClients, syncMeta } from '../db/schema.ts';
 import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
@@ -31,6 +32,22 @@ const permanent = (e: unknown) => e instanceof ApiError || /^2[23]/.test(pgCode(
 async function timeline(tx: Tx): Promise<{ timeline?: string }> {
   const [meta] = await tx.select({ timeline: syncMeta.timeline }).from(syncMeta).where(eq(syncMeta.id, 1));
   return meta ? { timeline: meta.timeline } : {};
+}
+
+/**
+ * Where a library stands, read in one statement (so from one snapshot): its revision, the
+ * timeline, and its copies that have lapsed.
+ */
+async function standing(db: Db, libraryId: string) {
+  const { rows } = await db.execute<{ rev: number; timeline: string | null; lapsed: string[] }>(sql`
+    SELECT l.rev,
+      (SELECT m.timeline FROM sync_meta m WHERE m.id = 1) AS timeline,
+      ARRAY(SELECT x.id FROM (${lapsedIn(libraryId)}) x) AS lapsed
+    FROM libraries l WHERE l.id = ${libraryId}`);
+  const row = rows[0];
+  let timeline = {};
+  if (row.timeline !== null) timeline = { timeline: row.timeline };
+  return { rev: row.rev, timeline, lapsed: row.lapsed };
 }
 
 export function syncRoutes(deps: Deps) {
@@ -106,24 +123,30 @@ export function syncRoutes(deps: Deps) {
     const since = parse(Since, c.req.query('since'));
     const libraryId = c.var.library.id;
 
+    // Most pulls (every two minutes, on focus) find the library as the browser left it. Those are
+    // answered from one statement: one trip to the database, and no connection held for a
+    // transaction, which a slow link to Supabase would make long.
+    if (since > 0) {
+      const now = await standing(db, libraryId);
+      if (since === now.rev) {
+        const out: PullResponse = { rev: now.rev, books: [], reads: [], settings: null, ...now.timeline, lapsed: now.lapsed };
+        return c.json(out);
+      }
+    }
+
     const out = await db.transaction(
       async (tx): Promise<PullResponse> => {
         const [lib] = await tx.select({ rev: libraries.rev, purgedRev: libraries.purgedRev }).from(libraries).where(eq(libraries.id, libraryId));
         const full = since > 0 && (since < lib.purgedRev || since > lib.rev);
         const from = full ? 0 : since;
-        // Most pulls (every two minutes, on focus) find the library as the browser left it: nothing
-        // has a revision past `from`, so only what changes elsewhere is asked for.
-        const same = from > 0 && from === lib.rev;
-        const items = same ? [] : await tx.select().from(libraryItems).where(and(eq(libraryItems.libraryId, libraryId), gt(libraryItems.rev, from)));
-        const reads = same ? [] : await tx.select().from(readingStates).where(and(eq(readingStates.libraryId, libraryId), gt(readingStates.rev, from)));
+        const items = await tx.select().from(libraryItems).where(and(eq(libraryItems.libraryId, libraryId), gt(libraryItems.rev, from)));
+        const reads = await tx.select().from(readingStates).where(and(eq(readingStates.libraryId, libraryId), gt(readingStates.rev, from)));
         const lapsed = (await tx.execute<{ id: string }>(lapsedIn(libraryId))).rows.map((r) => r.id);
-        const elsewhere = same ? new Set<string>() : await aiElsewhere(tx, libraryId, from);
-        const [settings] = same
-          ? []
-          : await tx
-            .select({ prefs: librarySettings.prefs })
-            .from(librarySettings)
-            .where(and(eq(librarySettings.libraryId, libraryId), gt(librarySettings.rev, from)));
+        const elsewhere = await aiElsewhere(tx, libraryId, from);
+        const [settings] = await tx
+          .select({ prefs: librarySettings.prefs })
+          .from(librarySettings)
+          .where(and(eq(librarySettings.libraryId, libraryId), gt(librarySettings.rev, from)));
         return {
           rev: lib.rev,
           books: items.map((i) => ({

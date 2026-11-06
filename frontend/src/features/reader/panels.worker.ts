@@ -14,7 +14,8 @@ type Ort = typeof import('onnxruntime-web');
 
 export type PanelsWork =
   | { type: 'start'; model: Want }
-  | { type: 'find'; pic: ImageBitmap };
+  /** The page's picture: its file, opened here, or the picture itself. */
+  | { type: 'find'; pic: Blob | ImageBitmap };
 export type PanelsAsk = PanelsWork & { id: number };
 
 export type PanelsReply =
@@ -50,8 +51,10 @@ async function start(id: number, model: Want) {
   return { gpu: false };
 }
 
-async function find(pic: ImageBitmap) {
+async function find(sent: Blob | ImageBitmap) {
   if (!ort || !session) throw new Error('The panel model hasn’t started.');
+  let pic = sent;
+  if (pic instanceof Blob) pic = await createImageBitmap(pic);
   const { width: w, height: h } = pic;
   const canvas = new OffscreenCanvas(w, h);
   const g = canvas.getContext('2d', { willReadFrequently: true });

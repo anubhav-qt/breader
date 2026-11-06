@@ -12,6 +12,25 @@ export function duration(minutes: number): string {
 
 export const minutesFor = (words: number) => words / WPM;
 
+/*
+ * Made once: making a date's words anew (toLocaleDateString) builds a formatter each time, and a
+ * list of hundreds of dates, drawn again, keeps a phone busy.
+ */
+const WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'long' });
+const MONTH = new Intl.DateTimeFormat('en-GB', { month: 'long' });
+const SHORT_DATE = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** A day as this device writes it short, "7 Nov 2026"; nothing for no time at all (0). */
+export function shortDate(t: number): string {
+  if (!t) return '';
+  return SHORT_DATE.format(t);
+}
+
+/** "Sunday". */
+export const weekdayOf = (t: number) => WEEKDAY.format(t);
+/** "August". */
+export const monthOf = (t: number) => MONTH.format(t);
+
 type BucketKind = 'today' | 'yesterday' | 'weekday' | 'lastweek' | 'thismonth' | 'month' | 'year';
 export interface Bucket { label: string; kind: BucketKind }
 
@@ -28,11 +47,11 @@ export function bucket(t: number, now: number): Bucket {
   const n = new Date(now);
   if (days <= 0) return { label: 'Today', kind: 'today' };
   if (days === 1) return { label: 'Yesterday', kind: 'yesterday' };
-  if (days < 7) return { label: d.toLocaleDateString('en-GB', { weekday: 'long' }), kind: 'weekday' };
+  if (days < 7) return { label: weekdayOf(t), kind: 'weekday' };
   if (days < 14) return { label: 'Last week', kind: 'lastweek' };
   if (d.getFullYear() === n.getFullYear()) {
     if (d.getMonth() === n.getMonth()) return { label: 'This month', kind: 'thismonth' };
-    return { label: d.toLocaleDateString('en-GB', { month: 'long' }), kind: 'month' };
+    return { label: monthOf(t), kind: 'month' };
   }
   return { label: String(d.getFullYear()), kind: 'year' };
 }

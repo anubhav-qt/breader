@@ -16,6 +16,9 @@ interface Change {
 }
 
 const BATCH = 500;
+/** While records arrive, the feed looks again this soon; once quiet, it waits longer each time, up to QUIET. */
+const QUICK = 2000;
+const QUIET = 30_000;
 const TABLES = Object.keys(FED_TABLES) as FedTable[];
 const XMIN = 'pg_snapshot_xmin(pg_current_snapshot())::text::bigint';
 
@@ -32,6 +35,19 @@ export interface FeedHooks {
    * run, only the one doing the once-only jobs does (jobs/lease.ts), as those include pruning.
    */
   acks?: () => boolean;
+}
+
+/**
+ * How long the feed waits after a step that copied `copied` records, the last wait having been
+ * `last`: not at all after a full batch, as more are waiting; QUICK after some; and when there
+ * were none, twice as long as before, from QUICK up to QUIET. Never 0 when quiet, even straight
+ * after a full batch, or the feed would ask Supabase again and again with no pause.
+ */
+export function waitAfter(copied: number, last: number): number {
+  if (copied >= BATCH) return 0;
+  if (copied > 0) return QUICK;
+  const before = Math.max(last, QUICK);
+  return Math.min(before * 2, QUIET);
 }
 
 export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: FeedHooks = {}) {
@@ -174,11 +190,11 @@ export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: FeedHooks = {
 
   /** Polls every 2 s while records arrive, easing off to every 30 s when quiet. */
   async function run(signal: AbortSignal) {
-    let delay = 2000;
+    let delay = QUICK;
     while (!signal.aborted) {
       try {
         const n = await step();
-        delay = n >= BATCH ? 0 : n > 0 ? 2000 : Math.min(delay * 2, 30_000);
+        delay = waitAfter(n, delay);
       } catch (err) {
         log.warn({ err }, 'feed step failed; retrying');
         report(err, { job: 'feed' });

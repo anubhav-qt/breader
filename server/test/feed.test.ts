@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FED_TABLES } from '../src/db/schema.ts';
 import { pruneReadFeed, pruneStaleFeed } from '../src/jobs/chores.ts';
-import { makeFeed } from '../src/mirror/feed.ts';
+import { makeFeed, waitAfter } from '../src/mirror/feed.ts';
 import { book, mirror, primary, push, registered } from './helpers.ts';
 
 const feed = makeFeed(primary.pool, mirror.pool);
@@ -100,5 +100,32 @@ describe('change feed', () => {
     const { rows } = await primary.pool.query(`SELECT count(*)::int AS n FROM change_log WHERE (txid, id) <= (SELECT ack_txid, ack_id FROM feed_state)`);
     expect(rows[0].n).toBe(0);
     expect((await primary.pool.query('SELECT count(*)::int AS n FROM change_log')).rows[0].n).toBeGreaterThan(0);
+  });
+});
+
+describe('feed waits', () => {
+  it('looks again at once after a full batch, as more are waiting', () => {
+    expect(waitAfter(500, 2000)).toBe(0);
+    expect(waitAfter(500, 30_000)).toBe(0);
+  });
+
+  it('looks again in 2 s after a few records', () => {
+    expect(waitAfter(1, 0)).toBe(2000);
+    expect(waitAfter(499, 30_000)).toBe(2000);
+  });
+
+  it('waits twice as long each quiet step, up to 30 s', () => {
+    const waits: number[] = [];
+    let wait = 2000;
+    for (let i = 0; i < 6; i++) {
+      wait = waitAfter(0, wait);
+      waits.push(wait);
+    }
+    expect(waits).toEqual([4000, 8000, 16_000, 30_000, 30_000, 30_000]);
+  });
+
+  it('never stops waiting once quiet, even straight after a full batch', () => {
+    const afterBatch = waitAfter(500, 2000);
+    expect(waitAfter(0, afterBatch)).toBe(4000);
   });
 });

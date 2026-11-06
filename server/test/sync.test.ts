@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { book, push, registered } from './helpers.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { book, primary, push, registered } from './helpers.ts';
 
 describe('sync', () => {
   it('applies a batch under one new rev and pulls it back', async () => {
@@ -26,6 +26,21 @@ describe('sync', () => {
     expect(p.body.settings).toEqual({ theme: 'night', style: 'book' });
 
     expect((await b.get('/v1/sync/pull?since=1')).body).toEqual({ rev: 1, books: [], reads: [], settings: null, timeline: expect.any(String), lapsed: [] });
+  });
+
+  it('answers a browser already up to date in one trip, with no transaction', async () => {
+    const { b } = await registered();
+    await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book() }));
+    const transaction = vi.spyOn(primary.db, 'transaction');
+    try {
+      const behind = await b.get('/v1/sync/pull?since=0');
+      expect(transaction).toHaveBeenCalledTimes(1);
+      const same = await b.get(`/v1/sync/pull?since=${behind.body.rev}`);
+      expect(same.body).toEqual({ rev: behind.body.rev, books: [], reads: [], settings: null, timeline: behind.body.timeline, lapsed: [] });
+      expect(transaction).toHaveBeenCalledTimes(1);
+    } finally {
+      transaction.mockRestore();
+    }
   });
 
   it('ignores a retried push', async () => {
