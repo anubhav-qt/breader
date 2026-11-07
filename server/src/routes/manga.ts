@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { AniListAboutQuery, AniListFindQuery, AniListFoundQuery, AniListId, AniListQuery, MANGA_KINDS, MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type MangaSearchEvent, type MangaState } from '@breader/shared';
+import { AniListAboutQuery, AniListFindQuery, AniListFoundQuery, AniListId, AniListKeptQuery, AniListQuery, AniListSearchQuery, MANGA_KINDS, MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type AniListKept, type MangaKind, type MangaSearchEvent, type MangaState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, signedOut } from '../lib/errors.ts';
 import { readSession } from '../lib/session.ts';
@@ -109,18 +109,36 @@ export function mangaRoutes(deps: Deps) {
   });
 
   // AniList's lists for Browse, and what it says of a series: kept a while on the laptop (manga/anilist.ts).
+  /** The kinds asked for, in MANGA_KINDS' order so the same ask is kept once; every kind when none are. */
+  const kindsOf = (asked: readonly MangaKind[] | undefined): MangaKind[] => {
+    if (!asked) return [...MANGA_KINDS];
+    return MANGA_KINDS.filter((k) => asked.includes(k));
+  };
+
   r.get('/manga/anilist', async (c) => {
     const q = parse(AniListQuery, c.req.query());
     c.header('Cache-Control', 'private, max-age=600');
-    let kinds = [...MANGA_KINDS];
-    if (q.kinds) kinds = MANGA_KINDS.filter((k) => q.kinds!.includes(k));
-    return c.json(await manga!.anilist.list({ sort: q.sort, page: q.page, adult: !!q.adult || !!q.adultOnly, adultOnly: !!q.adultOnly, kinds }));
+    return c.json(await manga!.anilist.list({ sort: q.sort, page: q.page, adult: !!q.adult || !!q.adultOnly, adultOnly: !!q.adultOnly, kinds: kindsOf(q.kinds) }));
   });
 
   r.get('/manga/anilist/find', async (c) => {
     const q = parse(AniListFindQuery, c.req.query());
     c.header('Cache-Control', 'private, max-age=3600');
     return c.json({ about: await manga!.anilist.find(q.title, !!q.adult) });
+  });
+
+  // AniList's best matches for a search, kept a day (a month while it's asked again): Browse shows them first.
+  r.get('/manga/anilist/search', async (c) => {
+    const q = parse(AniListSearchQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=600');
+    return c.json(await manga!.anilist.search({ q: q.q, adult: !!q.adult || !!q.adultOnly, adultOnly: !!q.adultOnly, kinds: kindsOf(q.kinds) }));
+  });
+
+  // Where a page of series is read, those the server knows already: one ask for a list's page, not one a card.
+  r.get('/manga/anilist/found', async (c) => {
+    const { ids, lang, adult } = parse(AniListKeptQuery, c.req.query());
+    c.header('Cache-Control', 'private, max-age=60');
+    return c.json({ found: await manga!.aniFoundKept(ids, lang, !!adult) } satisfies AniListKept);
   });
 
   r.get('/manga/anilist/cover/:id', async (c) => {

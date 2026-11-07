@@ -37,5 +37,5 @@
 
 ## Speed, measured on a slow phone (4x CPU)
 - [ ] A long manhwa strip (12000 px tall) takes the panel finder about 1.9 s in its worker. Scrolling stays smooth, but its panels come late.
-- [ ] Browse takes about 1 s to first show on a slow phone. Not looked into yet.
+- [ ] Browse takes about 1 s to first show on a slow phone. Since 2026-11-07 it asks where a page of series is read in one call, not 30; not measured on a phone yet.
 - [ ] The API's database pool is 5 connections (db/client.ts). Load tests passed 100 readers and failed 150: try a larger pool, measured, before changing it.

@@ -1,4 +1,4 @@
-import type { AniCard, AniListAbout, AniListPage, AniListSort, AniRelated, AniRelation, MangaCard, MangaKind } from '@breader/shared';
+import { MANGA_KINDS, type AniCard, type AniListAbout, type AniListPage, type AniListSort, type AniRelated, type AniRelation, type MangaCard, type MangaKind } from '@breader/shared';
 import { both, Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
@@ -22,6 +22,8 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 /** Cards a list page holds. */
 const PER_PAGE = 30;
+/** AniList's best matches a search shows: past these its matches are seldom what was meant. */
+const SEARCH_MATCHES = 10;
 /** Similar series a page shows at most. */
 const MOST_SIMILAR = 12;
 const NEVER_TAGS = new Set(['lolicon', 'shotacon']);
@@ -65,6 +67,12 @@ const LIST = `query ($page: Int, $sort: [MediaSort], $adult: Boolean, $country: 
   }
 }
 ${CARD}`;
+const SEARCH = `query ($search: String, $adult: Boolean, $country: CountryCode) {
+  Page(page: 1, perPage: ${SEARCH_MATCHES}) {
+    media(search: $search, type: MANGA, sort: [SEARCH_MATCH], isAdult: $adult, countryOfOrigin: $country, format_not_in: [NOVEL]) { ...card }
+  }
+}
+${CARD}`;
 const ABOUT_FIELDS = `...card
     relations { edges { relationType(version: 2) node { ...card } } }
     recommendations(sort: [RATING_DESC], perPage: 25) { nodes { rating mediaRecommendation { ...card } } }`;
@@ -101,8 +109,18 @@ export interface AniListAsk {
   kinds: MangaKind[];
 }
 
+/** A search of AniList's, as Browse asks for it. */
+export interface AniListSearchAsk {
+  q: string;
+  adult: boolean;
+  adultOnly: boolean;
+  kinds: MangaKind[];
+}
+
 export interface AniList {
   list(ask: AniListAsk): Promise<AniListPage>;
+  /** Its best matches for a search, one page of them (next is null). */
+  search(ask: AniListSearchAsk): Promise<AniListPage>;
   /** A series by its AniList id; adult: 18+ series among those it names too. */
   about(id: number, adult: boolean): Promise<AniListAbout>;
   /** The series AniList finds by this title, or null when it finds none. */
@@ -110,6 +128,8 @@ export interface AniList {
   cover(id: number, size: CoverWidth): Promise<Cover>;
   /** A series' card by its AniList id: from a list or page it came in, else asked of AniList. */
   card(id: number): Promise<AniCard>;
+  /** A series' card when one's kept, without asking AniList. */
+  cardKept(id: number): Promise<AniCard | undefined>;
 }
 
 export interface AniListOptions {
@@ -129,6 +149,36 @@ const never = (m: RawMedia) => (m.tags ?? []).some((t) => NEVER_TAGS.has((t?.nam
 function namesOf(m: RawMedia): string[] {
   const all = [m.title?.english, m.title?.romaji, m.title?.native, ...(m.synonyms ?? [])];
   return [...new Set(all.map((t) => (t ?? '').trim()).filter(Boolean))].slice(0, 20);
+}
+
+/** How a search is kept: the same however it's spaced or capitalised. */
+export function searchKey(q: string): string {
+  return q.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** What AniList is asked to filter by, and the key part saying so, for these kinds and 18+ choices. */
+function filtersOf(ask: { adult: boolean; adultOnly: boolean; kinds: MangaKind[] }) {
+  let adult: boolean | null = false;
+  if (ask.adultOnly) adult = true;
+  else if (ask.adult) adult = null;
+  // One kind is asked for by its country; some kinds but not all are picked out of every one.
+  let country: string | null = null;
+  if (ask.kinds.length === 1) country = COUNTRY_OF[ask.kinds[0]] ?? null;
+  // A filter left null is one AniList matches against null, so one not wanted is left out.
+  const vars: Record<string, unknown> = {};
+  if (adult !== null) vars.adult = adult;
+  if (country) vars.country = country;
+  let shown = 'safe';
+  if (adult === null) shown = 'any';
+  else if (adult) shown = 'only18';
+  const key = [shown, [...ask.kinds].sort().join('+')].join(':');
+  return { vars, key };
+}
+
+/** The cards of a kind wanted: when some kinds but not all are, those AniList gave of the rest go. */
+function ofKinds(items: AniCard[], kinds: MangaKind[]): AniCard[] {
+  if (kinds.length >= MANGA_KINDS.length) return items;
+  return items.filter((c) => c.kind !== null && kinds.includes(c.kind));
 }
 
 /** AniList's cover for a series: the biggest it has. */
@@ -162,7 +212,10 @@ export function makeAniList(opts: AniListOptions): AniList {
   // Without a shared store, memory alone keeps them.
   const store: Store = opts.store ?? { get: async () => undefined, set: async () => {} };
   // Each kind kept in memory too (both()), so AniList's limit holds with Redis away.
-  const lists = new Memo<AniListPage>(both(new MemoryStore(300), store), 'anilist:v1:list', 6 * HOUR, 3 * DAY);
+  // A list's page is asked again after 6 hours, and given at once for a month meanwhile.
+  const lists = new Memo<AniListPage>(both(new MemoryStore(1000), store), 'anilist:v1:list', 6 * HOUR, 30 * DAY);
+  /** A search's matches change only as AniList adds series, so they're given at once for a month, asked again after a day. */
+  const searches = new Memo<AniCard[]>(both(new MemoryStore(2000), store), 'anilist:v1:search', DAY, 30 * DAY);
   const abouts = new Memo<RawAbout>(both(new MemoryStore(500), store), 'anilist:v1:about', DAY, 7 * DAY);
   /** The id a title finds, or 0 when it finds none. */
   const finds = new Memo<number>(both(new MemoryStore(5000), store), 'anilist:v1:find', 7 * DAY, 30 * DAY);
@@ -299,28 +352,36 @@ export function makeAniList(opts: AniListOptions): AniList {
       });
     },
 
+    cardKept(id) {
+      return cards.peek(String(id));
+    },
+
     async list(ask) {
-      let adult: boolean | null = false;
-      if (ask.adultOnly) adult = true;
-      else if (ask.adult) adult = null;
-      // One kind is asked for by its country; some kinds but not all are picked out of every one.
-      let country: string | null = null;
-      if (ask.kinds.length === 1) country = COUNTRY_OF[ask.kinds[0]] ?? null;
-      const key = [ask.sort, ask.page, adult === null ? 'any' : adult ? 'only18' : 'safe', [...ask.kinds].sort().join('+')].join(':');
+      const filters = filtersOf(ask);
+      const key = [ask.sort, ask.page, filters.key].join(':');
       return lists.get(key, async () => {
-        // A filter left null is one AniList matches against null, so one not wanted is left out.
-        const vars: Record<string, unknown> = { page: ask.page, sort: [SORT[ask.sort]] };
-        if (adult !== null) vars.adult = adult;
-        if (country) vars.country = country;
+        const vars = { ...filters.vars, page: ask.page, sort: [SORT[ask.sort]] };
         const r = await call<{ Page: { pageInfo?: { hasNextPage?: boolean }; media?: RawMedia[] } }>(LIST, vars);
         const media = (r.Page.media ?? []).filter((m) => !never(m));
         noteCovers(media);
-        let items = media.map(cardOf);
-        if (ask.kinds.length < 4) items = items.filter((c) => c.kind !== null && ask.kinds.includes(c.kind));
+        const items = ofKinds(media.map(cardOf), ask.kinds);
         let next: number | null = null;
         if (r.Page.pageInfo?.hasNextPage && ask.page < 100) next = ask.page + 1;
         return { items, next };
       });
+    },
+
+    async search(ask) {
+      const q = searchKey(ask.q);
+      if (!q) return { items: [], next: null };
+      const filters = filtersOf(ask);
+      const items = await searches.get(`${filters.key}:${q}`, async () => {
+        const r = await call<{ Page: { media?: RawMedia[] } }>(SEARCH, { ...filters.vars, search: q });
+        const media = (r.Page.media ?? []).filter((m) => !never(m));
+        noteCovers(media);
+        return ofKinds(media.map(cardOf), ask.kinds);
+      });
+      return { items, next: null };
     },
 
     async find(title, adult) {

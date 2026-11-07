@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
-import { ANILIST_SORTS, MANGA_KINDS, seriesName, type AniCard, type AniListSort, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
+import { ANILIST_SORTS, MANGA_KINDS, sameSeries, seriesName, type AniCard, type AniListPage, type AniListSort, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
 import { IconCheck, IconSearch } from '../../components/icons';
 import { Modal } from '../../components/Modal';
 import { useLabels } from '../../data/labels';
 import { anilist, LANGS, langName, mangadex, writeMangaPrefs, type BrowseSort, type MangaPrefs } from '../../lib/mangadex';
 import { AniTile } from './AniTile';
-import { useAniFound } from './aniPick';
+import { primeFound, useAniFound } from './aniPick';
 import { entriesOf, viewOf } from './found';
 import './manga.css';
 import { Loader } from '../../components/Loader';
@@ -22,7 +22,9 @@ import { Loader } from '../../components/Loader';
  * page (MangaPage.tsx), to pick a copy, read it or add it to My manga.
  * Popular, Trending and Top rated are AniList's lists, which hold series rather than copies: a card
  * from one is looked for in every place when it's picked (AniTile.tsx). Updated is the sites' own,
- * as only they know what's just had a chapter.
+ * as only they know what's just had a chapter. A search shows AniList's best matches first, as it
+ * takes spaces and spelling loosely where the sites don't ("full metal alchemist"), then what the
+ * sites found that isn't one of them.
  */
 
 interface Props {
@@ -86,6 +88,13 @@ type AniFound = { state: 'loading' } | { state: 'error'; message: string } | { s
 /** The AniList list last shown, and how far down it was, as kept is for the sites'. */
 let keptAni: { found: Extract<AniFound, { state: 'ready' }>; top: number } | null = null;
 
+/** The longest search the server takes (MangaSearchQuery). */
+const SEARCH_MOST = 200;
+
+/** AniList's best matches for the last few searches, by aniQKey, so going back to one shows them at once. */
+const matches = new Map<string, AniCard[]>();
+const MATCHES = 20;
+
 /** Whether an order is one of AniList's lists. */
 const isAni = (sort: BrowseSort): sort is AniListSort => (ANILIST_SORTS as readonly string[]).includes(sort);
 
@@ -123,6 +132,8 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   const [q, setQ] = useState(() => kept?.text.trim() ?? '');
   const [found, setFound] = useState<Found>(() => kept?.found ?? { state: 'loading' });
   const [ani, setAni] = useState<AniFound>(() => keptAni?.found ?? { state: 'loading' });
+  /** AniList's best matches for a search: ask is the search they're for (aniQKey). */
+  const [matched, setMatched] = useState<{ ask: string; items: AniCard[] } | null>(null);
   /** Where to scroll back to, once Browse is on screen, and what it came back with. */
   const back = useRef(!kept?.text.trim() && isAni(prefs.sort) ? keptAni?.top ?? 0 : kept?.top ?? 0);
   const restored = useRef(kept?.found);
@@ -139,6 +150,8 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   const loadingMore = useRef<string | null>(null);
   /** The next lot, asked for as soon as the one before it came: the search it's for, and where it starts. */
   const ahead = useRef<{ ask: string; at: string; lot: Promise<Lot> } | null>(null);
+  /** An AniList list's next page, asked for and looked up as soon as the one before it is shown. */
+  const aniAhead = useRef<{ ask: string; page: number; lot: Promise<AniListPage> } | null>(null);
 
   const kinds = shownKinds(prefs.kinds);
 
@@ -149,8 +162,21 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
   const askKey = JSON.stringify({ q, lang: prefs.lang, sort, adult: prefs.adult, adultOnly: prefs.adultOnly, doujinshi: prefs.doujinshi, kinds });
   const aniKey = JSON.stringify({ sort: aniSort, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds });
   const aniPage = (page: number) => anilist.list({ sort: aniSort ?? 'popular', page, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds });
-  const aniCards = useMemo(() => (ani.state === 'ready' && ani.ask === aniKey ? ani.items : []), [ani, aniKey]);
-  const { shown: aniShown, settled: aniSettled } = useAniFound(aniCards, prefs);
+  const aniQKey = JSON.stringify({ q, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds });
+  const matchedNow = !!q && matched !== null && matched.ask === aniQKey;
+  // AniList's cards shown: a list's, or a search's best matches.
+  const aniCards = useMemo(() => {
+    if (aniSort) {
+      if (ani.state === 'ready' && ani.ask === aniKey) return ani.items;
+      return [];
+    }
+    if (matchedNow) return matched!.items;
+    return [];
+  }, [aniSort, ani, aniKey, matchedNow, matched]);
+  // A list is long, so a card slow to be looked up is left out of it rather than hold the rest back.
+  let aniList: string | undefined = undefined;
+  if (aniSort) aniList = aniKey;
+  const { shown: aniShown, settled: aniSettled } = useAniFound(aniCards, prefs, aniList);
 
   // A pause in typing searches.
   useEffect(() => {
@@ -225,6 +251,32 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askKey, tries, aniSort]);
 
+  // AniList's best matches for a search, beside the sites'. Not reaching AniList leaves the sites' alone.
+  useEffect(() => {
+    if (!q) return;
+    const ask = aniQKey;
+    const had = matches.get(ask);
+    if (had) {
+      setMatched({ ask, items: had });
+      return;
+    }
+    let live = true;
+    const keep = (items: AniCard[]) => {
+      matches.delete(ask);
+      matches.set(ask, items);
+      if (matches.size > MATCHES) matches.delete(matches.keys().next().value!);
+    };
+    anilist.search({ q, adult: prefs.adult, adultOnly: prefs.adultOnly, kinds }).then(
+      (r) => {
+        keep(r.items);
+        if (live) setMatched({ ask, items: r.items });
+      },
+      () => { if (live) setMatched({ ask, items: [] }); },
+    );
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aniQKey]);
+
   // An AniList list: its first page, then the rest as the end comes near, as the sites' lots are.
   useEffect(() => {
     if (!aniSort) return;
@@ -252,10 +304,24 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     if (ani.ask !== aniKey) return;
     const ask = ani.ask;
     const page = ani.next;
+    // Asked for now, and its cards looked up, so it's ready by the time the end comes near.
+    const had = aniAhead.current;
+    if (!had || had.ask !== ask || had.page !== page) {
+      const lot = aniPage(page);
+      aniAhead.current = { ask, page, lot };
+      lot.then(
+        (r) => primeFound(r.items, prefs),
+        () => { if (aniAhead.current?.lot === lot) aniAhead.current = null; },
+      );
+    }
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting || loadingMore.current === ask) return;
       loadingMore.current = ask;
-      aniPage(page).then(
+      const kept = aniAhead.current;
+      let lot: Promise<AniListPage>;
+      if (kept && kept.ask === ask && kept.page === page) lot = kept.lot;
+      else lot = aniPage(page);
+      lot.then(
         (r) => setAni((f) => {
           if (f.state !== 'ready' || f.ask !== ask || f.next !== page) return f;
           const seen = new Set(f.items.map((c) => c.id));
@@ -357,6 +423,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     if (!ready) return [];
     return entriesOf(ready.items).map((e) => ({
       ...viewOf(e),
+      found: e.found,
       have: e.found.some((f) => have.has(f.card.id)),
       pick: () => onPick(e.found),
     }));
@@ -377,6 +444,14 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
     else next = MANGA_KINDS.filter((k) => k === kind || kinds.includes(k));
     set({ kinds: next });
   };
+
+  // A search's AniList matches go first, and the sites' series that are one of them aren't shown twice.
+  let matchTiles: typeof aniShown = [];
+  if (q) matchTiles = aniShown;
+  const matchesComing = !!q && (!matchedNow || !aniSettled);
+  let siteItems = items;
+  if (matchTiles.length > 0) siteItems = items.filter((c) => !matchTiles.some((m) => c.found.some((f) => sameSeries(m.found, f))));
+  const haveOf = (f: MangaFound[]) => f.some((x) => have.has(x.card.id));
 
   let nothing = '';
   if (q) {
@@ -420,26 +495,32 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
         </>
       );
     }
-  } else if (found.state === 'error') {
+  } else if (found.state === 'error' && matchTiles.length === 0 && !matchesComing) {
     body = (
       <div className="mdx-note">
         <p>{found.message}</p>
         <button type="button" className="btn btn-quiet" onClick={() => setTries((n) => n + 1)}>Try again</button>
       </div>
     );
-  } else if (found.state === 'loading') {
+  } else if (matchTiles.length === 0 && (found.state !== 'ready' || (siteItems.length === 0 && matchesComing))) {
     body = (
       <div className="mdx-grid" aria-busy="true">
         {Array.from({ length: 12 }, (_, i) => <span key={i} className="mdx-card is-ghost"><span className="mdx-cover" /></span>)}
       </div>
     );
-  } else if (items.length === 0 && !found.next) {
+  } else if (found.state === 'ready' && siteItems.length === 0 && matchTiles.length === 0 && !found.next) {
     if (q) body = <div className="mdx-note"><p>{nothing}</p></div>;
   } else {
+    const coming = found.state === 'loading' || (found.state === 'ready' && (!!found.next || !!found.coming)) || matchesComing;
     body = (
       <>
         <ul className="mdx-grid">
-          {items.map((c) => (
+          {matchTiles.map(({ card, found: f }) => (
+            <li key={`al:${card.id}`}>
+              <AniTile card={card} have={haveOf(f)} onPick={() => onPick(f, card.id)} sizes="(max-width: 720px) 32vw, 190px" />
+            </li>
+          ))}
+          {siteItems.map((c) => (
             <li key={c.key}>
               <button type="button" className="mdx-card" onClick={c.pick}>
                 <span className="mdx-cover">
@@ -457,7 +538,13 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
             </li>
           ))}
         </ul>
-        <div ref={end} className="mdx-end">{found.next || found.coming ? <Loader /> : null}</div>
+        {found.state === 'error' && (
+          <div className="mdx-note">
+            <p>{found.message}</p>
+            <button type="button" className="btn btn-quiet" onClick={() => setTries((n) => n + 1)}>Try again</button>
+          </div>
+        )}
+        <div ref={end} className="mdx-end">{coming ? <Loader /> : null}</div>
       </>
     );
   }
@@ -471,7 +558,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
         <label className="mdx-search">
           <IconSearch />
           <span className="sr-only">Search manga</span>
-          <input type="search" value={text} placeholder="Search manga" enterKeyHint="search" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setQ(text.trim()); }} />
+          <input type="search" value={text} placeholder="Search manga" enterKeyHint="search" maxLength={SEARCH_MOST} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setQ(text.trim()); }} />
         </label>
         <div className={`mdx-row${more.l ? ' is-more-l' : ''}${more.r ? ' is-more-r' : ''}`} ref={row}>
           <div className="mdx-sorts" role="radiogroup" aria-label="Order">
@@ -511,7 +598,9 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       {body}
 
       <p className="mdx-credit">
-        {aniSort ? <>Lists from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a>, read from </> : 'From '}
+        {aniSort && <>Lists from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a>, read from </>}
+        {!aniSort && q && <>Matches from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a>, </>}
+        {!aniSort && !q && 'From '}
         <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a> and Suwayomi’s sites.
       </p>
 

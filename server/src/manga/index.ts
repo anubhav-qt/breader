@@ -47,7 +47,9 @@ export interface Manga {
   anilist: AniList;
   /** Where a series AniList knows (by its id) can be read: its copies found on the sites, none when no site has it (anifound.ts). */
   aniFound(alId: number, lang: string | undefined, adult: boolean): Promise<MangaFound[]>;
-  /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi, then finds where the first page of each AniList list is read in English. */
+  /** The same for many at once, as far as it's kept already, asking no site: one not kept is left out, to be asked alone. */
+  aniFoundKept(alIds: number[], lang: string | undefined, adult: boolean): Promise<Record<string, MangaFound[]>>;
+  /** Ahead of readers: shelves each English source's Popular and Updated lists, or checks MangaDex's first lots without Suwayomi, then finds where the first 20 pages of each AniList list are read in English (5 of each kind alone), with their covers. */
   warm(): Promise<void>;
 }
 
@@ -56,7 +58,7 @@ export interface MangaOptions {
   dir: string;
   cacheBytes: number;
   fetch?: typeof fetch;
-  /** Calls a window: MangaDex's API overall (each source the same), and its page servers' addresses. Tests go faster. */
+  /** Calls a window: MangaDex's API overall (each source and AniList the same), and its page servers' addresses. Tests go faster. */
   pace?: { api: [number, number]; home: [number, number] };
   /** Where answers are kept: Redis, when the server has one. Without, in memory. */
   store?: Store | null;
@@ -83,11 +85,12 @@ const SEARCH_WITHIN = 19_000;
 const COPIES_FOR = 24 * 3_600_000;
 /** And kept on after, given at once while they're measured again (lib/cache.ts). */
 const COPIES_KEPT = 3 * COPIES_FOR;
-/** How long where an AniList series is read is fresh: sites add series now and then; given at once after, while it's looked for again. */
-const ANI_FOUND_FOR = 24 * 3_600_000;
-const ANI_FOUND_KEPT = 14 * ANI_FOUND_FOR;
-/** Pages of each AniList list warmed ahead of readers (30 series a page), and series looked for at once. */
-const ANI_WARM_PAGES = 5;
+/** How long where an AniList series is read is fresh: sites add series now and then; given at once for a month after, while it's looked for again. */
+const ANI_FOUND_FOR = 3 * 24 * 3_600_000;
+const ANI_FOUND_KEPT = 30 * 24 * 3_600_000;
+/** Pages of each AniList list warmed ahead of readers (30 series a page), with every kind on and with each kind alone, and series looked for at once. */
+const ANI_WARM_PAGES = 20;
+const ANI_WARM_KIND_PAGES = 5;
 const ANI_WARM_AT_ONCE = 3;
 /** The kinds Browse offers (Comics isn't), as it asks AniList for them. */
 const BROWSE_KINDS: readonly MangaKind[] = ['manga', 'manhwa', 'manhua'];
@@ -98,7 +101,7 @@ export function makeManga(opts: MangaOptions): Manga {
   const covers = new Covers(disk, store ?? new MemoryStore(20_000));
   const pace = opts.pace?.api;
   const dex = makeMangaDex({ disk, covers, fetch: opts.fetch, pace: opts.pace, store });
-  const anilist = makeAniList({ covers, fetch: opts.fetch, store });
+  const anilist = makeAniList({ covers, fetch: opts.fetch, store, pace });
   let suwayomi: Suwayomi | null = null;
   if (opts.suwayomi) suwayomi = makeSuwayomi({ url: opts.suwayomi, disk, covers, fetch: opts.fetch, pace, store, browseWithin: opts.browseWithin });
 
@@ -162,21 +165,35 @@ export function makeManga(opts: MangaOptions): Manga {
     return { chapters: total, copies };
   }
 
-  /** The pages Browse's AniList lists are warmed to, as readers see them: most-read first. */
+  /** The pages Browse's AniList lists are warmed to, as readers see them: a page of every list before the next page of any. */
   function aniWarmAsks(): AniListAsk[] {
     const asks: AniListAsk[] = [];
     const ask = (sort: AniListSort, page: number, kinds: MangaKind[]) => asks.push({ sort, page, adult: false, adultOnly: false, kinds });
-    for (const sort of ANILIST_SORTS) ask(sort, 1, [...BROWSE_KINDS]);
-    for (const kind of BROWSE_KINDS) for (const sort of ANILIST_SORTS) ask(sort, 1, [kind]);
-    for (let page = 2; page <= ANI_WARM_PAGES; page++) for (const sort of ANILIST_SORTS) ask(sort, page, [...BROWSE_KINDS]);
+    for (let page = 1; page <= ANI_WARM_PAGES; page++) {
+      for (const sort of ANILIST_SORTS) ask(sort, page, [...BROWSE_KINDS]);
+      if (page > ANI_WARM_KIND_PAGES) continue;
+      for (const kind of BROWSE_KINDS) {
+        for (const sort of ANILIST_SORTS) ask(sort, page, [kind]);
+      }
+    }
     return asks;
   }
 
+  /** Where an AniList series is read is kept by this key. wide: 18+ copies count. */
+  const aniFoundKey = (alId: number, lang: string | undefined, wide: boolean) => `${alId}:${lang ?? 'any'}:${wide ? 1 : 0}`;
+
+  /** Warms a series' AniList cover onto the disk, when it isn't there. */
+  async function warmAniCover(alId: number) {
+    if (await covers.has(`al:${alId}`)) return;
+    await anilist.cover(alId, 256).catch(() => {});
+  }
+
   /**
-   * Where the series on Browse's AniList lists are read in English, looked for ahead of readers:
-   * the first pages of each list, and of each kind on its own, a few series at a time. A run still
-   * going isn't started again. Everything's kept a day, so after the first time a run asks only
-   * what's past its time, and waits for each (freshly), keeping to the sites' pace.
+   * Where the series on Browse's AniList lists are read in English, looked for ahead of readers,
+   * and the covers of those that are read somewhere: the first 20 pages of each list, and 5 of each
+   * kind on its own, a few series at a time. A run still going isn't started again. Everything's
+   * fresh for days, so after the first time a run asks only what's past its time, and waits for
+   * each (freshly), keeping to the sites' pace.
    */
   let aniWarming: Promise<void> | null = null;
   function warmAniList(): Promise<void> {
@@ -196,7 +213,8 @@ export function makeManga(opts: MangaOptions): Manga {
         const worker = async () => {
           while (i < cards.length) {
             const c = cards[i++];
-            await self.aniFound(c.id, 'en', false).catch(() => {});
+            const found = await self.aniFound(c.id, 'en', false).catch(() => []);
+            if (found.length > 0) await warmAniCover(c.id);
           }
         };
         await Promise.all(Array.from({ length: ANI_WARM_AT_ONCE }, worker));
@@ -214,7 +232,7 @@ export function makeManga(opts: MangaOptions): Manga {
       const card = await anilist.card(alId);
       if (card.adult && !adult) throw new ApiError(404, 'anilist_not_found', 'AniList doesn’t have that.');
       const wide = adult || card.adult;
-      const key = `${alId}:${lang ?? 'any'}:${wide ? 1 : 0}`;
+      const key = aniFoundKey(alId, lang, wide);
       const look = () => copiesOfCard(card, (q) => self.search(q), lang, wide);
       const found = await aniFoundMemo.get(key, look);
       const right = found.filter((f) => isCardsSeries(card, f));
@@ -222,6 +240,26 @@ export function makeManga(opts: MangaOptions): Manga {
       // the rest of what's kept staying as it is.
       if (right.length < found.length) return aniFoundMemo.get(key, look, true);
       return right;
+    },
+
+    async aniFoundKept(alIds, lang, adult) {
+      const out: Record<string, MangaFound[]> = {};
+      const one = async (alId: number) => {
+        const card = await anilist.cardKept(alId);
+        if (!card) return;
+        if (card.adult && !adult) return;
+        const wide = adult || card.adult;
+        // As kept, even past its time: looking again is left to the warming and to one asked alone,
+        // as a page's worth at once would hold up readers' own searches on the sites.
+        const found = await aniFoundMemo.peek(aniFoundKey(alId, lang, wide));
+        if (found === undefined) return;
+        const right = found.filter((f) => isCardsSeries(card, f));
+        // Kept with another series in it: asked alone, which looks for it again.
+        if (right.length < found.length) return;
+        out[alId] = right;
+      };
+      await Promise.all(alIds.map(one));
+      return out;
     },
 
     async search(q, onSome) {

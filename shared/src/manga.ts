@@ -464,11 +464,36 @@ export const AniListQuery = z.object({
 });
 export type AniListQuery = z.input<typeof AniListQuery>;
 
+/** AniList's best matches for a search typed in Browse, which takes spaces and spelling loosely ("full metal alchemist"). */
+export const AniListSearchQuery = z.object({
+  q: z.string().trim().min(1).max(200),
+  adult: Flag.optional(),
+  adultOnly: Flag.optional(),
+  kinds: Kinds.optional(),
+});
+export type AniListSearchQuery = z.input<typeof AniListSearchQuery>;
+
 export const AniListAboutQuery = z.object({ adult: Flag.optional() });
 /** A series looked up on AniList by its title, when nothing gave its AniList id. */
 export const AniListFindQuery = z.object({ title: z.string().trim().min(1).max(200), adult: Flag.optional() });
 /** Where a series AniList knows can be read: in this language (any, left out), 18+ copies too or not. */
 export const AniListFoundQuery = z.object({ lang: MangaLang.optional(), adult: Flag.optional() });
+
+/** The most series one ask may say where they're read (AniListKeptQuery): two of a list's pages. */
+export const MOST_KEPT = 60;
+/** Where some series are read, as far as the server already knows, by their AniList ids: 1,2,3. */
+export const AniListKeptQuery = AniListFoundQuery.extend({
+  ids: z
+    .string()
+    .regex(/^\d{1,9}(,\d{1,9})*$/, 'Not AniList ids')
+    .transform((v) => [...new Set(v.split(',').map(Number))])
+    .refine((ids) => ids.length <= MOST_KEPT, `At most ${MOST_KEPT} at once`),
+});
+export type AniListKeptQuery = z.input<typeof AniListKeptQuery>;
+/** Each series the server knows where it's read, by its AniList id; one it doesn't is left out, to be asked alone. */
+export interface AniListKept {
+  found: Record<string, MangaFound[]>;
+}
 
 /** A series as AniList has it. */
 export interface AniCard {

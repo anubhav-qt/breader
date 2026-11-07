@@ -1,4 +1,4 @@
-import { MANGA_KINDS, type AniListAbout, type AniListPage, type AniListSort, type MangaChapters, type MangaCopies, type MangaFound, type MangaKind, type MangaSearchEvent, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
+import { MANGA_KINDS, type AniListAbout, type AniListKept, type AniListPage, type AniListSort, type MangaChapters, type MangaCopies, type MangaFound, type MangaKind, type MangaSearchEvent, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
 import { api, ApiError, mangaUrl } from './api';
 import { readLocal, writeLocal } from './store';
 
@@ -109,12 +109,18 @@ export const mangadex = {
 export const anilist = {
   list: (s: { sort: AniListSort; page: number; adult: boolean; adultOnly: boolean; kinds: MangaKind[] }) =>
     ask(() => api.manga.get<AniListPage>(`/v1/manga/anilist${query({ sort: s.sort, page: s.page, adult: s.adult ? 1 : undefined, adultOnly: s.adultOnly ? 1 : undefined, kinds: kindsOf(s.kinds) })}`, 20_000)),
+  /** AniList's best matches for a search, which it takes loosely: "full metal alchemist" finds Fullmetal Alchemist. */
+  search: (s: { q: string; adult: boolean; adultOnly: boolean; kinds: MangaKind[] }) =>
+    ask(() => api.manga.get<AniListPage>(`/v1/manga/anilist/search${query({ q: s.q, adult: s.adult ? 1 : undefined, adultOnly: s.adultOnly ? 1 : undefined, kinds: kindsOf(s.kinds) })}`, 20_000)),
   about: (id: number, adult: boolean) => ask(() => api.manga.get<AniListAbout>(`/v1/manga/anilist/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   find: (title: string, adult: boolean) => ask(() => api.manga.get<{ about: AniListAbout | null }>(`/v1/manga/anilist/find${query({ title, adult: adult ? 1 : undefined })}`, 20_000)),
   coverUrl: (id: number, size: 256 | 512) => mangaUrl(`/v1/manga/anilist/cover/${id}?size=${size}`),
   /** Where it can be read: its copies on the sites, none when no site has it. Looking takes a site search or two the first time. */
   found: (id: number, lang: string, adult: boolean) =>
     ask(() => api.manga.get<{ found: MangaFound[] }>(`/v1/manga/anilist/${id}/found${query({ lang: lang || undefined, adult: adult ? 1 : undefined })}`, 60_000)).then((r) => r.found),
+  /** The same for many at once (MOST_KEPT at most), as far as the server knows already: one it doesn't is left out. */
+  foundKept: (ids: number[], lang: string, adult: boolean) =>
+    ask(() => api.manga.get<AniListKept>(`/v1/manga/anilist/found${query({ ids: ids.join(','), lang: lang || undefined, adult: adult ? 1 : undefined })}`, 20_000)).then((r) => r.found),
 };
 
 /**

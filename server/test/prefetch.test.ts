@@ -116,6 +116,7 @@ describe('the daily prefetch', () => {
       warm: async () => {},
       anilist: {} as never,
     aniFound: async () => [],
+    aniFoundKept: async () => ({}),
     } satisfies Manga;
     return { manga, asked };
   }

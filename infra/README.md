@@ -141,9 +141,17 @@ or Supabase for them again; if Redis stops answering, the API asks MangaDex inst
 Redis's room itself each time it connects, so a laptop on an older `compose.yml` gets the 1 GB too.
 What was asked lately is given straight away for three days, and fetched again behind the reader
 once it's old. Once a day at 04:00 in India (and soon after a start, if the last run was over a day
-ago), the API fetches the first 50 series of each of Browse's orders, with every kind on and with
+ago), the API fetches the first 100 series of each of Browse's orders, with every kind on and with
 each kind alone, and everything their sheets ask for: other places, copies, chapters and covers.
-The status page shows it as **Manga prefetch**. On the ThinkPad (`MACHINE=laptop`), every
+The status page shows it as **Manga prefetch**. Browse's AniList lists (Popular, Trending, Top
+rated) are warmed every 15 minutes too: the first 20 pages of each (600 series), and 5 of each kind
+alone, each series looked for on the sites and its cover kept. A list's page and where a series is
+read are given straight away for a month, and asked again behind the reader after 6 hours and 3
+days. The app asks where a whole page of series is read in one call
+(`/v1/manga/anilist/found?ids=`), looking up alone only those the server doesn't know yet, and
+fetches the next page while the reader is still on this one. A search shows AniList's best matches
+first (`/v1/manga/anilist/search`), as AniList takes spacing loosely ("full metal alchemist"),
+kept a day and given for a month. On the ThinkPad (`MACHINE=laptop`), every
 library's manga is kept on the SSD ahead of its readers too: every 15 minutes, each library's
 series, read most lately first, the chapter each is read to and the ten after it, one page at a
 time, the libraries taking turns a chapter each, and a series several read fetched once. Its reads

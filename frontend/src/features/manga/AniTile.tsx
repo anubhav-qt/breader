@@ -1,4 +1,6 @@
 import type { AniCard } from '@breader/shared/manga';
+import { IconCheck } from '../../components/icons';
+import { useLabels } from '../../data/labels';
 import { anilist } from '../../lib/mangadex';
 import { aniMeta } from './aniPick';
 
@@ -7,11 +9,14 @@ interface TileProps {
   card: AniCard;
   /** Said above its meta: how it's related (Sequel), when it is. */
   label?: string;
+  /** Already in My manga, where it was found. */
+  have?: boolean;
   onPick: () => void;
   sizes: string;
 }
 
-export function AniTile({ card, label, onPick, sizes }: TileProps) {
+export function AniTile({ card, label, have = false, onPick, sizes }: TileProps) {
+  const labels = useLabels();
   const small = anilist.coverUrl(card.id, 256);
   const big = anilist.coverUrl(card.id, 512);
   return (
@@ -22,6 +27,7 @@ export function AniTile({ card, label, onPick, sizes }: TileProps) {
         ) : (
           <span className="mdx-nocover">{card.title}</span>
         )}
+        {have && <span className="mdx-have" title={`In ${labels.mine}`}><IconCheck /></span>}
         {card.adult && <span className="mdx-badge">18+</span>}
       </span>
       {label && <span className="mdx-rel">{label}</span>}
