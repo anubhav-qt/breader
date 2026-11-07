@@ -70,6 +70,8 @@ services:
     <<: *server
     environment:
       ROLE: laptop
+      # The engines it hands voices and panels to; set ENGINE_URLS in .env to add more.
+      ENGINE_URLS: "${ENGINE_URLS:-http://engine:8790}"
       MIRROR_URL: "postgres://breader:breader@mirror:5432/breader"
       S3_PUBLIC_ENDPOINT: "http://localhost:9000"
       # Where Google sends readers back after logging in; account emails print their links in the logs.
@@ -83,6 +85,22 @@ services:
     ports: ["8787:8787"]
     volumes: ["voices:/data/voices", "manga:/data/manga"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
+
+  # The engine: the voices and the panel model, for the API's scheduler (server/src/engine/, ADR 0002).
+  # It sizes itself from this machine's cores and memory (ENGINE_WORKERS, ENGINE_THREADS,
+  # ENGINE_BESIDE_LIVE, ENGINE_MEMORY_MB, ENGINE_LOW_MB override it), and keeps the voices'
+  # files in the voices volume.
+  # Only the API reaches it. More engines, on other machines: ENGINE_URLS, and ENGINE_TOKEN on both.
+  engine:
+    build: { context: .., dockerfile: server/Dockerfile }
+    image: breader-server:dev
+    env_file: dev.env
+    command: ["node", "--enable-source-maps", "dist/engine/main.js"]
+    # Its logs say they are the engine's.
+    environment: { ROLE: engine }
+    volumes: ["voices:/data/voices"]
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8790/health"], interval: 10s }
+    restart: unless-stopped
 
   # The Render copy: same image, no mirror. Stop "api" to watch the app fail over to it.
   fallback:

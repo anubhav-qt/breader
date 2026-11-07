@@ -95,25 +95,28 @@ const Env = z.object({
   SPEECH_EMAILS: list.transform((l) => l.map((e) => e.toLowerCase())).default([]),
   /** Where the laptop keeps the voices' files once downloaded. */
   SPEECH_DIR: z.string().default('/data/voices'),
-  /** Processor threads the voice may use. Defaults to 4, or fewer on a smaller machine. */
-  SPEECH_THREADS: z.coerce.number().int().min(1).max(16).optional(),
   /**
    * Sentences it has said, kept in SPEECH_DIR/said up to this many MB (about 22 MB an hour of
    * listening), the ones heard longest ago going first, so one heard again isn't spoken again.
    */
   SPEECH_CACHE_MB: z.coerce.number().int().min(16).max(1_000_000).default(4096),
   /**
-   * Manga panels found with the panel model (src/panels/), for any reader while there's a seat:
-   * where the model is, if not in the image; the processor threads each worker may use (4, or
-   * fewer on a smaller machine); how many workers, each with the model; and how many readers it
-   * finds panels for at once. One worker of four threads finds about a page a second on the
-   * laptop's Ryzen 7 5800U, enough for 8. A bigger machine does more with more workers, not more
-   * threads: a Ryzen 7 9800X3D finds 2.4 pages a second with one of four, 4.4 with four of two.
+   * Manga panels found with the panel model (src/panels/), for this many readers at once. The
+   * model itself is the engine's (PANEL_MODEL, engine/serve.ts).
    */
-  PANEL_MODEL: z.string().optional(),
-  PANEL_THREADS: z.coerce.number().int().min(1).max(16).optional(),
-  PANEL_WORKERS: z.coerce.number().int().min(1).max(8).default(1),
   PANEL_SEATS: z.coerce.number().int().min(1).max(100).default(8),
+
+  /**
+   * The engines that run the voices and the panel model (src/engine/, ADR 0002): a service of
+   * their own, `node dist/engine/main.js`, beside the API (http://engine:8790) or on another
+   * machine. None: the server voice, audiobooks and panels are off here. ENGINE_TOKEN, when set,
+   * is what the API shows them (they ask for it when they have it too). ENGINE_BOOKS audiobooks are
+   * made at once; the rest wait their turn. An engine sizes itself: ENGINE_WORKERS, ENGINE_THREADS,
+   * ENGINE_BESIDE_LIVE, ENGINE_MEMORY_MB and ENGINE_LOW_MB are its own settings (engine/serve.ts).
+   */
+  ENGINE_URLS: list.default([]),
+  ENGINE_TOKEN: z.string().min(16).optional(),
+  ENGINE_BOOKS: z.coerce.number().int().min(1).max(1000).default(12),
 
   /**
    * Manga through the server (src/manga/): on unless this says false. Pages read are kept in

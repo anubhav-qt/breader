@@ -18,6 +18,7 @@ import { makeCurate, pgChecks } from './manga/curate.ts';
 import { makeKeeper } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makeSame, pgGroups } from './manga/same.ts';
+import { makeEngine } from './engine/index.ts';
 import { makePanels } from './panels/index.ts';
 import { makeBooks } from './speech/books.ts';
 import { makeSpeech } from './speech/index.ts';
@@ -27,6 +28,10 @@ const env = loadEnv();
 if (env.NODE_ENV === 'production' && env.CLIENT_IP_HEADER === 'none') {
   log.warn('CLIENT_IP_HEADER is not set, so every reader shares one rate limit (the proxy’s address)');
 }
+// The engine sizes itself now (ENGINE_WORKERS, ENGINE_THREADS on the engine service, ADR 0002).
+for (const gone of ['SPEECH_THREADS', 'PANEL_WORKERS', 'PANEL_THREADS']) {
+  if (process.env[gone]) log.warn(`${gone} is gone: the engine sizes itself (ENGINE_WORKERS, ENGINE_THREADS on the engine service)`);
+}
 const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // Answers worth keeping (manga's, AI notes) go to Redis when there's one, so they outlast a restart.
@@ -34,8 +39,11 @@ let redis: Redis | null = null;
 if (env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
 // The server voice runs on the laptop only: Render's free plan hasn't the processor for it. It reads
 // live for SPEECH_EMAILS, and makes audiobooks for anyone with a key.
-const speech = env.ROLE === 'laptop' ? makeSpeech(env) : null;
-const books = speech ? makeBooks(env.SPEECH_DIR, speech) : null;
+// The engines run it and the panel model, a service of their own, shared out by the scheduler here
+// (engine/, ADR 0002). None set, as on the fallback: the voice, audiobooks and panels are off.
+const engine = env.ROLE === 'laptop' ? makeEngine(env) : null;
+const speech = engine ? makeSpeech(env, engine) : null;
+const books = speech ? makeBooks(env.SPEECH_DIR, speech, env.ENGINE_BOOKS) : null;
 // Manga on both: the fallback reads Suwayomi's sources through the one on AWS (SUWAYOMI_URL), or MangaDex alone without it.
 const mangaOn = env.MANGADEX;
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: mangaCacheMb(env) * 1024 * 1024, store: redis };
@@ -58,9 +66,9 @@ if (mangaOn) {
 const manga = mangaOn ? makeManga(mangaOptions) : null;
 // Manga panels from the panel model, for any reader with a seat, on the laptop only: the fallback's
 // free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
-let panels: ReturnType<typeof makePanels> = null;
-if (manga && env.ROLE === 'laptop') panels = makePanels(env);
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, books, manga, panels, redis };
+let panels: ReturnType<typeof makePanels> | null = null;
+if (manga && engine) panels = makePanels(env, engine);
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, books, manga, panels, engine, redis };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.0.0.0' }, (info) =>
@@ -195,6 +203,7 @@ const stop = () => {
   prefetching.abort();
   void speech?.close();
   void panels?.close();
+  void engine?.close();
   void redis?.close();
   server.close(() => {
     void Promise.all([primary.pool.end(), mirror?.pool.end()]).finally(() => process.exit(0));

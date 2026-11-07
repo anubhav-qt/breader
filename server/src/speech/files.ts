@@ -42,6 +42,16 @@ export type VoiceFiles =
   | { engine: 'piper'; model: string; config: string; speaker?: number }
   | { engine: 'kokoro'; model: string; pack: string; mix?: string; british: boolean };
 
+/**
+ * The model a voice runs on, for the engine (engine/models.ts): Kokoro's one model for all its
+ * voices, or a Piper model, which may speak for several.
+ */
+export function modelOfVoice(key: string): string {
+  const [engine, id] = key.split(':');
+  if (engine === 'kokoro') return 'kokoro';
+  return `piper:${speakers[id]?.model ?? id}`;
+}
+
 const parts = (key: string) => {
   const [engine, id] = key.split(':');
   if (engine === 'kokoro') {
@@ -73,7 +83,8 @@ export function makeFiles(dir: string) {
     const to = where(f);
     if (await has(f)) return to;
     await mkdir(dir, { recursive: true });
-    const tmp = join(dir, `.${basename(to)}.download`);
+    // Its own name: engines sharing the folder may fetch the same file at once, and the rename keeps either.
+    const tmp = join(dir, `.${basename(to)}.${Math.random().toString(36).slice(2, 10)}.download`);
     for (let attempt = 1; ; attempt++) {
       arrived.set(to, 0);
       try {
