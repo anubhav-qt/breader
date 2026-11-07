@@ -133,3 +133,33 @@
   .ab-play { min-width: 0; flex: 1 1 auto; padding: 0 16px; }
   .ab-transport { gap: 8px; }
 }
+
+/* The top bar's play and pause, and the way back to the dialog: one control, as small as Select. */
+.hdr-ab { display: flex; align-items: center; border-radius: 99px; background: var(--fill); }
+.hdr-ab .hdr-icon { color: var(--ink); }
+.hdr-ab .hdr-icon:hover:not(:disabled) { background: var(--line); }
+.hdr-ab .i3-dots-icon { font-size: 15px; }
+.hdr-ab .i3-dots-icon rect { fill: currentColor; }
+/* Where the top bar has no room left for it (phones; and from 881px to 1000px, where books-or-manga
+   is up there too), it floats at the thumb: just above books-or-manga, or on its own. */
+@media (max-width: 560px), (min-width: 881px) and (max-width: 1000px) {
+  .hdr-ab {
+    position: fixed;
+    left: 50%;
+    bottom: calc(18px + var(--pv-room, 0px) + env(safe-area-inset-bottom));
+    z-index: 30;
+    padding: 3px;
+    transform: translateX(-50%);
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 0 0 1px var(--tile-border), var(--float-shadow);
+  }
+  .hdr .hdr-ab .hdr-icon { width: 44px; height: 38px; border-radius: 99px; }
+  /* Messages rise above it. */
+  :root:has(.hdr-ab) body .toast-host { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 560px) {
+  .hdr-ab { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
+  :root:has(.hdr-ab) body .toast-host { bottom: calc(130px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
+}
