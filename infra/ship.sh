@@ -12,6 +12,8 @@ cd "$(dirname "$0")/.."
 
 IMAGE=ghcr.io/anubhav-qt/breader-server
 PROJECT=breader
+# Breader's Cloudflare account, as a login can see more than one.
+export CLOUDFLARE_ACCOUNT_ID=84647e95d51947e4149cbfc398afc4e1
 SETTINGS=infra/.env.ship
 SHA=$(git rev-parse HEAD)
 STEPS=(check test push model image migrate render app live)
