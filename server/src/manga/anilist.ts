@@ -3,6 +3,7 @@ import { both, Memo, MemoryStore, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover, Covers, CoverWidth } from './covers.ts';
+import { Names, type NamesAsk } from './names.ts';
 import { pictureType, type Picture } from './disk.ts';
 import { USER_AGENT } from './mangadex.ts';
 import { Pace } from './pace.ts';
@@ -22,6 +23,8 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 /** Cards a list page holds. */
 const PER_PAGE = 30;
+/** A series' place among the names known (names.ts): Popular's order first, then the other lists'. */
+const OTHER_LISTS = 3000;
 /** AniList's best matches a search shows: past these its matches are seldom what was meant. */
 const SEARCH_MATCHES = 10;
 /** Similar series a page shows at most. */
@@ -130,6 +133,8 @@ export interface AniList {
   card(id: number): Promise<AniCard>;
   /** A series' card when one's kept, without asking AniList. */
   cardKept(id: number): Promise<AniCard | undefined>;
+  /** The series from its lists whose names are closest to what's typed, asking no one (names.ts). */
+  names(ask: NamesAsk): AniCard[];
 }
 
 export interface AniListOptions {
@@ -226,6 +231,8 @@ export function makeAniList(opts: AniListOptions): AniList {
   const coverUrls = new Memo<string>(both(new MemoryStore(50_000), store), 'anilist:v1:cover-url', 30 * DAY);
   /** Each series' card, from the lists and series it came in, for looking it up on the sites by its id. */
   const cards = new Memo<AniCard>(both(new MemoryStore(20_000), store), 'anilist:v1:card', 7 * DAY, 30 * DAY);
+  /** The names of every series in a list fetched since the server started, the warm-up's included. */
+  const names = new Names();
 
   async function call<T>(query: string, variables: Record<string, unknown>): Promise<T> {
     try {
@@ -359,7 +366,7 @@ export function makeAniList(opts: AniListOptions): AniList {
     async list(ask) {
       const filters = filtersOf(ask);
       const key = [ask.sort, ask.page, filters.key].join(':');
-      return lists.get(key, async () => {
+      const page = await lists.get(key, async () => {
         const vars = { ...filters.vars, page: ask.page, sort: [SORT[ask.sort]] };
         const r = await call<{ Page: { pageInfo?: { hasNextPage?: boolean }; media?: RawMedia[] } }>(LIST, vars);
         const media = (r.Page.media ?? []).filter((m) => !never(m));
@@ -369,6 +376,15 @@ export function makeAniList(opts: AniListOptions): AniList {
         if (r.Page.pageInfo?.hasNextPage && ask.page < 100) next = ask.page + 1;
         return { items, next };
       });
+      // Kept or fetched, its series' names are known from now on.
+      let from = (ask.page - 1) * PER_PAGE;
+      if (ask.sort !== 'popular') from += OTHER_LISTS;
+      page.items.forEach((card, i) => names.add(card, from + i));
+      return page;
+    },
+
+    names(ask) {
+      return names.look(ask);
     },
 
     async search(ask) {

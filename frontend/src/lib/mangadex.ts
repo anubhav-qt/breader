@@ -112,6 +112,9 @@ export const anilist = {
   /** AniList's best matches for a search, which it takes loosely: "full metal alchemist" finds Fullmetal Alchemist. */
   search: (s: { q: string; adult: boolean; adultOnly: boolean; kinds: MangaKind[] }) =>
     ask(() => api.manga.get<AniListPage>(`/v1/manga/anilist/search${query({ q: s.q, adult: s.adult ? 1 : undefined, adultOnly: s.adultOnly ? 1 : undefined, kinds: kindsOf(s.kinds) })}`, 20_000)),
+  /** The series the server knows whose names are closest to what's typed, a letter or two off at most: asked as a reader types. */
+  names: (s: { q: string; adult: boolean; adultOnly: boolean; kinds: MangaKind[] }) =>
+    ask(() => api.manga.get<AniListPage>(`/v1/manga/anilist/names${query({ q: s.q, adult: s.adult ? 1 : undefined, adultOnly: s.adultOnly ? 1 : undefined, kinds: kindsOf(s.kinds) })}`, 5_000)).then((r) => r.items),
   about: (id: number, adult: boolean) => ask(() => api.manga.get<AniListAbout>(`/v1/manga/anilist/${id}${adult ? '?adult=1' : ''}`, 20_000)),
   find: (title: string, adult: boolean) => ask(() => api.manga.get<{ about: AniListAbout | null }>(`/v1/manga/anilist/find${query({ title, adult: adult ? 1 : undefined })}`, 20_000)),
   coverUrl: (id: number, size: 256 | 512) => mangaUrl(`/v1/manga/anilist/cover/${id}?size=${size}`),

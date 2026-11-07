@@ -151,7 +151,10 @@ days. The app asks where a whole page of series is read in one call
 (`/v1/manga/anilist/found?ids=`), looking up alone only those the server doesn't know yet, and
 fetches the next page while the reader is still on this one. A search shows AniList's best matches
 first (`/v1/manga/anilist/search`), as AniList takes spacing loosely ("full metal alchemist"),
-kept a day and given for a month. On the ThinkPad (`MACHINE=laptop`), every
+kept a day and given for a month. As a search is typed, the names of the series in those lists
+drop down under the box (`/v1/manga/anilist/names`, from memory, a few milliseconds), spelt right
+even when typed a letter or two off ("solo levelling" finds Solo Leveling); picking one searches
+it. MangaDex is never sent `<` or `>`, which it refuses, and a refusal of its own says so. On the ThinkPad (`MACHINE=laptop`), every
 library's manga is kept on the SSD ahead of its readers too: every 15 minutes, each library's
 series, read most lately first, the chapter each is read to and the ten after it, one page at a
 time, the libraries taking turns a chapter each, and a series several read fetched once. Its reads

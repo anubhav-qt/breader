@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { AniListKept, AniListPage } from '@breader/shared';
 import { makeApp } from '../src/app.ts';
+import { MemoryStore, type Store } from '../src/lib/cache.ts';
 import { searchKey } from '../src/manga/anilist.ts';
 import { makeManga } from '../src/manga/index.ts';
 import { deps } from './helpers.ts';
@@ -32,7 +33,7 @@ const FMA = media(30025, 'Fullmetal Alchemist');
 const KOREAN = media(105398, 'Solo Leveling', { countryOfOrigin: 'KR', title: { romaji: 'Na Honjaman Level Up', english: 'Solo Leveling', native: null } });
 const NEVER = media(9, 'Never', { tags: [{ name: 'Lolicon' }] });
 
-async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN, NEVER]) {
+async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN, NEVER], store: Store | null = null) {
   const calls: Array<{ query: string; variables: Record<string, unknown> }> = [];
   /** What MangaDex was asked: it finds nothing, so a series is read nowhere. */
   const dexCalls: string[] = [];
@@ -49,7 +50,7 @@ async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN
     return json({ data: { Page: { media: answer } } });
   }) as typeof globalThis.fetch;
   const dir = await mkdtemp(join(tmpdir(), 'breader-anilist-'));
-  const manga = makeManga({ dir, cacheBytes: 1024 * 1024, fetch, store: null, pace: { api: [1000, 1000], home: [1000, 1000] } });
+  const manga = makeManga({ dir, cacheBytes: 1024 * 1024, fetch, store, pace: { api: [1000, 1000], home: [1000, 1000] } });
   const app = makeApp({ ...deps, manga });
   const get = async <T>(path: string) => {
     const res = await app.request(`/v1/manga/anilist${path}`);
@@ -108,6 +109,44 @@ describe('searching AniList', () => {
   it('keys a search by its words alone', () => {
     expect(searchKey('  Full\tMetal  ALCHEMIST ')).toBe('full metal alchemist');
     expect(searchKey('ＦＭＡ')).toBe('fma');
+  });
+});
+
+describe('names as a reader types', () => {
+  it('gives the series of the lists fetched, spelt a letter off too, asking no one', async () => {
+    const { calls, get } = await anilistApp();
+    const before = await get<AniListPage>('/names?q=solo%20levelling');
+    expect(before.status).toBe(200);
+    expect(before.body).toEqual({ items: [], next: null });
+    await get('?sort=popular&page=1');
+    const asked = calls.length;
+    const r = await get<AniListPage>('/names?q=solo%20levelling');
+    expect(r.body.items.map((c) => c.title)).toEqual(['Solo Leveling']);
+    expect((await get<AniListPage>('/names?q=full%20metal')).body.items.map((c) => c.id)).toEqual([FMA.id]);
+    // Its kinds, and a series tagged lolicon never, as in the lists.
+    expect((await get<AniListPage>('/names?q=solo&kinds=manga')).body.items).toEqual([]);
+    expect((await get<AniListPage>('/names?q=never')).body.items).toEqual([]);
+    expect(calls).toHaveLength(asked);
+  });
+
+  it('knows a list’s series after a restart, from the list as Redis kept it', async () => {
+    const redis = new MemoryStore(100);
+    const before = await anilistApp(undefined, redis);
+    await before.get('?sort=trending&page=1');
+    expect(before.calls).toHaveLength(1);
+    // A new server: its names start empty, and fill as the warm-up reads what's kept.
+    const after = await anilistApp(undefined, redis);
+    expect((await after.get<AniListPage>('/names?q=fullmetal')).body.items).toEqual([]);
+    await after.get('?sort=trending&page=1');
+    expect(after.calls).toHaveLength(0);
+    expect((await after.get<AniListPage>('/names?q=fullmetal')).body.items.map((c) => c.id)).toEqual([FMA.id]);
+  });
+
+  it('turns away a search of nothing, and one too long', async () => {
+    const { get } = await anilistApp();
+    expect((await get('/names?q=%20')).status).toBe(400);
+    expect((await get(`/names?q=${'a'.repeat(201)}`)).status).toBe(400);
+    expect((await get('/names')).status).toBe(400);
   });
 });
 

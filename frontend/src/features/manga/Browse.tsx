@@ -2,13 +2,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
 import { ANILIST_SORTS, MANGA_KINDS, sameSeries, seriesName, type AniCard, type AniListPage, type AniListSort, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared/manga';
-import { IconCheck, IconSearch } from '../../components/icons';
+import { IconCheck } from '../../components/icons';
 import { Modal } from '../../components/Modal';
 import { useLabels } from '../../data/labels';
 import { anilist, LANGS, langName, mangadex, writeMangaPrefs, type BrowseSort, type MangaPrefs } from '../../lib/mangadex';
 import { AniTile } from './AniTile';
 import { primeFound, useAniFound } from './aniPick';
 import { entriesOf, viewOf } from './found';
+import { SearchBox } from './SearchBox';
 import './manga.css';
 import { Loader } from '../../components/Loader';
 
@@ -555,11 +556,7 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       if (aniSort) { if (keptAni) keptAni.top = top; } else if (kept) kept.top = top;
     }}>
       <div className="mdx-bar">
-        <label className="mdx-search">
-          <IconSearch />
-          <span className="sr-only">Search manga</span>
-          <input type="search" value={text} placeholder="Search manga" enterKeyHint="search" maxLength={SEARCH_MOST} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setQ(text.trim()); }} />
-        </label>
+        <SearchBox text={text} most={SEARCH_MOST} adult={prefs.adult} adultOnly={prefs.adultOnly} kinds={kinds} onText={setText} onSearch={(next) => setQ(next.trim())} />
         <div className={`mdx-row${more.l ? ' is-more-l' : ''}${more.r ? ' is-more-r' : ''}`} ref={row}>
           <div className="mdx-sorts" role="radiogroup" aria-label="Order">
             {SORTS.map((s) => (

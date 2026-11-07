@@ -160,6 +160,18 @@ const notFound = () => new ApiError(404, 'manga_not_found', 'MangaDex doesn’t 
 const busy = () => new ApiError(503, 'manga_busy', 'MangaDex is busy just now. Try again in a minute.');
 const unreachable = () => new ApiError(503, 'manga_unreachable', 'Breader can’t reach MangaDex just now. Try again in a minute.');
 const adultOnly = () => new ApiError(403, 'manga_adult', 'This series is for adults. Turn on Show 18+ to see it.');
+/** MangaDex's firewall turned a call away (it does for searches like "etc/passwd"): not that it can't be reached. */
+const refused = () => new ApiError(422, 'manga_refused', 'MangaDex turned that away.');
+const searchRefused = () => new ApiError(422, 'manga_refused', 'MangaDex won’t search for that.');
+
+/**
+ * A search as MangaDex is asked it, its angle brackets taken out: its firewall turns away searches
+ * with some ("<script>", "<svg", "<style>"), and a title never needs them.
+ */
+export function askable(q: string): string {
+  const plainer = q.replace(/[<>]/g, ' ');
+  return plainer.replace(/\s+/g, ' ').trim();
+}
 
 /** What a search asks MangaDex, but for where in its results. */
 interface Ask {
@@ -412,6 +424,10 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       throw busy();
     }
     if (res.status === 404) throw notFound();
+    if (res.status === 403) {
+      log.warn({ path }, 'MangaDex turned a call away');
+      throw refused();
+    }
     if (!res.ok) {
       log.warn({ status: res.status, path }, 'MangaDex refused a call');
       throw res.status === 400 ? notFound() : unreachable();
@@ -482,7 +498,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       const excluded = [...(await neverIds())];
       if (!a.doujinshi) excluded.push(...SIDE_WORKS);
       const from = originals(a.kinds);
-      const r = await call<{ data: RawManga[]; total: number }>('/manga', [
+      const params: Array<[string, string]> = [
         ...query({
           limit: MANGA_PAGE,
           offset,
@@ -497,7 +513,15 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
           hasAvailableChapters: 'true',
         }),
         [`order[${a.field}]`, 'desc'],
-      ]);
+      ];
+      let r: { data: RawManga[]; total: number };
+      try {
+        r = await call('/manga', params);
+      } catch (e) {
+        // A search turned away is said to be one, rather than MangaDex being out of reach.
+        if (a.q && e instanceof ApiError && e.code === 'manga_refused') throw searchRefused();
+        throw e;
+      }
       const data = r.data.filter((m) => !never(m));
       for (const m of data) seriesMemo.set(m.id, m);
       return { data, total: Math.min(r.total, 10_000) };
@@ -632,7 +656,13 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
     const by = ORDER[w.sort ?? (w.q ? 'relevance' : 'popular')];
     // Relevance needs words to be relevant to.
     const field = by === 'relevance' && !w.q ? 'followedCount' : by;
-    const ask: Ask = { q: w.q, lang: w.lang, field, adult: w.adult, adultOnly: w.adultOnly, doujinshi: w.doujinshi, kinds: w.kinds };
+    let q = w.q;
+    if (q !== undefined) {
+      q = askable(q);
+      // Nothing left to search for, as "<>" leaves: no title goes by that.
+      if (!q) return { found: [], next: null };
+    }
+    const ask: Ask = { q, lang: w.lang, field, adult: w.adult, adultOnly: w.adultOnly, doujinshi: w.doujinshi, kinds: w.kinds };
     const started = Date.now();
     const found: Found[] = [];
     let failed: unknown = null;

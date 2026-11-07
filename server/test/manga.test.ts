@@ -134,6 +134,9 @@ function fakeDex() {
   const answer = (url: URL) => {
     const path = url.pathname;
     if (url.host === 'api.mangadex.org') {
+      // Its nginx firewall, as it answers on the real one: some searches turned away whole.
+      const title = url.searchParams.get('title') ?? '';
+      if (/<(script|svg|style)|etc\/passwd/i.test(title)) return new Response('<html>403 Forbidden</html>', { status: 403, headers: { 'content-type': 'text/html' } });
       if (state.busy) return new Response('{}', { status: 429, headers: { 'x-ratelimit-retry-after': String(Math.floor(Date.now() / 1000) + 2) } });
       if (path === '/manga/tag') return json({ result: 'ok', data: [tag(LOLI, 'Loli'), tag(SHOTA, 'Shota'), tag('t-adv', 'Adventure', 'genre')] });
       if (path === '/manga' && state.catalogue.length) {
@@ -279,6 +282,26 @@ describe('MangaDex through the laptop', () => {
     expect(asked.url.searchParams.getAll('contentRating[]')).toEqual(['safe', 'suggestive', 'erotica', 'pornographic']);
     expect(asked.url.searchParams.get('order[latestUploadedChapter]')).toBe('desc');
     expect(asked.url.searchParams.getAll('excludedTags[]')).toContain(LOLI);
+  });
+
+  it('takes angle brackets out of a search, and says so when MangaDex turns one away', async () => {
+    const { b, dex } = await setup();
+    const r = await b.get(`/v1/manga/search?q=${encodeURIComponent('<script>frieren</script>')}`);
+    expect(r.status).toBe(200);
+    expect(ids(r.body)).toEqual([FRIEREN]);
+    const asked = dex.asked('api.mangadex.org', /^\/manga$/);
+    expect(asked.map((c) => c.url.searchParams.get('title'))).toEqual(['script frieren /script']);
+
+    // Nothing left once they're out: nothing by that name, and MangaDex isn't asked.
+    const empty = await b.get(`/v1/manga/search?q=${encodeURIComponent('<>')}`);
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual({ items: [], next: null });
+    expect(dex.asked('api.mangadex.org', /^\/manga$/)).toHaveLength(1);
+
+    // One its firewall still turns away is said to be that, not MangaDex out of reach.
+    const refused = await b.get(`/v1/manga/search?q=${encodeURIComponent('etc/passwd')}`);
+    expect(refused.status).toBe(422);
+    expect(refused.body).toEqual({ code: 'manga_refused', message: 'MangaDex won’t search for that.' });
   });
 
   it('leaves doujinshi and anthologies out unless asked, and keeps the two searches apart', async () => {

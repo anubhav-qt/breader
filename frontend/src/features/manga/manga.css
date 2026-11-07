@@ -10,6 +10,36 @@
   padding: 12px 0 18px;
   background: linear-gradient(var(--canvas) 82%, transparent);
 }
+/* The box, with the names of series dropping down under it as it's typed (SearchBox.tsx). */
+.mdx-find { position: relative; min-width: 0; }
+.mdx-names {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 7;
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--tile-border), var(--float-shadow);
+}
+.mdx-name {
+  min-width: 0;
+  padding: 10px 10px 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--read);
+  font-size: 21px;
+  line-height: 1.1;
+  cursor: pointer;
+}
+.mdx-name.is-on { background: var(--fill); }
 .mdx-search {
   min-width: 0;
   display: flex;
