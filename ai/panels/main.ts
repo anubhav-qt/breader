@@ -264,8 +264,8 @@ svg.addEventListener('pointermove', (e) => {
 
 function endDrag(e: PointerEvent) {
   // Let go of, not lost to the browser: a corner moved, or a panel drawn, snaps to the borders,
-  // unless Command is held as it's let go.
-  const done = e.type === 'pointerup' && !e.metaKey;
+  // unless Ctrl (Command on a Mac) is held as it's let go.
+  const done = e.type === 'pointerup' && !e.ctrlKey && !e.metaKey;
   if (drag?.kind === 'draw') {
     const q = drawing;
     drawing = null;
@@ -599,7 +599,8 @@ async function go(n: number) {
     const frames = framesOf(pic);
     found = frames.panels.map((b) => quadOf(b, page!.width, page!.height));
     guessed = guess ? { model: guess.model, panels: copy(guess.panels) } : null;
-    panels = copy(startOf({ found, guessed }));
+    // No boxes to start from: they're drawn by hand.
+    panels = [];
   }
   base = copy(panels);
   loading = 0;

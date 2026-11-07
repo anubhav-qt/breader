@@ -1,0 +1,31 @@
+{
+ "v": 1,
+ "page": "kinnikuman-c820-p14",
+ "file": "kinnikuman-c820-p14.jpg",
+ "sha256": "8d11ffc00b59987627aa13d7ee624b6681bb1f887e7025abbab204ab5554ad80",
+ "width": 844,
+ "height": 1192,
+ "panels": [
+  [
+   [
+    51,
+    0
+   ],
+   [
+    844,
+    0
+   ],
+   [
+    844,
+    1192
+   ],
+   [
+    51,
+    1192
+   ]
+  ]
+ ],
+ "found": [],
+ "guessed": null,
+ "saved": "2026-10-22T17:49:55.330Z"
+}
