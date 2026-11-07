@@ -78,7 +78,10 @@ step_check() {
 step_test() {
   say "test"
   if standInsUp; then
-    echo "the stand-ins are up already"
+    # The restore test runs pg_dump inside the copy's container (server/test/ops.test.ts).
+    MIRROR_CONTAINER=$(docker ps --filter publish=54333 --format '{{.Names}}')
+    export MIRROR_CONTAINER
+    echo "the stand-ins are up already, the copy in $MIRROR_CONTAINER"
   else
     docker compose -f infra/compose.dev.yml up -d --wait primary mirror s3
   fi
