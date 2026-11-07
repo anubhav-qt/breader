@@ -24,7 +24,9 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 ## In progress
 
 - ADR 0001 (`docs/adr/0001-four-servers.md`): 4 servers, regional read copies, edge-cached
-  pages, the app picks the server (no Worker). Proposed, nothing built yet.
+  pages, the app picks the server (no Worker). Point 1 built: pages and covers are public
+  (`shared/src/public.ts`), skip CORS, sent with no cookie; errors are `no-store`. Live only after
+  the Cache Rule (`infra/README.md`) and a ship. The rest: not built.
 - Load tests: `infra/load/` (run inside Docker's network), how-to and numbers in
   `docs/load-tests.md`.
 

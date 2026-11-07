@@ -18,8 +18,8 @@
 - The API reads only from Supabase. The ThinkPad's copy is used for health, admin, backups and
   drills, not for answering readers.
 - The API's database pool is 5 connections (`server/src/db/client.ts`).
-- Manga pages need a signed-in browser (`readSession` on `/manga/chapter/*` and
-  `/manga/source/chapter/*`) and are sent `private, max-age=86400`. Covers are `private` too.
+- Manga pages and covers are public (point 1, built 2026-11-07, not live until the Cache Rule
+  and a ship).
 - Browse's AniList lists, AniList search and `/manga/anilist/names` are all
   `private, max-age=600`, so Cloudflare keeps none of them.
 - `feed_state` has one row: one cursor (`ack_txid`, `ack_id`) for one copy.
@@ -56,6 +56,36 @@
    exists today).
 7. **`page_panels` is fed.** It joins `FED_TABLES`, so every copy has panels.
 8. **No regional buckets for pages.** Cloudflare's edge is the regional storage.
+
+### Point 1, as built (2026-11-07)
+
+- `shared/src/public.ts` lists the public paths: pages, a source chapter's page count, covers.
+- No sign-in on them. Pages are sent `public, max-age=2592000` (30 days, owner's choice). Covers
+  keep their own time (60 s to 7 days, `manga/covers.ts`) and tag, now `public`. Page counts
+  `public, max-age=300`.
+- They answer `Access-Control-Allow-Origin: *` with no credentials and no `Vary`, and skip Hono's
+  `cors()` (`server/src/app.ts`). The app asks for them with no cookie (`frontend/src/lib/api.ts`).
+- Every error, on every route, is sent `no-store` (`neverKept`, `server/src/lib/errors.ts`).
+  Hono lays headers a route set before it failed over the error's own, so it is set on the
+  answer being made.
+- Cloudflare needs a Cache Rule for these paths (owner's choice over file endings), plus Smart
+  Tiered Cache: `infra/README.md`, Edge cache for pages and covers.
+
+Checked 2026-11-07 (Cloudflare and Render docs, and live headers):
+
+- Cloudflare caches by file ending only. A live cover on `api.` said `cf-cache-status: DYNAMIC`.
+- It keeps nothing `private`, `no-store`, `no-cache`, `max-age=0`, or with `Set-Cookie`.
+- With no `Cache-Control`, it keeps a 200 for 120 minutes and a 404 for 3. Hence `no-store` on
+  errors.
+- It ignores `Vary` (except `Accept-Encoding`), but its default cache key holds the request's
+  `Origin` header and the query string.
+- How long it keeps a page: no set time; least used goes first.
+- Tiered cache (Smart Topology) is on the free plan. Whether it is on for breader.site: not
+  checked yet.
+- Free plan: 10 Cache Rules; the regex operator `matches` is Business and up.
+- `fb.` is DNS only, behind Render's own Cloudflare. Render's edge cache is for paid services, so
+  `fb.` pages are not edge-cached. The 3 Renders of point 2 would be the same unless proxied
+  through breader.site's zone: not checked yet.
 
 ## To propose (each needs the owner's yes before building)
 
@@ -143,8 +173,8 @@ The owner chose the app (above).
 ## Not checked yet
 
 - Render free: RAM, included bandwidth, outgoing addresses per region.
-- Cloudflare: Worker free limits, Load Balancing price, how long the free cache keeps pages,
-  tiered cache.
+- Cloudflare: Worker free limits, Load Balancing price, whether tiered cache is on for
+  breader.site.
 - Supabase free: size, pausing, `session_replication_role`, how many free projects per account.
 - Whether AniList limits per address.
 - Trip time from each Render region to Mumbai.
@@ -157,7 +187,8 @@ The owner chose the app (above).
 1. Load test before anything changes: numbers to beat. Done: `docs/load-tests.md`.
 2. Find why 150 failed. Done: Docker port forwarding on the Mac.
 3. Route that shows a server's outgoing address. Check what MangaDex sees.
-4. Public, edge-cached pages and covers (point 1), if no other session has done it.
+4. Public, edge-cached pages and covers (point 1). Built 2026-11-07; live after the Cache Rule
+   and a ship.
 5. Feed: one cursor per copy, prune to the slowest (point 6). Then `page_panels` fed (point 7).
 6. Renders ask the ThinkPad first and save to it (point 3).
 7. Shared fetching across servers (point 4).

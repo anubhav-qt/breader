@@ -40,6 +40,9 @@ async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN
   const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
   const fetch = (async (url: string | URL, init?: RequestInit) => {
     const at = new URL(String(url));
+    if (at.host === 's4.anilist.co') {
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 1]), { headers: { 'content-type': 'image/png' } });
+    }
     if (at.host === 'api.mangadex.org') {
       dexCalls.push(at.pathname);
       return json({ result: 'ok', data: [], total: 0, limit: 10, offset: 0 });
@@ -57,7 +60,7 @@ async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN
     return { status: res.status, body: (await res.json()) as T };
   };
   const search = (query: string) => get<AniListPage>(`/search?${query}`);
-  return { calls, dexCalls, get, search, manga };
+  return { calls, dexCalls, get, search, manga, app };
 }
 
 describe('searching AniList', () => {
@@ -104,6 +107,19 @@ describe('searching AniList', () => {
     expect((await search(`q=${'a'.repeat(201)}`)).status).toBe(400);
     expect((await search('')).status).toBe(400);
     expect(calls).toHaveLength(0);
+  });
+
+  it('sends a cover to anyone, from any site, for Cloudflare to keep', async () => {
+    const { app, search } = await anilistApp();
+    await search('q=fullmetal');
+    const r = await app.request(`/v1/manga/anilist/cover/${FMA.id}?size=256`, { headers: { origin: 'https://elsewhere.example' } });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toMatch(/^public, max-age=\d+$/);
+    expect(r.headers.get('access-control-allow-origin')).toBe('*');
+    expect(r.headers.get('vary')).toBeNull();
+    const wrong = await app.request(`/v1/manga/anilist/cover/${FMA.id}?size=300`);
+    expect(wrong.status).toBe(400);
+    expect(wrong.headers.get('cache-control')).toBe('no-store');
   });
 
   it('keys a search by its words alone', () => {

@@ -1,8 +1,10 @@
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
+import { isPublicPath } from '@breader/shared';
 import type { AppEnv, Deps } from './context.ts';
-import { ApiError, onError } from './lib/errors.ts';
+import { ApiError, neverKept, onError } from './lib/errors.ts';
 import { clientIp, sameOriginWrites } from './lib/http.ts';
 import { log } from './log.ts';
 import { accountRoutes } from './routes/account.ts';
@@ -19,6 +21,13 @@ import { speechRoutes } from './routes/speech.ts';
 import { syncRoutes } from './routes/sync.ts';
 import { voiceRoutes } from './routes/voices.ts';
 
+/** A read of an answer that's the same for everyone. */
+function isPublicRead(c: Context<AppEnv>): boolean {
+  const method = c.req.method;
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  return isPublicPath(c.req.path);
+}
+
 export function makeApp(deps: Deps) {
   const allowed = deps.env.ALLOWED_ORIGINS;
   const app = new Hono<AppEnv>();
@@ -31,18 +40,27 @@ export function makeApp(deps: Deps) {
     const level = c.res.status >= 500 ? 'error' : c.req.path === '/health' ? 'trace' : 'debug';
     log[level]({ method: c.req.method, path: c.req.path, status: c.res.status, ms }, 'request');
   });
-  app.use(
-    '*',
-    cors({
-      origin: (origin) => (allowed.includes(origin) ? origin : null),
-      credentials: true,
-      allowMethods: ['GET', 'POST', 'DELETE'],
-      allowHeaders: ['content-type', 'authorization'],
-      // The server voice's sound says how long it is (routes/speech.ts).
-      exposeHeaders: ['x-samples', 'x-rate'],
-      maxAge: 600,
-    }),
-  );
+  const withCors = cors({
+    origin: (origin) => (allowed.includes(origin) ? origin : null),
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'DELETE'],
+    allowHeaders: ['content-type', 'authorization'],
+    // The server voice's sound says how long it is (routes/speech.ts).
+    exposeHeaders: ['x-samples', 'x-rate'],
+    maxAge: 600,
+  });
+  // Pages and covers (shared/src/public.ts) are read by any site, with no cookie, so what
+  // Cloudflare keeps fits every reader. They skip cors(), which builds each answer again to add
+  // its headers and Vary: Origin (docs/load-tests.md).
+  app.use('*', async (c, next) => {
+    if (isPublicRead(c)) {
+      c.header('Access-Control-Allow-Origin', '*');
+      await next();
+      return;
+    }
+    // A preflight's answer is cors()'s own, so it's handed back.
+    return withCors(c, next);
+  });
   app.use('/v1/*', sameOriginWrites(allowed));
   app.use(
     '/v1/*',
@@ -68,7 +86,10 @@ export function makeApp(deps: Deps) {
   app.route('/v1', panelRoutes(deps));
   app.route('/v1', mangaRoutes(deps));
 
-  app.notFound((c) => c.json({ code: 'not_found', message: 'No such endpoint.' }, 404));
+  app.notFound((c) => {
+    neverKept(c);
+    return c.json({ code: 'not_found', message: 'No such endpoint.' }, 404);
+  });
   app.onError(onError);
   return app;
 }

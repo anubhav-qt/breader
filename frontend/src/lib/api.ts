@@ -1,3 +1,5 @@
+import { isPublicPath } from '@breader/shared/public';
+
 /*
  * The API lives in two places (backend design §3): the laptop behind a Cloudflare Tunnel, and the
  * same server on Render's free tier. Requests go to whichever answered last. A timeout, a network
@@ -120,6 +122,16 @@ async function request<T>(method: string, path: string, body?: unknown, timeout 
  */
 const LAPTOP_GATEWAY = new Set([502, 504, 530]);
 
+/**
+ * Pages and covers are the same for everyone (shared/src/public.ts), so they're asked for with no
+ * cookie: the server answers them for any site, and Cloudflare keeps one copy for every reader.
+ */
+function credentialsFor(path: string): RequestCredentials {
+  const pathOnly = path.split('?')[0];
+  if (isPublicPath(pathOnly)) return 'omit';
+  return 'include';
+}
+
 /** One try at one copy of the server, with no switching: a 504 of its own when nothing answers. */
 async function fetchFrom(base: ApiBase, path: string, body: unknown, timeout: number): Promise<Response> {
   const ctrl = new AbortController();
@@ -129,7 +141,7 @@ async function fetchFrom(base: ApiBase, path: string, body: unknown, timeout: nu
       method: body === undefined ? 'GET' : 'POST',
       headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      credentials: 'include',
+      credentials: credentialsFor(path),
       signal: ctrl.signal,
     });
     answered(base, !LAPTOP_GATEWAY.has(res.status));

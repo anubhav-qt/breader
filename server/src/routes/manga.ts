@@ -3,21 +3,23 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { AniListAboutQuery, AniListFindQuery, AniListFoundQuery, AniListId, AniListKeptQuery, AniListQuery, AniListSearchQuery, MANGA_KINDS, MangaChaptersQuery, MangaCoverQuery, MangaId, MangaPageQuery, MangaSearchQuery, MangaSeriesQuery, SourceId, type AniListKept, type AniListPage, type MangaKind, type MangaSearchEvent, type MangaState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
-import { ApiError, parse, signedOut } from '../lib/errors.ts';
-import { readSession } from '../lib/session.ts';
+import { ApiError, parse } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover } from '../manga/covers.ts';
 import type { Picture } from '../manga/disk.ts';
 
+/** How long Cloudflare and the browser keep a page, in seconds: its address always means the same picture. */
+export const PAGE_KEPT = 30 * 24 * 3600;
+
 /*
  * Manga through the laptop (manga/): one search across MangaDex and Breader's Suwayomi sources, and
- * each series from wherever it is. Anyone may look through it; pages, the most of what it sends,
- * are for browsers signed in to a library, as a series is read once it's added to one. Pages go
+ * each series from wherever it is. Anyone may look through it and read it: pages and covers are
+ * the same for everyone, so Cloudflare keeps them near the reader (ADR 0001, point 1). Pages go
  * through here because MangaDex only lets its own site fetch them from a browser, and Suwayomi
  * isn't open to readers. The fallback reads the sources through the Suwayomi on AWS (infra/aws/).
  */
 export function mangaRoutes(deps: Deps) {
-  const { env, manga } = deps;
+  const { manga } = deps;
   const r = new Hono<AppEnv>();
 
   r.get('/manga', (c) => {
@@ -29,24 +31,15 @@ export function mangaRoutes(deps: Deps) {
     if (!manga) throw new ApiError(503, 'manga_off', 'Manga isn’t on, on this server.');
     await next();
   });
-  // The signed cookie is enough to tell a reader from a stranger, and asks nothing of the database,
-  // which every page would otherwise.
-  r.use('/manga/chapter/*', async (c, next) => {
-    if (!readSession(c, env)) throw signedOut();
-    await next();
-  });
-  r.use('/manga/source/chapter/*', async (c, next) => {
-    if (!readSession(c, env)) throw signedOut();
-    await next();
-  });
 
   const id = (c: Context<AppEnv>, name = 'id') => parse(MangaId, c.req.param(name));
   const sourceId = (c: Context<AppEnv>) => parse(SourceId, c.req.param('id'));
-  const picture = (c: Context<AppEnv>, pic: Picture, maxAge: number) =>
-    c.body(pic.data as Uint8Array<ArrayBuffer>, 200, { 'content-type': pic.type, 'cache-control': `private, max-age=${maxAge}` });
-  /** A cover, kept by the browser until it's due to be fetched again (manga/covers.ts), then asked after by its tag. */
+  /** A page, the same for everyone: kept by Cloudflare and the browser (shared/src/public.ts). */
+  const picture = (c: Context<AppEnv>, pic: Picture) =>
+    c.body(pic.data as Uint8Array<ArrayBuffer>, 200, { 'content-type': pic.type, 'cache-control': `public, max-age=${PAGE_KEPT}` });
+  /** A cover, kept until it's due to be fetched again (manga/covers.ts), then asked after by its tag. */
   const cover = (c: Context<AppEnv>, got: Cover) => {
-    const headers = { 'cache-control': `private, max-age=${got.maxAge}`, etag: got.tag };
+    const headers = { 'cache-control': `public, max-age=${got.maxAge}`, etag: got.tag };
     if (c.req.header('if-none-match') === got.tag) return c.body(null, 304, headers);
     return c.body(got.pic.data as Uint8Array<ArrayBuffer>, 200, { 'content-type': got.pic.type, ...headers });
   };
@@ -100,7 +93,7 @@ export function mangaRoutes(deps: Deps) {
   // A page each second or two, and a chapter or a few at once when they're kept to read offline.
   r.get('/manga/chapter/:id/:n{[0-9]{1,4}}', async (c) => {
     const { saver } = parse(MangaPageQuery, c.req.query());
-    return picture(c, await manga!.page(id(c), Number(c.req.param('n')), !!saver), 86_400);
+    return picture(c, await manga!.page(id(c), Number(c.req.param('n')), !!saver));
   });
 
   r.get('/manga/cover/:id/:file{[\\w-]{1,80}\\.(?:jpe?g|png|webp|gif)}', async (c) => {
@@ -169,12 +162,12 @@ export function mangaRoutes(deps: Deps) {
 
   // A series on one of Suwayomi's sources, by its source and address (SourceId).
   r.get('/manga/source/chapter/:id', async (c) => {
-    c.header('Cache-Control', 'private, max-age=300');
+    c.header('Cache-Control', 'public, max-age=300');
     return c.json({ pages: await manga!.sourcePages(sourceId(c)) });
   });
 
   r.get('/manga/source/chapter/:id/:n{[0-9]{1,4}}', async (c) => {
-    return picture(c, await manga!.sourcePage(sourceId(c), Number(c.req.param('n'))), 86_400);
+    return picture(c, await manga!.sourcePage(sourceId(c), Number(c.req.param('n'))));
   });
 
   r.get('/manga/source/:id', async (c) => {

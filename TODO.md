@@ -47,6 +47,6 @@
 - [ ] Browse takes about 1 s to first show on a slow phone. Since 2026-11-07 it asks where a page of series is read in one call, not 30; not measured on a phone yet.
 - [x] The 150-reader failure was Docker's port forwarding on the Mac, not the pool (docs/load-tests.md).
 - [ ] Pool size for production: measure the ThinkPad's trip time to Supabase Mumbai first (Supabase free runs 15 queries at once).
-- [ ] CORS rebuilds every page and cover answer to add `Vary: Origin`, copying its bytes (about 18% of the API's CPU at 1,200 readers).
+- [x] CORS rebuilt every page and cover answer to add `Vary: Origin`: public pages and covers now skip cors() (ADR 0001, point 1).
 - [ ] The names drop-down's `distance` is about 10% of the API's CPU at 1,200 readers.
 - [ ] A place save makes about 12 trips to the database, 10 inside one transaction: fewer trips.

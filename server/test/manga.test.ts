@@ -10,7 +10,7 @@ import { Disk } from '../src/manga/disk.ts';
 import { makeManga } from '../src/manga/index.ts';
 import { ANTHOLOGY_ID, DOUJINSHI_ID, plain, USER_AGENT } from '../src/manga/mangadex.ts';
 import { Gate, Pace } from '../src/manga/pace.ts';
-import { app as plainApp, browser, deps } from './helpers.ts';
+import { app as plainApp, browser, deps, ORIGIN } from './helpers.ts';
 
 /*
  * A MangaDex of our own, answering the calls Breader makes as MangaDex does, so the rules it keeps
@@ -235,15 +235,13 @@ describe('MangaDex through the laptop', () => {
     expect(r.body.code).toBe('manga_off');
   });
 
-  it('lets anyone look, and only browsers signed in to a library read pages', async () => {
+  it('lets anyone look and read, signed in or not', async () => {
     const { app } = await setup();
     const stranger = browser(undefined, app);
     expect((await stranger.get('/v1/manga/search?q=frieren')).status).toBe(200);
     expect((await stranger.get(`/v1/manga/series/${FRIEREN}/chapters`)).status).toBe(200);
     expect((await stranger.get(`/v1/manga/cover/${FRIEREN}/cover-1.jpg`)).status).toBe(200);
-    const r = await stranger.get(`/v1/manga/chapter/${ch(1)}/0`);
-    expect(r.status).toBe(401);
-    expect(r.body.code).toBe('signed_out');
+    expect((await stranger.get(`/v1/manga/chapter/${ch(7)}/0`)).status).toBe(200);
   });
 
   it('searches as itself, leaving out 18+ series unless asked and loli and shota always', async () => {
@@ -482,7 +480,7 @@ describe('MangaDex through the laptop', () => {
     const r = await b.get(`/v1/manga/chapter/${ch(7)}/1`);
     expect(r.status).toBe(200);
     expect(r.headers.get('content-type')).toBe('image/png');
-    expect(r.headers.get('cache-control')).toContain('private');
+    expect(r.headers.get('cache-control')).toBe('public, max-age=2592000');
     const [img] = dex.asked('node1.mangadex.network', /./);
     expect(img.url.pathname).toBe('/data/hash007/x2-b.png');
     expect(img.ua).toBe(USER_AGENT);
@@ -566,6 +564,109 @@ describe('MangaDex through the laptop', () => {
     const r = await b.get('/v1/manga/search?q=busy');
     expect(r.status).toBe(503);
     expect(r.body.code).toBe('manga_busy');
+  });
+});
+
+describe('pages and covers, the same for everyone', () => {
+  const ELSEWHERE = 'https://elsewhere.example';
+  /** Asked for as Cloudflare, a browser tab or another site would: no cookie, any origin or none. */
+  const bare = (app: ReturnType<typeof makeApp>, path: string, headers: Record<string, string> = {}, method = 'GET') =>
+    app.request(path, { method, headers });
+  /** The headers that let one kept copy serve every reader. */
+  const expectPublic = (r: Response) => {
+    expect(r.headers.get('access-control-allow-origin')).toBe('*');
+    expect(r.headers.get('access-control-allow-credentials')).toBeNull();
+    expect(r.headers.get('vary')).toBeNull();
+    expect(r.headers.get('set-cookie')).toBeNull();
+  };
+
+  it('sends a page to anyone, kept 30 days, the same answer whoever asks', async () => {
+    const { app, b } = await setup();
+    const path = `/v1/manga/chapter/${ch(7)}/1`;
+    const askers: Array<Record<string, string>> = [{}, { origin: ORIGIN }, { origin: ELSEWHERE }, { origin: 'null' }];
+    for (const headers of askers) {
+      const r = await bare(app, path, headers);
+      expect(r.status).toBe(200);
+      expect(r.headers.get('cache-control')).toBe('public, max-age=2592000');
+      expectPublic(r);
+    }
+    // Signed in, with its cookie: the very same answer.
+    const signedIn = await b.get(path);
+    expect(signedIn.status).toBe(200);
+    expectPublic(new Response(null, { headers: signedIn.headers }));
+    const saver = await bare(app, `/v1/manga/chapter/${ch(7)}/0?saver=1`);
+    expect(saver.headers.get('cache-control')).toBe('public, max-age=2592000');
+    // HEAD, as a cache may ask.
+    const head = await bare(app, path, {}, 'HEAD');
+    expect(head.status).toBe(200);
+    expectPublic(head);
+  });
+
+  it('sends a cover to anyone, kept until it’s due again, and asked after by its tag', async () => {
+    const { app } = await setup();
+    const path = `/v1/manga/cover/${FRIEREN}/cover-1.jpg?size=256`;
+    const r = await bare(app, path, { origin: ELSEWHERE });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toMatch(/^public, max-age=\d+$/);
+    expect(Number(r.headers.get('cache-control')!.split('=')[1])).toBeGreaterThanOrEqual(60);
+    expectPublic(r);
+    const again = await bare(app, path, { 'if-none-match': r.headers.get('etag')! });
+    expect(again.status).toBe(304);
+    expect(again.headers.get('cache-control')).toBe(r.headers.get('cache-control'));
+    expectPublic(again);
+  });
+
+  it('never lets an error be kept, and lets any site read what went wrong', async () => {
+    const { app, dex } = await setup();
+    const cases: Array<[string, number, string]> = [
+      [`/v1/manga/chapter/${ch(7)}/3`, 404, 'manga_not_found'],
+      [`/v1/manga/chapter/${ch(999)}/0`, 404, 'manga_not_found'],
+      ['/v1/manga/chapter/not-an-id/0', 400, 'bad_request'],
+      [`/v1/manga/cover/${NEVER}/cover-1.jpg`, 404, 'manga_not_found'],
+      [`/v1/manga/cover/${FRIEREN}/cover-1.jpg?size=99`, 400, 'bad_request'],
+    ];
+    for (const [path, status, code] of cases) {
+      const r = await bare(app, path, { origin: ELSEWHERE });
+      expect(r.status, path).toBe(status);
+      expect(r.headers.get('cache-control'), path).toBe('no-store');
+      expectPublic(r);
+      const body = (await r.json()) as { code: string };
+      expect(body.code, path).toBe(code);
+    }
+    dex.state.notPicture = true;
+    const busy = await bare(app, `/v1/manga/chapter/${ch(9)}/1`);
+    expect(busy.status).toBe(503);
+    expect(busy.headers.get('cache-control')).toBe('no-store');
+    expectPublic(busy);
+    // A path past every route, under the public ones: still never kept.
+    const none = await bare(app, `/v1/manga/chapter/${ch(7)}/1/more`);
+    expect(none.status).toBe(404);
+    expect(none.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('keeps an error from being kept where the route had said to keep its answer', async () => {
+    const { b } = await setup();
+    // The series route says private, max-age=600 before it finds the series is 18+.
+    const r = await b.get(`/v1/manga/series/${ADULT}`);
+    expect(r.status).toBe(403);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('leaves everything else to the app’s own sites, with their cookie', async () => {
+    const { app, b } = await setup();
+    const own = await b.get('/v1/manga/search?q=frieren');
+    expect(own.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+    expect(own.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(own.headers.get('vary')).toContain('Origin');
+    const other = await bare(app, '/v1/manga/search?q=frieren', { origin: ELSEWHERE });
+    expect(other.headers.get('access-control-allow-origin')).toBeNull();
+    // Writing to a public path isn't reading it: no open door for another site.
+    const post = await bare(app, `/v1/manga/chapter/${ch(7)}/1`, { origin: ELSEWHERE, 'content-type': 'application/json' }, 'POST');
+    expect(post.headers.get('access-control-allow-origin')).toBeNull();
+    // A preflight is answered as for any other path.
+    const pre = await bare(app, `/v1/manga/chapter/${ch(7)}/1`, { origin: ORIGIN, 'access-control-request-method': 'GET' }, 'OPTIONS');
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get('access-control-allow-origin')).toBe(ORIGIN);
   });
 });
 

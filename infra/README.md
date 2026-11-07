@@ -17,9 +17,9 @@ The app calls `api.` and switches to `fb.` when `api.` fails: a network error, a
 or a 502/503/504/530. Every write carries an id and applies once, so the retry is safe. While on
 `fb.`, it checks `api.` every minute and moves back when it answers.
 
-Planned, not built: four servers (the laptop and three Renders), regional read copies of the
-database, and edge-cached manga pages. See `docs/adr/0001-four-servers.md`. This file changes as
-each piece lands.
+Planned, not built: four servers (the laptop and three Renders) and regional read copies of the
+database. Built, not live yet: edge-cached manga pages and covers (Edge cache for pages and covers,
+below). See `docs/adr/0001-four-servers.md`. This file changes as each piece lands.
 
 ## Local development
 
@@ -386,6 +386,31 @@ nothing itself: Settings › Builds › Branch control, turn off automatic produ
 deployments. Put `VITE_API_URL=https://api.breader.example`,
 `VITE_API_FALLBACK_URL=https://fb.breader.example` and `VITE_SENTRY_DSN=<the DSN>` in
 `infra/.env.ship`, and sign in once with `npx wrangler@4 login`.
+
+### Edge cache for pages and covers
+
+Pages, a source chapter's page count and covers are the same for every reader
+(`shared/src/public.ts`). The API sends them `public` with `Access-Control-Allow-Origin: *` and no
+cookie, and every error `no-store`. Cloudflare only caches by file ending, and these addresses
+have none, so one Cache Rule makes them cacheable (ADR 0001, point 1).
+
+1. Caching › Cache Rules › Create rule, named `public pages and covers`. Custom filter expression:
+   ```
+   (http.host eq "api.breader.example" and (
+     starts_with(http.request.uri.path, "/v1/manga/chapter/") or
+     starts_with(http.request.uri.path, "/v1/manga/source/chapter/") or
+     starts_with(http.request.uri.path, "/v1/manga/cover/") or
+     starts_with(http.request.uri.path, "/v1/manga/anilist/cover/") or
+     (starts_with(http.request.uri.path, "/v1/manga/source/") and ends_with(http.request.uri.path, "/cover"))))
+   ```
+   Cache eligibility: **Eligible for cache**. Edge TTL: **Use cache-control header if present,
+   bypass cache if not**. Leave the cache key as it is (the query string is part of it, so
+   `?saver=1` and `?size=` are kept apart).
+2. Caching › Tiered Cache: on, Smart Tiered Cache Topology (free).
+3. Check: ask a page twice; the second answer says `cf-cache-status: HIT`.
+
+`fb.` is not cached this way: it is DNS only, behind Render's own Cloudflare, and Render's edge
+cache is for paid services only.
 
 ### 10. Monitoring
 

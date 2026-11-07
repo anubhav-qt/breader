@@ -526,20 +526,28 @@ describe('a series from a source', () => {
     ]);
 
     const chapter = `/v1/manga/source/chapter/${cid(7, 7001)}`;
-    const stranger = browser(undefined, app);
-    expect((await stranger.get(chapter)).status).toBe(401);
-    expect((await stranger.get(`${chapter}/0`)).status).toBe(401);
+    // The same for everyone: no cookie needed, any site may read it, Cloudflare keeps it.
+    const count = await app.request(chapter, { headers: { origin: 'https://elsewhere.example' } });
+    expect(await count.json()).toEqual({ pages: 3 });
+    expect(count.headers.get('cache-control')).toBe('public, max-age=300');
+    expect(count.headers.get('access-control-allow-origin')).toBe('*');
+    expect(count.headers.get('vary')).toBeNull();
     expect((await b.get(chapter)).body).toEqual({ pages: 3 });
-    const page = await b.get(`${chapter}/2`);
+    const page = await app.request(`${chapter}/2`);
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toBe('image/png');
+    expect(page.headers.get('cache-control')).toBe('public, max-age=2592000');
+    expect(page.headers.get('access-control-allow-origin')).toBe('*');
     await b.get(`${chapter}/2`);
     expect(sw.calls.filter((c) => c.op === 'picture')).toHaveLength(1);
     const past = await b.get(`${chapter}/3`);
     expect(past.status).toBe(404);
     expect(past.body.message).toBe('That chapter has no page there.');
-    const cover = await b.get(`/v1/manga/source/${sid(7)}/cover`);
+    expect(past.headers.get('cache-control')).toBe('no-store');
+    const cover = await app.request(`/v1/manga/source/${sid(7)}/cover`);
     expect(cover.headers.get('content-type')).toBe('image/png');
+    expect(cover.headers.get('cache-control')).toMatch(/^public, max-age=\d+$/);
+    expect(cover.headers.get('access-control-allow-origin')).toBe('*');
 
     const shut = await b.get(`/v1/manga/source/${sid(8, '44')}`);
     expect(shut.status).toBe(403);

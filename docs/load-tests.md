@@ -79,13 +79,34 @@ numbers may be better than shown.
 - CPU profile of one copy at 1,200 readers (`--cpu-prof`):
   - About 18%: copying each page and cover. Hono's CORS adds `Vary: Origin` after the route
     answers, which rebuilds the answer as a real `Response` and copies its bytes
-    (`hono/dist/middleware/cors`, `c.header` after `next()`; read in the code, not tried yet).
+    (`hono/dist/middleware/cors`, `c.header` after `next()`). Fixed: pages and covers skip it
+    (below).
   - About 10%: the names drop-down's `distance` (`server/src/manga/names.ts`).
   - About 9%: garbage collection. About 8%: writing to sockets.
 - A place save makes about 12 trips to the database: one for the session, then about 10 inside
   one transaction (`server/src/routes/sync.ts`). In production every trip goes to Mumbai.
 - Supabase free (Nano, checked 2026-11-07, supabase.com/docs/guides/platform/compute-and-disk):
   60 direct connections, 200 pooler clients, 15 queries at once (default pool size).
+
+## Public pages and covers, before and after (2026-11-07)
+
+ADR 0001, point 1: pages and covers skip CORS and need no sign-in. Same test, 1,200 readers
+(`GENS=2`, 600 each), 2 minutes, one API copy, quiet stack. Built `server/dist/api.js` of each,
+run in turn: before, after, before, after. CPU is the API container's average (`docker stats`).
+
+| Run | Requests a second | p50 | p95 all | Pages p95 | Covers p95 | Saves p95 | Failed | CPU |
+|---|---|---|---|---|---|---|---|---|
+| Before, 1 | 561 | 42 ms | 874 ms | 330 ms | 140 ms | 7.8 s | 31 (0.04%) | 228% |
+| After, 1 | 583 | 3 ms | 17 ms | 18 ms | 13 ms | 17 ms | 0 | 119% |
+| Before, 2 | 581 | 10 ms | 118 ms | 110 ms | 75 ms | 994 ms | 0 | 174% |
+| After, 2 | 583 | 3 ms | 15 ms | 15 ms | 11 ms | 14 ms | 0 | 113% |
+
+- After: about half the CPU, and every kind of answer is quicker, saves too, as the one main
+  thread is no longer busy copying pages.
+- The two "before" runs differ a lot (874 ms and 118 ms at p95); the two "after" runs don't.
+  Why "before, 1" was slower is not checked yet. The failures there were saves answering 500.
+- Cloudflare keeping pages (once the Cache Rule is in) takes most page asks off the server too;
+  not measured here.
 
 ## What each API copy keeps to itself
 

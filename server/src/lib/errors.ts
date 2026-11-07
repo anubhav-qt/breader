@@ -35,7 +35,17 @@ export async function readJson(c: Context): Promise<unknown> {
   }
 }
 
+/**
+ * An error is never kept, by the browser or by Cloudflare: the next ask may well work. Set on the
+ * answer being made, not passed with the error's own, because Hono lays what a route set before it
+ * failed (its Cache-Control, say) over the error's.
+ */
+export function neverKept(c: Context) {
+  c.header('Cache-Control', 'no-store');
+}
+
 export function onError(err: Error, c: Context) {
+  neverKept(c);
   if (err instanceof ApiError) return c.json({ code: err.code, message: err.message }, err.status);
   log.error({ err, path: c.req.path, method: c.req.method }, 'request failed');
   report(err, { method: c.req.method, path: c.req.routePath });
