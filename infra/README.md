@@ -18,8 +18,7 @@ or a 502/503/504/530. Every write carries an id and applies once, so the retry i
 `fb.`, it checks `api.` every minute and moves back when it answers.
 
 Planned, not built: four servers (the laptop and three Renders) and regional read copies of the
-database. Built, not live yet: edge-cached manga pages and covers (Edge cache for pages and covers,
-below). See `docs/adr/0001-four-servers.md`. This file changes as each piece lands.
+database. Live: edge-cached manga pages and covers (Edge cache for pages and covers, below). See `docs/adr/0001-four-servers.md`. This file changes as each piece lands.
 
 ## Local development
 
@@ -408,6 +407,8 @@ have none, so one Cache Rule makes them cacheable (ADR 0001, point 1).
    `?saver=1` and `?size=` are kept apart).
 2. Caching › Tiered Cache: on, Smart Tiered Cache Topology (free).
 3. Check: ask a page twice; the second answer says `cf-cache-status: HIT`.
+
+Done on breader.site 2026-11-07: the rule is `public pages and covers`, Tiered Cache is on.
 
 `fb.` is not cached this way: it is DNS only, behind Render's own Cloudflare, and Render's edge
 cache is for paid services only.

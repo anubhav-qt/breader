@@ -18,8 +18,7 @@
 - The API reads only from Supabase. The ThinkPad's copy is used for health, admin, backups and
   drills, not for answering readers.
 - The API's database pool is 5 connections (`server/src/db/client.ts`).
-- Manga pages and covers are public (point 1, built 2026-11-07, not live until the Cache Rule
-  and a ship).
+- Manga pages and covers are public and kept by Cloudflare (point 1, live 2026-11-07).
 - Browse's AniList lists, AniList search and `/manga/anilist/names` are all
   `private, max-age=600`, so Cloudflare keeps none of them.
 - `feed_state` has one row: one cursor (`ack_txid`, `ack_id`) for one copy.
@@ -80,9 +79,12 @@ Checked 2026-11-07 (Cloudflare and Render docs, and live headers):
 - It ignores `Vary` (except `Accept-Encoding`), but its default cache key holds the request's
   `Origin` header and the query string.
 - How long it keeps a page: no set time; least used goes first.
-- Tiered cache (Smart Topology) is on the free plan. Whether it is on for breader.site: not
-  checked yet.
+- Tiered cache (Smart Topology) is on the free plan. It was off for breader.site; turned on
+  2026-11-07.
 - Free plan: 10 Cache Rules; the regex operator `matches` is Business and up.
+- Live, 2026-11-07, after the ship (`e9823e7`) and the Cache Rule: a page and a cover answer
+  `MISS` then `HIT` (a 3.9 MB page: 1.45 s, then 0.19 s); `?saver=1` is kept apart; errors say
+  `BYPASS`; search and chapter lists stay `DYNAMIC`. `starts_with` works on the free plan.
 - `fb.` is DNS only, behind Render's own Cloudflare. Render's edge cache is for paid services, so
   `fb.` pages are not edge-cached. The 3 Renders of point 2 would be the same unless proxied
   through breader.site's zone: not checked yet.
@@ -173,8 +175,7 @@ The owner chose the app (above).
 ## Not checked yet
 
 - Render free: RAM, included bandwidth, outgoing addresses per region.
-- Cloudflare: Worker free limits, Load Balancing price, whether tiered cache is on for
-  breader.site.
+- Cloudflare: Worker free limits, Load Balancing price.
 - Supabase free: size, pausing, `session_replication_role`, how many free projects per account.
 - Whether AniList limits per address.
 - Trip time from each Render region to Mumbai.
@@ -187,8 +188,7 @@ The owner chose the app (above).
 1. Load test before anything changes: numbers to beat. Done: `docs/load-tests.md`.
 2. Find why 150 failed. Done: Docker port forwarding on the Mac.
 3. Route that shows a server's outgoing address. Check what MangaDex sees.
-4. Public, edge-cached pages and covers (point 1). Built 2026-11-07; live after the Cache Rule
-   and a ship.
+4. Public, edge-cached pages and covers (point 1). Done: live 2026-11-07.
 5. Feed: one cursor per copy, prune to the slowest (point 6). Then `page_panels` fed (point 7).
 6. Renders ask the ThinkPad first and save to it (point 3).
 7. Shared fetching across servers (point 4).
