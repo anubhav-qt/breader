@@ -23,6 +23,7 @@
 - [ ] Initials split a sentence: "by O. Henry" is said as "by O." and "Henry", with a pause between (`sentencesIn`, reading aloud too).
 - [ ] Kokoro on this device tops out near 6x on the graphics chip (`features/audiobook/speed.ts`). Several sentences in one run would need a Kokoro export that masks padding; this one doesn't.
 - [ ] On a real phone: Maximum's three Piper engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
+- [ ] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live, audiobooks and the panel model. Many people can then make audiobooks at once, instead of one book at a time in a queue (`server/src/speech/books.ts`), while live reading stays quick.
 
 ## Testing on real phones
 - [ ] Reproduce phone browsers properly, then tune voices and Immersive against them. So far both were tuned in code and a desktop browser only.
