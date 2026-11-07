@@ -5,6 +5,10 @@ import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/
 import { BulkBar, type BulkAction } from './components/BulkBar';
 import { Header, type Tab } from './components/Header';
 import { IconAddBook, IconLock, IconPeople, IconStar, IconTrash } from './components/icons';
+import { Hint, type HintSpec } from './features/guide/Hint';
+import type { Go } from './features/guide/list';
+import { markSeen, useGuideKept, useNews } from './features/guide/seen';
+import { WelcomeBooks, WelcomeManga, WelcomeShared } from './features/guide/Welcome';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { DesignBar } from './features/design/DesignBar';
 import { Toast, type ToastMessage } from './components/Toast';
@@ -176,6 +180,7 @@ const Reader = lazy(() => loadReader().then((m) => ({ default: m.Reader })));
 const Browse = lazy(() => loadBrowse().then((m) => ({ default: m.Browse })));
 const MangaPage = lazy(() => loadPage().then((m) => ({ default: m.MangaPage })));
 const AddBook = lazy(() => loadAdd().then((m) => ({ default: m.AddBook })));
+const Guide = lazy(() => import('./features/guide/Guide').then((m) => ({ default: m.Guide })));
 function loadSoon() {
   const all = () => { for (const load of [loadReader, loadBrowse, loadPage, loadAdd]) void load().catch(() => {}); };
   // Safari has no requestIdleCallback.
@@ -292,6 +297,12 @@ export default function App() {
   /** Picked books being removed, some of them shared too: asking once about all of those. */
   const [askingAll, setAskingAll] = useState<{ ids: string[]; shared: string[]; title: string; category: Category; fromKeyboard: boolean } | null>(null);
   const [login, setLogin] = useState<LoginStart | null>(null);
+  /** The guide, open: when it was last opened before this, so what came since is New in it. */
+  const [guide, setGuide] = useState<{ seenAt: number; q?: string } | null>(null);
+  /** The shared libraries' list, under the arrow beside the switch between libraries; `key`: opened to type someone's key in. */
+  const [librariesOpen, setLibrariesOpen] = useState<false | 'list' | 'key'>(false);
+  const guideKept = useGuideKept();
+  const news = useNews();
   const account = useAccount();
   const [dragOver, setDragOver] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -1013,6 +1024,26 @@ export default function App() {
     };
   }, [route.name, adding, addFiles]);
 
+  /** The guide, from settings, an empty library, a tip or ? in the library; `q`: what it looks for first. */
+  const openGuide = useCallback((q?: string) => {
+    setGuide({ seenAt: guideKept.seen, q });
+    markSeen();
+  }, [guideKept.seen]);
+  // ? in the library opens the guide, as in a book it opens the keys.
+  useEffect(() => {
+    if (route.name !== 'library') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '?' || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      openGuide();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [route.name, openGuide]);
+
   const onAdded = useCallback(async (rec: BookRecord, data: Blob | string, cover?: Blob, opts?: { ai: boolean; tokens?: string[] }) => {
     await lib.addBook(rec, data, cover);
     if (opts?.ai) lib.editBook(rec.id, { ai: true });
@@ -1284,6 +1315,41 @@ export default function App() {
   /** Select, where the library showing has books to pick. */
   let startPicking: (() => void) | undefined = undefined;
   if (tab !== 'browse' && books.length > 0) startPicking = () => setPicking({ place: pickPlace, ids: new Set() });
+  // The shared libraries' list goes with the tab it hangs from.
+  if (tab !== 'shelf' && librariesOpen) setLibrariesOpen(false);
+
+  /** Where the guide's Show me goes; nothing for what can't be gone to just now. */
+  const showMe = (g: Go): (() => void) | undefined => {
+    switch (g) {
+      case 'add': return () => { setCategory('books'); setAdding({ mode: 'file' }); };
+      case 'paste': return () => { setCategory('books'); setAdding({ mode: 'paste' }); };
+      case 'browse': return mdOn === false ? undefined : () => { setCategory('manga'); setTab('browse'); };
+      case 'login': return loggedIn ? undefined : () => setLogin({ mode: 'login' });
+      case 'key': return () => setKeyOpen(true);
+      case 'libraries': return () => { setTab('shelf'); setLibrariesOpen('key'); };
+      case 'select': return startPicking;
+    }
+  };
+
+  /*
+   * Tips, once each (features/guide/Hint.tsx). In the library: books kept only in this browser
+   * ask to log in; then that the guide is there. In a book, with a keyboard: that ? has the keys.
+   */
+  const mouse = useMemo(() => window.matchMedia('(hover: hover) and (pointer: fine)').matches, []);
+  const ownCount = shelves.books.mine.length + shelves.manga.mine.length;
+  const libraryHints: HintSpec[] = [];
+  if (!loggedIn && !lib.key && ownCount > 0) {
+    libraryHints.push({ id: 'keep-books', text: 'Your books are only in this browser. Log in to keep them on every device.', action: { label: 'Log in', run: () => setLogin({ mode: 'login' }) } });
+  }
+  if (ownCount > 0) {
+    libraryHints.push({
+      id: 'guide',
+      text: mouse ? 'Everything Breader does is in the guide: press ?, or find it in settings.' : 'Everything Breader does is in the guide, in settings.',
+      action: { label: 'Open it', run: () => openGuide() },
+    });
+  }
+  const readerHints: HintSpec[] = mouse ? [{ id: 'reader-keys', text: 'Press ? to see the keys.', ms: 6000 }] : [];
+  const busy = !!(choosing || adding || login || keyOpen || guide || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
 
   const flipCovers = () => {
     const next = !coversOnly;
@@ -1316,8 +1382,17 @@ export default function App() {
   }
   /** An empty library's Add a book opens Add book; its Add a manga opens Browse, where the laptop has anywhere to look. */
   const addTo = (c: Category) => (c === 'manga' ? () => setTab('browse') : () => setAdding({ mode: 'file' }));
-  /** Nowhere to find manga: an empty manga library, without its button. */
-  const noBrowse = <div className="gallery-empty" />;
+  /** An empty library: what it's for and how to fill it (features/guide/Welcome.tsx); someone else's says why it's empty. */
+  const emptyOf = (c: Category, t: 'mine' | 'shelf'): ReactNode => {
+    if (t === 'shelf') {
+      if (showing !== 'own') return emptyShelf();
+      return <WelcomeShared manga={c === 'manga'} onShare={addTo(c)} onOpen={() => setLibrariesOpen('key')} onGuide={() => openGuide('sharing')} />;
+    }
+    if (c === 'manga') {
+      return <WelcomeManga onBrowse={mdOn === false ? null : () => setTab('browse')} onAdd={() => setAdding({ mode: 'file' })} onGuide={() => openGuide()} />;
+    }
+    return <WelcomeBooks onAdd={() => setAdding({ mode: 'file' })} onPaste={() => setAdding({ mode: 'paste' })} onGuide={() => openGuide()} />;
+  };
 
   return (
     <MotionConfig reducedMotion="user">
@@ -1338,12 +1413,15 @@ export default function App() {
                 key="libraries"
                 sharing={sharing}
                 ownCount={ownShared}
+                focusKey={librariesOpen === 'key'}
                 onShow={(which: Showing) => { showLibrary(which); setTab('shelf'); }}
                 onClose={close}
                 say={say}
               />
             )}
             ownMenu={() => <OwnLibraryMenu key="own" name={labels.mine} count={items.mine.length} category={category} />}
+            librariesOpen={librariesOpen !== false}
+            onLibrariesOpen={(o) => setLibrariesOpen(o ? 'list' : false)}
             dark={dark}
             onTheme={() => {
               const next = dark ? 'light' : 'dark';
@@ -1359,6 +1437,8 @@ export default function App() {
                 // Only over manga's covers, where there are some to show.
                 coversOnly={manga && tab !== 'browse' && books.length > 0 ? coversOnly : undefined}
                 onCoversOnly={flipCovers}
+                onGuide={() => openGuide()}
+                news={news}
               />
             )}
             onSelect={startPicking}
@@ -1386,7 +1466,7 @@ export default function App() {
               onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
               onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
               onChapters={chaptersOf}
-              empty={(t === 'shelf' ? emptyShelf() : undefined) ?? (c === 'manga' && mdOn === false ? noBrowse : undefined)}
+              empty={emptyOf(c, t)}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
               onShare={(b, shared) => {
                 // Out of their books already: not shared either, it's nowhere, so it goes.
@@ -1534,6 +1614,11 @@ export default function App() {
         {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} />}
         {/* A key made as a series was read waits for the reader to close. */}
         {freshKey && route.name !== 'read' && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
+        {guide && (
+          <Suspense key="guide" fallback={null}>
+            <Guide seenAt={guide.seenAt} initial={guide.q} go={showMe} onClose={() => setGuide(null)} />
+          </Suspense>
+        )}
         {login && (
           <LoginDialog
             key="login"
@@ -1549,6 +1634,8 @@ export default function App() {
       </AnimatePresence>
 
       <Toast toast={toast} onDone={dismissToast} />
+      {route.name === 'library' && <Hint key="library" place="library" hints={libraryHints} quiet={busy} />}
+      {route.name === 'read' && <Hint key="reader" place="reader" hints={readerHints} quiet={!reading || !!opening} />}
       <AudiobookHost />
       {devTools && route.name === 'library' && (
         <PreviewBar

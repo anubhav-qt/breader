@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { IconEye, IconKey, IconPencil, IconSettings } from '../../components/icons';
+import { IconEye, IconKey, IconList, IconPencil, IconSettings } from '../../components/icons';
 import { DEFAULT_LABELS, LABEL_CHARS, readLabels, renameLabel, type LibraryLabels } from '../../data/labels';
 import { useSyncStatus } from '../../data/sync';
 import { loginError, sendVerification, type AccountState } from '../../lib/account';
@@ -17,13 +17,17 @@ interface Props {
   /** Manga's covers without their titles, or with them; absent where there are no covers to show. */
   coversOnly?: boolean;
   onCoversOnly: () => void;
+  /** The guide: everything Breader does. */
+  onGuide: () => void;
+  /** How much in the guide is new since it was last opened: a dot on the button says so. */
+  news: number;
 }
 
 /**
- * The header's settings: manga's covers on their own, the names of the switch between libraries,
- * the library key, and logging in, or who's logged in and logging out.
+ * The header's settings: the guide first, then manga's covers on their own, the names of the
+ * switch between libraries, the library key, and logging in, or who's logged in and logging out.
  */
-export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, onCoversOnly }: Props) {
+export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, onCoversOnly, onGuide, news }: Props) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [naming, setNaming] = useState(false);
@@ -71,8 +75,12 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
     go();
   };
 
+  // Logged out, the books are only in this browser: what logging in is for, under it.
   let ending = (
-    <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onLogin)}>Log in</button>
+    <button type="button" role="menuitem" className="acct-item acct-login" onClick={() => leaveFor(onLogin)}>
+      <span>Log in</span>
+      <small>Keep your books on every device</small>
+    </button>
   );
   if (user && confirming) {
     let ask = 'Log out of this browser?';
@@ -100,11 +108,12 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
         className="btn btn-ghost hdr-icon"
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label="Settings"
+        aria-label={news ? 'Settings, with something new in the guide' : 'Settings'}
         title="Settings"
         onClick={() => setOpen((o) => !o)}
       >
         <IconSettings />
+        {news > 0 && <span className="acct-dot" aria-hidden="true" />}
       </button>
       <AnimatePresence>
         {open && (
@@ -132,6 +141,10 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
             )}
             {message && <p className="acct-message" role="status">{message}</p>}
             {user && <div className="acct-sep" />}
+            <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onGuide)}>
+              <IconList /> Guide
+              {news > 0 ? <span className="acct-new">{news} new</span> : <kbd className="acct-kbd" aria-hidden="true">?</kbd>}
+            </button>
             {/* Stays open, so the covers can be seen changing behind it. */}
             {coversOnly !== undefined && (
               <button type="button" role="menuitemcheckbox" aria-checked={coversOnly} className="acct-item acct-toggle" onClick={onCoversOnly}>

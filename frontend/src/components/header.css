@@ -19,6 +19,12 @@
 /* Buttons that are only an icon: the pencil, Select, light or dark and settings. */
 .hdr .hdr-icon { width: 40px; padding: 0; }
 .hdr-icon svg { width: 20px; height: 20px; }
+/* Select says its word too where there's room for it. */
+.hdr-word { display: none; }
+@media (min-width: 1180px) {
+  .hdr .hdr-select { width: auto; padding: 0 12px 0 10px; gap: 7px; }
+  .hdr-select .hdr-word { display: inline; font-size: 13px; }
+}
 
 /* Phones: closer to the edges, and as tall as what's in it. */
 @media (max-width: 720px) {

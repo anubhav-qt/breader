@@ -11,16 +11,24 @@ interface Props {
    * the list of shared libraries, to pick, rename or add one (features/shared/LibraryMenu.tsx).
    */
   menu: (close: () => void) => ReactNode;
+  /** Its button's icon: the pencil for the reader's own library, an arrow for the shared ones' list. */
+  icon?: ReactNode;
+  /** Open, where something else opens it too (the guide's Show me, an empty library's button). */
+  open?: boolean;
+  onOpen?: (open: boolean) => void;
 }
 
 /** The pencil beside the switch between libraries, with the dropdown of the library showing. */
-export function LibraryEdit({ label, menu }: Props) {
-  const [open, setOpen] = useState(false);
+export function LibraryEdit({ label, menu, icon, open: given, onOpen }: Props) {
+  const [mine, setMine] = useState(false);
+  const open = given ?? mine;
+  const setOpen = (o: boolean) => { setMine(o); onOpen?.(o); };
   const wrap = useRef<HTMLDivElement>(null);
 
   // A tap anywhere else, or Escape, closes it.
   useEffect(() => {
     if (!open) return;
+    const setOpen = (o: boolean) => { setMine(o); onOpen?.(o); };
     const away = (e: PointerEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('pointerdown', away);
@@ -29,7 +37,7 @@ export function LibraryEdit({ label, menu }: Props) {
       window.removeEventListener('pointerdown', away);
       window.removeEventListener('keydown', esc);
     };
-  }, [open]);
+  }, [open, onOpen]);
 
   return (
     <div className="le" ref={wrap}>
@@ -42,7 +50,7 @@ export function LibraryEdit({ label, menu }: Props) {
         title={label}
         onClick={() => setOpen(!open)}
       >
-        <IconPencil />
+        {icon ?? <IconPencil />}
       </button>
       <AnimatePresence>{open && menu(() => setOpen(false))}</AnimatePresence>
     </div>

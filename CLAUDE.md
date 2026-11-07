@@ -34,6 +34,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 
 - Tests run from the Docker test stack, not this checkout (see the owner's memory notes).
 - Server tests: `npm test -w server` (needs the stack). App tests: `npm test -w frontend`.
+- Every feature a reader can use goes in the guide (`frontend/src/features/guide/list.ts`): a line on
+  what it does and where it is. A new one gets `since` (its day), so readers from before see it as New.
 - Migrations only add (a table, a nullable column). Removals ship a release later.
 - Never print `infra/.env` or any secret.
 - Commits: one line, `type: message`. No em dashes. No Claude attribution.

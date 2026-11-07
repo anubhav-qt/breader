@@ -10,7 +10,8 @@
 }
 .gallery > * { max-width: 1400px; margin-inline: auto; }
 .gallery[hidden] { display: none; }
-.gallery.is-empty:not([hidden]) { display: grid; place-items: center; padding-bottom: 76px; }
+/* Centred while it fits; once it doesn't (a short phone), it starts at the top and scrolls. */
+.gallery.is-empty:not([hidden]) { display: grid; place-items: safe center; padding-bottom: calc(76px + var(--pv-room, 0px)); }
 /* Every empty library's one button, Add a book or Add a manga: one size, whichever it says. */
 .gallery-add { min-width: 176px; height: 50px; padding: 0 22px; border-radius: 14px; font-size: 15px; }
 .gallery-add svg { width: 18px; height: 18px; }

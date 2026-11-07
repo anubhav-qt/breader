@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Category } from '../books/category';
 import type { LibraryLabels } from '../data/labels';
-import { IconSelect } from './icons';
+import { IconCaret, IconSelect } from './icons';
 import { LibraryEdit } from './LibraryEdit';
 import { LibrarySwitch } from './LibrarySwitch';
 import { Logo } from './Logo';
@@ -34,6 +34,9 @@ interface Props {
   libraries: (close: () => void) => ReactNode;
   /** The reader's own library's dropdown, to rename it (features/shared/OwnLibraryMenu.tsx). */
   ownMenu: (close: () => void) => ReactNode;
+  /** The shared libraries' list is open: the guide and an empty shared library open it too. */
+  librariesOpen: boolean;
+  onLibrariesOpen: (open: boolean) => void;
   /** The page is dark, picked by the sun-or-moon button or, until it's first tapped, by the device. */
   dark: boolean;
   onTheme: () => void;
@@ -52,7 +55,7 @@ interface Props {
  * start, with the pencil for the one showing; books-or-manga and the + button, Select, light or dark
  * and settings at the end. On phones books-or-manga floats at the bottom instead (ShelfSwitch).
  */
-export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd, libraries, ownMenu, dark, onTheme, settings, onSelect, bulk, audiobook }: Props) {
+export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd, libraries, ownMenu, librariesOpen, onLibrariesOpen, dark, onTheme, settings, onSelect, bulk, audiobook }: Props) {
   const plus: PlusButton = { run: onAdd, pressed: tab === 'browse' };
 
   return (
@@ -61,9 +64,11 @@ export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd
         <Logo />
         <div className="hdr-lib">
           <LibrarySwitch category={category} tab={tab} counts={counts} labels={labels} onTab={onTab} />
-          {/* The library showing's dropdown: a rename, or the shared ones' list. */}
+          {/* The library showing's dropdown: a rename, or the shared ones' list, with the box for someone's key. */}
           {tab === 'mine' && <LibraryEdit label={`Rename ${labels.mine}`} menu={ownMenu} />}
-          {tab === 'shelf' && <LibraryEdit label="Shared libraries" menu={libraries} />}
+          {tab === 'shelf' && (
+            <LibraryEdit label="Shared libraries, and opening someone’s with their key" icon={<IconCaret />} menu={libraries} open={librariesOpen} onOpen={onLibrariesOpen} />
+          )}
         </div>
       </div>
       <div className="hdr-actions">
@@ -71,8 +76,10 @@ export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd
         {!bulk && audiobook}
         {/* Where there's nothing to pick it stays, greyed out, so nothing around it moves. */}
         {!bulk && (
-          <button type="button" className="btn btn-ghost hdr-icon" onClick={onSelect} disabled={!onSelect} aria-label="Select" title="Select">
+          <button type="button" className="btn btn-ghost hdr-icon hdr-select" onClick={onSelect} disabled={!onSelect} aria-label="Select" title="Select">
             <IconSelect />
+            {/* Its word too, where there's room: the ticked circle alone says little. */}
+            <span className="hdr-word" aria-hidden="true">Select</span>
           </button>
         )}
         <ThemeToggle dark={dark} onToggle={onTheme} />

@@ -14,6 +14,8 @@ interface Props {
   onShow: (which: Showing) => void;
   onClose: () => void;
   say: (text: string) => void;
+  /** Opened to type someone's key in: the box has the cursor. */
+  focusKey?: boolean;
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * below adds one, and a name makes a new one only to share, with its own key. Others see the
  * reader's shared books by the name they give their own.
  */
-export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) {
+export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey = false }: Props) {
   const [renaming, setRenaming] = useState<Showing | null>(null);
   const [draft, setDraft] = useState('');
   const [key, setKey] = useState('');
@@ -186,6 +188,7 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say }: Props) 
           className="lm-input"
           value={key}
           placeholder="Someone’s key: BRDR-…"
+          autoFocus={focusKey}
           aria-label="Someone’s key, to open their shared library"
           autoComplete="off"
           spellCheck={false}
