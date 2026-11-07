@@ -72,6 +72,12 @@ export function adminRoutes(deps: Deps) {
     return c.redirect(`${app.replace(/\/+$/, '')}/admin`, 302);
   });
 
+  /** The laptop's engine (engine/, ADR 0002): workers, jobs waiting by kind, models held, memory. */
+  r.get('/admin/engine', rateLimit({ name: 'admin', max: 30, windowMs: 60_000 }), (c) => {
+    checkToken(c);
+    return c.json({ engine: deps.engine?.stats() ?? null });
+  });
+
   r.get('/admin/status', rateLimit({ name: 'admin', max: 30, windowMs: 60_000 }), async (c) => {
     checkToken(c);
     const s = await hub.read();

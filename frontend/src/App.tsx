@@ -8,7 +8,7 @@ import { IconAddBook, IconLock, IconPeople, IconStar, IconTrash } from './compon
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { DesignBar } from './features/design/DesignBar';
 import { Toast, type ToastMessage } from './components/Toast';
-import { AudiobookHost } from './features/audiobook/Audiobook';
+import { AudiobookHost, AudiobookNav } from './features/audiobook/Audiobook';
 import { AddWhat } from './features/add/AddWhat';
 import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
@@ -1325,6 +1325,7 @@ export default function App() {
       {route.name !== 'read' && (
         <div className="lib" inert={route.name === 'series'}>
           <Header
+            audiobook={<AudiobookNav />}
             category={category}
             onCategory={setCategory}
             tab={tab}

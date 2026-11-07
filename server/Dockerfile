@@ -1,9 +1,11 @@
-# One image, four commands (build context: the repository root):
-#   node dist/api.js         the API (default), as ROLE=laptop or ROLE=fallback
-#   node dist/worker.js      the laptop's feed, file copy and backups
-#   node dist/migrate.js     schema migrations for Supabase and the copy
-#   node ai/dist/marker.js   voice marks, music and Revisit notes for books with AI on (ai/tools/marker.ts)
+# One image, five commands (build context: the repository root):
+#   node dist/api.js          the API (default), as ROLE=laptop or ROLE=fallback
+#   node dist/worker.js       the laptop's feed, file copy and backups
+#   node dist/migrate.js      schema migrations for Supabase and the copy
+#   node dist/engine/main.js  an engine: the voices and the panel model (src/engine/, ADR 0002)
+#   node ai/dist/marker.js    voice marks, music and Revisit notes for books with AI on (ai/tools/marker.ts)
 # The bundles are plain JavaScript, so they are built once on the building machine's own platform.
+# The image is Debian, not Alpine: the engine's ONNX Runtime is built for glibc.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -25,15 +27,20 @@ COPY ai/pi ai/pi
 COPY ai/tools ai/tools
 RUN node ai/build.mjs
 
-# The cover encoder (manga/covers.ts) is native code: the build for the image's own platform,
-# fetched on the building machine's, at the version the lockfile has.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS sharp
+# The cover encoder (manga/covers.ts) and ONNX Runtime (engine/worker.ts) are native code: the
+# builds for the image's own platform, fetched on the building machine's, at the versions the
+# lockfile has. Only that platform's ONNX Runtime files are kept (about 25 MB of the package's 300).
+FROM --platform=$BUILDPLATFORM node:24-alpine AS native
 ARG TARGETARCH
-WORKDIR /sharp
+WORKDIR /native
 COPY package-lock.json /tmp/
 RUN cpu=$TARGETARCH && if [ "$cpu" = amd64 ]; then cpu=x64; fi \
-  && v=$(node -p "require('/tmp/package-lock.json').packages['node_modules/sharp'].version") \
-  && npm install --no-package-lock --no-audit --no-fund --ignore-scripts --os=linux --libc=musl --cpu=$cpu "sharp@$v"
+  && v() { node -p "require('/tmp/package-lock.json').packages['node_modules/$1'].version"; } \
+  && npm install --no-package-lock --no-audit --no-fund --ignore-scripts --os=linux --libc=glibc --cpu=$cpu "sharp@$(v sharp)" "onnxruntime-node@$(v onnxruntime-node)" \
+  && bin=node_modules/onnxruntime-node/bin/napi-v6 \
+  && find "$bin" -mindepth 1 -maxdepth 1 ! -name linux -exec rm -rf {} + \
+  && find "$bin/linux" -mindepth 1 -maxdepth 1 ! -name "$cpu" -exec rm -rf {} + \
+  && rm -rf node_modules/onnxruntime-node/script
 
 # The AI accounts' proxy, CLIProxyAPI (server/src/jobs/cliproxy.ts): its static build, for the
 # image's platform, checked against the checksums its release lists.
@@ -48,15 +55,19 @@ RUN arch=amd64 && sum=fb058791b2957a09542782213fda57eab97b12c5d21560e0a64b8741a0
   && echo "$sum  $file" | sha256sum -c - \
   && tar -xzf "$file" cli-proxy-api
 
-FROM node:24-alpine
-# pg_dump for backups (must be at least the copy's major version), tini to forward signals.
-# ffmpeg and yt-dlp for the marker's music (ai/tools/youtube.ts, sound.ts): yt-dlp in a Python
-# venv the worker can write to, since it keeps it current every day (jobs/ytdlp.ts).
-RUN apk add --no-cache postgresql17-client tini tzdata ffmpeg python3 \
+FROM node:24-trixie-slim
+# pg_dump for backups (must be at least the copy's major version), tini to forward signals, wget
+# for the health checks. ffmpeg and yt-dlp for the marker's music (ai/tools/youtube.ts, sound.ts):
+# yt-dlp in a Python venv the worker can write to, since it keeps it current every day (jobs/ytdlp.ts).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends postgresql-client-17 tini tzdata ffmpeg python3 python3-venv wget ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
   && python3 -m venv /opt/yt-dlp \
   && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]" \
   && mkdir -p /data/files /data/backups /data/voices /data/manga && chown -R node:node /data /opt/yt-dlp
 ENV YT_DLP=/opt/yt-dlp/bin/yt-dlp
+# Native ONNX Runtime would send telemetry over HTTPS.
+ENV ORT_DISABLE_TELEMETRY=1
 COPY --from=cliproxy /cliproxy/cli-proxy-api /usr/local/bin/cli-proxy-api
 WORKDIR /app
 ENV NODE_ENV=production
@@ -65,12 +76,12 @@ ARG RELEASE=dev
 ENV RELEASE=$RELEASE
 COPY --from=build /app/server/dist ./dist
 COPY --from=build /app/server/drizzle ./drizzle
-# The panel model the laptop finds manga panels with (src/panels/), one round of ai/panels.
+# The panel model the engine finds manga panels with (src/engine/), one round of ai/panels.
 COPY ai/panels/model/live.onnx ai/panels/model/live.json ./panels/
-# The server voice's MP3 encoder sits beside the bundle rather than in it (build.mjs), and the
-# cover encoder too, built for this platform.
+# The engine's MP3 encoder sits beside the bundle rather than in it (build.mjs), and the cover
+# encoder and ONNX Runtime too, built for this platform.
 COPY --from=build /app/node_modules/@breezystack/lamejs ./node_modules/@breezystack/lamejs
-COPY --from=sharp /sharp/node_modules ./node_modules
+COPY --from=native /native/node_modules ./node_modules
 # The marker, which the worker runs: its bundle, the procedure its prompts quote, the sealed NVIDIA
 # key (ai/tools/seal.ts), and the two packages that load files of their own (ai/build.mjs): jsdom
 # whole, and only the build of pdf.js it uses.
@@ -80,6 +91,6 @@ COPY --from=build /app/ai/node_modules ./ai/node_modules
 COPY --from=build /app/node_modules/pdfjs-dist/package.json ./node_modules/pdfjs-dist/
 COPY --from=build /app/node_modules/pdfjs-dist/legacy/build/pdf.mjs /app/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs ./node_modules/pdfjs-dist/legacy/build/
 USER node
-EXPOSE 8787
-ENTRYPOINT ["/sbin/tini", "--"]
+EXPOSE 8787 8790
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "--enable-source-maps", "dist/api.js"]

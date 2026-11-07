@@ -41,6 +41,8 @@ interface Props {
   settings: ReactNode;
   /** Starts picking books to act on together, where the library showing has any: Select is greyed out where not. */
   onSelect?: () => void;
+  /** An audiobook playing with its dialog closed: its play and pause, left of Select (features/audiobook). */
+  audiobook?: ReactNode;
   /** While picking: the bar (BulkBar) that takes the place of books-or-manga and the + button. */
   bulk?: ReactNode;
 }
@@ -50,7 +52,7 @@ interface Props {
  * start, with the pencil for the one showing; books-or-manga and the + button, Select, light or dark
  * and settings at the end. On phones books-or-manga floats at the bottom instead (ShelfSwitch).
  */
-export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd, libraries, ownMenu, dark, onTheme, settings, onSelect, bulk }: Props) {
+export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd, libraries, ownMenu, dark, onTheme, settings, onSelect, bulk, audiobook }: Props) {
   const plus: PlusButton = { run: onAdd, pressed: tab === 'browse' };
 
   return (
@@ -66,6 +68,7 @@ export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd
       </div>
       <div className="hdr-actions">
         {bulk ?? <ShelfSwitch category={category} onCategory={onCategory} plus={plus} />}
+        {!bulk && audiobook}
         {/* Where there's nothing to pick it stays, greyed out, so nothing around it moves. */}
         {!bulk && (
           <button type="button" className="btn btn-ghost hdr-icon" onClick={onSelect} disabled={!onSelect} aria-label="Select" title="Select">

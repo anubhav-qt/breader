@@ -1,11 +1,8 @@
-import { copyFile, mkdir } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
 
 // One self-contained file per entry point, so the runtime image needs next to no node_modules.
 await build({
-  entryPoints: ['src/api.ts', 'src/worker.ts', 'src/migrate.ts', 'src/speech/worker.ts', 'src/panels/worker.ts'],
+  entryPoints: ['src/api.ts', 'src/worker.ts', 'src/migrate.ts', 'src/engine/main.ts', 'src/engine/worker.ts'],
   outdir: 'dist',
   bundle: true,
   platform: 'node',
@@ -14,14 +11,9 @@ await build({
   sourcemap: true,
   // pg tries pg-native only when asked to; it isn't installed. The MP3 encoder is LGPL, so it
   // stays its own package beside the bundle (the Dockerfile copies it) rather than inside it. The
-  // cover encoder is native code, installed for the image's own platform (the Dockerfile).
-  external: ['pg-native', '@breezystack/lamejs', 'sharp'],
+  // cover encoder and ONNX Runtime are native code, installed for the image's own platform (the Dockerfile).
+  external: ['pg-native', '@breezystack/lamejs', 'sharp', 'onnxruntime-node'],
   // Bundled CommonJS packages still call require().
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
   logLevel: 'info',
 });
-
-// The server voice's and the panel model's engine loads its WebAssembly from files, which can't be bundled (speech/worker.ts, panels/worker.ts).
-const ort = dirname(createRequire(import.meta.url).resolve('onnxruntime-web'));
-await mkdir('dist/ort', { recursive: true });
-for (const f of ['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm']) await copyFile(join(ort, f), join('dist/ort', f));

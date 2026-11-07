@@ -26,6 +26,7 @@ const fake: Speech = {
   },
   sound: async () => ({ audio: new Float32Array(10), rate: 22050 }),
   encode: async () => new Uint8Array([0xff, 0xfb]),
+  drop: () => {},
   close: async () => {},
 };
 const app = makeApp({ ...deps, env: { ...deps.env, SPEECH_EMAILS: [OPEN, UNCONFIRMED] }, speech: fake });

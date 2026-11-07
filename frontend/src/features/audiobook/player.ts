@@ -25,6 +25,8 @@ const set = (patch: Partial<PlayerState>) => {
   state = { ...state, ...patch };
   subs.forEach((f) => f());
 };
+/** Now, outside React. */
+export const now = () => state;
 export const usePlayer = () => useSyncExternalStore(
   (f) => { subs.add(f); return () => { subs.delete(f); }; },
   () => state,
@@ -83,7 +85,8 @@ export function open(id: string, engine: Engine, book: { title: string; author: 
   about = { ...about, ...book };
 }
 
-async function go(n: number, playing: boolean) {
+/** `from`: where in the paragraph to start, in seconds; below 0, that far before its end. */
+async function go(n: number, playing: boolean, from = 0) {
   const { id, engine } = state;
   if (!id || !engine) return;
   const m = madeOf(id, engine);
@@ -100,6 +103,16 @@ async function go(n: number, playing: boolean) {
   url = blob ? URL.createObjectURL(blob) : null;
   if (!url) { set({ playing: false }); return; }
   a.src = url;
+  if (from) {
+    await new Promise<void>((done) => {
+      if (a.readyState >= 1) { done(); return; }
+      a.addEventListener('loadedmetadata', () => done(), { once: true });
+      a.addEventListener('error', () => done(), { once: true });
+    });
+    if (state.id !== id || state.engine !== engine || state.at !== at) return;
+    const d = Number.isFinite(a.duration) ? a.duration : 0;
+    a.currentTime = Math.max(0, Math.min(Math.max(0, d - 0.05), from < 0 ? d + from : from));
+  }
   const chapter = [...m.chapters].reverse().find((c) => c.from <= at);
   about.chapter = chapter?.title ?? '';
   if (navigator.mediaSession && typeof MediaMetadata !== 'undefined') {
@@ -126,9 +139,55 @@ export function pause() {
   set({ playing: false });
 }
 
+/** Play or pause, as its button does. */
+export function toggle() {
+  if (state.playing) { pause(); return Promise.resolve(); }
+  return play();
+}
+
+/** An audiobook is open in it, and not waiting for its next paragraph. */
+export const usable = () => !!state.id && !state.waiting;
+
 /** Back or on a paragraph, playing if it was. */
-export async function step(by: number) {
-  await go(state.at + by, state.playing || !!(el && !el.paused));
+export const step = (by: number) => inTurn(() => go(state.at + by, state.playing || !!(el && !el.paused)));
+
+/**
+ * Back or on some seconds, as live reading's arrows do: past the paragraph's start or end, into
+ * the one before or after, if it's made. Playing if it was.
+ */
+export const nudge = (seconds: number) => inTurn(() => nudgeNow(seconds));
+
+/** One after another, so keys pressed quickly each start from where the last left it. */
+let turn: Promise<unknown> = Promise.resolve();
+function inTurn(f: () => Promise<void>) {
+  const next = turn.then(f, f);
+  turn = next.catch(() => {});
+  return next;
+}
+
+async function nudgeNow(seconds: number) {
+  const { id, engine } = state;
+  const m = id && engine ? madeOf(id, engine) : undefined;
+  if (!m || state.waiting) return;
+  const playing = state.playing || !!(el && !el.paused);
+  const a = el;
+  // Nothing loaded yet: from the start of the paragraph it's at.
+  if (!a || !a.src) {
+    if (seconds > 0) await go(state.at, playing, seconds);
+    else if (state.at > 0) await go(state.at - 1, playing, seconds);
+    return;
+  }
+  const d = Number.isFinite(a.duration) ? a.duration : 0;
+  const t = (a.ended ? d : a.currentTime) + seconds;
+  if (t < 0) {
+    if (state.at > 0) await go(state.at - 1, playing, t);
+    else a.currentTime = 0;
+  } else if (d && t >= d) {
+    if (state.at + 1 < m.done) await go(state.at + 1, playing, t - d);
+    else a.currentTime = Math.max(0, d - 0.05);
+  } else {
+    a.currentTime = t;
+  }
 }
 
 /** To a paragraph, from the bar. */

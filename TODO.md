@@ -23,7 +23,10 @@
 - [ ] Initials split a sentence: "by O. Henry" is said as "by O." and "Henry", with a pause between (`sentencesIn`, reading aloud too).
 - [ ] Kokoro on this device tops out near 6x on the graphics chip (`features/audiobook/speed.ts`). Several sentences in one run would need a Kokoro export that masks padding; this one doesn't.
 - [ ] On a real phone: Maximum's three Piper engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
-- [ ] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live, audiobooks and the panel model. Many people can then make audiobooks at once, instead of one book at a time in a queue (`server/src/speech/books.ts`), while live reading stays quick.
+- [x] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live, audiobooks and the panel model (ADR 0002, `server/src/engine/`).
+- [ ] The engine's numbers on the ThinkPad itself (`infra/load/voices.mjs`), and its memory, to check the default budget (half the memory free) and 4 workers of 4 against it.
+- [ ] A smaller server image: Debian's `ffmpeg` brings a graphics stack (LLVM, Mesa, about 400 MB) Breader never uses. A static ffmpeg would take the image from 1.55 GB to about 1.2 GB.
+- [ ] Audiobooks while someone reads aloud for hours: they wait the whole time (`ENGINE_BESIDE_LIVE`, 0). If that's too long, let them run on one worker, at 1.6 s to first sound instead of 1.0 s.
 
 ## Testing on real phones
 - [ ] Reproduce phone browsers properly, then tune voices and Immersive against them. So far both were tuned in code and a desktop browser only.

@@ -16,6 +16,7 @@ import {
   timeToMake, useAudiobook, useBooksInfo, useStage, wake, type Engine, type Made, type Where,
 } from './audiobooks';
 import { canAudiobook } from './plan';
+import { useAudiobookKeys } from './keys';
 import * as player from './player';
 import './audiobook.css';
 
@@ -34,23 +35,28 @@ type Book = BookRecord;
 /* Which book's dialog is open */
 
 let opened: { book: Book; listen?: Engine } | null = null;
+/** The book the player has open, for the top bar's button to open its dialog again. */
+let heard: Book | null = null;
 const subs = new Set<() => void>();
 function openAudiobook(book: Book, listen?: Engine) {
   opened = { book, listen };
   subs.forEach((f) => f());
 }
+/** Closed while it plays, it plays on, worked from the top bar (AudiobookNav); paused, it stops. */
 const closeAudiobook = () => {
   opened = null;
-  player.close();
+  const p = player.now();
+  if (!p.id || !(p.playing || p.waiting)) { player.close(); heard = null; }
   subs.forEach((f) => f());
 };
+const useOpened = () => useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => opened);
 
 /**
  * Where the dialog shows, over everything, and the note that a book being made can be listened to
  * now (its first chapter is made) or is all made, wherever the reader is: mount once, in the app.
  */
 export function AudiobookHost() {
-  const o = useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => opened);
+  const o = useOpened();
   const [toast, setToast] = useState<ToastMessage | null>(null);
   useEffect(() => wake(), []);
   useEffect(() => onListenable((id, engine, m, whole) => {
@@ -70,6 +76,64 @@ export function AudiobookHost() {
       <Toast toast={toast} onDone={(id) => setToast((t) => (t?.id === id ? null : t))} className="ab-toast" />
     </>,
     document.body,
+  );
+}
+
+/**
+ * The top bar's play and pause, left of Select, while an audiobook plays with its dialog closed:
+ * and beside it, the way back to the dialog. Live reading's keys work it too.
+ */
+export function AudiobookNav() {
+  const p = player.usePlayer();
+  const o = useOpened();
+  const book = heard;
+  const on = !o && !!p.id && !!p.engine && !!book && book.id === p.id;
+  useAudiobookKeys(on);
+  if (!on) return null;
+  const playing = p.playing;
+  return (
+    <div className="hdr-ab" role="group" aria-label={`Audiobook: ${book.title}`}>
+      <button
+        type="button"
+        className="btn btn-ghost hdr-icon"
+        disabled={p.waiting}
+        aria-label={playing ? 'Pause the audiobook' : p.waiting ? 'Waiting for the next paragraph' : 'Play the audiobook'}
+        title={playing ? 'Pause (Space)' : p.waiting ? 'Waiting…' : 'Play (Space)'}
+        onClick={() => void player.toggle()}
+      >
+        <DotIcon rows={playing ? PAUSE : PLAY} />
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost hdr-icon"
+        aria-label={`Open the audiobook of ${book.title}`}
+        aria-haspopup="dialog"
+        title={book.title}
+        onClick={() => openAudiobook(book, p.engine!)}
+      >
+        <IconSpeaker />
+      </button>
+    </div>
+  );
+}
+
+/** Removes it in one click; it's red as a warning from the start. */
+function RemoveButton({ id, engine }: { id: string; engine: Engine }) {
+  const [going, setGoing] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn btn-danger"
+      disabled={going}
+      onClick={() => {
+        setGoing(true);
+        const p = player.now();
+        if (p.id === id && p.engine === engine) { player.close(); heard = null; }
+        void remove(id, engine).finally(() => setGoing(false));
+      }}
+    >
+      {going ? 'Removing…' : 'Remove'}
+    </button>
   );
 }
 
@@ -145,7 +209,7 @@ function AudiobookDialog({ book, listen: listenIn, onClose }: { book: Book; list
             m={ab![view.engine]!}
             first
             onCarryOn={carryOn(view.engine)}
-            lead={listenable(ab![view.engine]) && <button type="button" className="btn btn-primary is-wide" onClick={() => setView({ kind: 'player', engine: (view as { engine: Engine }).engine })}>Play what’s made</button>}
+            lead={listenable(ab![view.engine]) && <button type="button" className="btn btn-primary is-wide" onClick={() => setView({ kind: 'player', engine: (view as { engine: Engine }).engine })}>{ab![view.engine]!.state === 'ready' ? 'Listen' : 'Play what’s made'}</button>}
           >
             {!listenable(ab![view.engine]) && back && <button type="button" className="btn btn-ghost" onClick={back}>Back</button>}
           </Making>
@@ -264,7 +328,6 @@ function Making({ book, engine, m, first, onCarryOn, lead, children }: {
   children?: ReactNode;
 }) {
   const stage = useStage(book.id, engine);
-  const [sure, setSure] = useState(false);
   const p = m.done / m.total;
   const chapters = m.chapters.length;
   const made = chaptersMade(m);
@@ -301,9 +364,7 @@ function Making({ book, engine, m, first, onCarryOn, lead, children }: {
           ? <button type="button" className="btn btn-quiet" onClick={() => void pause(book.id, engine)}>Pause</button>
           : m.state !== 'ready' && <button type="button" className="btn btn-primary" onClick={onCarryOn}>Carry on</button>}
         {children}
-        {sure
-          ? <button type="button" className="btn btn-danger" onClick={() => { player.close(); void remove(book.id, engine); }}>Remove it</button>
-          : <button type="button" className="btn btn-ghost" onClick={() => setSure(true)}>Remove</button>}
+        <RemoveButton id={book.id} engine={engine} />
       </div>
     </div>
   );
@@ -321,10 +382,10 @@ function PlayerView({ book, engine, ab, hear, onEngine, onOther, onCarryOn }: {
 }) {
   const m = ab[engine]!;
   const p = player.usePlayer();
-  const [sure, setSure] = useState(false);
   const [saving, setSaving] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { player.open(book.id, engine, { title: book.title, author: book.author }); }, [book.id, book.title, book.author, engine]);
+  useEffect(() => { player.open(book.id, engine, { title: book.title, author: book.author }); heard = book; }, [book, engine]);
+  useAudiobookKeys(true);
 
   const mine = p.id === book.id && p.engine === engine;
   const at = mine ? p.at : m.at;
@@ -392,9 +453,7 @@ function PlayerView({ book, engine, ab, hear, onEngine, onOther, onCarryOn }: {
             {saving !== null ? `Export ${Math.round(saving * 100)}%` : 'Export MP3'}
           </button>
           {otherButton}
-          {sure
-            ? <button type="button" className="btn btn-danger" onClick={() => { player.close(); void remove(book.id, engine); }}>Remove it</button>
-            : <button type="button" className="btn btn-ghost" onClick={() => setSure(true)}>Remove</button>}
+          <RemoveButton id={book.id} engine={engine} />
         </div>
       )}
       <p className="ab-note">

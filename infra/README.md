@@ -120,22 +120,38 @@ MP3 (about 22 MB an hour). It's open only to the accounts in `SPEECH_EMAILS` (co
 laptop only; Render is too small to speak), and only once each address is confirmed; they then see
 **Read on the server** in the voice sheet. Each voice downloads into the `voices` volume the first
 time it's asked for: about 64 MB for a Normal one, and 326 MB once for all the heavy ones. The
-engine holds about 150 MB per Normal voice while it reads, and about 1 GB while any heavy one is
-held, letting go after ten quiet minutes. The heavy ones run at about twice real time on four
-threads of an M-series Mac; a slower processor may keep a reader waiting between sentences.
-`SPEECH_THREADS` caps the processor threads it uses (4, or one less than the laptop has).
+voices run in the engine (below). A heavy sentence takes about 0.7 s on the engine alone, and a
+reader's first one starts at once: one worker is always left for reading aloud.
 Each sentence's sound is kept in the `voices` volume, by a hash of its voice, speed and text, up to
 `SPEECH_CACHE_MB` (4096 by default), the ones used longest ago going first: a book read again, or
 on another phone, is spoken once. The sound is kept, though no text is.
 
 **Audiobooks.** Anyone with a library key can have the laptop make a book's audiobook (EPUB and
-text books, Piper or Kokoro, at 1x): the app sends the book's text, and the laptop reads it a
-paragraph at a time, one book at a time in the order asked, between the sentences it reads live
-(`server/src/speech/books.ts`). Each paragraph is an MP3 in `voices/books/<hash>/`, with the text
+text books, Piper or Kokoro, at 1x): the app sends the book's text, and the engine reads it a
+paragraph at a time (`server/src/speech/books.ts`). Up to `ENGINE_BOOKS` books (12) are made at
+once, sharing the engine's workers by turns, a library's books taking turns inside its own; the
+rest wait, the app showing how many are ahead. While anyone reads aloud on the server, audiobooks
+wait, and carry on a minute after. Each paragraph is an MP3 in `voices/books/<hash>/`, with the text
 beside it, and the app downloads them as they're made. They're kept for good, so the same book on
 another device downloads at once; nothing caps their size yet (about 22 MB an hour of book). A
 book being made when the server stops carries on when it starts. Because of this the voice engine
 now runs on the laptop whatever `SPEECH_EMAILS` holds; reading live is still only for those accounts.
+
+**The engine** (`server/src/engine/`, ADR 0002) runs the voices and the panel model for the API:
+the `engine` service, the same image run as `node dist/engine/main.js`, reached only by the API
+at `ENGINE_URLS` (`http://engine:8790`). The API's scheduler hands it each job: reading aloud
+first, then panels, then audiobooks, everyone taking turns. It sizes itself from the machine: a
+worker for each two cores, of four threads each (4 of 4 on the ThinkPad), each holding the models
+its jobs need, up to half the memory free at start. Its own settings, in `infra/.env`:
+`ENGINE_WORKERS`, `ENGINE_THREADS` (threads a worker), `ENGINE_MEMORY_MB` (what its models may
+hold), `ENGINE_LOW_MB` (short of memory below this: it then starts only live reading; 1 GB or a
+quarter of that), and `ENGINE_BESIDE_LIVE` (workers audiobooks may use while anyone reads aloud;
+0, since each one at it slows a live sentence by a third or so). `/health` says how busy it is;
+`/admin/engine` (admin token) gives each worker's models and memory. More engines, on other
+machines with Docker: run the `engine` service there with `ENGINE_TOKEN` set (16 characters or
+more) and port 8790 published, open to the laptop only (a firewall rule, or a private network
+such as Tailscale), then add its address to `ENGINE_URLS` on the laptop (comma separated), with
+the same `ENGINE_TOKEN`.
 
 **Manga from MangaDex.** The Manga shelf's MangaDex tab finds series there and reads them
 through the laptop: MangaDex lets only its own site fetch its pages in a browser, so its API, its
@@ -238,12 +254,8 @@ manga's look panel, while there's a seat: the laptop finds them for `PANEL_SEATS
 (8), and the owner's accounts (`SPEECH_EMAILS`) always have one besides. When they're all taken, the
 app says how full it is, live, and can pop up when there's room. A reader's library takes a seat
 when it opens a manga from Japan with it on, and gives it back on closing it, or after 75 seconds
-without a word. The model runs in `PANEL_WORKERS` threads of its own (1), each on up to
-`PANEL_THREADS` processor threads (4, or one less than the laptop has), let go after ten quiet
-minutes, and readers' pages take turns. On the laptop's Ryzen 7
-5800U that's about a page a second, for readers reading a page every ten seconds or so. A bigger
-machine does more with more workers, not more threads: a Ryzen 7 9800X3D finds 2.4 pages a second
-with one worker of four threads and 4.4 with four of two, so 4 workers of 2 and about 30 seats.
+without a word. The model runs in the engine (above), and readers' pages take turns. A bigger
+machine, or another engine, finds more pages at once: then raise `PANEL_SEATS` with it.
 Render never has it.
 
 Errors go to Sentry (free plan, 5,000 errors a month). At sentry.io create a project on the
