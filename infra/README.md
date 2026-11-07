@@ -367,7 +367,8 @@ the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull` and th
 
 Workers & Pages › Create › Pages › a project named `breader`, production branch `dev`, custom domain
 `breader.example`. `npm run ship` builds the app on your machine and uploads it, so Pages builds
-nothing itself. Put `VITE_API_URL=https://api.breader.example`,
+nothing itself: Settings › Builds › Branch control, turn off automatic production and preview
+deployments. Put `VITE_API_URL=https://api.breader.example`,
 `VITE_API_FALLBACK_URL=https://fb.breader.example` and `VITE_SENTRY_DSN=<the DSN>` in
 `infra/.env.ship`, and sign in once with `npx wrangler@4 login`.
 
