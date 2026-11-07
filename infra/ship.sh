@@ -77,7 +77,11 @@ step_check() {
 # Type checks, lint and every test, against the same stand-ins as local development.
 step_test() {
   say "test"
-  docker compose -f infra/compose.dev.yml up -d --wait primary mirror s3
+  if standInsUp; then
+    echo "the stand-ins are up already"
+  else
+    docker compose -f infra/compose.dev.yml up -d --wait primary mirror s3
+  fi
   until curl -s -o /dev/null http://localhost:9000; do
     sleep 1
   done
@@ -85,6 +89,17 @@ step_test() {
   npm run typecheck
   npm run lint -w frontend
   npm test
+}
+
+# Postgres, its copy and S3 answering on the ports the tests use (server/test/env.ts), from this
+# stack or another checkout's.
+standInsUp() {
+  local port
+  for port in 54322 54333 9000; do
+    if ! nc -z localhost "$port" 2> /dev/null; then
+      return 1
+    fi
+  done
 }
 
 step_push() {
