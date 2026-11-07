@@ -3,7 +3,7 @@
 #   node dist/worker.js      the laptop's feed, file copy and backups
 #   node dist/migrate.js     schema migrations for Supabase and the copy
 #   node ai/dist/marker.js   voice marks, music and Revisit notes for books with AI on (ai/tools/marker.ts)
-# The bundles are plain JavaScript, so they are built once on the CI machine's own platform.
+# The bundles are plain JavaScript, so they are built once on the building machine's own platform.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -26,7 +26,7 @@ COPY ai/tools ai/tools
 RUN node ai/build.mjs
 
 # The cover encoder (manga/covers.ts) is native code: the build for the image's own platform,
-# fetched on the CI machine's, at the version the lockfile has.
+# fetched on the building machine's, at the version the lockfile has.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS sharp
 ARG TARGETARCH
 WORKDIR /sharp

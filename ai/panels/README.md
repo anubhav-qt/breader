@@ -161,9 +161,8 @@ To bring a round back, `git lfs pull` its `best.pt`, copy it to `data/model/roun
 To put a round live, in the app and on the laptop, export its `best.pt` to ONNX the way the live
 one is (`YOLO(best).export(format="onnx", imgsz=1024, batch=1, dynamic=False, simplify=True,
 opset=17)`: one 1024 × 1024 picture in, the raw answers out), save it as `model/live.onnx` and set
-`model/live.json` to `{"round": N}`. On the push, CI builds it into the laptop's server image and
-publishes it once as a release (`panels-<its hash>`), which Cloudflare Pages builds into the app for
-readers' devices (`frontend/scripts/panels.mjs`); `npm --prefix frontend run panels` does the same
+`model/live.json` to `{"round": N}`. `npm run ship` (`infra/ship.sh`) builds it into the server image,
+publishes it once as a release (`panels-<its hash>`), and builds it into the app for readers' devices (`frontend/scripts/panels.mjs`); `npm --prefix frontend run panels` does the same
 for the dev server.
 
 ## Labels

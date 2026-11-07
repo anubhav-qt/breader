@@ -36,7 +36,8 @@ The status page is at http://localhost:8787/admin, with the `ADMIN_TOKEN` from `
 ## Setting up production
 
 Do these in order. Each step says which settings it produces; they go in `infra/.env` (from
-`.env.example`), Render, Cloudflare Pages, or GitHub. Save `infra/.env` in your password manager.
+`.env.example`), `infra/.env.ship` (from `.env.ship.example`, for shipping), Render, or Cloudflare
+Pages. Save both files in your password manager.
 
 ### 1. Domain
 
@@ -49,7 +50,7 @@ Buy the domain at Cloudflare Registrar, so its DNS is already on Cloudflare.
    has row-level security with no policies.
 3. **Connect** shows the connection strings. Put in the password:
    - Transaction pooler (port 6543) → `PRIMARY_URL`
-   - Session pooler (port 5432) → `PRIMARY_SESSION_URL`, and the GitHub secret `SUPABASE_SESSION_URL`
+   - Session pooler (port 5432) → `PRIMARY_SESSION_URL`, and `SUPABASE_SESSION_URL` in `infra/.env.ship`
 
 Both poolers work over IPv4. The direct connection is IPv6-only on the free plan. Free projects
 pause after 7 days without activity; the worker and the monitor on `fb.` keep it active.
@@ -231,11 +232,11 @@ that fails (bad settings, a migration that can't run) shows there too.
 
 ### 6. GitHub
 
-1. Push the repository. The first push to `dev` builds `ghcr.io/OWNER/breader-server`.
-2. Your profile › Packages › breader-server › Package settings: make it **public**, so the laptop and
-   Render can pull without credentials. It holds code only, no settings.
-3. Settings › Secrets and variables › Actions: `SUPABASE_SESSION_URL`, then `RENDER_DEPLOY_HOOK`
-   after step 8.
+1. Push the repository. Sign in on the machine you ship from: `gh auth login`, then
+   `gh auth refresh -s write:packages` and `gh auth token | docker login ghcr.io -u OWNER --password-stdin`.
+2. The first `npm run ship` builds `ghcr.io/OWNER/breader-server`. Your profile › Packages ›
+   breader-server › Package settings: make it **public**, so the laptop and Render can pull without
+   credentials. It holds code only, no settings.
 
 `IMAGE` in `infra/.env` is `ghcr.io/OWNER/breader-server:latest` (owner in lowercase).
 
@@ -325,7 +326,7 @@ curl -s -H "authorization: Bearer $ADMIN_TOKEN" -H 'x-forwarded-for: 6.6.6.6' \
 `headers` lists what arrived.
 
 Settings › Custom Domains: add `fb.breader.example`, then in Cloudflare DNS add the CNAME it shows,
-**DNS only** (grey cloud). Settings › Deploy Hook → GitHub secret `RENDER_DEPLOY_HOOK`.
+**DNS only** (grey cloud). Settings › Deploy Hook → `RENDER_DEPLOY_HOOK` in `infra/.env.ship`.
 
 ### Suwayomi on AWS for Render
 
@@ -364,12 +365,11 @@ the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull` and th
 
 ### 9. Cloudflare Pages
 
-Workers & Pages › Create › Pages › connect the repository, production branch `dev`:
-
-- Build command `npm ci && npm run build -w frontend`, output directory `frontend/dist`, root `/`
-- Environment variables `VITE_API_URL=https://api.breader.example`,
-  `VITE_API_FALLBACK_URL=https://fb.breader.example`, `VITE_SENTRY_DSN=<the DSN>`, `NODE_VERSION=24`
-- Custom domain `breader.example`
+Workers & Pages › Create › Pages › a project named `breader`, production branch `dev`, custom domain
+`breader.example`. `npm run ship` builds the app on your machine and uploads it, so Pages builds
+nothing itself. Put `VITE_API_URL=https://api.breader.example`,
+`VITE_API_FALLBACK_URL=https://fb.breader.example` and `VITE_SENTRY_DSN=<the DSN>` in
+`infra/.env.ship`, and sign in once with `npx wrangler@4 login`.
 
 ### 10. Monitoring
 
@@ -392,8 +392,12 @@ are, and when each worker job last worked or failed.
 
 ## Day to day
 
-**Shipping.** Push to `dev`. CI tests, publishes the image, migrates Supabase and redeploys
-Render. The laptop picks the image up within 5 minutes, and Pages rebuilds the app. For those
+**Shipping.** On `dev`, with everything committed and Docker running: `npm run ship`
+(`infra/ship.sh`). It checks this machine is ready, runs type checks, lint and every test against
+the local stand-ins, pushes, publishes a new panel model round, builds and pushes the server image,
+migrates Supabase, redeploys Render, builds and uploads the app, then waits until all three are on
+the new commit. `infra/ship.sh app live` runs only the steps named. There is no CI on GitHub.
+The laptop picks the image up within 5 minutes. For those
 minutes the laptop and Render can run different versions. So a migration only ever adds: a new
 table, or a nullable column. Removals ship in a later release, once no running version reads them.
 `/health` shows each server's `release` (the commit).
@@ -477,7 +481,7 @@ you lose almost nothing. Otherwise you lose what changed since the last backup, 
    `docker compose -f infra/compose.yml cp worker:/data/backups ./backups`.
 3. Decrypt a backup where the key is: `age -d -i breader-backup.agekey breader-DATE.dump.age > breader.dump`
 4. Restore into an empty database. Use a new project (step 2, then update the URLs in
-   `infra/.env`, Render and GitHub), or add `--clean --if-exists` to reuse the old one:
+   `infra/.env`, `infra/.env.ship` and Render), or add `--clean --if-exists` to reuse the old one:
    ```sh
    docker run --rm -v "$PWD:/w" -e URL="<session pooler URL>?sslmode=require" ghcr.io/OWNER/breader-server \
      sh -c 'pg_restore --no-owner --no-privileges --exit-on-error -d "$URL" /w/breader.dump'

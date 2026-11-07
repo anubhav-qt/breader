@@ -4,9 +4,9 @@
  * (ai/panels/model/live.onnx) into public/panels, in parts under Cloudflare Pages' 25 MiB limit,
  * named by its hash, with model.json saying which round it is and how to check it.
  *
- * It's in Git LFS, whose downloads are metered and which Pages doesn't fetch, so a Pages build
- * takes it from the GitHub release CI makes of each round (.github/workflows/ci.yml, panels-<hash>),
- * waiting a few minutes for CI when the round is new. Checked out with LFS, it's copied instead.
+ * It's in Git LFS, whose downloads are metered. Checked out with LFS, as infra/ship.sh builds it,
+ * it's copied. Left as its pointer, a build takes it from the GitHub release infra/ship.sh makes of
+ * each round (panels-<hash>), waiting a few minutes when the round is new.
  * Without it, the app finds panels as before, so a build doesn't fail for want of it.
  *
  *   node scripts/panels.mjs             copy or fetch it
@@ -22,7 +22,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const model = join(root, '../ai/panels/model');
 const out = join(root, 'public/panels');
 const RELEASES = 'https://github.com/anubhav-qt/breader/releases/download';
-/** How long a Pages build waits for CI to publish a new round. */
+/** How long a build waits for a new round to be published. */
 const WAIT_MS = 10 * 60_000;
 
 if (process.argv.includes('--if-pages') && !process.env.CF_PAGES) {
@@ -69,7 +69,7 @@ async function fetched() {
       }
       if (res.status !== 404) throw new Error(`${res.status} ${res.statusText}`);
       if (Date.now() > until) return null;
-      console.log('panels: CI hasn’t published this round yet, waiting');
+      console.log('panels: this round isn’t published yet, waiting');
     } catch (e) {
       if (Date.now() > until) {
         console.warn(`panels: couldn't fetch the model from ${url}: ${e.message}`);

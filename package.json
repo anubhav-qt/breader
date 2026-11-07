@@ -6,6 +6,7 @@
     "web": "npm run dev -w frontend",
     "stack": "docker compose -f infra/compose.dev.yml up -d --build",
     "stack:down": "docker compose -f infra/compose.dev.yml down",
+    "ship": "infra/ship.sh",
     "test": "npm test -w server && npm test -w frontend",
     "typecheck": "npm run typecheck -w shared -w server && npm run build -w frontend"
   }

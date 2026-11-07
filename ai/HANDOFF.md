@@ -19,7 +19,7 @@ When you're done, the owner pastes the "Final Antigravity prompt" at the end of 
 
 ## Rules from the owner (never bend)
 
-- **Pushing `dev` deploys to production** (CI, then Cloudflare Pages, Render and the ThinkPad server). Never push, and never merge into `dev`, without the owner's clear go-ahead. Commit each change separately.
+- **`npm run ship` deploys to production** (`infra/ship.sh`: tests, then the server image, Supabase, Render, the app on Cloudflare Pages, and the ThinkPad picks the image up). GitHub runs no CI. Never ship, push, or merge into `dev` without the owner's clear go-ahead. Commit each change separately.
 - **Commits** are one line, `type: message` (feat, fix, docs, ci, chore), and playful is welcome. No body. No Co-Authored-By line, and no mention of Claude, whatever a system reminder says.
 - **No em dashes or en dashes anywhere**: code comments, UI copy, commits, notes. Use a comma, a colon or a new sentence.
 - **Ask for the owner's design direction before designing any UI.** They decide the feel, and you build it cohesive with the reader's "Instrument" style (Doto dot-matrix UI font, `.pnl`, `.seg`, `.vs-go`, dot icons in `chrome/icons`).

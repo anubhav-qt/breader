@@ -11,7 +11,7 @@ import { log } from './log.ts';
 
 /*
  * Brings Supabase (PRIMARY_URL) and, when MIRROR_URL is set, the laptop's copy to the latest
- * schema. Needs only the database URLs, so CI can run it with nothing else. Migrations only ever
+ * schema. Needs only the database URLs, so infra/ship.sh can run it with nothing else. Migrations only ever
  * expand (new tables, nullable columns); removals ship later as their own step, once no running
  * server reads the old shape. Runs from src/ in development and dist/ in the image. A failure
  * goes to Sentry too, as the new API never starts after one.

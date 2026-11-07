@@ -827,11 +827,11 @@ svg text { font-family: var(--body); }
 
   <h3>Shipping a change</h3>
   <ol class="steps">
-    <li><span>Push to <code>main</code>. GitHub Actions runs type checks, lint and tests.</span></li>
+    <li><span>Run <code>npm run ship</code> on dev (<code>infra/ship.sh</code>). It runs type checks, lint and tests, then pushes.</span></li>
     <li><span>It builds one image for both <code>arm64</code> (the Mac) and <code>amd64</code> (Render) and pushes it to GHCR.</span></li>
-    <li><span>A CI job applies new migrations to Supabase. On the laptop, a one-shot <code>migrate</code> container brings Supabase and the copy up to date before the new <code>api</code> and <code>worker</code> start. A database lock makes the two migrators take turns.</span></li>
+    <li><span>The script applies new migrations to Supabase. On the laptop, a one-shot <code>migrate</code> container brings Supabase and the copy up to date before the new <code>api</code> and <code>worker</code> start. A database lock makes the two migrators take turns.</span></li>
     <li><span>Render deploys the new image from a deploy hook. The laptop pulls it with <code>infra/update.sh</code>, which launchd runs every 5 minutes. It restarts the stack only when the running API is on an older image, so a stack you stopped stays stopped.</span></li>
-    <li><span>Cloudflare Pages builds the app from the same commit.</span></li>
+    <li><span>It builds the app from the same commit and uploads it to Cloudflare Pages.</span></li>
   </ol>
   <p class="prose">For a few minutes the laptop and Render can run different versions, so migrations only ever add. A column is added in one release and removed in a later one, once no running code uses it.</p>
 
