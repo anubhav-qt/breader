@@ -24,6 +24,8 @@ const fake: Speech = {
     heard.push({ voice, text, speed });
     return { mp3: new TextEncoder().encode(`mp3:${text}`), samples: 22050, rate: 22050 };
   },
+  sound: async () => ({ audio: new Float32Array(10), rate: 22050 }),
+  encode: async () => new Uint8Array([0xff, 0xfb]),
   close: async () => {},
 };
 const app = makeApp({ ...deps, env: { ...deps.env, SPEECH_EMAILS: [OPEN, UNCONFIRMED] }, speech: fake });

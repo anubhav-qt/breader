@@ -160,7 +160,11 @@ export async function missingAll(vs: VoiceInfo[]) {
  * voices go, but those in `keep`: 2 voices keeps its other one.
  */
 export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
-  if (onServer()) return prepareOnServer(v);
+  return onServer() ? prepareOnServer(v) : prepareHere(v, keep);
+}
+
+/** Loads the voice in this device's engine, whatever the server switch says. */
+function prepareHere(v: VoiceInfo, keep: string[]): Promise<void> {
   const r = runner(v.engine);
   const ready = r.voices.get(v.key);
   if (ready) return ready;
@@ -183,19 +187,7 @@ export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
     try {
       if (!(await Promise.all(wants.map(has))).every(Boolean)) void navigator.storage?.persist?.().catch(() => {});
       if (v.engine === 'kokoro') startingHeavy(v.key);
-      r.started ??= r.call({ type: 'start', engine: v.engine }, onBytes).then(() => undefined);
-      await r.started;
-      const u = v.upload;
-      await r.call({
-        type: 'voice',
-        key: v.key,
-        model: await linked(f.model, u?.fileId),
-        config: await linked(f.config, u?.configId),
-        pack: await linked(f.pack, u?.fileId),
-        mix: f.mix,
-        speaker: f.speaker,
-        british: v.british,
-      }, onBytes);
+      await loadInto(r, v, onBytes);
       setLoad({ key: null, loaded: total });
       if (v.engine === 'kokoro') startingHeavy(null);
     } catch (e) {
@@ -211,6 +203,81 @@ export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
   })();
   r.voices.set(v.key, p);
   return p;
+}
+
+/** Starts the engine, if it hasn't, and loads the voice into it. */
+async function loadInto(r: Runner, v: VoiceInfo, onBytes?: Pending['onBytes']) {
+  const f = filesOf(v);
+  r.started ??= r.call({ type: 'start', engine: v.engine }, onBytes).then(() => undefined);
+  await r.started;
+  const u = v.upload;
+  await r.call({
+    type: 'voice',
+    key: v.key,
+    model: await linked(f.model, u?.fileId),
+    config: await linked(f.config, u?.configId),
+    pack: await linked(f.pack, u?.fileId),
+    mix: f.mix,
+    speaker: f.speaker,
+    british: v.british,
+  }, onBytes);
+}
+
+/*
+ * Audiobooks made on this device (features/audiobook) have engines of their own, apart from the
+ * reader's, so reading aloud, or anything else, meanwhile doesn't stop them: one, or several side
+ * by side (lanes), each making its own paragraphs. They go when the last book is made.
+ */
+let forBooks: { engine: Engine; key: string; lanes: Runner[] } | null = null;
+
+/**
+ * Readies `v` in up to `lanes` engines for an audiobook and says how many are ready. The first
+ * downloads what's missing, showing it arrive in `onLoading`; the others then load it from the
+ * cache. One that can't start (out of memory, say) is left out, unless it's the first.
+ */
+export async function bookVoices(v: VoiceInfo, lanes: number, onLoading?: (loaded: number, total: number) => void): Promise<number> {
+  if (forBooks && (forBooks.engine !== v.engine || forBooks.key !== v.key)) releaseBookVoice();
+  const b = (forBooks ??= { engine: v.engine, key: v.key, lanes: [] });
+  if (!b.lanes.length) {
+    const r = new Runner();
+    const f = filesOf(v);
+    const wants = [...engineFiles(v.engine), f.model, f.config, f.pack, f.mix].filter((w): w is Want => !!w);
+    const total = wants.reduce((n, w) => n + w.size, 0);
+    let loaded = 0;
+    try {
+      await loadInto(r, v, (_, n) => { loaded += n; onLoading?.(Math.min(loaded, total), total); });
+    } catch (e) {
+      r.stop();
+      if (forBooks === b) forBooks = null;
+      throw e;
+    }
+    if (forBooks !== b) { r.stop(); throw new Error('Stopped'); }
+    b.lanes.push(r);
+  }
+  const more = Array.from({ length: Math.max(0, lanes - b.lanes.length) }, () => new Runner());
+  const ok = await Promise.all(more.map((r) => loadInto(r, v).then(() => true, () => { r.stop(); return false; })));
+  for (let i = 0; i < more.length; i++) {
+    if (ok[i] && forBooks === b) b.lanes.push(more[i]);
+    else if (ok[i]) more[i].stop();
+  }
+  if (forBooks !== b) throw new Error('Stopped');
+  // Fewer wanted than are running: the rest go.
+  for (const r of b.lanes.splice(Math.max(1, lanes))) r.stop();
+  return b.lanes.length;
+}
+
+/** A sentence's sound for an audiobook, made in lane `lane` of those bookVoices readied. */
+export async function synthForBook(v: VoiceInfo, text: string, lane = 0): Promise<Clip> {
+  const r = forBooks?.key === v.key ? forBooks.lanes[lane] : undefined;
+  if (!r) throw new Error('Stopped');
+  const res = await r.call({ type: 'say', key: v.key, text, speed: 1 });
+  return { audio: res.audio!, rate: res.rate! };
+}
+
+/** No audiobook is being made here: its engines go, with what they hold. */
+export function releaseBookVoice() {
+  for (const r of forBooks?.lanes ?? []) r.stop();
+  forBooks = null;
 }
 
 /** Voices the server has made ready, or is making ready. */
@@ -240,7 +307,7 @@ function prepareOnServer(v: VoiceInfo): Promise<void> {
 
 export async function synth(v: VoiceInfo, text: string, speed: number, keep: string[] = []): Promise<Clip> {
   if (onServer()) return sayOnServer(v, text, speed);
-  await prepare(v, keep);
+  await prepareHere(v, keep);
   // Not a new engine: this one was let go while the voice was being readied.
   const r = runners[v.engine];
   if (!r) throw new Error('Stopped');

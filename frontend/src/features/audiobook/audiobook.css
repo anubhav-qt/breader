@@ -1,0 +1,135 @@
+/* The card's button, beside the edit button. Quiet until it's made or being made. */
+.tile-ab {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--canvas) 82%, transparent);
+  box-shadow: inset 0 0 0 1px var(--tile-border);
+  opacity: 0.55;
+  transition: opacity 160ms ease, background-color 160ms ease;
+}
+.tile:hover .tile-ab, .tile-ab:focus-visible, .tile-ab.is-on { opacity: 1; }
+.tile-ab:hover { background: var(--canvas); }
+.tile-ab svg { width: 16px; height: 16px; fill: none; }
+.tile-ab .tile-ab-ring {
+  position: absolute;
+  inset: -1px;
+  width: 32px;
+  height: 32px;
+  transform: rotate(-90deg);
+}
+.tile-ab-ring circle { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; transition: stroke-dasharray 400ms ease; }
+.tile-ab:not(.is-making) .tile-ab-ring circle { stroke: var(--ink-2); }
+.tile-ab.is-making .tile-ab-ring { animation: ab-breathe 2.4s ease-in-out infinite; }
+@keyframes ab-breathe { 50% { opacity: 0.45; } }
+
+/* The dialog: everything on the middle line. */
+.ab .ab-book {
+  margin: -8px 0 18px;
+  font: var(--ui-w-strong) 14px/1.35 var(--ui);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ab .ab-book span { color: var(--ink-2); font-weight: var(--ui-w); }
+
+
+/* A row of buttons, each as wide as the others; the main one on a line of its own above them. */
+.ab-actions { display: flex; flex-wrap: wrap; gap: 8px; max-width: 360px; margin: 16px auto 0; }
+.ab-actions .btn { flex: 1 1 0; min-width: 0; height: 36px; padding: 0 10px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ab-actions .is-wide { flex-basis: 100%; }
+.ab-note, .ab-line {
+  margin: 10px 0 0;
+  font: var(--ui-w) 12.5px/1.4 var(--ui);
+  color: var(--ink-2);
+  text-wrap: balance;
+}
+.ab-note + .ab-note { margin-top: 4px; }
+.ab-line.is-bad, .ab-error { color: var(--danger); }
+.ab-error { margin: 10px 0 0; font: var(--ui-w) 13px/1.4 var(--ui); }
+.ab-now { margin: 0 0 14px; font: var(--ui-w) 13px/1.3 var(--ui); color: var(--ink-2); }
+.ab-now b { color: var(--ink); font-weight: var(--ui-w-strong); }
+
+/* Being made */
+.ab-meter { height: 8px; border-radius: 99px; background: var(--fill); overflow: hidden; }
+.ab-meter span { display: block; height: 100%; border-radius: inherit; background: var(--ink); transition: width 400ms ease; }
+.ab-meter.is-moving span { animation: ab-breathe 2.4s ease-in-out infinite; }
+/* Under the player: apart from it. */
+.ab-player .ab-making { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.ab-player .ab-making .ab-meter { height: 4px; }
+.ab-player .ab-making .ab-actions { margin-top: 10px; }
+
+/* Playing */
+.ab-tabs { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 14px; border-radius: 10px; background: var(--fill); }
+.ab-tabs button { height: 28px; padding: 0 12px; border-radius: 8px; font: var(--ui-w-strong) 12.5px/1 var(--ui); color: var(--ink-2); }
+.ab-tabs button.is-on { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.ab-chapter { margin: 0; font: var(--ui-w-strong) 18px/1.25 var(--ui); color: var(--ink); }
+.ab-player > .ab-line { margin: 6px 0 14px; }
+/* Played, then made, then still to be made. */
+.ab-bar {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.ab-bar::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(to right, var(--ink) var(--p), color-mix(in srgb, var(--ink) 30%, var(--fill)) var(--p) var(--m), var(--fill) var(--m));
+}
+.ab-bar::-moz-range-track {
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(to right, var(--ink) var(--p), color-mix(in srgb, var(--ink) 30%, var(--fill)) var(--p) var(--m), var(--fill) var(--m));
+}
+.ab-bar::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -4px; border-radius: 50%; background: var(--ink); border: 2px solid var(--paper); }
+.ab-bar::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--ink); border: 2px solid var(--paper); }
+
+.ab-transport { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
+.ab-transport svg rect { fill: currentColor; }
+.ab-skip {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: var(--fill);
+  font-size: 15px;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+.ab-skip:hover:not(:disabled) { background: var(--line); }
+.ab-skip:active:not(:disabled) { transform: scale(0.94); }
+.ab-skip:disabled { opacity: 0.35; cursor: default; }
+.ab-play {
+  height: 52px;
+  min-width: 184px;
+  padding: 0 22px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font: var(--ui-w-strong) 14px/1 var(--ui);
+  white-space: nowrap;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.ab-play svg { font-size: 15px; }
+.ab-play:hover:not(:disabled) { opacity: 0.88; }
+.ab-play:active:not(:disabled) { transform: scale(0.97); }
+.ab-play:disabled { opacity: 0.6; cursor: default; }
+
+@media (max-width: 420px) {
+  .ab-actions .btn { padding: 0 6px; }
+  .ab-play { min-width: 0; flex: 1 1 auto; padding: 0 16px; }
+  .ab-transport { gap: 8px; }
+}

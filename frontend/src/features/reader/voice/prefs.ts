@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { readLocal, writeLocal } from '../../../lib/store';
+import { handheld } from '../../../lib/handheld';
 import { BUILT_IN, DEFAULT_VOICE, fromListed, hasGpu, type Engine, type Mode, type VoiceInfo } from './catalog';
 import { listedVoices } from './list';
 import { serverHas, speechAllowed } from './server';
@@ -61,8 +62,7 @@ export const spokenWpm = (p: VoicePrefs) => rateOf(p) * SPOKEN;
 /** How fast a voice reads: Normal at its speed, Immersive at its pace, as near as a voice goes (RATES). */
 export const rateOf = (p: VoicePrefs) => (p.mode === 'immersive' ? Math.min(RATES[RATES.length - 1], Math.max(RATES[0], p.pace / SPOKEN)) : p.rate);
 
-/** Phones and tablets, where the heavy voices can hang the browser. */
-export const handheld = () => typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
+export { handheld };
 
 /** 2 voices' first pair in each mode. A phone's Immersive starts on Normal's, like its one voice. */
 const DEFAULT_PAIR: Record<Mode, Record<Two, string>> = {
@@ -104,6 +104,15 @@ let prefs: VoicePrefs = {
   music: stored.music ?? true,
   musicVolume: stored.musicVolume ?? MUSIC_VOLUME.start,
 };
+/*
+ * Reading on the server sends every sentence's sound over the reader's own connection, so it's
+ * theirs to turn on: switched off once for everyone who had it on, then left as they set it.
+ */
+const SERVER_OFF = 'breader.voice.server-off';
+if (!readLocal(SERVER_OFF, false)) {
+  if (prefs.server) writeLocal(KEY, (prefs = { ...prefs, server: false }));
+  writeLocal(SERVER_OFF, true);
+}
 if (hung && voice.immersive === hung) {
   voice.immersive = normal;
   writeLocal(KEY, prefs);
@@ -181,6 +190,15 @@ export function voiceFor(mode: Mode): VoiceInfo {
   const v = find(prefs.voice.immersive, ['piper', 'kokoro']) ?? (handheld() ? normal : find(DEFAULT_VOICE.immersive, ['kokoro'])!);
   return v.engine === 'kokoro' && !hasGpu() ? normal : v;
 }
+
+/** The voice an audiobook is made with: the one picked for that kind of voice, or its default. */
+export function audiobookVoice(engine: Engine): VoiceInfo {
+  if (engine === 'piper') return find(prefs.voice.normal, ['piper']) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
+  return find(prefs.voice.immersive, ['kokoro']) ?? find(DEFAULT_VOICE.immersive, ['kokoro'])!;
+}
+
+/** A voice by its key, if it's still there. */
+export const voiceByKey = (key: string) => find(key, ['piper', 'kokoro']);
 
 /*
  * 2 voices. Each pair is two of one kind, so one engine reads both: Normal's (about 64 MB more for

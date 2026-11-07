@@ -371,13 +371,35 @@ export function TwoVoices({ her, his, hearing, onHear, onAgain, children }: {
 }
 
 /**
+ * The faces shown folded: the first row, in its order, with any voice reading that isn't in it
+ * taking the last places, so what's picked always shows.
+ */
+function folded(voices: VoiceInfo[], lit: (v: VoiceInfo) => boolean): VoiceInfo[] {
+  const row = voices.slice(0, ROW);
+  const missing = voices.slice(ROW).filter(lit);
+  // Each one missing takes the place of the last face in the row that isn't reading.
+  for (let n = 0; n < missing.length; n++) {
+    let i = row.length - 1;
+    while (i >= 0 && lit(row[i])) i--;
+    if (i < 0) break;
+    row.splice(i, 1);
+  }
+  return [...row, ...missing].slice(0, ROW);
+}
+
+/**
  * A model's voices as faces, a woman's in her colour and a man's in his: a tap picks one and plays
- * it. Lit: the voice reading, or hers and his.
+ * it. Lit: the voice reading, or hers and his. One row of them, and the rest a tap away.
  */
 export function VoiceFaces({ voices, lit, onPick }: { voices: VoiceInfo[]; lit: (v: VoiceInfo) => boolean; onPick: (v: VoiceInfo) => void }) {
+  const [all, setAll] = useState(false);
+  const more = voices.length > ROW;
+  let shown = voices;
+  if (more && !all) shown = folded(voices, lit);
   return (
+    <>
     <div className="cs-faces" role="group" aria-label="Voices">
-      {voices.map((v) => {
+      {shown.map((v) => {
         let about = `${v.name}, a ${v.gender === 'F' ? 'woman' : 'man'}’s voice, ${v.accent}`;
         if (v.blend) about += `, ${v.blend[0]} and ${v.blend[1]} blended`;
         return (
@@ -389,6 +411,13 @@ export function VoiceFaces({ voices, lit, onPick }: { voices: VoiceInfo[]; lit: 
         );
       })}
     </div>
+    {more && (
+      <button type="button" className={`cs-more${all ? ' is-open' : ''}`} aria-expanded={all} onClick={() => setAll(!all)}>
+        {all ? 'Fewer voices' : `All ${voices.length} voices`}
+        <span className="cs-more-i" aria-hidden="true">▾</span>
+      </button>
+    )}
+    </>
   );
 }
 

@@ -20,10 +20,14 @@ import type { VoiceFiles } from './files.ts';
 
 export type Request =
   | { type: 'load'; key: string; files: VoiceFiles }
-  | { type: 'say'; key: string; files: VoiceFiles; text: string; speed: number };
+  | { type: 'say'; key: string; files: VoiceFiles; text: string; speed: number }
+  /** An audiobook's sentence, as sound, to be put together with the rest of its paragraph. */
+  | { type: 'sound'; key: string; files: VoiceFiles; text: string; speed: number }
+  /** An audiobook's paragraph, put together, as MP3. */
+  | { type: 'encode'; audio: Float32Array; rate: number };
 
 export type Reply =
-  | { id: number; ok: true; mp3?: Uint8Array; samples?: number; rate?: number }
+  | { id: number; ok: true; mp3?: Uint8Array; audio?: Float32Array; samples?: number; rate?: number }
   | { id: number; ok: false; error: string };
 
 const HELD = 2;
@@ -144,6 +148,12 @@ async function handle(m: Request & { id: number }): Promise<Reply> {
       await load(m.key, m.files);
       return { id: m.id, ok: true };
     }
+    if (m.type === 'sound') {
+      const { audio, rate } = await sound(await load(m.key, m.files), m.text, m.speed);
+      // A copy of its own, to hand over: the engine's may share its memory.
+      return { id: m.id, ok: true, audio: audio.slice(), rate };
+    }
+    if (m.type === 'encode') return { id: m.id, ok: true, mp3: mp3(m.audio, m.rate) };
     return { id: m.id, ok: true, ...(await say(m)) };
   } catch (err) {
     return { id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -154,6 +164,7 @@ let queue = Promise.resolve();
 parentPort!.on('message', (m: Request & { id: number }) => {
   queue = queue.then(async () => {
     const r = await handle(m);
-    parentPort!.postMessage(r, r.ok && r.mp3 ? [r.mp3.buffer as ArrayBuffer] : []);
+    const moved = r.ok ? [r.mp3?.buffer, r.audio?.buffer].filter((b): b is ArrayBuffer => b instanceof ArrayBuffer) : [];
+    parentPort!.postMessage(r, moved);
   });
 });

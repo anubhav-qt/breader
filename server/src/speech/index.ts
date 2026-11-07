@@ -35,6 +35,10 @@ export interface Speech {
    */
   ready(voice: string, wait: number): Promise<{ ready: boolean; loaded: number; total: number }>;
   say(voice: string, text: string, speed: number): Promise<Said>;
+  /** A sentence's sound for an audiobook (books.ts): not kept, as the audiobook keeps it. */
+  sound(voice: string, text: string, speed: number): Promise<{ audio: Float32Array; rate: number }>;
+  /** Sound as MP3, in the voice's thread. */
+  encode(audio: Float32Array, rate: number): Promise<Uint8Array>;
   close(): Promise<void>;
 }
 
@@ -115,7 +119,7 @@ export function makeSpeech(env: Env): Speech {
     const w = worker;
     return new Promise((resolve, reject) => {
       pending.set(id, { w, resolve, reject });
-      w.postMessage({ ...req, id });
+      w.postMessage({ ...req, id }, req.type === 'encode' && req.audio.buffer instanceof ArrayBuffer ? [req.audio.buffer] : []);
     });
   }
 
@@ -150,6 +154,14 @@ ${text}`, async () => {
         return { data: pack({ mp3: r.mp3!, samples: r.samples!, rate: r.rate! }), type: 'audio/mpeg' };
       });
       return unpack(kept.data);
+    },
+    async sound(voice, text, speed) {
+      const f = await files.ensure(voice);
+      const r = await call({ type: 'sound', key: voice, files: f, text, speed });
+      return { audio: r.audio!, rate: r.rate! };
+    },
+    async encode(audio, rate) {
+      return (await call({ type: 'encode', audio, rate })).mp3!;
     },
     async close() {
       clearTimeout(idle);

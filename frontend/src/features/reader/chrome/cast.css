@@ -38,6 +38,11 @@
 
 /* A, and 1 voice and 2: faces in a grid, each saying whose voice it has. */
 .cs-faces { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+/* Under the one row of faces: the rest of them, or back to the one row. */
+.cs-more { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; border-radius: 9px; font: var(--ui-w) 12px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-mu); transition: color 140ms ease, background-color 140ms ease; }
+.cs-more:hover { color: var(--r-fg); background: var(--r-fill); }
+.cs-more-i { font-size: 10px; transition: transform var(--dur-snappy) var(--ease-snappy); }
+.cs-more.is-open .cs-more-i { transform: rotate(180deg); }
 .cs-face-b { display: grid; justify-items: center; gap: 5px; padding: 8px 2px 7px; border-radius: 10px; transition: background-color 140ms ease; }
 .cs-face-b:hover { background: var(--r-fill); }
 .cs-face-b.is-on { background: var(--r-fill); }

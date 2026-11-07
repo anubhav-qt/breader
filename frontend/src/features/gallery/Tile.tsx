@@ -7,6 +7,7 @@ import { fitCard } from './fit';
 import { cardNames, markFor } from './names';
 import { actionLabel, chapterText, progressText, shortProgress, timeLeft, when } from './text';
 import { Pick, Tools } from './Tools';
+import { canAudiobook } from '../audiobook/plan';
 import type { GalleryItem } from './types';
 import { useSize } from './useSize';
 import { bookVars } from './vars';
@@ -111,8 +112,8 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   // Someone else's book, in their shared library: theirs to change. It can only be read, or kept.
   const theirs = b.source === 'shelf';
   const keepable = !!onKeep && theirs;
-  // The corner's buttons: keep or finished, favourite and the edit button, which the first line keeps clear of.
-  let tools = (theirs ? 0 : 1) + (keepable || done ? 1 : 0) + (b.favorite ? 1 : 0);
+  // The corner's buttons: keep or finished, favourite, the audiobook and the edit button, which the first line keeps clear of.
+  let tools = (theirs ? 0 : 1) + (keepable || done ? 1 : 0) + (b.favorite ? 1 : 0) + (canAudiobook(b) ? 1 : 0);
   // While picking, the tick stands in for the edit and keep buttons.
   if (picked !== undefined) tools = 1 + (done ? 1 : 0) + (b.favorite ? 1 : 0);
   // A series' card has none, but for its tick while picking.

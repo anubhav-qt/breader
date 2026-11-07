@@ -8,6 +8,7 @@ import { IconAddBook, IconLock, IconPeople, IconStar, IconTrash } from './compon
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { DesignBar } from './features/design/DesignBar';
 import { Toast, type ToastMessage } from './components/Toast';
+import { AudiobookHost } from './features/audiobook/Audiobook';
 import { AddWhat } from './features/add/AddWhat';
 import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
@@ -588,8 +589,11 @@ export default function App() {
   const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect) => {
     openAnimDone.current = false;
     loadedId.current = null;
-    // A shared book this reader hasn't started joins their library as they open it.
+    // A shared book this reader hasn't started joins their library as they open it. Its copy needs
+    // a key to reach the server: that's where its AI switch comes on, when the sharer's file has
+    // been read, and where its voices, music and notes are fetched from.
     const entry = recordById.get(book.id);
+    if (entry?.source === 'shelf') await ensureKey();
     const rec = entry?.source === 'shelf' ? await lib.startShelfBook(entry) : entry;
     if (!rec) return;
     // One taken out of My books comes back in once it's being read again.
@@ -600,13 +604,17 @@ export default function App() {
       if (!b) setOpening(null);
       else if (openAnimDone.current) finishOpen(rec.id);
     });
-  }, [recordById, lib, startLoad, finishOpen]);
+  }, [recordById, lib, startLoad, finishOpen, ensureKey]);
 
-  /** Renaming, recolouring or favouring a shared book adds it to the reader's library first. */
+  /**
+   * Renaming, recolouring or favouring a shared book adds it to the reader's library first. Turning
+   * its AI on needs a key: without one the switch never reaches the server, and the AI's work can't come back.
+   */
   const editBook = useCallback(async (id: string, patch: BookEdit) => {
+    if (patch.ai) await ensureKey();
     const rec = recordById.get(id);
     lib.editBook(rec?.source === 'shelf' ? (await lib.startShelfBook(rec)).id : id, patch);
-  }, [recordById, lib]);
+  }, [recordById, lib, ensureKey]);
 
   // A reader URL opened directly (or reloaded) loads without the transition.
   useEffect(() => {
@@ -1540,6 +1548,7 @@ export default function App() {
       </AnimatePresence>
 
       <Toast toast={toast} onDone={dismissToast} />
+      <AudiobookHost />
       {devTools && route.name === 'library' && (
         <PreviewBar
           mode={preview}

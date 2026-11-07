@@ -1,4 +1,5 @@
 export * from './accounts.ts';
+export * from './audiobook.ts';
 export * from './admin.ts';
 export * from './ai.ts';
 export * from './comments.ts';

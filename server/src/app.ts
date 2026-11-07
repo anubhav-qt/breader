@@ -18,6 +18,7 @@ import { mangaRoutes } from './routes/manga.ts';
 import { shelfRoutes } from './routes/shelf.ts';
 import { panelRoutes } from './routes/panels.ts';
 import { speechRoutes } from './routes/speech.ts';
+import { audiobookRoutes } from './routes/audiobooks.ts';
 import { syncRoutes } from './routes/sync.ts';
 import { voiceRoutes } from './routes/voices.ts';
 
@@ -83,6 +84,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', aiRoutes(deps));
   app.route('/v1', commentRoutes(deps));
   app.route('/v1', speechRoutes(deps));
+  app.route('/v1', audiobookRoutes(deps));
   app.route('/v1', panelRoutes(deps));
   app.route('/v1', mangaRoutes(deps));
 

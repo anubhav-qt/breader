@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AI_LABEL } from '../../../books/ai';
@@ -53,14 +53,18 @@ const SOON: Record<Soon, string> = {
 };
 /** 1 voice, 2 (hers and his), or a voice for each character. */
 type Count = 1 | 2 | 'cast';
-const counts = (ready: boolean, castReady: boolean): Array<{ v: Count; label: string; muted?: boolean }> => [
-  { v: 1, label: '1 voice' },
-  { v: 2, label: '2 voices', muted: !ready },
-  { v: 'cast', label: 'Characters', muted: !castReady },
+const counts = (ready: boolean, castReady: boolean): Array<{ v: Count; label: string; muted?: boolean; line: string }> => [
+  { v: 1, label: '1 voice', line: 'One for all' },
+  { v: 2, label: '2 voices', muted: !ready, line: 'Hers and his' },
+  { v: 'cast', label: 'Characters', muted: !castReady, line: 'One each' },
 ];
-const modelsOf = (kokoro: boolean): Array<{ v: Engine; label: string; muted?: boolean }> => [
-  { v: 'piper', label: 'Piper' },
-  { v: 'kokoro', label: 'Kokoro', muted: !kokoro },
+const modelsOf = (kokoro: boolean): Array<{ v: Engine; label: string; muted?: boolean; line: string }> => [
+  { v: 'piper', label: 'Piper', line: 'Clear, light' },
+  { v: 'kokoro', label: 'Kokoro', muted: !kokoro, line: 'Most natural, heavier' },
+];
+const MODES: Array<{ v: Mode; label: string; line: string }> = [
+  { v: 'normal', label: 'Normal', line: 'A voice reads aloud' },
+  { v: 'immersive', label: 'Immersive', line: 'Words light up as it reads' },
 ];
 
 const mb = (n: number) => `${n > 0 && n < 500_000 ? '<1' : Math.round(n / 1e6)} MB`;
@@ -219,7 +223,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     return (
       <div className="pnl vs">
         <div className="pnl-h">Read aloud</div>
-        <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
+        <Segmented label="Mode" value={mode} onChange={setMode} options={MODES} />
         <p className="p-note vs-about">{NO_VOICES}</p>
         {canPace && pace}
         {canPace && music === 'ready' && <Music />}
@@ -227,16 +231,10 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     );
   }
 
-  // The model toggle, and why Kokoro can't be picked, when it can't.
+  // Why Kokoro can't be picked, when it can't.
   let modelNote: string | null = null;
   if (noKokoro && fallback) modelNote = NO_KOKORO.fallback;
   else if (noKokoro) modelNote = NO_KOKORO.normal;
-  const models = (
-    <>
-      <Segmented label="Model" value={model} onChange={setModel} options={modelsOf(voices === 'immersive')} />
-      {modelNote && <p className="p-note vs-heavy">{modelNote}</p>}
-    </>
-  );
   // A tap on a face picks that voice and plays it.
   const pickAndHear = (v: VoiceInfo) => {
     pick(v);
@@ -251,41 +249,45 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     <div className="pnl vs" ref={onRoot}>
       <div className="pnl-h">Read aloud</div>
       <SheetAi p={ai} book={bookId} elsewhere={aiElsewhere} onAi={onAi} />
-      <Segmented label="Mode" value={mode} onChange={setMode} options={[{ v: 'normal', label: 'Normal' }, { v: 'immersive', label: 'Immersive' }]} />
-      {speech.allowed && (
-        <>
+      <Step n={1} title="Mode">
+        <Segmented bare label="Mode" value={mode} onChange={setMode} options={MODES} />
+      </Step>
+      <Step n={2} title="Model">
+        <Segmented bare label="Model" value={model} onChange={setModel} options={modelsOf(voices === 'immersive')} />
+        {modelNote && <p className="p-note vs-heavy">{modelNote}</p>}
+        {/* Only Piper reads on the server: with Kokoro, the switch makes way for where it reads. */}
+        {speech.allowed && !heavy && (
           <div className="ctl tgrow">
             <span className="clbl">Read on the server</span>
-            <button type="button" className="tg" role="switch" aria-checked={server} disabled={heavy} aria-label="Read aloud on Breader’s own computer" onClick={() => {
+            <button type="button" className="tg" role="switch" aria-checked={server} aria-label="Read aloud on Breader’s own computer" onClick={() => {
               if (!prefs.server && api.away) sayAway('it can’t read aloud on the server');
               setVoicePrefs({ server: !prefs.server });
             }} />
           </div>
-          {heavy && <p className="p-note vs-about">Piper voices only.</p>}
-        </>
-      )}
-      {hung && mode === 'immersive' && !server && <p className="p-note vs-about vs-err">{HUNG}</p>}
-      {pace}
-      <Music onLocked={musicLocked} />
-      <Segmented label="Voices" value={count} onChange={setCount} options={counts(two === 'ready', castReady)} />
-      {count === 1 && (
-        <OneVoice v={current} hearing={hearing === current.key} onHear={() => toggleHear(current)} onAgain={anotherVoice}>
-          {models}
-          {faces}
-        </OneVoice>
-      )}
-      {count === 2 && (
-        <TwoVoices her={pair.F} his={pair.M} hearing={hearing} onHear={toggleHear} onAgain={anotherPair}>
-          {models}
-          {faces}
-        </TwoVoices>
-      )}
-      {characters && (
-        <CastSection book={bookId} design={round.cast} playing={playing} engine={model}>
-          {models}
-        </CastSection>
-      )}
-      {mode === 'normal' && <Segmented label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />}
+        )}
+        {speech.allowed && heavy && <p className="p-note vs-where">Kokoro reads on this device.</p>}
+        {hung && mode === 'immersive' && !server && <p className="p-note vs-where vs-err">{HUNG}</p>}
+      </Step>
+      <Step n={3} title="Voices">
+        <Segmented bare label="Voices" value={count} onChange={setCount} options={counts(two === 'ready', castReady)} />
+        {count === 1 && (
+          <OneVoice v={current} hearing={hearing === current.key} onHear={() => toggleHear(current)} onAgain={anotherVoice}>
+            {faces}
+          </OneVoice>
+        )}
+        {count === 2 && (
+          <TwoVoices her={pair.F} his={pair.M} hearing={hearing} onHear={toggleHear} onAgain={anotherPair}>
+            {faces}
+          </TwoVoices>
+        )}
+        {characters && <CastSection book={bookId} design={round.cast} playing={playing} engine={model}>{null}</CastSection>}
+      </Step>
+      <Step n={4} title={mode === 'immersive' ? 'Pace' : 'Speed'}>
+        {mode === 'immersive' ? <Pace bare /> : <Segmented bare label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />}
+      </Step>
+      <Step n={5} title="Music">
+        <Music onLocked={musicLocked} />
+      </Step>
       <div className="vs-foot">
         {loading ? (
           <Progress loaded={load.loaded} total={load.total} />
@@ -360,12 +362,28 @@ export function NotYet({ what, off, onAi, onClose }: { what: Soon; off: boolean;
   );
 }
 
+/**
+ * The sheet's steps, in the order they're best picked: a number and a name over each, joined by a
+ * line down the left, so it reads top to bottom as one thing after another.
+ */
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <section className="vs-step" aria-labelledby={`vs-step-${n}`}>
+      <h3 className="vs-step-h" id={`vs-step-${n}`}>
+        <span className="vs-step-n" aria-hidden="true">{n}</span>
+        {title}
+      </h3>
+      <div className="vs-step-b">{children}</div>
+    </section>
+  );
+}
+
 /** Immersive's pace in words a minute: how fast the words light up, and how fast a voice reads them. */
-function Pace() {
+function Pace({ bare = false }: { bare?: boolean }) {
   const { pace } = useVoicePrefs();
   return (
     <div className="ctl">
-      <div className="clbl">Pace</div>
+      {!bare && <div className="clbl">Pace</div>}
       <div className="stp">
         <button type="button" aria-label="Slower" disabled={pace <= PACE.min} onClick={() => stepPace(-1)}>−</button>
         <span className="stp-v" aria-live="polite">{pace} wpm</span>

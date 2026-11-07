@@ -2,6 +2,7 @@ import type { Ref } from 'react';
 import type { ShelfItem } from '../../data/useLibrary';
 import { IconAddBook, IconCheck, IconMore, IconStar } from '../../components/icons';
 import { colorVars } from '../../data/colors';
+import { AudiobookButton } from '../audiobook/Audiobook';
 import { Spark } from '../ai/AiStatus';
 import { useCardProgress } from '../ai/progress';
 import { stageText } from '../ai/words';
@@ -21,7 +22,7 @@ interface Props {
 
 /**
  * A card's corner: keep (someone's shared book) or a tick once it's finished, the favourite star,
- * and the edit button, whose popover marks it finished. While picking, a tick takes the place of
+ * the audiobook (a speaker once it's made), and the edit button, whose popover marks it finished. While picking, a tick takes the place of
  * the edit and keep buttons.
  */
 export function Tools({ book: b, open, picked, moreRef, onEdit, onKeep }: Props) {
@@ -47,6 +48,7 @@ export function Tools({ book: b, open, picked, moreRef, onEdit, onKeep }: Props)
       <CardSpark book={b} />
       {b.favorite && <span className="tile-fav" title="Favourite"><IconStar /></span>}
       {picked !== undefined && <Pick on={picked} />}
+      {picked === undefined && <AudiobookButton book={b} />}
       {!theirs && picked === undefined && <button
         ref={moreRef}
         type="button"

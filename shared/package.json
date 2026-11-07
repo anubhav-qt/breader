@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./accounts": "./src/accounts.ts",
     "./admin": "./src/admin.ts",
+    "./audiobook": "./src/audiobook.ts",
     "./ai": "./src/ai.ts",
     "./comments": "./src/comments.ts",
     "./genres": "./src/genres.ts",

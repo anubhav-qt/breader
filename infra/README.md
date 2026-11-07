@@ -128,6 +128,15 @@ Each sentence's sound is kept in the `voices` volume, by a hash of its voice, sp
 `SPEECH_CACHE_MB` (4096 by default), the ones used longest ago going first: a book read again, or
 on another phone, is spoken once. The sound is kept, though no text is.
 
+**Audiobooks.** Anyone with a library key can have the laptop make a book's audiobook (EPUB and
+text books, Piper or Kokoro, at 1x): the app sends the book's text, and the laptop reads it a
+paragraph at a time, one book at a time in the order asked, between the sentences it reads live
+(`server/src/speech/books.ts`). Each paragraph is an MP3 in `voices/books/<hash>/`, with the text
+beside it, and the app downloads them as they're made. They're kept for good, so the same book on
+another device downloads at once; nothing caps their size yet (about 22 MB an hour of book). A
+book being made when the server stops carries on when it starts. Because of this the voice engine
+now runs on the laptop whatever `SPEECH_EMAILS` holds; reading live is still only for those accounts.
+
 **Manga from MangaDex.** The Manga shelf's MangaDex tab finds series there and reads them
 through the laptop: MangaDex lets only its own site fetch its pages in a browser, so its API, its
 covers and its pages all come through here. Anyone can look through it; pages are for browsers

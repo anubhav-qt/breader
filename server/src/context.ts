@@ -7,6 +7,7 @@ import type { Store } from './lib/cache.ts';
 import type { Storage } from './lib/storage.ts';
 import type { Manga } from './manga/index.ts';
 import type { Panels } from './panels/index.ts';
+import type { Books } from './speech/books.ts';
 import type { Speech } from './speech/index.ts';
 
 export interface Deps {
@@ -20,6 +21,8 @@ export interface Deps {
   auth: Auth;
   /** The server voice (speech/); null where it's off, as on the fallback. */
   speech: Speech | null;
+  /** Audiobooks made with the server voice (speech/books.ts); null or missing where it's off. */
+  books?: Books | null;
   /** Manga: MangaDex, and Suwayomi when set up (manga/); null where it's off, as on the fallback. */
   manga: Manga | null;
   /** Manga panels found with the panel model (panels/); null or missing where it's off, as on the fallback. */

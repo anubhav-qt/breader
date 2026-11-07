@@ -19,6 +19,7 @@ import { makeKeeper } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makeSame, pgGroups } from './manga/same.ts';
 import { makePanels } from './panels/index.ts';
+import { makeBooks } from './speech/books.ts';
 import { makeSpeech } from './speech/index.ts';
 
 startReporting('api');
@@ -31,8 +32,10 @@ const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // Answers worth keeping (manga's, AI notes) go to Redis when there's one, so they outlast a restart.
 let redis: Redis | null = null;
 if (env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
-// The server voice runs on the laptop only: Render's free plan hasn't the processor for it.
-const speech = env.ROLE === 'laptop' && env.SPEECH_EMAILS.length ? makeSpeech(env) : null;
+// The server voice runs on the laptop only: Render's free plan hasn't the processor for it. It reads
+// live for SPEECH_EMAILS, and makes audiobooks for anyone with a key.
+const speech = env.ROLE === 'laptop' ? makeSpeech(env) : null;
+const books = speech ? makeBooks(env.SPEECH_DIR, speech) : null;
 // Manga on both: the fallback reads Suwayomi's sources through the one on AWS (SUWAYOMI_URL), or MangaDex alone without it.
 const mangaOn = env.MANGADEX;
 const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: mangaCacheMb(env) * 1024 * 1024, store: redis };
@@ -57,7 +60,7 @@ const manga = mangaOn ? makeManga(mangaOptions) : null;
 // free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
 let panels: ReturnType<typeof makePanels> = null;
 if (manga && env.ROLE === 'laptop') panels = makePanels(env);
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga, panels, redis };
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, books, manga, panels, redis };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.0.0.0' }, (info) =>

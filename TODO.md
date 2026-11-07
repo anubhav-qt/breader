@@ -16,6 +16,14 @@
 - [ ] Strip Project Gutenberg front matter and licence from EPUBs, so percentages match the story itself. It currently reads ~5% low on Alice.
 - [ ] Poetry and verse in EPUBs lose their indentation, because publisher CSS is set aside.
 
+## Audiobooks
+- [ ] Cap what Breader's computer keeps (`voices/books/`), the books listened to longest ago going first, and let a reader remove theirs from there too. Today only this device's copy can be removed.
+- [ ] PDFs: read their pages' words into an audiobook as well.
+- [ ] Chapters in the exported MP3 (ID3 CHAP frames), so players can jump between them.
+- [ ] Initials split a sentence: "by O. Henry" is said as "by O." and "Henry", with a pause between (`sentencesIn`, reading aloud too).
+- [ ] Kokoro on this device tops out near 6x on the graphics chip (`features/audiobook/speed.ts`). Several sentences in one run would need a Kokoro export that masks padding; this one doesn't.
+- [ ] On a real phone: Maximum's three Piper engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
+
 ## Testing on real phones
 - [ ] Reproduce phone browsers properly, then tune voices and Immersive against them. So far both were tuned in code and a desktop browser only.
   - A real iPhone 13 with 1 to 2 GB free: Safari's memory ceiling for the voice worker, and what Cache Storage keeps when space is short.
