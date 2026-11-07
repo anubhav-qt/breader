@@ -25,7 +25,7 @@
 
   --ui: "Doto", ui-monospace, Menlo, Consolas, monospace;
   /* Doto's weight is the size of its dots: phones get the heaviest, or small text turns faint. */
-  --ui-w: 700;
+  --ui-w: 800;
   --ui-w-strong: 800;
   --read: "Dongle", "Atkinson Hyperlegible Next", system-ui, sans-serif;
   --libron: "Libron", Georgia, serif;

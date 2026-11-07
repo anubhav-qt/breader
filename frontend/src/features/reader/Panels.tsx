@@ -181,17 +181,23 @@ export interface MangaControls {
   strip: boolean;
 }
 
-export function Segmented<T extends string | number>({ label, value, options, onChange }: {
+export function Segmented<T extends string | number>({ label, value, options, onChange, bare = false }: {
   label: string;
   value: T;
-  /** `muted`: not ready yet. It looks off, and a tap still reaches onChange, which says why. */
-  options: Array<{ v: T; label: string; content?: React.ReactNode; muted?: boolean }>;
+  /**
+   * `muted`: not ready yet. It looks off, and a tap still reaches onChange, which says why. `line`: a
+   * few words under the name on what it means.
+   */
+  options: Array<{ v: T; label: string; content?: React.ReactNode; muted?: boolean; line?: string }>;
   onChange: (v: T) => void;
+  /** Its label said already, by a heading above it: only screen readers hear it here. */
+  bare?: boolean;
 }) {
   return (
     <div className="ctl">
-      <div className="clbl">{label}</div>
-      <div className="seg" role="radiogroup" aria-label={label}>
+      {!bare && <div className="clbl">{label}</div>}
+      {/* Cards side by side, all one height whatever each holds. */}
+      <div className="seg seg-cards" role="radiogroup" aria-label={label}>
         {options.map((o) => (
           <button
             key={String(o.v)}
@@ -204,7 +210,8 @@ export function Segmented<T extends string | number>({ label, value, options, on
             className={value === o.v ? 'is-on' : o.muted ? 'is-muted' : ''}
             onClick={() => onChange(o.v)}
           >
-            {o.content ?? o.label}
+            {o.content ?? <span className="seg-name">{o.label}</span>}
+            {o.line && <span className="seg-line">{o.line}</span>}
           </button>
         ))}
       </div>

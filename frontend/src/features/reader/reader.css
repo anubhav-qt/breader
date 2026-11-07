@@ -81,6 +81,27 @@ label.clbl { display: block; }
 .seg button.is-on { background: var(--r-bg); color: var(--r-fg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--r-line); }
 .seg button:disabled { opacity: 0.4; }
 .seg svg { width: 22px; height: 16px; }
+/* Settings' choices: cards side by side, as the audiobook dialog's (components/steps.css), every one in a row as tall as the tallest. */
+.seg-cards { grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 8px; padding: 0; border-radius: 0; background: none; }
+.seg-cards button {
+  height: auto;
+  min-height: 48px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  background: var(--r-fill);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.seg-cards button:hover:not(:disabled, .is-muted, .is-on) { background: var(--r-line); }
+.seg-cards button.is-on { background: var(--r-bg); color: var(--r-fg); box-shadow: inset 0 0 0 1.5px var(--r-fg); }
+.seg-name { font: var(--ui-w-strong) 13px/1.2 var(--ui); }
+.seg-line { font: var(--ui-w) 11.5px/1.3 var(--ui); color: var(--r-mu); text-wrap: balance; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .sws { display: flex; gap: 10px; }
 .sw {
