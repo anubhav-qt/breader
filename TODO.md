@@ -35,7 +35,18 @@
   - Pages are kept by a hash of `page:<chapter>:…`, so the move needs a series → pages index first (or keys that start with the series).
   - The server already warns in Sentry when the SSD cache is nearly full or has to drop pages: that's the cue to do this.
 
+## More room in the database (ADR 0001)
+- [ ] When Supabase's free 500 MB or 5 GB a month gets near, split the shared manga and AI data
+  (panels, series matches, AI notes) into a second free Supabase. Measure the biggest tables first.
+- [ ] Later, if one database per kind still isn't enough: split by reader (each library's data in
+  one database, a map of which). Never split a library's tables apart: a sync push and a key claim
+  each write several tables in one transaction.
+
 ## Speed, measured on a slow phone (4x CPU)
 - [ ] A long manhwa strip (12000 px tall) takes the panel finder about 1.9 s in its worker. Scrolling stays smooth, but its panels come late.
 - [ ] Browse takes about 1 s to first show on a slow phone. Since 2026-11-07 it asks where a page of series is read in one call, not 30; not measured on a phone yet.
-- [ ] The API's database pool is 5 connections (db/client.ts). Load tests passed 100 readers and failed 150: try a larger pool, measured, before changing it.
+- [x] The 150-reader failure was Docker's port forwarding on the Mac, not the pool (docs/load-tests.md).
+- [ ] Pool size for production: measure the ThinkPad's trip time to Supabase Mumbai first (Supabase free runs 15 queries at once).
+- [ ] CORS rebuilds every page and cover answer to add `Vary: Origin`, copying its bytes (about 18% of the API's CPU at 1,200 readers).
+- [ ] The names drop-down's `distance` is about 10% of the API's CPU at 1,200 readers.
+- [ ] A place save makes about 12 trips to the database, 10 inside one transaction: fewer trips.

@@ -17,6 +17,10 @@ The app calls `api.` and switches to `fb.` when `api.` fails: a network error, a
 or a 502/503/504/530. Every write carries an id and applies once, so the retry is safe. While on
 `fb.`, it checks `api.` every minute and moves back when it answers.
 
+Planned, not built: four servers (the laptop and three Renders), regional read copies of the
+database, and edge-cached manga pages. See `docs/adr/0001-four-servers.md`. This file changes as
+each piece lands.
+
 ## Local development
 
 ```sh
