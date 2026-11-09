@@ -31,6 +31,21 @@ describe('the card fonts', () => {
     for (const family of families) expect(existsSync(at(`./fonts/${family}-OFL.txt`)), family).toBe(true);
   });
 
+  it('give Dongle a line box near its letters, so the caret and a selection are as tall as the words', () => {
+    const faces = [...css.matchAll(/@font-face \{[^}]*font-family: Dongle;[^}]*\}/g)].map((m) => m[0]);
+    expect(faces.length).toBe(9);
+    for (const face of faces) {
+      const up = Number(face.match(/ascent-override: ([\d.]+)%/)?.[1]);
+      const down = Number(face.match(/descent-override: ([\d.]+)%/)?.[1]);
+      // Its letters reach 43.5% up and 14.5% down; the file's own box is 85% and 59.8%.
+      expect(up, face).toBeGreaterThanOrEqual(43.5);
+      expect(down, face).toBeGreaterThanOrEqual(14.5);
+      expect(up + down, face).toBeLessThan(80);
+      // Up less down as in the file, so every line's words sit where they did.
+      expect(up - down, face).toBeCloseTo(85 - 59.8, 5);
+    }
+  });
+
   it('are never inlined into the build, however small', () => {
     const limit = config.build?.assetsInlineLimit;
     expect(typeof limit).toBe('function');

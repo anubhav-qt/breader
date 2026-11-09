@@ -38,6 +38,7 @@ export const FEATURES: Feature[] = [
   { id: 'browse', group: 'Start', name: 'Find manga', what: 'Search MangaDex and other sites at once, or look through what’s popular, new or top rated.', where: '+ Add, then Manga', go: 'browse' },
   { id: 'login', group: 'Start', name: 'Log in', what: 'Keeps your books and places on every device. Email or Google.', where: 'Settings, then Log in', go: 'login' },
   { id: 'whats-new', group: 'Start', name: 'What’s new', what: 'After each update, a note says in a line or two what changed. It shows once.', where: 'Shows by itself, over the library', since: day(2026, 11, 9) },
+  { id: 'see-how', group: 'Start', name: 'See how', what: 'On an empty shelf, tap a card to watch how it’s done, then start it.', where: 'The cards under Start with a book, or a manga', since: day(2026, 11, 9) },
   { id: 'feedback', group: 'Start', name: 'Request a feature / Feedback', what: 'Ask for something Breader should do, or tell us what you think. We read every one.', where: 'Settings, then Request a feature / Feedback', since: day(2026, 11, 9) },
 
   // Your library

@@ -1,0 +1,224 @@
+/* How a welcome card is done (Demo.tsx): a small Breader on a 2:1 stage, playing a 7 second loop.
+   Positions are percentages of the stage, so the dot lands on the same thing at every width. */
+.dm-stage {
+  --d: 7s;
+  position: relative;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--canvas);
+  box-shadow: inset 0 0 0 1px var(--tile-border);
+  font: var(--ui-w) 11px/1.2 var(--ui);
+  color: var(--ink);
+  user-select: none;
+  container-type: inline-size;
+}
+.dm { text-align: left; }
+.dm-stage * { box-sizing: border-box; }
+/* Sizes inside are in cqw, of the stage, so the picture scales whole: 1cqw is 4px on a 400px stage. */
+.dm-stage > * { font-size: 2.75cqw; }
+.dm-steps { margin: 16px 0 18px; padding: 0 0 0 1.4em; display: grid; gap: 8px; font: 400 20px/1.05 var(--read); color: var(--ink); }
+.dm-steps li::marker { font: var(--ui-w) 12px/1 var(--ui); color: var(--ink-2); }
+.dm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dm-actions .btn { width: 100%; }
+.dm-actions .btn:only-child { grid-column: 1 / -1; }
+
+/* The finger: a dot that goes where you'd tap, and presses. */
+.dm-tap {
+  position: absolute; z-index: 5; left: 50%; top: 90%;
+  width: 5.5cqw; height: 5.5cqw; margin: -2.75cqw 0 0 -2.75cqw; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 2px var(--accent);
+  opacity: 0;
+  animation: var(--tap) var(--d) ease-in-out infinite;
+}
+.dm-chip { display: inline-flex; align-items: center; gap: 1cqw; padding: 1cqw 1.75cqw; border-radius: 1.75cqw; background: var(--fill); font: var(--ui-w) 2.5cqw/1 var(--ui); white-space: nowrap; }
+.dm-chip svg { width: 2.75cqw; height: 2.75cqw; }
+.dm-card { position: absolute; display: grid; align-content: start; gap: 1.5cqw; padding: 2.5cqw 3cqw; border-radius: 3cqw; background: var(--paper); box-shadow: inset 0 0 0 1px var(--tile-border); }
+.dm-card-t { font: 700 5cqw/0.9 var(--read); }
+.dm-more, .dm-arrow { position: absolute; top: 2cqw; right: 2cqw; display: grid; place-items: center; width: 5.5cqw; height: 5.5cqw; border-radius: 1.75cqw; background: var(--fill); }
+.dm-more svg, .dm-arrow svg { width: 3.25cqw; height: 3.25cqw; }
+.dm-menu { position: absolute; z-index: 3; padding: 1.75cqw 2.5cqw; border-radius: 2.25cqw; background: var(--paper); box-shadow: 0 0 0 1px var(--tile-border), var(--float-shadow, 0 1.5cqw 4.5cqw rgba(0, 0, 0, 0.18)); white-space: nowrap; opacity: 0; }
+
+/* Read: Aa, a typeface, then bigger. */
+.dm-read { --tap: dm-tap-read; }
+@keyframes dm-tap-read {
+  0%, 6% { left: 40%; top: 85%; opacity: 0; transform: scale(1); }
+  10% { opacity: 1; }
+  16% { left: 92%; top: 12%; transform: scale(1); }
+  18% { transform: scale(0.7); }
+  21% { transform: scale(1); }
+  33% { left: 80%; top: 41%; transform: scale(1); }
+  36% { transform: scale(0.7); }
+  39% { transform: scale(1); }
+  52% { left: 91%; top: 82%; transform: scale(1); }
+  55% { transform: scale(0.7); }
+  58% { transform: scale(1); }
+  86% { left: 91%; top: 82%; opacity: 1; }
+  92%, 100% { left: 91%; top: 82%; opacity: 0; }
+}
+.dm-book { position: absolute; left: 5%; top: 7%; color: var(--ink-2); }
+.dm-aa { position: absolute; right: 3%; top: 5%; font-size: 2.75cqw; animation: dm-aa var(--d) infinite; }
+@keyframes dm-aa { 0%, 17% { background: var(--fill); color: var(--ink); } 19%, 90% { background: var(--ink); color: var(--canvas); } 95%, 100% { background: var(--fill); color: var(--ink); } }
+.dm-text { position: absolute; left: 5%; top: 22%; width: 52%; transform-origin: 0 0; animation: dm-grow var(--d) infinite; }
+.dm-text p { margin: 0; font-size: 5cqw; line-height: 1.05; }
+.dm-t1 { font-family: var(--read); animation: dm-out var(--d) infinite; }
+.dm-t2 { position: absolute; inset: 0; font-family: var(--serif); font-size: 3.25cqw !important; line-height: 1.4 !important; opacity: 0; animation: dm-in var(--d) infinite; }
+@keyframes dm-out { 0%, 36% { opacity: 1; } 39%, 90% { opacity: 0; } 96%, 100% { opacity: 1; } }
+@keyframes dm-in { 0%, 36% { opacity: 0; } 39%, 90% { opacity: 1; } 96%, 100% { opacity: 0; } }
+@keyframes dm-grow { 0%, 55% { transform: scale(1); } 59%, 90% { transform: scale(1.14); } 96%, 100% { transform: scale(1); } }
+.dm-panel { position: absolute; right: 3%; top: 21%; width: 36%; bottom: 6%; display: grid; align-content: space-between; padding: 1.5cqw; border-radius: 3cqw; background: var(--paper); box-shadow: 0 0 0 1px var(--tile-border); opacity: 0; animation: dm-panel var(--d) infinite; }
+@keyframes dm-panel { 0%, 19% { opacity: 0; transform: translateX(2.5cqw); } 23%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; transform: translateX(2.5cqw); } }
+.dm-row { display: flex; align-items: center; height: 22%; padding: 0 2cqw; border-radius: 1.75cqw; font: 400 4.25cqw/1 var(--read); }
+.dm-pick { font-size: 3cqw; animation: dm-pick var(--d) infinite; }
+@keyframes dm-pick { 0%, 36% { background: transparent; } 38%, 90% { background: var(--fill); } 95%, 100% { background: transparent; } }
+.dm-row:nth-child(3) { font-size: 3cqw; }
+.dm-size { justify-content: space-between; background: var(--fill); font: var(--ui-w) 2.5cqw/1 var(--ui); }
+.dm-size i { font-style: normal; }
+.dm-plus { padding: 0.75cqw 1cqw; border-radius: 1.25cqw; animation: dm-press var(--d) infinite; }
+@keyframes dm-press { 0%, 54% { background: transparent; color: inherit; } 55%, 60% { background: var(--ink); color: var(--canvas); } 62%, 100% { background: transparent; color: inherit; } }
+
+/* Listen: tap Listen, the words light up one by one. */
+.dm-listen { --tap: dm-tap-listen; }
+@keyframes dm-tap-listen {
+  0%, 4% { left: 50%; top: 100%; opacity: 0; transform: scale(1); }
+  8% { opacity: 1; }
+  15% { left: 50%; top: 85%; transform: scale(1); }
+  17% { transform: scale(0.7); }
+  20% { left: 50%; top: 85%; transform: scale(1); opacity: 1; }
+  26%, 100% { left: 50%; top: 85%; opacity: 0; }
+}
+.dm-words { position: absolute; left: 7%; right: 7%; top: 12%; margin: 0; font: 400 6.5cqw/1 var(--read); color: var(--ink-2); }
+.dm-words span { border-radius: 1.25cqw; animation: dm-word var(--d) infinite; animation-delay: calc(var(--i) * 0.42s); }
+@keyframes dm-word { 0%, 30% { background: transparent; color: var(--ink-2); } 31%, 36% { background: var(--accent-soft, var(--fill)); color: var(--ink); } 37%, 100% { background: transparent; color: var(--ink-2); } }
+.dm-modes { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); display: flex; gap: 2px; padding: 0.75cqw; border-radius: 2.5cqw; background: var(--fill); }
+.dm-modes span { padding: 1.5cqw 2.25cqw; border-radius: 2cqw; color: var(--ink-2); }
+.dm-modes .dm-lpill { animation: dm-on var(--d) infinite; }
+@keyframes dm-on { 0%, 16% { background: transparent; color: var(--ink-2); } 18%, 92% { background: var(--canvas); color: var(--ink); } 97%, 100% { background: transparent; color: var(--ink-2); } }
+.dm-wave { position: absolute; right: 7%; bottom: 10%; display: flex; align-items: flex-end; gap: 2px; height: 3.5cqw; opacity: 0; animation: dm-show var(--d) infinite; }
+.dm-wave i { width: 0.75cqw; height: 100%; border-radius: 2px; background: var(--ink); transform-origin: bottom; animation: dm-bar 0.6s ease-in-out infinite alternate; }
+.dm-wave i:nth-child(2) { animation-delay: -0.2s; }
+.dm-wave i:nth-child(3) { animation-delay: -0.4s; }
+.dm-wave i:nth-child(4) { animation-delay: -0.1s; }
+@keyframes dm-bar { from { transform: scaleY(0.25); } to { transform: scaleY(1); } }
+@keyframes dm-show { 0%, 18% { opacity: 0; } 22%, 90% { opacity: 1; } 95%, 100% { opacity: 0; } }
+
+/* Audiobooks: the arrow, a bar filling, MP3, and it plays while it's made. */
+.dm-audiobook { --tap: dm-tap-audio; }
+@keyframes dm-tap-audio {
+  0%, 4% { left: 50%; top: 95%; opacity: 0; transform: scale(1); }
+  8% { opacity: 1; }
+  15% { left: 75%; top: 35.5%; transform: scale(1); }
+  17% { transform: scale(0.7); }
+  20% { left: 75%; top: 35.5%; transform: scale(1); opacity: 1; }
+  26%, 100% { left: 75%; top: 35.5%; opacity: 0; }
+}
+.dm-card-c { left: 20%; right: 20%; top: 26%; bottom: 10%; padding: 3cqw 3.5cqw; }
+.dm-card-c .dm-card-t { padding-right: 7cqw; font-size: 6cqw; }
+.dm-arrow { top: 2.5cqw; right: 2.5cqw; animation: dm-arrow var(--d) infinite; }
+@keyframes dm-arrow { 0%, 16% { background: var(--fill); color: var(--ink); } 18%, 90% { background: var(--ink); color: var(--canvas); } 95%, 100% { background: var(--fill); color: var(--ink); } }
+.dm-bar { position: absolute; left: 3.5cqw; right: 3.5cqw; bottom: 3.5cqw; height: 1.5cqw; border-radius: 0.75cqw; background: var(--fill); overflow: hidden; }
+.dm-bar i { display: block; height: 100%; background: var(--ink); transform-origin: left; transform: scaleX(0); animation: dm-fill var(--d) linear infinite; }
+@keyframes dm-fill { 0%, 19% { transform: scaleX(0); } 70%, 90% { transform: scaleX(1); } 95%, 100% { transform: scaleX(0); } }
+.dm-mp3 { position: absolute; left: 3.5cqw; bottom: 7cqw; opacity: 0; animation: dm-late var(--d) infinite; }
+@keyframes dm-late { 0%, 70% { opacity: 0; transform: translateY(1cqw); } 74%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; } }
+.dm-playbar { position: absolute; left: 50%; top: 6%; transform: translateX(-50%); display: flex; align-items: center; gap: 1.5cqw; padding: 1.25cqw 2.5cqw; border-radius: 2.25cqw; background: var(--fill); opacity: 0; animation: dm-mid var(--d) infinite; }
+.dm-playbar b { font-size: 2.25cqw; }
+@keyframes dm-mid { 0%, 32% { opacity: 0; } 36%, 90% { opacity: 1; } 95%, 100% { opacity: 0; } }
+
+/* Share: ⋯, Share with your key, the key goes over, the book is there. */
+.dm-share { --tap: dm-tap-share; }
+@keyframes dm-tap-share {
+  0%, 4% { left: 25%; top: 95%; opacity: 0; transform: scale(1); }
+  8% { opacity: 1; }
+  14% { left: 39%; top: 37%; transform: scale(1); }
+  16% { transform: scale(0.7); }
+  19% { transform: scale(1); }
+  27% { left: 30%; top: 66%; transform: scale(1); }
+  29% { transform: scale(0.7); }
+  32% { left: 30%; top: 66%; transform: scale(1); opacity: 1; }
+  38%, 100% { left: 30%; top: 66%; opacity: 0; }
+}
+.dm-phone { position: absolute; top: 8%; bottom: 8%; width: 38%; border-radius: 3.5cqw; box-shadow: inset 0 0 0 1px var(--tile-border); background: var(--paper); }
+.dm-you { left: 5%; }
+.dm-friend { right: 5%; }
+.dm-who { position: absolute; left: 2.5cqw; top: 2cqw; color: var(--ink-2); }
+.dm-phone .dm-card { left: 2cqw; right: 2cqw; top: 26%; height: 34%; background: var(--canvas); }
+.dm-phone .dm-card-t { font-size: 4.5cqw; }
+.dm-phone .dm-more { top: 1.5cqw; right: 1.5cqw; }
+.dm-you .dm-menu { left: 3.5cqw; top: 58%; animation: dm-menu var(--d) infinite; }
+@keyframes dm-menu { 0%, 16% { opacity: 0; transform: translateY(-1cqw); } 19%, 30% { opacity: 1; transform: none; } 34%, 100% { opacity: 0; } }
+.dm-key { position: absolute; z-index: 4; left: 12%; top: 82%; opacity: 0; animation: dm-key var(--d) ease-in-out infinite; }
+@keyframes dm-key { 0%, 32% { opacity: 0; left: 12%; } 36% { opacity: 1; left: 12%; } 58% { opacity: 1; left: 64%; } 64%, 100% { opacity: 0; left: 64%; } }
+.dm-got { opacity: 0; animation: dm-got var(--d) infinite; }
+@keyframes dm-got { 0%, 60% { opacity: 0; transform: scale(0.95); } 66%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; } }
+
+/* Find: a name typed, results from several sites. */
+.dm-find { --tap: dm-tap-find; }
+@keyframes dm-tap-find {
+  0%, 2% { left: 30%; top: 40%; opacity: 0; transform: scale(1); }
+  5% { opacity: 1; }
+  9% { left: 30%; top: 17%; transform: scale(1); }
+  11% { transform: scale(0.7); }
+  14% { left: 30%; top: 17%; transform: scale(1); opacity: 1; }
+  20%, 100% { left: 30%; top: 17%; opacity: 0; }
+}
+.dm-search { position: absolute; left: 6%; right: 6%; top: 8%; display: flex; align-items: center; gap: 2cqw; height: 18%; padding: 0 3cqw; border-radius: 2.75cqw; background: var(--fill); }
+.dm-search svg { flex: none; width: 3.25cqw; height: 3.25cqw; color: var(--ink-2); }
+.dm-typed { overflow: hidden; white-space: nowrap; font: 400 5cqw/1 var(--read); width: 0; animation: dm-type var(--d) steps(9, end) infinite; }
+@keyframes dm-type { 0%, 14% { width: 0; } 36%, 92% { width: 9.2ch; } 96%, 100% { width: 0; } }
+.dm-results { position: absolute; left: 6%; right: 6%; top: 32%; display: grid; gap: 1.5cqw; }
+.dm-result { display: flex; align-items: center; gap: 2.5cqw; height: 8.5cqw; padding: 1cqw 2cqw 1cqw 1cqw; border-radius: 2.5cqw; background: var(--paper); box-shadow: inset 0 0 0 1px var(--tile-border); opacity: 0; animation: dm-result var(--d) infinite; animation-delay: calc(var(--i) * 0.3s); }
+.dm-result > i { width: 5cqw; height: 6.5cqw; border-radius: 1cqw; background: var(--ink-2); opacity: 0.5; }
+.dm-result > span:first-of-type { flex: 1; font: 400 4.75cqw/1 var(--read); }
+@keyframes dm-result { 0%, 40% { opacity: 0; transform: translateY(1.25cqw); } 45%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; } }
+
+/* Panel by panel: the page, then each panel close, left to right. */
+.dm-panels { --tap: none; }
+.dm-view { position: absolute; left: 50%; top: 6%; bottom: 16%; aspect-ratio: 3 / 4; transform: translateX(-50%); overflow: hidden; border-radius: 1.5cqw; background: var(--paper); box-shadow: 0 0 0 1px var(--tile-border); }
+.dm-page { position: absolute; inset: 0; display: grid; grid-template: 1fr 1fr / 1fr 1fr; gap: 1cqw; padding: 1cqw; transform-origin: 0 0; animation: dm-pan var(--d) ease-in-out infinite; }
+@keyframes dm-pan {
+  0%, 10% { transform: scale(1) translate(0, 0); }
+  16%, 28% { transform: scale(2) translate(0, 0); }
+  34%, 46% { transform: scale(2) translate(-50%, 0); }
+  52%, 64% { transform: scale(2) translate(0, -50%); }
+  70%, 82% { transform: scale(2) translate(-50%, -50%); }
+  90%, 100% { transform: scale(1) translate(0, 0); }
+}
+.dm-pnl { display: grid; place-items: center; border-radius: 0.75cqw; box-shadow: inset 0 0 0 1.5px var(--ink); background: var(--canvas); }
+.dm-pnl b { font: 700 5.5cqw/1 var(--read); }
+.dm-dir { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); color: var(--ink-2); }
+
+/* Offline: ⋯, Download, the chapters fill, no connection and it still reads. */
+.dm-offline { --tap: dm-tap-off; }
+@keyframes dm-tap-off {
+  0%, 4% { left: 50%; top: 95%; opacity: 0; transform: scale(1); }
+  8% { opacity: 1; }
+  14% { left: 75%; top: 35.5%; transform: scale(1); }
+  16% { transform: scale(0.7); }
+  19% { transform: scale(1); }
+  25% { left: 66%; top: 55%; transform: scale(1); }
+  27% { transform: scale(0.7); }
+  30% { left: 66%; top: 55%; transform: scale(1); opacity: 1; }
+  36%, 100% { left: 66%; top: 55%; opacity: 0; }
+}
+.dm-manga .dm-more { top: 2.5cqw; right: 2.5cqw; }
+.dm-dl { left: 58%; top: 49%; animation: dm-menu var(--d) infinite; }
+.dm-dots { position: absolute; left: 3.5cqw; bottom: 4cqw; display: flex; gap: 1.25cqw; }
+.dm-dots i { width: 3cqw; height: 3cqw; border-radius: 0.75cqw; background: var(--fill); animation: dm-dot var(--d) infinite; animation-delay: calc(var(--i) * 0.35s); }
+@keyframes dm-dot { 0%, 30% { background: var(--fill); } 33%, 85% { background: var(--ink); } 90%, 100% { background: var(--fill); } }
+.dm-saved { position: absolute; left: 3.5cqw; bottom: 8.5cqw; opacity: 0; animation: dm-late var(--d) infinite; }
+.dm-net { position: absolute; right: 5%; top: 8%; width: 7.5cqw; height: 4.5cqw; border-radius: 1.5cqw; background: var(--fill); }
+.dm-net::before { content: 'wifi'; position: absolute; inset: 0; display: grid; place-items: center; font: var(--ui-w) 2.25cqw/1 var(--ui); color: var(--ink-2); }
+.dm-net::after { content: ''; position: absolute; left: 0.75cqw; right: 0.75cqw; top: 50%; height: 1.5px; background: var(--danger, var(--ink)); transform: rotate(-25deg) scaleX(0); animation: dm-cut var(--d) infinite; }
+@keyframes dm-cut { 0%, 68% { transform: rotate(-25deg) scaleX(0); } 72%, 90% { transform: rotate(-25deg) scaleX(1); } 95%, 100% { transform: rotate(-25deg) scaleX(0); } }
+
+/* Less motion: the picture holds still at its start, and the steps say it. */
+@media (prefers-reduced-motion: reduce) {
+  .dm-stage *, .dm-stage *::before, .dm-stage *::after { animation: none !important; }
+}
+
+@media (max-width: 560px) {
+  .dm-actions { grid-template-columns: 1fr; }
+  .dm-steps { font-size: 18px; }
+}

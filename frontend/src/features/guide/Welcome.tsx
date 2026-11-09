@@ -1,40 +1,62 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { IconChevron, IconPaste, IconPlus, IconSearch } from '../../components/icons';
+import type { DemoId } from './Demo';
 import './guide.css';
+
+const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
 
 /*
  * An empty library, saying what it's for and how to fill it: the one thing to do first, big, a
  * second way beside it, and in a few words what Breader does with what's put in, with the guide
  * for the rest. Someone who has emptied their library sees it too; it asks nothing of them.
+ * Each card shows how it's done (Demo.tsx), with the button that starts it.
  */
 
-interface Card { name: string; what: string }
+interface Card { id: DemoId; name: string; what: string }
+type Act = { label: string; run: () => void } | null;
 
 const BOOKS: Card[] = [
-  { name: 'Read', what: 'EPUB, PDF, TXT, Markdown and CBZ, in the look you like.' },
-  { name: 'Listen', what: 'Sixty voices read aloud, or the words light up as you read.' },
-  { name: 'Audiobooks', what: 'Any book made into MP3, to play with the screen off.' },
-  { name: 'Share', what: 'Your key lets the people you trust read what you share.' },
+  { id: 'read', name: 'Read', what: 'EPUB, PDF, TXT, Markdown and CBZ, in the look you like.' },
+  { id: 'listen', name: 'Listen', what: 'Sixty voices read aloud, or the words light up as you read.' },
+  { id: 'audiobook', name: 'Audiobooks', what: 'Any book made into MP3, to play with the screen off.' },
+  { id: 'share', name: 'Share', what: 'Your key lets the people you trust read what you share.' },
 ];
 
 const MANGA: Card[] = [
-  { name: 'Find', what: 'MangaDex and other sites, searched at once.' },
-  { name: 'Panel by panel', what: 'Or page by page, or scrolling, right to left or left to right.' },
-  { name: 'Offline', what: 'Download a series to read without a connection.' },
+  { id: 'find', name: 'Find', what: 'MangaDex and other sites, searched at once.' },
+  { id: 'panels', name: 'Panel by panel', what: 'Or page by page, or scrolling, left to right or right to left.' },
+  { id: 'offline', name: 'Offline', what: 'Download a series to read without a connection.' },
 ];
 
 const hasMouse = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-function Cards({ list }: { list: Card[] }) {
+/** The cards; a tap on one shows how it's done, with `actOf` its button. */
+function Cards({ list, actOf }: { list: Card[]; actOf: (id: DemoId) => Act }) {
+  const [open, setOpen] = useState<DemoId | null>(null);
+  const act = open ? actOf(open) : null;
   return (
-    <ul className="wl-cards">
-      {list.map((c) => (
-        <li key={c.name} className="wl-card">
-          <b>{c.name}</b>
-          <span>{c.what}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="wl-cards">
+        {list.map((c) => (
+          <li key={c.id}>
+            <button type="button" className="wl-card" onClick={() => setOpen(c.id)}>
+              <b>{c.name}</b>
+              <span>{c.what}</span>
+              <em className="wl-how">See how</em>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {open && (
+        <Suspense fallback={null}>
+          <Demo
+            id={open}
+            act={act && { label: act.label, run: () => { setOpen(null); act.run(); } }}
+            onClose={() => setOpen(null)}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }
 
@@ -58,7 +80,7 @@ export function WelcomeBooks({ onAdd, onPaste, onGuide }: { onAdd: () => void; o
         <button type="button" className="btn btn-quiet wl-second" onClick={onPaste}><IconPaste /> Paste text</button>
       </div>
       {mouse && <span className="wl-note">or drop files anywhere here</span>}
-      <Cards list={BOOKS} />
+      <Cards list={BOOKS} actOf={(id) => (id === 'listen' ? { label: 'Paste text to try it', run: onPaste } : { label: 'Add a book', run: onAdd })} />
       <GuideLink label="Everything Breader does" onGuide={onGuide} />
     </div>
   );
@@ -74,7 +96,7 @@ export function WelcomeManga({ onBrowse, onAdd, onGuide }: { onBrowse: (() => vo
         <button type="button" className={`btn ${onBrowse ? 'btn-quiet wl-second' : 'btn-primary wl-main'}`} onClick={onAdd}><IconPlus /> Add CBZ files</button>
       </div>
       {!onBrowse && <span className="wl-note">Breader’s computer can’t look for manga right now.</span>}
-      <Cards list={MANGA} />
+      <Cards list={MANGA} actOf={() => (onBrowse ? { label: 'Find manga', run: onBrowse } : { label: 'Add CBZ files', run: onAdd })} />
       <GuideLink label="Everything Breader does" onGuide={onGuide} />
     </div>
   );

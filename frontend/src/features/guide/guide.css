@@ -113,7 +113,14 @@
 .wl-second { height: 50px; padding: 0 20px; border-radius: 14px; font-size: 15px; }
 .wl-note { margin-top: -6px; font: var(--ui-w) 12.5px/1.3 var(--ui); color: var(--ink-2); }
 .wl-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; width: 100%; margin: 14px 0 0; padding: 0; list-style: none; text-align: left; }
-.wl-card { display: grid; align-content: start; gap: 6px; padding: 14px 16px 16px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--tile-border); }
+.wl-cards li { display: grid; }
+.wl-card { display: grid; align-content: start; justify-items: start; gap: 6px; width: 100%; padding: 14px 16px 14px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--tile-border); text-align: left; cursor: pointer; transition: box-shadow 140ms ease, transform 140ms ease; }
+.wl-card:hover { box-shadow: inset 0 0 0 1px var(--tile-border-hover, var(--ink-2)); }
+.wl-card:active { transform: scale(0.98); }
+.wl-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wl-how { display: inline-flex; align-items: center; gap: 5px; margin-top: auto; padding-top: 4px; font: var(--ui-w) 11.5px/1 var(--ui); font-style: normal; color: var(--ink-2); }
+.wl-how::before { content: ''; border-style: solid; border-width: 4px 0 4px 7px; border-color: transparent transparent transparent currentColor; }
+.wl-card:hover .wl-how { color: var(--ink); }
 .wl-card b { font: var(--ui-w-strong) 13px/1.2 var(--ui); color: var(--ink); }
 .wl-card span { font: 400 19px/0.95 var(--read); color: var(--ink-2); }
 .wl-guide { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 8px 0 12px; border-radius: 10px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); transition: background-color 140ms ease, color 140ms ease; }

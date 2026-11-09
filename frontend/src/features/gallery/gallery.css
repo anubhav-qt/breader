@@ -172,8 +172,6 @@
   text-overflow: ellipsis;
 }
 .t-foot { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 18px; }
-.t-cta { margin-left: auto; padding: 11px 16px; border-radius: 999px; font: var(--ui-w) 13px/1 var(--ui); white-space: nowrap; background: var(--ink); color: var(--canvas); }
-.is-ink .t-cta { background: var(--bc-ink); color: var(--bc); }
 
 /*
  * Titles: a size for each kind of card, a step smaller where the card is narrow, and a square's

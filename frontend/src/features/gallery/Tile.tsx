@@ -5,7 +5,7 @@ import { springs } from '../../lib/springs';
 import { blotsFor, maskFor, radiiFor } from './blots';
 import { fitCard } from './fit';
 import { cardNames, markFor } from './names';
-import { actionLabel, chapterText, progressText, shortProgress, timeLeft, when } from './text';
+import { chapterText, progressText, shortProgress, timeLeft, when } from './text';
 import { Pick, Tools } from './Tools';
 import { canAudiobook } from '../audiobook/made';
 import type { GalleryItem } from './types';
@@ -223,7 +223,6 @@ function Face({ book: b, variant, now, number, author, stack, beside, manga }: {
         {n.author && <span className="t-author">{n.author}</span>}
         <span className="t-foot">
           <span className="t-meta">{chapterText(b)}</span>
-          <span className="t-cta">{actionLabel(b)} ›</span>
         </span>
       </>
     );
@@ -238,7 +237,6 @@ function Face({ book: b, variant, now, number, author, stack, beside, manga }: {
         {b.line && <span className="t-line" data-full={b.line}>{b.line}</span>}
         <span className="t-foot">
           <span className="t-meta">{variant === 'hero' ? progressText(b) : timeLeft(b)}</span>
-          {variant === 'hero' && <span className="t-cta">{actionLabel(b)} ›</span>}
         </span>
       </>
     );

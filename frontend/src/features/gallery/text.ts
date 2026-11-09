@@ -44,4 +44,3 @@ export function chapterText(b: ShelfItem) {
 }
 
 
-export const actionLabel = (b: ShelfItem) => (isDone(b) ? 'Read again' : isNew(b) ? 'Start reading' : 'Continue');
