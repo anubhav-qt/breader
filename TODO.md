@@ -26,6 +26,8 @@
 - [ ] On a real phone: Maximum's three Piper engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
 - [x] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live and the panel model (ADR 0002, `server/src/engine/`).
 - [x] Audiobooks made on devices only, never on the ThinkPad.
+- [ ] After the engine's first release (96185ba, 2026-11-08), on the ThinkPad: `compose ps` shows engine healthy; `compose logs engine api` has no "terminate called" and no "engine down"; total and free memory (`free -m`); the budget, workers and threads at "engine listening". Seen from outside so far: engine up, 4 workers, budget 5553 MB, about 10.5 GB free.
+- [ ] On production, still untried after that release: a panel job on the engine (the pages tried had their panels kept already). Live reading on the server worked (21 sentences, 0.6 to 1.7 s each).
 - [ ] A smaller server image: Debian's `ffmpeg` brings a graphics stack (LLVM, Mesa, about 400 MB) Breader never uses. A static ffmpeg would take the image from 1.55 GB to about 1.2 GB.
 
 ## Engine load tests (at the end of the day's work, with the typechecks and tests)
