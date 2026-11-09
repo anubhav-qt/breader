@@ -37,6 +37,7 @@ import { flash, readBook, type Found } from './search';
 import { useSleepWatch } from './sleep';
 import { keepStop, stopIn, type Stop } from './stops';
 import { useReadingClock } from './useReadingClock';
+import { tintInkOf, tintOf } from '../../data/colors';
 import './reader.css';
 import './instrument.css';
 
@@ -870,8 +871,8 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   };
   const tones = settings.twoColors ?? TWO_COLORS;
   const vars: Record<string, string> = {
-    '--book': `var(--bc-${color})`,
-    '--book-ink': `var(--bc-${color}-ink)`,
+    '--book': tintOf(color),
+    '--book-ink': tintInkOf(color),
     '--her-mark': `var(--bc-${tones.F})`,
     '--his-mark': `var(--bc-${tones.M})`,
     '--pw': `${pageW}px`,

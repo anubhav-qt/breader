@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { AI_ELSEWHERE, AI_LABEL, AI_WHY } from '../../books/ai';
 import type { BookEdit } from '../../books/types';
-import { BOOK_COLORS, colorVars } from '../../data/colors';
+import { BOOK_COLORS, colorVars, isPicked, rgbToHex } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
 import { IconCheck, IconClose, IconList, IconStar, IconTrash } from '../../components/icons';
@@ -11,6 +11,7 @@ import { seriesKey, spellSeries, type SeriesName } from './series';
 import { SeriesField, type SeriesValue } from './SeriesField';
 import { genreIds, joinGenres } from '@breader/shared/genres';
 import { GenreField } from './GenreField';
+import { ExactCircle, HexField } from './Exact';
 import { Download } from './Download';
 import { BookAiSwitch } from '../ai/AiStatus';
 import { useAiProgress, type AiProgress } from '../ai/progress';
@@ -60,7 +61,7 @@ function FirstSwitch({ bookId, progress }: { bookId: string; progress: AiProgres
 const WIDTH = 288;
 const MARGIN = 12;
 /** Swatches per row, as in .ep-swatches. Up and down arrows move a row. */
-const COLS = 7;
+const COLS = 8;
 const MOVES: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLS, ArrowUp: -COLS };
 
 /**
@@ -176,17 +177,28 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
     else if (!e.shiftKey && at === last) { e.preventDefault(); first.focus(); }
   };
 
-  // The swatches are one stop for Tab; arrow keys move between them and pick as they go.
-  const current = Math.max(0, BOOK_COLORS.findIndex((c) => c.key === book.color));
+  // The swatches are one stop for Tab; arrow keys move between them and pick as they go. A colour
+  // picked exactly is none of them: Tab lands on the first, and the arrows start from there.
+  const on = BOOK_COLORS.findIndex((c) => c.key === book.color);
+  const current = Math.max(0, on);
   const onSwatchKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const move = MOVES[e.key];
-    if (!move) return;
+    if (!move || (e.target as HTMLElement).tagName === 'INPUT') return;
     e.preventDefault();
     const n = BOOK_COLORS.length;
-    const next = (current + move + n) % n;
+    const next = on < 0 ? current : (current + move + n) % n;
     onChange({ color: BOOK_COLORS[next].key });
     (e.currentTarget.children[next] as HTMLElement | undefined)?.focus();
   };
+
+  // The colour's code: the one picked, or the palette's shade in this theme, read off its swatch.
+  const [paletteHex, setPaletteHex] = useState('');
+  useLayoutEffect(() => {
+    if (isPicked(book.color)) return;
+    const sw = ref.current?.querySelector('.ep-sw.is-on:not(.ep-any)');
+    setPaletteHex(sw ? rgbToHex(getComputedStyle(sw).backgroundColor) ?? '' : '');
+  }, [book.color]);
+  const shownHex = isPicked(book.color) ? book.color : paletteHex;
 
   return createPortal(
     <motion.div
@@ -250,18 +262,20 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
             key={c.key}
             type="button"
             role="radio"
-            aria-checked={i === current}
+            aria-checked={i === on}
             aria-label={c.label}
             title={c.label}
             tabIndex={i === current ? 0 : -1}
-            className={`ep-sw${i === current ? ' is-on' : ''}`}
+            className={`ep-sw${i === on ? ' is-on' : ''}`}
             style={colorVars(c.key)}
             onClick={() => onChange({ color: c.key })}
           >
-            {i === current && <IconCheck />}
+            {i === on && <IconCheck />}
           </button>
         ))}
+        <ExactCircle hex={shownHex} on={on < 0} onPick={(color) => onChange({ color })} />
       </div>
+      <HexField hex={shownHex} onPick={(color) => onChange({ color })} />
       {onShare && (
         <div className="ep-share">
           <span className="ep-label" id="ep-share">Share with your key</span>

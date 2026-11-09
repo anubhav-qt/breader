@@ -44,6 +44,7 @@ export const FEATURES: Feature[] = [
   // Your library
   { id: 'shelves', group: 'Your library', name: 'Books and Manga', what: 'Two shelves, each with your own library and the shared ones.', where: 'Books or Manga, at the top' },
   { id: 'edit', group: 'Your library', name: 'Edit a book', what: 'Its name, series, genres and colour. Mark it finished or a favourite, or remove it.', where: 'The ⋯ on its card, or right-click the card' },
+  { id: 'any-colour', group: 'Your library', name: 'Any colour', what: 'Give a book any colour: tap the rainbow after the colours, or type or paste its code, like #2f6f8f.', where: 'The ⋯ on its card, under Colour', since: day(2026, 11, 9) },
   { id: 'series', group: 'Your library', name: 'Series', what: 'Books of a series sit together, in order. Breader guesses the series as you add a book.', where: 'A book’s ⋯, then Series' },
   { id: 'select', group: 'Your library', name: 'Select', what: 'Pick many books to share, stop sharing or remove at once.', where: 'The ticked circle at the top', go: 'select' },
   { id: 'rename', group: 'Your library', name: 'Rename libraries', what: 'Call Personal and Shared what you like.', where: 'Settings, then Rename libraries' },

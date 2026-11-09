@@ -49,12 +49,62 @@ export function pickColor(given: string[]): BookColor {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export function normColor(value: string | undefined, title: string): BookColor {
+/**
+ * A book's colour: one of the palette's, or one picked exactly, as `#rrggbb`. Picked ones are kept in
+ * lower case; LEGACY's are matched only as earlier builds saved them, in upper case, so a colour
+ * picked now is never swapped for the palette's nearest.
+ */
+export type Tint = BookColor | `#${string}`;
+
+const HEX = /^#[0-9a-f]{6}$/;
+
+/** A colour typed or pasted, as `#rrggbb`: with or without its #, in 3 digits or 6. Null if it isn't one. */
+export function toHex(typed: string): `#${string}` | null {
+  let h = typed.trim().toLowerCase().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/.test(h)) h = h.replace(/./g, (c) => c + c);
+  return /^[0-9a-f]{6}$/.test(h) ? `#${h}` : null;
+}
+
+export function normColor(value: string | undefined, title: string): Tint {
   if (value && KEYS.has(value)) return value as BookColor;
-  if (value && LEGACY[value.toUpperCase()]) return LEGACY[value.toUpperCase()];
+  if (value && LEGACY[value]) return LEGACY[value];
+  if (value && HEX.test(value)) return value as Tint;
   return colorKeyFor(title);
 }
 
+export const isPicked = (key: string) => HEX.test(key);
+
+/** A colour as the browser gives it, `rgb(r, g, b)`, as `#rrggbb`. Null if it isn't one. */
+export function rgbToHex(rgb: string): `#${string}` | null {
+  const m = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!m) return null;
+  return `#${m.slice(1, 4).map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** How bright a colour looks (WCAG's relative luminance), 0 to 1. */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+const LIGHT_INK = '#ffffff';
+const DARK_INK = '#141414';
+
+/** The words on a picked colour: white or near black, whichever stands out more. */
+export function inkOn(hex: string): string {
+  const l = luminance(hex);
+  const onWhite = 1.05 / (l + 0.05);
+  const onDark = (l + 0.05) / (luminance(DARK_INK) + 0.05);
+  return onWhite >= onDark ? LIGHT_INK : DARK_INK;
+}
+
+/** A book colour, and its ink: the palette's shade for this theme, or the colour picked, as it is. */
+export const tintOf = (key: string) => (isPicked(key) ? key : `var(--bc-${key})`);
+export const tintInkOf = (key: string) => (isPicked(key) ? inkOn(key) : `var(--bc-${key}-ink)`);
+
 export function colorVars(key: string): CSSProperties {
-  return { '--bc': `var(--bc-${key})`, '--bc-ink': `var(--bc-${key}-ink)` } as CSSProperties;
+  return { '--bc': tintOf(key), '--bc-ink': tintInkOf(key) } as CSSProperties;
 }
