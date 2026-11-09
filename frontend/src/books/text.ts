@@ -1,5 +1,5 @@
 import { countWords } from '../lib/format';
-import { escapeHtml } from './sanitize';
+import { escapeHtml } from './escape';
 import type { FlowBook, Section, TocItem } from './types';
 
 const HEADING = /^(chapter|book|part|volume|section|act|scene|canto|letter|stave|prologue|epilogue|preface|introduction)\b[\s\S]{0,70}$/i;

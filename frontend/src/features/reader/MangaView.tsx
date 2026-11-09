@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
 import { flushSync } from 'react-dom';
-import { WORDS_PER_MANGA_PAGE } from '../../books/manga';
+import { WORDS_PER_MANGA_PAGE } from '../../lib/format';
 import type { MangaBook, Position, RemoteChapter } from '../../books/types';
 import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';

@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { LIBRARY_NAME, LIBRARY_NAME_CHARS } from '@breader/shared/protocol';
+import { LIBRARY_NAME, LIBRARY_NAME_CHARS } from '@breader/shared/limits';
 import type { SharedBooksResponse, SharedCreateResponse, SharedKeyResponse, SharedOpenResponse, ShelfBook } from '@breader/shared/protocol';
 import type { BookRecord } from '../books/types';
 import { readSetting, writeSetting } from '../features/reader/settings';

@@ -7,6 +7,7 @@ export * from './genres.ts';
 export * from './key.ts';
 export * from './limits.ts';
 export * from './manga.ts';
+export * from './manga-queries.ts';
 export * from './music.ts';
 export * from './protocol.ts';
 export * from './public.ts';

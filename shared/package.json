@@ -14,6 +14,7 @@
     "./key": "./src/key.ts",
     "./limits": "./src/limits.ts",
     "./manga": "./src/manga.ts",
+    "./manga-queries": "./src/manga-queries.ts",
     "./music": "./src/music.ts",
     "./panels": "./src/panels.ts",
     "./protocol": "./src/protocol.ts",

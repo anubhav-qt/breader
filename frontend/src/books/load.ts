@@ -1,7 +1,7 @@
 import { downloadFile } from '../data/sync';
 import { store } from '../lib/store';
 import { countWords } from '../lib/format';
-import { escapeHtml } from './sanitize';
+import { escapeHtml } from './escape';
 import type { BookRecord, FlowBook, Format, LoadedBook, Position } from './types';
 
 export const ACCEPT =

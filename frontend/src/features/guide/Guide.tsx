@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { IconSearch } from '../../components/icons';
-import { KEY_LIST } from '../reader/keys';
+import { KEY_LIST } from '../reader/keymap';
 import { FEATURES, GROUPS, type Feature, type Go } from './list';
 import { forgetTold, setTips, useGuideKept } from './seen';
 import './guide.css';

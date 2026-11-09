@@ -7,7 +7,7 @@ import { fitCard } from './fit';
 import { cardNames, markFor } from './names';
 import { actionLabel, chapterText, progressText, shortProgress, timeLeft, when } from './text';
 import { Pick, Tools } from './Tools';
-import { canAudiobook } from '../audiobook/plan';
+import { canAudiobook } from '../audiobook/made';
 import type { GalleryItem } from './types';
 import { useSize } from './useSize';
 import { bookVars } from './vars';
