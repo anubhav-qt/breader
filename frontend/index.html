@@ -24,8 +24,13 @@
         }
       } catch (e) { /* storage blocked: the device's */ }
     </script>
-    <!-- The typefaces come from Google Fonts, declared in src/styles/fonts.css. -->
+    <!-- The typefaces, declared in src/styles/fonts.css: most from Google Fonts, and the card faces
+         from our own files, preloaded so the library is laid out once, in them. -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/src/styles/fonts/Doto-800.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/src/styles/fonts/Doto-900.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/src/styles/fonts/Dongle-400.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/src/styles/fonts/Dongle-700.woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>
