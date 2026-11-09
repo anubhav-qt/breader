@@ -6,6 +6,7 @@ import type { Env } from './env.ts';
 import type { Store } from './lib/cache.ts';
 import type { Storage } from './lib/storage.ts';
 import type { Manga } from './manga/index.ts';
+import type { Engine } from './engine/index.ts';
 import type { Panels } from './panels/index.ts';
 import type { Books } from './speech/books.ts';
 import type { Speech } from './speech/index.ts';
@@ -27,6 +28,8 @@ export interface Deps {
   manga: Manga | null;
   /** Manga panels found with the panel model (panels/); null or missing where it's off, as on the fallback. */
   panels?: Panels | null;
+  /** The laptop's engine for voices and panels (engine/); null or missing where it's off, as on the fallback. */
+  engine?: Engine | null;
   /** Redis, where answers worth keeping outlast a restart (lib/cache.ts); null or missing without one, each then keeping a few in memory. */
   redis?: Store | null;
 }

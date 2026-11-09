@@ -108,6 +108,68 @@ run in turn: before, after, before, after. CPU is the API container's average (`
 - Cloudflare keeping pages (once the Cache Rule is in) takes most page asks off the server too;
   not measured here.
 
+## Voices, audiobooks and panels: the engine (ADR 0002)
+
+`infra/load/voices.mjs`, against an API with an engine (`ENGINE_URLS`). Test stack only, never
+production. It runs at once:
+
+- `--live N` readers reading aloud on the server, as the app does: passages of `--passage`
+  sentences, a sentence playing while the next two are asked for, a few seconds' rest between
+  passages. Each logs in to `OWNER_EMAIL` (`OWNER_PASSWORD`), an account in the API's
+  `SPEECH_EMAILS` with its address confirmed, so each has a line of its own. Reported: first sound
+  (each passage's first sentence), each sentence, stalls (playing waits for the next).
+- `--books N` libraries each making an audiobook of `--paragraphs` paragraphs (40, 3 sentences
+  each). Reported: paragraphs made a minute.
+- `--panels N` readers having a chapter of Yotsuba to!'s panels found, a page every `--page-ms`.
+  Clear `page_panels` first: pages found before are kept.
+- Every second it reads `/health`: the most workers busy and jobs waiting.
+
+How to run it:
+
+1. A side copy of the API and an engine, built from this checkout (`npm run build -w server`),
+   on the test stack's network, with `SPEECH_EMAILS` holding the test account. Each run starts
+   them afresh with the voices volume's `books/` and `said/` emptied, so no book is left from a
+   run before and no sentence comes from the said-cache (the test's sentences are new each run
+   anyway).
+2. `docker run --rm --network <the stack's network> -v "$PWD/infra/load:/load:ro" -e OWNER_EMAIL
+   -e OWNER_PASSWORD <the server image> node /load/voices.mjs --base http://<api>:8787 --live 1
+   --books 12 --minutes 2`
+3. Books made a second: the change in `/admin/engine`'s `done.book` between 30 s and 90 s in.
+
+Stop a run by removing its container (`docker rm -f`), not only the shell that started it: a
+`docker run` left behind keeps loading the engine, and spoils the next run's numbers.
+
+### Results (2026-11-08)
+
+The test stack on this desktop (Docker: 16 threads of 8 cores, 16 GB), the defaults (4 workers of
+4 threads, `ENGINE_BESIDE_LIVE` 0), Kokoro `af_heart`, `--passage 2`, about 1.7 minutes a run.
+
+| Load | First sound p50 / p95 | A live sentence p50 | Audiobooks, paragraphs a minute | Panels, a page p50 / p95 |
+|---|---|---|---|---|
+| `--live 1` | 949 ms / 1.0 s | 1.3 s | | |
+| `--live 1 --books 1` | 1.1 s / 1.2 s | | 1.1 | |
+| `--live 1 --books 4` | 1.3 s / 1.3 s | | 0.6 | |
+| `--live 1 --books 12` | 1.2 s / 1.3 s | | 0 (they wait) | |
+| `--live 2 --books 12` | 1.0 s / 1.5 s | 1.8 s | 0 (they wait) | |
+| `--live 0 --books 12` | | | 44.2 (2.21 sentences a second) | |
+| `--live 1 --panels 2` | 1.1 s / 1.2 s | 1.7 s | | 484 ms / 1.0 s, 92 pages |
+
+`--live 1 --books 12` with `ENGINE_BESIDE_LIVE` set higher (books may use that many workers while
+someone reads aloud):
+
+| `ENGINE_BESIDE_LIVE` | 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| First sound p50 | 1.2 s | 1.6 s | 1.9 s | 2.1 s |
+| Paragraphs a minute | 0 | 15.3 | 27.8 | 37.5 |
+
+- First sound stays near a second, whatever else runs. Books wait while anyone reads aloud, and
+  take every worker but one when no one does.
+- No stalls in any run: the next sentence was always ready before the one playing ended.
+- The panel run's first try had 18 pages answered 409: the load test took a seat once and never
+  kept it, so it was given up after 75 s. Fixed (it keeps it every 30 s, as the app does); the
+  numbers above are from the run after, with none failed. With the seat kept, panels ran the whole
+  run, so first sound there is a little slower than reading alone.
+
 ## What each API copy keeps to itself
 
 Before several copies can run in production, each of these needs one shared place (Redis, or
@@ -120,8 +182,9 @@ one copy that owns it):
 - Rate limits (`lib/http.ts`): each copy would allow the full amount.
 - Background jobs in `api.ts` (Browse warm-up, prefetch, keeper, Gemini fill): no lock, so every
   copy runs them. Admin commands are fine: one copy takes each.
-- Panel seats and the panel model's threads (`panels/`): 8 seats and a model per copy.
-- The server voice (`speech/`): its memory once per copy.
+- Panel seats (`panels/`): 8 seats per copy.
+- The engine's scheduler (`engine/`): each copy would hand out the engines' workers as if it had
+  them alone, and make the same audiobooks from the shared `voices/books/`.
 - In-memory layers of the caches (AniList lists, names, covers): fine, but memory once per copy.
 
 ## Not checked yet

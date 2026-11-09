@@ -35,7 +35,7 @@ export function panelRoutes(deps: Deps) {
   const r = new Hono<AppEnv>();
 
   const on = () => {
-    if (!panels || !manga) throw new ApiError(503, 'panels_off', 'The server isn’t finding panels just now.');
+    if (!panels || !manga || !panels.on) throw new ApiError(503, 'panels_off', 'The server isn’t finding panels just now.');
     return panels;
   };
   const library = (c: Context<AppEnv>) => {
@@ -62,7 +62,7 @@ export function panelRoutes(deps: Deps) {
 
   r.get('/panels', (c) => {
     c.header('Cache-Control', 'private, no-store');
-    const ok = !!panels && !!manga && !!readSession(c, env);
+    const ok = !!panels && !!manga && panels.on && !!readSession(c, env);
     const count = ok ? panels!.seats.count() : { used: 0, seats: 0 };
     return c.json({ allowed: ok, round: ok ? panels!.round : 0, ...count } satisfies PanelsState);
   });
@@ -119,7 +119,7 @@ export function panelRoutes(deps: Deps) {
     const page = pageOf(c);
     const had = await kept.get(page.chapter, page.n);
     // Kept from an earlier round, it's found again for a reader with a seat.
-    const p = panels && manga ? panels : null;
+    const p = panels && manga && panels.on ? panels : null;
     if (had && !(p && had.round < p.round && p.seats.has(lib))) return keep(c, had);
     if (!p) throw new ApiError(503, 'panels_off', 'The server isn’t finding panels just now.');
     if (!p.seats.has(lib)) throw new ApiError(409, 'panels_no_seat', 'This reader hasn’t a seat at the panel model just now.');

@@ -34,6 +34,7 @@ const HALVES: PagePanels = {
 function fake(opts: { seats?: number; wait?: Promise<void> } = {}): Panels & { asked: Array<{ key: string; who?: string }> } {
   const asked: Array<{ key: string; who?: string }> = [];
   return {
+    on: true,
     round: 7,
     seats: makeSeats(opts.seats ?? 1),
     asked,

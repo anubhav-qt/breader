@@ -1,17 +1,17 @@
-import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
-import { Worker } from 'node:worker_threads';
+import type { Engine } from '../engine/index.ts';
+import { voiceModel } from '../engine/models.ts';
+import { bytesOf, floats } from '../engine/wire.ts';
 import type { Env } from '../env.ts';
-import { log } from '../log.ts';
 import { Disk } from '../manga/disk.ts';
-import { makeFiles, VOICES } from './files.ts';
-import type { Reply, Request } from './worker.ts';
+import { VOICES } from './files.ts';
 
 /*
  * The server voice: the laptop reads aloud for a phone that can't run a voice itself, a sentence
- * at a time, as the app asks (routes/speech.ts). The voices' files download the first time each is
- * wanted (files.ts), and the engine runs in a worker thread (worker.ts), started when it's first
- * needed and let go after ten quiet minutes, with the memory it holds.
+ * at a time, as the app asks (routes/speech.ts), and makes audiobooks (books.ts). The voices' files
+ * download the first time each is wanted (files.ts), and the laptop's one engine runs them
+ * (engine/, ADR 0002): a sentence read live goes first, and an audiobook's when nothing more
+ * urgent waits.
  *
  * What it says is kept on the laptop's disk, up to SPEECH_CACHE_MB, the sentences heard longest ago
  * going first, so a sentence heard again (a page read twice, a rewind, a second reader of the same
@@ -33,16 +33,21 @@ export interface Speech {
    * Makes a voice ready, its files here and loaded, waiting up to `wait` ms. Not ready by then, it
    * carries on, and the app asks again, showing how much of its files has arrived.
    */
-  ready(voice: string, wait: number): Promise<{ ready: boolean; loaded: number; total: number }>;
-  say(voice: string, text: string, speed: number): Promise<Said>;
-  /** A sentence's sound for an audiobook (books.ts): not kept, as the audiobook keeps it. */
-  sound(voice: string, text: string, speed: number): Promise<{ audio: Float32Array; rate: number }>;
-  /** Sound as MP3, in the voice's thread. */
-  encode(audio: Float32Array, rate: number): Promise<Uint8Array>;
+  ready(voice: string, wait: number, who?: string): Promise<{ ready: boolean; loaded: number; total: number }>;
+  /** A sentence read live, in `who`'s turn. */
+  say(voice: string, text: string, speed: number, who?: string): Promise<Said>;
+  /**
+   * A sentence's sound for an audiobook (books.ts), in `who`'s turn and, inside it, `book`'s: not
+   * kept, as the audiobook keeps it.
+   */
+  sound(voice: string, text: string, speed: number, who?: string, book?: string): Promise<{ audio: Float32Array; rate: number }>;
+  /** An audiobook's paragraph as MP3, in the engine, in the same turns, before the book's sentences waiting: it finishes a paragraph. */
+  encode(audio: Float32Array, rate: number, who?: string, book?: string): Promise<Uint8Array>;
+  /** Turns away `book`'s sentences waiting, as it's paused or removed: they fail with `dropped`. */
+  drop(who: string, book: string): void;
   close(): Promise<void>;
 }
 
-const IDLE_MS = 10 * 60_000;
 /** A kept sentence: its samples and rate, then its MP3. */
 const HEAD = 8;
 
@@ -62,76 +67,18 @@ function unpack(b: Uint8Array): Said {
   const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
   return { samples: view.getUint32(0), rate: view.getUint32(4), mp3: b.subarray(HEAD) };
 }
-/** Sentences waiting beyond this many are turned away: something is asking far faster than it listens. */
-const MOST_WAITING = 24;
-
-export function makeSpeech(env: Env): Speech {
-  const files = makeFiles(env.SPEECH_DIR);
+export function makeSpeech(env: Env, engine: Engine): Speech {
   const said = new Disk(join(env.SPEECH_DIR, 'said'), env.SPEECH_CACHE_MB * 1024 * 1024, saidType);
-  const threads = env.SPEECH_THREADS ?? Math.max(1, Math.min(4, availableParallelism() - 1));
-
-  let worker: Worker | null = null;
-  let next = 1;
-  const pending = new Map<number, { w: Worker; resolve: (r: Extract<Reply, { ok: true }>) => void; reject: (e: Error) => void }>();
-  let idle: NodeJS.Timeout | undefined;
-
-  /** A worker stopped: what it was asked fails, and nothing else. */
-  const drop = (w: Worker, why: Error) => {
-    for (const [id, p] of pending) {
-      if (p.w !== w) continue;
-      pending.delete(id);
-      p.reject(why);
-    }
-  };
-
-  function start() {
-    // Bundled, this runs from dist/api.js and the worker is dist/speech/worker.js; from the source, it's next door.
-    const file = import.meta.url.endsWith('.ts') ? new URL('./worker.ts', import.meta.url) : new URL('./speech/worker.js', import.meta.url);
-    const w = new Worker(file, { workerData: { threads } });
-    w.on('message', (r: Reply) => {
-      const p = pending.get(r.id);
-      if (!p) return;
-      pending.delete(r.id);
-      if (r.ok) p.resolve(r);
-      else p.reject(new Error(r.error));
-    });
-    w.on('error', (err) => log.error({ err }, 'speech worker failed'));
-    w.on('exit', (code) => {
-      if (worker === w) worker = null;
-      drop(w, new Error(`The voice stopped (${code}).`));
-    });
-    log.info({ threads }, 'speech worker started');
-    return w;
-  }
-
-  function call(req: Request): Promise<Extract<Reply, { ok: true }>> {
-    if (pending.size >= MOST_WAITING) return Promise.reject(Object.assign(new Error('The voice is busy.'), { busy: true }));
-    worker ??= start();
-    clearTimeout(idle);
-    idle = setTimeout(() => {
-      if (pending.size || !worker) return;
-      log.info('speech worker idle, letting it go');
-      void worker.terminate();
-      worker = null;
-    }, IDLE_MS);
-    idle.unref();
-    const id = next++;
-    const w = worker;
-    return new Promise((resolve, reject) => {
-      pending.set(id, { w, resolve, reject });
-      w.postMessage({ ...req, id }, req.type === 'encode' && req.audio.buffer instanceof ArrayBuffer ? [req.audio.buffer] : []);
-    });
-  }
 
   /** Voices being made ready, so asking again waits on the same work. */
   const readying = new Map<string, Promise<void>>();
 
   return {
     voices: VOICES,
-    async ready(voice, wait) {
+    async ready(voice, wait, who = '') {
       let p = readying.get(voice);
       if (!p) {
-        p = files.ensure(voice).then((f) => call({ type: 'load', key: voice, files: f })).then(() => undefined);
+        p = engine.run({ kind: 'live', who, model: voiceModel(voice), body: () => ({ ask: { type: 'load', voice } }) }).then(() => undefined);
         readying.set(voice, p);
         // Done or failed, the next ask starts afresh: a let-go worker loads it again.
         p.then(() => readying.delete(voice), () => readying.delete(voice));
@@ -140,33 +87,32 @@ export function makeSpeech(env: Env): Speech {
       const late = new Promise<false>((r) => { timer = setTimeout(() => r(false), wait); });
       try {
         const ready = await Promise.race([p.then(() => true as const), late]);
-        return { ready, ...(await files.progress(voice)) };
+        return { ready, ...(await engine.progress(voice)) };
       } finally {
         clearTimeout(timer);
       }
     },
-    async say(voice, text, speed) {
+    async say(voice, text, speed, who = '') {
       const kept = await said.keep(`${voice}
 ${speed}
 ${text}`, async () => {
-        const f = await files.ensure(voice);
-        const r = await call({ type: 'say', key: voice, files: f, text, speed });
-        return { data: pack({ mp3: r.mp3!, samples: r.samples!, rate: r.rate! }), type: 'audio/mpeg' };
+        const r = await engine.run({ kind: 'live', who, model: voiceModel(voice), body: () => ({ ask: { type: 'say', voice, text, speed } }) });
+        return { data: pack({ mp3: r.bytes, samples: r.head.samples!, rate: r.head.rate! }), type: 'audio/mpeg' };
       });
       return unpack(kept.data);
     },
-    async sound(voice, text, speed) {
-      const f = await files.ensure(voice);
-      const r = await call({ type: 'sound', key: voice, files: f, text, speed });
-      return { audio: r.audio!, rate: r.rate! };
+    async sound(voice, text, speed, who = '', book) {
+      const r = await engine.run({ kind: 'book', who, sub: book, model: voiceModel(voice), body: () => ({ ask: { type: 'sound', voice, text, speed } }) });
+      return { audio: floats(r.bytes), rate: r.head.rate! };
     },
-    async encode(audio, rate) {
-      return (await call({ type: 'encode', audio, rate })).mp3!;
+    async encode(audio, rate, who = '', book) {
+      const r = await engine.run({ kind: 'book', who, sub: book, soon: true, model: null, body: () => ({ ask: { type: 'encode', rate }, bytes: bytesOf(audio) }) });
+      return r.bytes;
     },
-    async close() {
-      clearTimeout(idle);
-      await worker?.terminate();
-      worker = null;
+    drop(who, book) {
+      engine.drop('book', who, book);
     },
+    // The engines are the API's to let go of (api.ts).
+    async close() {},
   };
 }

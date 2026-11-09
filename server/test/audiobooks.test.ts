@@ -18,6 +18,7 @@ const fake: Speech = {
     return { audio: new Float32Array(text.length), rate: 22050 };
   },
   encode: async (audio) => new TextEncoder().encode(`mp3:${audio.length}`),
+  drop: () => {},
   close: async () => {},
 };
 
@@ -32,7 +33,7 @@ const settle = async (b: { get: (p: string) => Promise<{ body: any }> }, path: s
     if (r.body.state === until) return r.body;
     await new Promise((res) => setTimeout(res, 20));
   }
-  throw new Error(`never ${until}`);
+  throw new Error(`never ${until}: ${JSON.stringify((await b.get(path)).body)}`);
 };
 
 describe('audiobooks on Breader’s computer', () => {

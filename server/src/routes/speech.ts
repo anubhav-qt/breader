@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { SpeechReadyRequest, SpeechRequest, type SpeechReady, type SpeechState } from '@breader/shared';
@@ -18,6 +19,9 @@ export function speechRoutes(deps: Deps) {
   /** Whether the logged-in reader may use it. */
   const allowed = ownerCheck(env, auth);
 
+  /** Whose turn a sentence waits in at the engine: a line per login (its cookies, hashed). */
+  const who = (c: Context<AppEnv>) => createHash('sha256').update(c.req.header('cookie') ?? '').digest('base64url').slice(0, 16);
+
   const gate = async (c: Context<AppEnv>, voice: string) => {
     if (!speech) throw new ApiError(503, 'speech_off', 'The server voice isn’t reading aloud just now. Turn off Read on the server to read with this device’s voice.');
     if (!(await allowed(c))) throw new ApiError(403, 'speech_not_allowed', 'The server voice isn’t open to this account.');
@@ -36,7 +40,7 @@ export function speechRoutes(deps: Deps) {
     const s = await gate(c, voice);
     try {
       // Under Cloudflare's 100 seconds, with room to spare; the app asks again until it's ready.
-      return c.json((await s.ready(voice, 20_000)) satisfies SpeechReady);
+      return c.json((await s.ready(voice, 20_000, who(c))) satisfies SpeechReady);
     } catch (err) {
       log.warn({ err, voice }, 'server voice couldn’t get ready');
       throw new ApiError(500, 'speech_failed', 'The server couldn’t get that voice ready. Try again in a minute.');
@@ -49,7 +53,7 @@ export function speechRoutes(deps: Deps) {
     const s = await gate(c, voice);
     let said;
     try {
-      said = await s.say(voice, text, speed);
+      said = await s.say(voice, text, speed, who(c));
     } catch (err) {
       if ((err as { busy?: boolean }).busy) throw new ApiError(503, 'speech_busy', 'The server voice is busy. Try again in a moment.');
       log.warn({ err, voice }, 'server voice couldn’t say a sentence');
