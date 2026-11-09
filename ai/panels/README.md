@@ -196,8 +196,8 @@ round learns from whatever's saved.
 
 `data/` stays on this machine, so each round worth keeping is committed to
 `model/rounds/round-N/`: its `round.json` and `results.csv`, and its `best.pt`, in Git LFS up to
-round 7 and, from round 21 (Git LFS's budget is spent), in the round's release as `round-N-best.pt`
-(`gh release upload panels-<hash> best.pt#round-N-best.pt`, after `npm run ship` has made it). No
+round 7 and, from round 21 (Git LFS's budget is spent), in the round's release as `best.pt`
+(`gh release upload panels-<hash> best.pt`, after `npm run ship` has made it). No
 pages or labels go with it. To keep a new round, copy those three files from `data/model/round-N/`.
 
 To bring a round back, get its `best.pt` (`git lfs pull`, or `gh release download`), copy it to `data/model/round-N/` and set

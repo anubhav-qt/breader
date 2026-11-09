@@ -133,7 +133,7 @@ step_model() {
   want=$(node -p "require('./ai/panels/model/live.json').sha256")
   local tag="panels-${want:0:12}"
   if [ ! -f "$file" ] || [ "$(head -c 7 "$file")" = version ] || [ "$(sha256 "$file")" != "$want" ]; then
-    gh release download "$tag" -p live.onnx -O "$file" --clobber \
+    gh release download "$tag" -R anubhav-qt/breader -p live.onnx -O "$file" --clobber \
       || fail "$file isn't here, nor in the release $tag: make it with npm --prefix ai run panels-live -- N"
   fi
   [ "$(sha256 "$file")" = "$want" ] || fail "$file isn't the model live.json names"
