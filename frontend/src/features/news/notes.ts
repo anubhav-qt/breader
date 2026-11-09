@@ -19,7 +19,7 @@ export const NOTES: Note[] = [
     title: 'Breader is optimized!',
     lines: [
       'Your library opens faster: it loads less than half the code it used to.',
-      'Menus, dialogs and voices now load quietly in the background.',
+      'Book cards show at once, and menus and voices load quietly in the background.',
     ],
   },
 ];
