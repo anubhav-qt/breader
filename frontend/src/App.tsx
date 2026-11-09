@@ -10,6 +10,8 @@ import type { Go } from './features/guide/list';
 import { markSeen, useGuideKept, useNews } from './features/guide/seen';
 import { checkDevice } from './features/reader/able';
 import { WelcomeBooks, WelcomeManga, WelcomeShared } from './features/guide/Welcome';
+import type { Note } from './features/news/notes';
+import { markShown, unseen } from './features/news/seen';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { AudiobookHost, AudiobookNav } from './features/audiobook/Audiobook';
@@ -176,6 +178,7 @@ const Browse = lazy(() => loadBrowse().then((m) => ({ default: m.Browse })));
 const MangaPage = lazy(() => loadPage().then((m) => ({ default: m.MangaPage })));
 const AddBook = lazy(() => loadAdd().then((m) => ({ default: m.AddBook })));
 const Guide = lazy(() => import('./features/guide/Guide').then((m) => ({ default: m.Guide })));
+const News = lazy(() => import('./features/news/News').then((m) => ({ default: m.News })));
 /* The dialogs and menus too: none shows as the library opens. */
 const loadLogin = () => import('./features/account/LoginDialog');
 const loadKey = () => import('./features/add/KeyDialog');
@@ -313,6 +316,9 @@ export default function App() {
   const [login, setLogin] = useState<LoginStart | null>(null);
   /** The guide, open: when it was last opened before this, so what came since is New in it. */
   const [guide, setGuide] = useState<{ seenAt: number; q?: string } | null>(null);
+  /** What changed since this reader was last here, shown once, over the library. */
+  const [whatsNew, setWhatsNew] = useState<Note[] | null>(null);
+  const newsAsked = useRef(false);
   /** The shared libraries' list, under the arrow beside the switch between libraries; `key`: opened to type someone's key in. */
   const [librariesOpen, setLibrariesOpen] = useState<false | 'list' | 'key'>(false);
   const guideKept = useGuideKept();
@@ -1365,7 +1371,16 @@ export default function App() {
     });
   }
   const readerHints: HintSpec[] = mouse ? [{ id: 'reader-keys', text: 'Press ? to see the keys.', ms: 6000 }] : [];
-  const busy = !!(choosing || adding || login || keyOpen || guide || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
+  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
+  // What's new waits for the library and for nothing else to be open, then shows once.
+  useEffect(() => {
+    if (newsAsked.current || busy || !lib.ready || route.name !== 'library') return;
+    newsAsked.current = true;
+    const notes = unseen();
+    if (!notes.length) return;
+    markShown();
+    setWhatsNew(notes);
+  }, [busy, lib.ready, route.name]);
 
   const flipCovers = () => {
     const next = !coversOnly;
@@ -1636,6 +1651,7 @@ export default function App() {
         {keyOpen && <Suspense key="key" fallback={null}><KeyDialog libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} /></Suspense>}
         {/* A key made as a series was read waits for the reader to close. */}
         {freshKey && route.name !== 'read' && <Suspense key="fresh-key" fallback={null}><KeyDialog libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} /></Suspense>}
+        {whatsNew && <Suspense key="news" fallback={null}><News notes={whatsNew} onClose={() => setWhatsNew(null)} /></Suspense>}
         {guide && (
           <Suspense key="guide" fallback={null}>
             <Guide seenAt={guide.seenAt} initial={guide.q} go={showMe} onClose={() => setGuide(null)} />

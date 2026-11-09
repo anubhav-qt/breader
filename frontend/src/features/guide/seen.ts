@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { usedBefore } from '../../lib/first-visit';
 import { readLocal, writeLocal } from '../../lib/store';
 import { FEATURES } from './list';
 
@@ -26,14 +27,7 @@ interface Kept {
 }
 
 function first(): Kept {
-  let before = false;
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k !== KEY && k.startsWith('breader.')) { before = true; break; }
-    }
-  } catch { /* storage blocked: as someone new */ }
-  return { seen: before ? GUIDE_FROM : Date.now(), tips: true, told: [] };
+  return { seen: usedBefore ? GUIDE_FROM : Date.now(), tips: true, told: [] };
 }
 
 function load(): Kept {

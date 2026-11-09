@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import type pg from 'pg';
 import type { Storage } from '../lib/storage.ts';
 import { log } from '../log.ts';
@@ -28,7 +28,8 @@ export async function repairStorage(opts: { mirror: pg.Pool; primary: pg.Pool; s
     const { rows: [now] } = await opts.primary.query<{ status: string }>('SELECT status FROM blobs WHERE id = $1', [b.id]);
     if (now?.status !== 'ready') continue;
     const path = resolve(join(root, b.r2_key));
-    const have = path.startsWith(root + '/') ? await stat(path).catch(() => null) : null;
+    // Only inside the copy: a key can't reach out of it. `sep`, as Windows writes \.
+    const have = path.startsWith(root + sep) ? await stat(path).catch(() => null) : null;
     if (!have || have.size !== Number(b.size) || (await sha256File(path)) !== b.sha256) {
       lost.push(b.r2_key);
       continue;

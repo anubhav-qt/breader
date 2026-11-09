@@ -45,6 +45,9 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - Every feature a reader can use goes in the guide (`frontend/src/features/guide/list.ts`): a line on
   what it does and where it is. A new one gets `since` (its day), so readers from before see it as New.
 - Migrations only add (a table, a nullable column). Removals ship a release later.
+- Every release to production tells readers what changed: a new note at the top of
+  `frontend/src/features/news/notes.ts` (a title, one or two short plain lines), shown once in a
+  dialog. `infra/ship.sh` won't ship without one.
 - Never print `infra/.env` or any secret.
 - Commits: one line, `type: message`. No em dashes. No Claude attribution.
 - Keep this file, `infra/README.md` and the ADRs in step with every change.

@@ -37,6 +37,7 @@ export const FEATURES: Feature[] = [
   { id: 'drop', group: 'Start', name: 'Drop files in', what: 'Drop book files anywhere on the library to add them.', where: 'The library', mouse: true },
   { id: 'browse', group: 'Start', name: 'Find manga', what: 'Search MangaDex and other sites at once, or look through what’s popular, new or top rated.', where: '+ Add, then Manga', go: 'browse' },
   { id: 'login', group: 'Start', name: 'Log in', what: 'Keeps your books and places on every device. Email or Google.', where: 'Settings, then Log in', go: 'login' },
+  { id: 'whats-new', group: 'Start', name: 'What’s new', what: 'After each update, a note says in a line or two what changed. It shows once.', where: 'Shows by itself, over the library', since: day(2026, 11, 9) },
 
   // Your library
   { id: 'shelves', group: 'Your library', name: 'Books and Manga', what: 'Two shelves, each with your own library and the shared ones.', where: 'Books or Manga, at the top' },

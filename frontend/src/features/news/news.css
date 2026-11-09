@@ -1,0 +1,5 @@
+/* What's new (News.tsx): a line each on what changed, then one button. */
+.news-lines { margin: 0 0 20px; padding: 0; list-style: none; display: grid; gap: 10px; }
+.news-lines li { position: relative; padding-left: 18px; font: 400 19px/1.1 var(--read); color: var(--ink-2); }
+.news-lines li::before { content: ''; position: absolute; left: 3px; top: 0.42em; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
+.news-ok { width: 100%; }
