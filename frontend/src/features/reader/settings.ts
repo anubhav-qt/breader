@@ -162,8 +162,8 @@ const DEFAULTS: ReaderSettings = {
   book: { font: 'dongle', size: 22, lh: 1.45, measure: 'auto', layout: 'pages', justify: false, weight: 'regular' },
   modern: { font: 'dongle', size: 22, lh: 1.65, measure: 'auto', layout: 'scroll', justify: false, weight: 'regular' },
   pdfLayout: 'pages',
-  mangaDir: 'rtl',
-  v: 5,
+  mangaDir: 'ltr',
+  v: 6,
 };
 
 /** The style a layout reads in: pages are a book's, scrolling is modern. */
@@ -174,7 +174,7 @@ const KEY = 'breader.reader.v1';
 /** Settings changed on the way in, to keep and send on once the reader is open. */
 let changedOnLoad: ReaderSettings | null = null;
 
-function loadSettings(): ReaderSettings {
+export function loadSettings(): ReaderSettings {
   const saved = readLocal<Partial<ReaderSettings>>(KEY, {});
   const s = {
     ...DEFAULTS,
@@ -220,6 +220,13 @@ function loadSettings(): ReaderSettings {
       if (s[k].measure === MEDIUM_MEASURE) s[k] = { ...s[k], measure: 'auto' };
     }
     s.v = 5;
+    if (saved.v) changedOnLoad = s;
+  }
+  // 6: A new manga reads left to right by default. Right to left was the default, and was saved
+  // with everything else, so it's let go; each manga keeps the direction it's read in.
+  if ((saved.v ?? 1) < 6) {
+    s.mangaDir = 'ltr';
+    s.v = 6;
     if (saved.v) changedOnLoad = s;
   }
   return s;

@@ -6,18 +6,20 @@ import { demoAdmin, type Scene } from './demo';
 import { liveAdmin, savedToken, saveToken } from './live';
 import { MarkerCard } from './Marker';
 import { ago, mb, span, until, useClock } from './format';
-import { Label, Percent } from './parts';
+import { Label, Percent, Seg } from './parts';
 import { Accounts, Music, Workers } from './Side';
+import { FeedbackCard } from './Feedback';
 import { TASK_NAMES, type Admin, type Link, type Snapshot } from './types';
 import '../components/header.css';
 import '../components/preview-bar.css';
 import './admin.css';
 
 /*
- * The admin page, in Breader's own look: what needs doing first, each with the button that does
- * it; the numbers at a glance, their details a tap away; then the AI marker, the accounts, the
- * workers and the music upload. Everything arrives as it happens, pushed by the server (live.ts),
- * behind the admin token.
+ * The admin page, in Breader's own look, on one screen: what needs doing across the top, each with
+ * the button that does it; under it four panes side by side, each scrolling by itself: the AI
+ * marker; health (the numbers, their details a tap away, and the workers); the accounts and the
+ * music upload; and readers' feedback. A narrow screen shows one pane at a time, picked above.
+ * Everything arrives as it happens, pushed by the server (live.ts), behind the admin token.
  *
  * With ?demo it runs on demoAdmin (demo.ts) instead, with a preview bar to switch scenes and themes.
  */
@@ -130,6 +132,12 @@ function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => v
     return () => window.clearTimeout(t);
   }, [error]);
   useClock();
+  const [pane, setPane] = useState<Pane>('marker');
+  // To a card in another pane: that pane first (on a narrow screen it's the only one shown), then the card.
+  const go = (to: Pane, id: string) => {
+    setPane(to);
+    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
 
   return (
     <div className="adm">
@@ -137,21 +145,26 @@ function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => v
       {error && <p className="adm-bad adm-err" role="alert">{error.text}</p>}
       {snap && (
         <main className="adm-main">
-          {/* Each at its own width: what needs you and the marker wide, the rest narrow, side by side where they fit. */}
-          <div className="adm-board">
-            <div className="adm-col is-wide">
-              <Needs snap={snap} admin={admin} />
-              {snap.marker && <MarkerCard m={snap.marker} admin={admin} />}
+          <Needs snap={snap} admin={admin} go={go} />
+          {/* A narrow screen shows one pane at a time; a wide one shows them all side by side. */}
+          <div className="adm-tabs">
+            <Seg value={pane} onChange={setPane} label="Show" options={PANES} />
+          </div>
+          {/* One screen: the page never scrolls, each pane scrolls by itself. */}
+          <div className="adm-board" data-pane={pane}>
+            <div className="adm-col is-wide" data-for="marker">
+              {snap.marker ? <MarkerCard m={snap.marker} admin={admin} /> : <p className="adm-none">The AI marker isn’t running here.</p>}
             </div>
-            <div className="adm-side">
-              <div className="adm-col">
-                <Glance snap={snap} />
-                {snap.accounts && <Accounts list={snap.accounts} admin={admin} />}
-              </div>
-              <div className="adm-col">
-                <Workers jobs={snap.status.jobs} admin={admin} />
-                <Music admin={admin} />
-              </div>
+            <div className="adm-col" data-for="health">
+              <Glance snap={snap} />
+              <Workers jobs={snap.status.jobs} admin={admin} />
+            </div>
+            <div className="adm-col" data-for="accounts">
+              {snap.accounts && <Accounts list={snap.accounts} admin={admin} />}
+              <Music admin={admin} />
+            </div>
+            <div className="adm-col is-fb" data-for="feedback">
+              <FeedbackCard admin={admin} />
             </div>
           </div>
         </main>
@@ -160,6 +173,14 @@ function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => v
     </div>
   );
 }
+
+type Pane = 'marker' | 'health' | 'accounts' | 'feedback';
+const PANES: Array<{ v: Pane; label: string }> = [
+  { v: 'marker', label: 'Marker' },
+  { v: 'health', label: 'Health' },
+  { v: 'accounts', label: 'Accounts' },
+  { v: 'feedback', label: 'Feedback' },
+];
 
 /** The design's demo, on a pretend server. */
 function DemoPage() {
@@ -201,10 +222,11 @@ interface Need {
   act?: { label: string; run: () => void };
 }
 
-const jumpTo = (id: string) => () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+type Go = (to: Pane, id: string) => void;
 
 /** What needs looking at, worst first, each with what can be done about it from here. */
-function needsOf(s: Snapshot, admin: Admin): Need[] {
+function needsOf(s: Snapshot, admin: Admin, go: Go): Need[] {
+  const jumpTo = (id: string) => () => go('accounts', id);
   const out: Need[] = [];
   const st = s.status;
   if (!st.supabase) out.push({ key: 'db', text: 'Database down' });
@@ -241,8 +263,8 @@ const JOB_NAMES: Record<string, string> = {
 };
 
 /** What needs doing, at the top of the page; nothing at all when nothing does. */
-function Needs({ snap, admin }: { snap: Snapshot; admin: Admin }) {
-  const needs = needsOf(snap, admin);
+function Needs({ snap, admin, go }: { snap: Snapshot; admin: Admin; go: Go }) {
+  const needs = needsOf(snap, admin, go);
   if (!needs.length) return null;
   return (
     <section className="adm-needs" aria-label="Needs you">

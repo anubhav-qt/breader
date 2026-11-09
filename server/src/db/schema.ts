@@ -566,6 +566,24 @@ export const adminCommands = pgTable(
   (t) => [index('admin_commands_open_idx').on(t.kind).where(sql`${t.doneAt} IS NULL`)],
 );
 
+/**
+ * What readers ask for or tell us (routes/feedback.ts), read on the admin page. The library is
+ * the one they were signed into, if any, and goes when it does. Not fed: only the admin reads it.
+ */
+export const feedback = pgTable(
+  'feedback',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    at: at('at').notNull().defaultNow(),
+    kind: text('kind').notNull(),
+    body: text('body').notNull(),
+    libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
+    release: text('release'),
+    doneAt: at('done_at'),
+  },
+  (t) => [index('feedback_at_idx').on(t.at)],
+);
+
 /** Every write to a fed table, in the order the worker must read them: (txid, id). */
 export const changeLog = pgTable(
   'change_log',

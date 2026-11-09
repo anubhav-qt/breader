@@ -10,6 +10,7 @@
     "./audiobook": "./src/audiobook.ts",
     "./ai": "./src/ai.ts",
     "./comments": "./src/comments.ts",
+    "./feedback": "./src/feedback.ts",
     "./genres": "./src/genres.ts",
     "./key": "./src/key.ts",
     "./limits": "./src/limits.ts",

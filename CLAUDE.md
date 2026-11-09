@@ -24,6 +24,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
   The server voice reads Piper's voices only; Kokoro (the heavy voices) runs on devices.
+- Readers send requests and feedback from the app (`frontend/src/features/feedback/`,
+  `server/src/routes/feedback.ts`); they show on the admin page (`frontend/src/admin/`).
 - Audiobooks are made on readers' devices only. The server never makes them.
 - Reading aloud and finding panels run on the reader's device when it can
   (`frontend/src/features/reader/able.ts`, checked as a book opens, nothing sent). Only a device too

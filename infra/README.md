@@ -452,7 +452,11 @@ paid plan at the time of writing; Healthchecks.io's free plan has them.
 
 The status page, `https://api.breader.example/admin` (or `fb.` while the laptop is off), asks for
 `ADMIN_TOKEN` and shows which server answered, how far behind the copy is, how full Supabase and R2
-are, and when each worker job last worked or failed.
+are, and when each worker job last worked or failed. It fits one screen: what needs you across
+the top, then four panes that each scroll by themselves (the AI marker, health, accounts and music,
+feedback); a narrow screen shows one pane at a time. Feedback is what readers send from Request a
+feature / Feedback (in Settings, and under each What's new): newest first, each marked done here.
+It lives in Supabase's `feedback` table, which the ThinkPad's copy doesn't keep.
 
 ## Day to day
 

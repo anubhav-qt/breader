@@ -38,6 +38,7 @@ export const FEATURES: Feature[] = [
   { id: 'browse', group: 'Start', name: 'Find manga', what: 'Search MangaDex and other sites at once, or look through what’s popular, new or top rated.', where: '+ Add, then Manga', go: 'browse' },
   { id: 'login', group: 'Start', name: 'Log in', what: 'Keeps your books and places on every device. Email or Google.', where: 'Settings, then Log in', go: 'login' },
   { id: 'whats-new', group: 'Start', name: 'What’s new', what: 'After each update, a note says in a line or two what changed. It shows once.', where: 'Shows by itself, over the library', since: day(2026, 11, 9) },
+  { id: 'feedback', group: 'Start', name: 'Request a feature / Feedback', what: 'Ask for something Breader should do, or tell us what you think. We read every one.', where: 'Settings, then Request a feature / Feedback', since: day(2026, 11, 9) },
 
   // Your library
   { id: 'shelves', group: 'Your library', name: 'Books and Manga', what: 'Two shelves, each with your own library and the shared ones.', where: 'Books or Manga, at the top' },
@@ -83,7 +84,7 @@ export const FEATURES: Feature[] = [
   { id: 'panels', group: 'Manga', name: 'Panel by panel', what: 'One panel at a time, fitted to the screen.', where: 'Aa, then Layout, then Panels' },
   { id: 'panels-anywhere', group: 'Manga', name: 'Panels on any device', what: 'This device finds a page’s panels itself. One that can’t has Breader’s computer find them.', where: 'Happens by itself, in Panels', since: day(2026, 11, 9) },
   { id: 'zoom', group: 'Manga', name: 'Zoom', what: 'Tap a panel to bring it close. Tap twice to zoom where you tapped, and drag it about.', where: 'Any manga page' },
-  { id: 'direction', group: 'Manga', name: 'Direction', what: 'Right to left or left to right, one page or two side by side.', where: 'Aa, in a manga' },
+  { id: 'direction', group: 'Manga', name: 'Direction', what: 'Left to right (the start) or right to left, one page or two side by side.', where: 'Aa, in a manga' },
   { id: 'offline', group: 'Manga', name: 'Download', what: 'Keep a whole series in this browser to read offline.', where: 'A manga’s ⋯, then Download' },
 
   // Sharing

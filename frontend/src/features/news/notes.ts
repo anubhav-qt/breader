@@ -18,8 +18,8 @@ export const NOTES: Note[] = [
     id: '2026-11-09',
     title: 'Breader is optimized!',
     lines: [
-      'Your library opens faster: it loads less than half the code it used to.',
-      'Book cards show at once, and menus and voices load quietly in the background.',
+      'Breader opens faster, and your books show up right away.',
+      'Manga now read left to right. Like right to left? Tap Aa while reading.',
     ],
   },
 ];

@@ -1,23 +1,23 @@
 /* The admin page (src/admin): the library's look. Black and white, Doto for what's said about
    things, Dongle for their names, colour only from the books, and red only for what needs you. */
 
-/* Each card at the width it reads best at: what needs you and the marker 720, the rest 400, as many
-   side by side as fit. The header's ends line up with the board's. */
+/* One screen: the header, what needs you, then the panes side by side. The page never scrolls; each
+   pane does, by itself. The header's ends line up with the board's. */
 .adm {
   --adm-wide: 720px;
-  --adm-narrow: 400px;
   --adm-gap: 20px;
   --adm-pad: 36px;
-  --adm-board: calc(var(--adm-wide) + var(--adm-gap) + var(--adm-narrow));
+  --adm-board: 1840px;
   height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--canvas);
   color: var(--ink);
 }
 .adm-hdr {
-  position: sticky;
-  top: 0;
+  flex: none;
   z-index: 20;
   padding-left: max(var(--adm-pad), calc((100% - var(--adm-board)) / 2));
   padding-right: max(var(--adm-pad), calc((100% - var(--adm-board)) / 2));
@@ -31,7 +31,9 @@
 .adm-live.is-on i { background: var(--ink); animation: adm-beat 1.6s steps(2, jump-none) infinite; }
 @keyframes adm-beat { 50% { opacity: 0.25; } }
 
-.adm-main { width: min(var(--adm-board), calc(100% - 2 * var(--adm-pad))); margin: 0 auto; padding: 4px 0 120px; display: grid; gap: 26px; }
+.adm-main { flex: 1; min-height: 0; width: min(var(--adm-board), calc(100% - 2 * var(--adm-pad))); margin: 0 auto; padding: 4px 0 24px; display: flex; flex-direction: column; gap: 16px; }
+/* The demo's preview bar sits over the bottom left; the panes stop above it. */
+.adm:has(.pv) .adm-main { padding-bottom: 76px; }
 .adm-fold { overflow: hidden; }
 
 /* Words */
@@ -49,7 +51,8 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 .adm-wide { width: 100%; }
 
 /* What needs you: a red square, what's wrong, and the button that sees to it. */
-.adm-need-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: var(--adm-wide); }
+.adm-needs { flex: none; max-height: 26vh; overflow-y: auto; overscroll-behavior: contain; }
+.adm-need-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 8px; }
 .adm-need-list li { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 10px 8px 16px; border-radius: 14px; background: var(--danger-soft); }
 .adm-need-list li > i { flex: none; width: 8px; height: 8px; background: var(--danger); }
 .adm-need-list li > span { flex: 1; min-width: 0; font: var(--ui-w) 13px/1.45 var(--ui); overflow-wrap: anywhere; }
@@ -81,11 +84,20 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 .adm-details dt { font: var(--ui-w) 10.5px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); }
 .adm-details dd { margin: 0; font: var(--ui-w) 13px/1.4 var(--ui); overflow-wrap: anywhere; }
 
-/* What needs you over the marker, and beside them the narrow cards: one column of them, or two where
-   there's room. */
-.adm-board { display: grid; grid-template-columns: var(--adm-wide) var(--adm-narrow); gap: var(--adm-gap); align-items: start; }
-.adm-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--adm-gap); align-items: start; }
-.adm-col { display: grid; gap: var(--adm-gap); align-content: start; min-width: 0; }
+/* The panes: the marker wide, then health, accounts and feedback. Each fills the height left and
+   scrolls inside; feedback's list scrolls by itself under its heading. */
+.adm-tabs { display: none; flex: none; }
+.adm-board {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--adm-gap);
+}
+.adm-col { display: grid; gap: var(--adm-gap); align-content: start; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; border-radius: 22px; }
+.adm-col.is-fb { display: flex; flex-direction: column; overflow: hidden; }
+.adm-card.adm-fb { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .adm-card { display: grid; gap: 12px; min-width: 0; padding: 22px; border-radius: 22px; border: 1px solid var(--tile-border); background: var(--paper); }
 .adm-card > .adm-label { margin-top: 8px; }
 .adm-card > .adm-label:first-child { margin-top: 0; }
@@ -199,7 +211,7 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 /* The admin token, before anything else; and what a button's request ran into. */
 .adm-gate { width: min(360px, 100%); margin: 16vh auto 0; display: grid; gap: 10px; }
 .adm-gate .adm-paste input { height: 38px; font-size: 14px; }
-.adm-err { width: min(var(--adm-board), calc(100% - 2 * var(--adm-pad))); margin: 0 auto 12px; }
+.adm-err { flex: none; width: min(var(--adm-board), calc(100% - 2 * var(--adm-pad))); margin: 0 auto 12px; }
 
 /* Workers: a square each, filled while fine, red when failing, beating while it runs, hollow when off. */
 .adm-jobs { list-style: none; margin: 0; padding: 0; }
@@ -218,34 +230,32 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 .adm-drop { display: grid; justify-items: start; gap: 10px; padding: 20px; border-radius: 16px; border: 1.5px dashed var(--dash); transition: border-color 140ms ease, background-color 140ms ease; }
 .adm-drop.is-over { border-color: var(--ink); background: var(--accent-soft); }
 
-@media (min-width: 1640px) {
-  .adm { --adm-board: calc(var(--adm-wide) + 2 * var(--adm-gap) + 2 * var(--adm-narrow)); }
-  .adm-board { grid-template-columns: var(--adm-wide) auto; }
-  .adm-side { grid-template-columns: repeat(2, var(--adm-narrow)); }
+/* Less room: three columns, accounts over feedback in the last. */
+@media (max-width: 1799px) {
+  .adm-board { grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+  .adm-col[data-for="marker"], .adm-col[data-for="health"] { grid-row: 1 / -1; }
+  .adm-col[data-for="accounts"] { grid-column: 3; grid-row: 1; }
+  .adm-col[data-for="feedback"] { grid-column: 3; grid-row: 2; }
 }
-/* One column of wide things, what needs you first and the numbers next, then the narrow cards two
-   to a row. The columns step aside so the cards can be put in that order. */
-@media (max-width: 1219px) {
-  .adm { --adm-board: calc(2 * var(--adm-narrow) + var(--adm-gap)); }
-  .adm-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .adm-col, .adm-side { display: contents; }
-  .adm-needs, .adm-glance-w, .adm-marker { grid-column: 1 / -1; }
-  .adm-needs { order: 1; }
-  .adm-glance-w { order: 2; }
-  .adm-marker { order: 3; }
-  .adm-accounts { order: 4; }
-  .adm-workers { order: 5; }
-  .adm-music { order: 6; }
+/* A narrow screen: one pane at a time, picked from the tabs, the whole height left. */
+@media (max-width: 1099px) {
+  .adm-tabs { display: block; }
+  .adm-tabs .adm-seg { display: flex; width: 100%; }
+  .adm-tabs .adm-seg button { flex: 1; }
+  .adm-board { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .adm-board .adm-col { grid-column: 1; grid-row: 1; }
+  .adm-board[data-pane="marker"] > :not([data-for="marker"]),
+  .adm-board[data-pane="health"] > :not([data-for="health"]),
+  .adm-board[data-pane="accounts"] > :not([data-for="accounts"]),
+  .adm-board[data-pane="feedback"] > :not([data-for="feedback"]) { display: none; }
   .adm-glance { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 880px) {
-  .adm { --adm-board: 10000px; }
-  .adm-board { grid-template-columns: minmax(0, 1fr); }
-  .adm-glance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
   .adm { --adm-pad: 16px; }
-  .adm-main { padding: 0 0 150px; gap: 20px; }
+  .adm-main { padding: 0 0 16px; gap: 12px; }
+  .adm:has(.pv) .adm-main { padding-bottom: 100px; }
+  .adm-needs { max-height: 22vh; }
+  .adm-glance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adm-hdr { padding-bottom: 12px; }
   .adm-big { font-size: 38px; }
   .adm-glance { gap: 8px; }
@@ -300,3 +310,12 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
   .adm-stg-r .adm-pick { flex: none; width: 100%; }
   .adm-set-line { flex-wrap: wrap; }
 }
+
+/* Feedback (Feedback.tsx): what readers asked for or told us, the newest first. */
+.adm-fb-list { flex: 1; min-height: 0; display: grid; align-content: start; gap: 8px; margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.adm-fb-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: start; padding: 12px 14px; border-radius: 14px; background: var(--fill); }
+.adm-fb-item.is-done { opacity: 0.55; }
+.adm-fb-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 10px; font: var(--ui-w) 11px/1.4 var(--ui); color: var(--ink-2); }
+.adm-fb-kind { color: var(--ink); }
+.adm-fb-kind.is-feature { color: var(--accent); }
+.adm-fb-body { margin: 0; font: 400 19px/1.2 var(--read); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }

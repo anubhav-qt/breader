@@ -179,6 +179,7 @@ const MangaPage = lazy(() => loadPage().then((m) => ({ default: m.MangaPage })))
 const AddBook = lazy(() => loadAdd().then((m) => ({ default: m.AddBook })));
 const Guide = lazy(() => import('./features/guide/Guide').then((m) => ({ default: m.Guide })));
 const News = lazy(() => import('./features/news/News').then((m) => ({ default: m.News })));
+const Feedback = lazy(() => import('./features/feedback/Feedback').then((m) => ({ default: m.Feedback })));
 /* The dialogs and menus too: none shows as the library opens. */
 const loadLogin = () => import('./features/account/LoginDialog');
 const loadKey = () => import('./features/add/KeyDialog');
@@ -318,6 +319,7 @@ export default function App() {
   const [guide, setGuide] = useState<{ seenAt: number; q?: string } | null>(null);
   /** What changed since this reader was last here, shown once, over the library. */
   const [whatsNew, setWhatsNew] = useState<Note[] | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const newsAsked = useRef(false);
   /** The shared libraries' list, under the arrow beside the switch between libraries; `key`: opened to type someone's key in. */
   const [librariesOpen, setLibrariesOpen] = useState<false | 'list' | 'key'>(false);
@@ -1371,7 +1373,7 @@ export default function App() {
     });
   }
   const readerHints: HintSpec[] = mouse ? [{ id: 'reader-keys', text: 'Press ? to see the keys.', ms: 6000 }] : [];
-  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
+  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || feedbackOpen || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
   // What's new waits for the library and for nothing else to be open, then shows once.
   useEffect(() => {
     if (newsAsked.current || busy || !lib.ready || route.name !== 'library') return;
@@ -1474,6 +1476,7 @@ export default function App() {
                 coversOnly={manga && tab !== 'browse' && books.length > 0 ? coversOnly : undefined}
                 onCoversOnly={flipCovers}
                 onGuide={() => openGuide()}
+                onFeedback={() => setFeedbackOpen(true)}
                 news={news}
               />
             )}
@@ -1651,7 +1654,16 @@ export default function App() {
         {keyOpen && <Suspense key="key" fallback={null}><KeyDialog libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} /></Suspense>}
         {/* A key made as a series was read waits for the reader to close. */}
         {freshKey && route.name !== 'read' && <Suspense key="fresh-key" fallback={null}><KeyDialog libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} /></Suspense>}
-        {whatsNew && <Suspense key="news" fallback={null}><News notes={whatsNew} onClose={() => setWhatsNew(null)} /></Suspense>}
+        {whatsNew && (
+          <Suspense key="news" fallback={null}>
+            <News notes={whatsNew} onClose={() => setWhatsNew(null)} onFeedback={() => { setWhatsNew(null); setFeedbackOpen(true); }} />
+          </Suspense>
+        )}
+        {feedbackOpen && (
+          <Suspense key="feedback" fallback={null}>
+            <Feedback onClose={() => setFeedbackOpen(false)} onSent={() => { setFeedbackOpen(false); say('Thanks! It’s sent.'); }} />
+          </Suspense>
+        )}
         {guide && (
           <Suspense key="guide" fallback={null}>
             <Guide seenAt={guide.seenAt} initial={guide.q} go={showMe} onClose={() => setGuide(null)} />

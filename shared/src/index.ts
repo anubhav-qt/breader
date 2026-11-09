@@ -3,6 +3,7 @@ export * from './audiobook.ts';
 export * from './admin.ts';
 export * from './ai.ts';
 export * from './comments.ts';
+export * from './feedback.ts';
 export * from './genres.ts';
 export * from './key.ts';
 export * from './limits.ts';

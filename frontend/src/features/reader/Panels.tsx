@@ -276,7 +276,7 @@ function MangaLookControls({ look, pick, widen, pair, saver, panels, strip }: Ma
   return (
     <>
       {!strip && <Segmented label="Layout" value={look.layout} onChange={(v) => pick({ layout: v })} options={layouts} />}
-      <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'rtl', label: 'Right to left' }, { v: 'ltr', label: 'Left to right' }]} />
+      <Segmented label="Direction" value={look.dir} onChange={(v) => pick({ dir: v })} options={[{ v: 'ltr', label: 'Left to right' }, { v: 'rtl', label: 'Right to left' }]} />
       {!look.narrow && look.layout === 'scroll' && (
         <Segmented label="Width" value={look.width} onChange={widen} options={MANGA_WIDTHS.map((w) => ({ v: w.v, label: w.label }))} />
       )}
