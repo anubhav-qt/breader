@@ -366,8 +366,8 @@ export const aiFills = pgTable('ai_fills', {
 });
 
 /**
- * The name a library comments under (shared comments.ts). `fold` is the name as foldName tells
- * names apart, and no two libraries may share one. Fed.
+ * The name a library commented under, from when readers could comment. Nothing reads or writes it;
+ * dropped a release later (TODO.md). Fed.
  */
 export const commenters = pgTable(
   'commenters',
@@ -382,11 +382,8 @@ export const commenters = pgTable(
 );
 
 /**
- * What readers say about a book, for everyone on it: `book` is the shared book's id (a copy's
- * origin), `section` the chapter's first section, or -1 for the whole book. `progress` is how far
- * the writer had read. `parentId` is the comment a reply answers, always one that isn't itself a
- * reply; no key holds it, so a reply outlives what it answered being taken back. Stored as
- * written; the app censors it when it shows it. Fed.
+ * What readers said about a book, from when readers could comment. Nothing reads or writes it;
+ * dropped a release later (TODO.md). Fed.
  */
 export const comments = pgTable(
   'comments',
@@ -582,6 +579,20 @@ export const feedback = pgTable(
     doneAt: at('done_at'),
   },
   (t) => [index('feedback_at_idx').on(t.at)],
+);
+
+/**
+ * Who has been shown a note of what's new (routes/news.ts): an account or key library
+ * (`lib:<id>`), or an address (`ip:<HMAC of it>`, never the address itself). Not fed.
+ */
+export const newsSeen = pgTable(
+  'news_seen',
+  {
+    who: text('who').notNull(),
+    note: text('note').notNull(),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.who, t.note] })],
 );
 
 /** Every write to a fed table, in the order the worker must read them: (txid, id). */

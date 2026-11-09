@@ -53,8 +53,14 @@ export function HexField({ hex, onPick }: { hex: string; onPick: (hex: `#${strin
   const take = (typed: string) => {
     if (typed.trim() === '' || typed.trim().toLowerCase() === hex) { setText(hex); setBad(false); return; }
     const h = toHex(typed);
-    setBad(!h);
-    if (h) { setText(h); if (h !== hex) onPick(h); }
+    if (!h) {
+      setText(typed.trim());
+      setBad(true);
+      return;
+    }
+    setText(h);
+    setBad(false);
+    if (h !== hex) onPick(h);
   };
 
   return (

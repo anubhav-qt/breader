@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { NOTE_ID } from '@breader/shared/news';
 import type { Note } from './notes';
 
 /*
@@ -22,6 +23,9 @@ function fakeStorage(start: Record<string, string> = {}) {
 
 const note = (id: string): Note => ({ id, title: `Title ${id}`, lines: [`Line ${id}`] });
 
+const post = vi.fn();
+vi.mock('../../lib/api', () => ({ api: { post: (...args: unknown[]) => post(...args) } }));
+
 async function load(start: Record<string, string> = {}, notes?: Note[]) {
   vi.resetModules();
   vi.doUnmock('./notes');
@@ -33,7 +37,7 @@ async function load(start: Record<string, string> = {}, notes?: Note[]) {
   return { ...seen, ls, kept: () => JSON.parse(ls.getItem(KEY) ?? 'null') };
 }
 
-afterEach(() => { vi.unstubAllGlobals(); vi.doUnmock('./notes'); });
+afterEach(() => { vi.unstubAllGlobals(); vi.doUnmock('./notes'); post.mockReset(); });
 
 describe('what’s new on a device', () => {
   it('shows nothing to someone new, then the next release’s note', async () => {
@@ -85,6 +89,27 @@ describe('what’s new on a device', () => {
   });
 });
 
+describe('what’s new on an account or address', () => {
+  it('asks the server about the note, and shows it only if no one there has seen it', async () => {
+    const { firstOnServer } = await load();
+    post.mockResolvedValueOnce({ first: true });
+    expect(await firstOnServer('2026-11-09')).toBe(true);
+    expect(post).toHaveBeenCalledWith('/v1/news/seen', { note: '2026-11-09' });
+    post.mockResolvedValueOnce({ first: false });
+    expect(await firstOnServer('2026-11-09')).toBe(false);
+  });
+
+  it('shows nothing when the server can’t be asked, or answers oddly', async () => {
+    const { firstOnServer } = await load();
+    post.mockRejectedValueOnce(new Error('offline'));
+    expect(await firstOnServer('2026-11-09')).toBeNull();
+    post.mockResolvedValueOnce({});
+    expect(await firstOnServer('2026-11-09')).toBe(false);
+    post.mockResolvedValueOnce(null);
+    expect(await firstOnServer('2026-11-09')).toBeNull();
+  });
+});
+
 describe('the notes', () => {
   it('are newest first, each a day of its own, short and plain', async () => {
     const { NOTES } = await vi.importActual<typeof import('./notes')>('./notes');
@@ -93,7 +118,7 @@ describe('the notes', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect([...ids].sort().reverse()).toEqual(ids);
     for (const n of NOTES) {
-      expect(n.id).toMatch(/^\d{4}-\d{2}-\d{2}(-\d+)?$/);
+      expect(n.id).toMatch(NOTE_ID);
       expect(n.title.trim()).not.toBe('');
       expect(n.lines.length).toBeGreaterThanOrEqual(1);
       expect(n.lines.length).toBeLessThanOrEqual(2);

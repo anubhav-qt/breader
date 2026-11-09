@@ -8,9 +8,7 @@ import { paintBars } from '../../lib/bars';
 import { behindMark, chapterTitles, isAway, leave, markOrder, readingOrder, resume, type Visit } from './chapterBack';
 import { chapterAt, chapterName, chaptersOf } from './chapters';
 import { ChapterBack } from './chrome/ChapterBack';
-import { ChapterTail } from './chrome/Comments';
 import { InstrumentChrome } from './chrome/Instrument';
-import { opens, readTo, threadOf, useTalk } from './comments';
 import type { ChromeProps, PanelName } from './chrome/types';
 import { FlowView, type Loc, type Start, type ViewHandle } from './FlowView';
 import { useBarAsk, useWake } from './focus';
@@ -113,9 +111,6 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   // How far the AI has got, asked again while the book's open; pretend, during the design round.
   const aiProgress = useAiProgress(record.id, ai);
   const round = useRound();
-  // Comments, in the shared book's threads for a copy of one (comments.ts).
-  const thread = threadOf(record);
-  const talk = useTalk(thread, !closing);
   const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current(), marks, record.id);
   saying.current = narration.current;
   const { asked, done: sleptDone } = slept;
@@ -715,7 +710,6 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       // A keyboard's media keys, where the browser passes them on: play and pause the voice.
       const key = MEDIA_KEYS[e.key];
       if (key) { mediaKey.current(key); e.preventDefault(); return; }
-      if (e.key === 'Escape' && (e.target as HTMLElement).closest?.('[data-aside] :is(input, textarea)')) { (e.target as HTMLElement).blur(); return; }
       if (e.key === 'Escape') { if (behind) return; if (panel) openPanel(null); else if (choosing) setAsking(false); else onBack(); return; }
       // The browser's own find sees only the chapter on screen: this one reads the whole book.
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'f') { e.preventDefault(); openPanel('find'); return; }
@@ -765,31 +759,6 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   }, [chapters]);
 
   const style = book.kind === 'flow' ? settings.style : 'modern';
-
-  /*
-   * Comments, after each chapter's text (the tail), or for a PDF in the drop from the speech
-   * bubble. A chapter's thread opens once its end has been read (comments.ts opens). Opening the
-   * drop stops the voice or the light: the reader is reading something else. Immersive itself
-   * never stops for them.
-   */
-  const mark = marker.get();
-  const opened = opens(chapters, mark, loc);
-  const readUpTo = readTo(mark, loc);
-  const talkView = { thread, talk, readTo: readUpTo };
-  const [talkAt, setTalkAt] = useState<number | undefined>(undefined);
-  const openTalk = (section?: number) => {
-    if (pacing.running) pauseLight();
-    if (narration.playing) narration.stop();
-    setTalkAt(section);
-    openPanel('comments');
-  };
-  /** The tail: after the last section of each chapter, and the whole book's after the last. */
-  const lastOf = (i: number) => (chapters[i + 1]?.section ?? (book.kind === 'flow' ? book.sections.length : 0)) - 1;
-  const tail = (section: number) => {
-    const i = chapters.findIndex((_, k) => lastOf(k) === section);
-    if (i < 0 || talk.state === 'off') return null;
-    return <ChapterTail key={i} view={talkView} chapters={chapters} i={i} open={opened(i)} last={i === chapters.length - 1} />;
-  };
 
   // 2 voices and the music as the server has them; during the design round, as the pretend AI does.
   let twoState: ChromeProps['two'] = 'off';
@@ -867,7 +836,6 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       skip: (seconds) => playerKeyRef.current({ do: 'seek', seconds }),
       step: (dir) => playerKeyRef.current({ do: 'step', dir }),
     },
-    talk: { view: talkView, opens: opened, at: talkAt, open: openTalk },
   };
   const tones = settings.twoColors ?? TWO_COLORS;
   const vars: Record<string, string> = {
@@ -883,7 +851,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick} onContextMenu={(e) => { if (looking()) e.preventDefault(); }}>
           {book.kind === 'flow' ? (
-            <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} aside={tail} />
+            <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} />
           ) : book.kind === 'manga' ? (
             <MangaView ref={view} book={book} layout={mangaLook.layout} dir={mangaLook.dir} width={mangaLook.width} pages={mangaLook.pages} start={start} onLocation={onLocation} onWidth={setPageW} onTap={tapPage} onGrow={onBook} />
           ) : (

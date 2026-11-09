@@ -11,7 +11,7 @@ import { markSeen, useGuideKept, useNews } from './features/guide/seen';
 import { checkDevice } from './features/reader/able';
 import { WelcomeBooks, WelcomeManga, WelcomeShared } from './features/guide/Welcome';
 import type { Note } from './features/news/notes';
-import { markShown, unseen } from './features/news/seen';
+import { firstOnServer, markShown, unseen } from './features/news/seen';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { AudiobookHost, AudiobookNav } from './features/audiobook/Audiobook';
@@ -319,6 +319,8 @@ export default function App() {
   const [guide, setGuide] = useState<{ seenAt: number; q?: string } | null>(null);
   /** What changed since this reader was last here, shown once, over the library. */
   const [whatsNew, setWhatsNew] = useState<Note[] | null>(null);
+  /** What's new, cleared by the server to show, waiting for nothing else to be open. */
+  const [newsWaiting, setNewsWaiting] = useState<Note[] | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const newsAsked = useRef(false);
   /** The shared libraries' list, under the arrow beside the switch between libraries; `key`: opened to type someone's key in. */
@@ -1374,15 +1376,28 @@ export default function App() {
   }
   const readerHints: HintSpec[] = mouse ? [{ id: 'reader-keys', text: 'Press ? to see the keys.', ms: 6000 }] : [];
   const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || feedbackOpen || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
-  // What's new waits for the library and for nothing else to be open, then shows once.
+  // What's new waits for the library and for nothing else to be open, then asks the server
+  // whether this account or address has been shown it already, and shows it once.
   useEffect(() => {
     if (newsAsked.current || busy || !lib.ready || route.name !== 'library') return;
     newsAsked.current = true;
     const notes = unseen();
-    if (!notes.length) return;
-    markShown();
-    setWhatsNew(notes);
+    if (notes.length === 0) return;
+    void firstOnServer(notes[0].id).then((first) => {
+      if (first === null) return;
+      if (first) {
+        setNewsWaiting(notes);
+        return;
+      }
+      markShown();
+    });
   }, [busy, lib.ready, route.name]);
+  useEffect(() => {
+    if (!newsWaiting || busy || route.name !== 'library') return;
+    markShown();
+    setWhatsNew(newsWaiting);
+    setNewsWaiting(null);
+  }, [newsWaiting, busy, route.name]);
 
   const flipCovers = () => {
     const next = !coversOnly;

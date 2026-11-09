@@ -16,6 +16,9 @@
 - [ ] Strip Project Gutenberg front matter and licence from EPUBs, so percentages match the story itself. It currently reads ~5% low on Alice.
 - [ ] Poetry and verse in EPUBs lose their indentation, because publisher CSS is set aside.
 
+## Comments (removed 2026-11-09)
+- [ ] Next release: drop the `comments` and `commenters` tables (a migration), take them out of `FED_TABLES` and `server/src/db/schema.ts`. Nothing reads or writes them since the comments feature went.
+
 ## Audiobooks
 - [ ] Delete `voices/books/` on the ThinkPad: audiobooks are made on devices now, and nothing reads it.
 - [ ] Next release: remove the `/v1/audiobooks` stub (`server/src/routes/audiobooks.ts`) and its test, once apps from before it are gone.

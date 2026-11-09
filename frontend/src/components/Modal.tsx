@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { springs } from '../lib/springs';
 import { IconClose } from './icons';
@@ -17,9 +17,21 @@ export function Modal({ title, onClose, children, width = 460, className = '' }:
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  // What had focus before the dialog: read while drawing, before a field inside takes focus.
+  const [prev] = useState(() => document.activeElement as HTMLElement | null);
+  // A field or button inside that asked for focus (autoFocus) keeps it; otherwise the dialog takes it.
+  const asked = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
+    const dialog = ref.current;
+    const active = document.activeElement;
+    if (dialog && active instanceof HTMLElement && active !== dialog && dialog.contains(active)) {
+      asked.current = active;
+    }
+    if (asked.current?.isConnected) {
+      asked.current.focus();
+    } else {
+      dialog?.focus();
+    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       // A popover or dialog opened over this one closes first, on its own.
@@ -31,7 +43,7 @@ export function Modal({ title, onClose, children, width = 460, className = '' }:
       window.removeEventListener('keydown', onKey);
       prev?.focus?.({ preventScroll: true });
     };
-  }, []);
+  }, [prev]);
 
   return (
     <div className="modal-root">

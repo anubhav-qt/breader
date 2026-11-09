@@ -17,7 +17,6 @@ import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
 import { CHECK, CROSS, GROW, MINUS, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
 import { SpeakerChip } from './Cast';
-import { CommentsPanel, TalkButton } from './Comments';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { RevisitMenu, RevisitWindow, type Scope } from './Revisit';
 import { SayAs } from './SayAs';
@@ -27,10 +26,12 @@ import { HeadTips } from './Tip';
 import { VoiceSheet } from './VoiceSheet';
 import type { ChromeProps, PanelName } from './types';
 
-const DROP_CLOSED = 'inset(-12% -24% 100% -24%)';
+// Closed, the clip's two edges meet, so nothing of the drop shows: not even its outline, which sits
+// in the band the open clip leaves above it for the shadow.
+const DROP_CLOSED = 'inset(-12% -24% 112% -24%)';
 const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
 // Revisit's drop comes up from the bottom line.
-const UP_CLOSED = 'inset(100% -24% -12% -24%)';
+const UP_CLOSED = 'inset(112% -24% -12% -24%)';
 const UP_OPEN = 'inset(-40% -24% -12% -24%)';
 
 /**
@@ -38,7 +39,7 @@ const UP_OPEN = 'inset(-40% -24% -12% -24%)';
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
  * book. Pages change with a hard wipe.
  */
-export function InstrumentChrome({ book, bookId, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, note, search, sleep, revisit, two, music, letAi, aiElsewhere, aiProgress, transport, talk }: ChromeProps) {
+export function InstrumentChrome({ book, bookId, title, loc, chapters, current, settings, update, manga, panel, openPanel, canRemove, onBack, onRemove, onGo, onPick, body, narration, immersion, focus, note, search, sleep, revisit, two, music, letAi, aiElsewhere, aiProgress, transport }: ChromeProps) {
   const [head, setHead] = useState(false);
   const [foot, setFoot] = useState(false);
   const headRef = useRef<HTMLDivElement>(null);
@@ -138,10 +139,6 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
   else if (aiSaid) aiHint = aiSaid;
   const { on: castOn } = useCast();
 
-  // Comments: a PDF's or a manga's pages take no tail, so the speech bubble up top has them.
-  const here = chapters[current];
-  const talkCount = here ? talk.view.talk.threads.get(here.section)?.count ?? 0 : 0;
-
   return (
     <>
       <div ref={headRef} className={`i3-head${head || panel ? ' is-on' : ''}`} onPointerEnter={() => setHead(true)} onPointerLeave={() => setHead(false)}>
@@ -152,9 +149,6 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
         </button>
         <div className="i3-ends">
           <AiHeadButton p={aiProgress} book={bookId} open={panel === 'ai'} onClick={() => toggle('ai')} />
-          {book.kind !== 'flow' && talk.view.talk.state !== 'off' && (
-            <TalkButton count={talkCount} lit={talk.opens(current)} open={panel === 'comments'} onClick={() => (panel === 'comments' ? openPanel(null) : talk.open())} />
-          )}
           {search && (
             <button type="button" className={`i3-side i3-icon${panel === 'find' ? ' is-open' : ''}`} onClick={() => toggle('find')} aria-label="Search the book" aria-expanded={panel === 'find'} aria-haspopup="dialog" data-tip="Find words in the book">
               <DotIcon rows={SEARCH} />
@@ -245,8 +239,6 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
             <div className="i3-drop-in">
               {panel === 'toc' ? (
                 <ContentsPanel book={book} title={title} loc={loc} canRemove={canRemove} onGo={(it) => { openPanel(null); onGo(it); }} onRemove={onRemove} />
-              ) : panel === 'comments' ? (
-                <CommentsPanel key={talk.at ?? 'here'} view={talk.view} chapters={chapters} current={current} opens={talk.opens} at={talk.at} />
               ) : panel === 'voice' && (narration || immersion) ? (
                 <VoiceSheet playing={!!narration?.playing} onStart={narration?.read} onStop={narration?.stop} canPace={!!immersion} two={two} music={music} onAi={letAi} aiElsewhere={aiElsewhere} ai={aiProgress} bookId={bookId} castReady={castReady} />
               ) : panel === 'sleep' && sleep ? (

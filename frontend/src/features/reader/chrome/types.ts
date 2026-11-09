@@ -3,7 +3,6 @@ import type { RevisitResponse } from '@breader/shared/ai';
 import type { AiProgress } from '../../ai/progress';
 import type { LoadedBook, TocItem } from '../../../books/types';
 import type { Chapter } from '../chapters';
-import type { TalkView } from './Comments';
 import type { Loc } from '../FlowView';
 import type { Paragraph, Sentence } from '../narration';
 import type { BarAsk } from '../focus';
@@ -14,7 +13,7 @@ import type { ReaderSettings } from '../settings';
 
 /** `revisit` is the drop up from the bottom line; `recap` the window it opens (chrome/Revisit.tsx). */
 /** `ai`: how far the AI has got with the book, from the spark or the meter up top (design round, features/ai). */
-export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap' | 'comments' | 'keys' | 'ai';
+export type PanelName = 'toc' | 'look' | 'voice' | 'paras' | 'sleep' | 'find' | 'revisit' | 'recap' | 'keys' | 'ai';
 
 /** Everything the reader's controls get from the reader shell. */
 export interface ChromeProps {
@@ -112,17 +111,6 @@ export interface ChromeProps {
   aiProgress: AiProgress;
   /** The voice or the light, moved on or back from the play row: by seconds, or a sentence at a time. */
   transport: { skip: (seconds: number) => void; step: (dir: -1 | 1) => void };
-  /**
-   * Comments on the book (comments.ts), for the speech bubble a PDF has in place of the tail:
-   * `opens` says whether a chapter's thread is open to them yet, `at` is the thread the drop opens
-   * on (BOOK_THREAD, or a chapter's first section; the chapter being read if not said).
-   */
-  talk: {
-    view: TalkView;
-    opens: (i: number) => boolean;
-    at?: number;
-    open: (section?: number) => void;
-  };
 }
 
 export const toItem = (c: Chapter): TocItem => ({ title: c.title, section: c.section, anchor: c.anchor, level: 0 });

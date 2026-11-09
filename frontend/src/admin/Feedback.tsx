@@ -33,13 +33,26 @@ export function FeedbackCard({ admin }: { admin: Admin }) {
     return () => window.clearInterval(t);
   }, [load]);
 
-  const mark = async (id: number, done: boolean) => {
+  // One change at a time for each: a second click waits, so the server ends as the page shows.
+  const [marking, setMarking] = useState<ReadonlySet<number>>(new Set());
+  const setDone = (id: number, done: boolean) => {
     setItems((list) => list?.map((f) => (f.id === id ? { ...f, done } : f)) ?? null);
+  };
+  const mark = async (id: number, done: boolean) => {
+    if (marking.has(id)) return;
+    setMarking((m) => new Set(m).add(id));
+    setDone(id, done);
     try {
       await admin.feedbackDone(id, done);
     } catch (e) {
+      setDone(id, !done);
       setSaid(e instanceof Error ? e.message : String(e));
-      void load();
+    } finally {
+      setMarking((m) => {
+        const next = new Set(m);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -65,7 +78,7 @@ export function FeedbackCard({ admin }: { admin: Admin }) {
               {f.release && <span title={f.release}>build {f.release.slice(0, 7)}</span>}
             </div>
             <p className="adm-fb-body">{f.body}</p>
-            <button type="button" className="btn btn-quiet adm-small" onClick={() => void mark(f.id, !f.done)}>
+            <button type="button" className="btn btn-quiet adm-small" disabled={marking.has(f.id)} onClick={() => void mark(f.id, !f.done)}>
               {f.done ? 'Not done' : 'Done'}
             </button>
           </li>

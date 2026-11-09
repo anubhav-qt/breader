@@ -57,7 +57,6 @@ export const FEATURES: Feature[] = [
   { id: 'find', group: 'Reading', name: 'Find', what: 'Search the book for words.', where: 'The magnifier, at the top of a book', keys: ['/'] },
   { id: 'look', group: 'Reading', name: 'Look', what: 'Typeface, size, spacing and theme. Pages or scrolling.', where: 'Aa, at the top of a book', keys: ['+', '−'] },
   { id: 'full', group: 'Reading', name: 'Full screen', what: 'Just the words on the whole screen.', where: 'The corners icon, at the top of a book', keys: ['F'] },
-  { id: 'comments', group: 'Reading', name: 'Comments', what: 'Talk about a chapter with everyone reading the book. A chapter’s comments open once you’ve read it.', where: 'After a chapter’s last paragraph, or the speech bubble at the top' },
   { id: 'place', group: 'Reading', name: 'Your place', what: 'Kept as you read. Read on from an earlier chapter and Breader asks which place to keep.', where: 'Happens by itself' },
 
   // Listening

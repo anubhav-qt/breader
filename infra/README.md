@@ -467,7 +467,9 @@ migrates Supabase, redeploys Render, builds and uploads the app, then waits unti
 the new commit. `infra/ship.sh app live` runs only the steps named. There is no CI on GitHub.
 Before anything, check makes sure this release has a note for readers at the top of
 `frontend/src/features/news/notes.ts`, different from the live release's: readers from before see
-it once, in a dialog over the library. A tab left open from before a release asks for files the
+it once, in a dialog over the library, and only once for an account, an address and a device (the
+app asks `POST /v1/news/seen` first, `server/src/routes/news.ts`; an address is kept only as an
+HMAC of it). A tab left open from before a release asks for files the
 release took away (Pages answers those with the app's page): it reloads onto the new build, once
 a minute at most (`frontend/src/lib/stale-build.ts`), and the service worker never keeps such a page
 in place of a file.

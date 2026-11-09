@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FEEDBACK_CHARS } from '@breader/shared/feedback';
 import { Modal } from '../../components/Modal';
+import { ApiError } from '../../lib/api';
 import { KINDS, canSend, keepDraft, readDraft, sendFeedback } from './send';
 import './feedback.css';
 
@@ -21,7 +22,7 @@ export function Feedback({ onClose, onSent }: { onClose: () => void; onSent: () 
       await sendFeedback(kind, body);
       onSent();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'That didn’t send. Try again.');
+      setError(sendError(e));
       setSending(false);
     }
   };
@@ -66,4 +67,12 @@ export function Feedback({ onClose, onSent }: { onClose: () => void; onSent: () 
       </div>
     </Modal>
   );
+}
+
+/** What to say when it didn't send. It isn't kept to send later, so never that it will be. */
+function sendError(e: unknown): string {
+  if (e instanceof ApiError) {
+    return e.message;
+  }
+  return 'Can’t reach Breader. Try again in a minute.';
 }

@@ -19,7 +19,6 @@ export const NOTES: Note[] = [
     title: 'Breader is optimized!',
     lines: [
       'Breader opens faster, and your books show up right away.',
-      'Manga now read left to right. Like right to left? Tap Aa while reading.',
     ],
   },
 ];
