@@ -11,7 +11,6 @@ import './covers.css';
 
 interface Props {
   item: GalleryItem;
-  index: number;
   enter: boolean;
   /** Its title on it, over its foot, with a line for how far it's read; without, the cover alone. */
   words: boolean;
@@ -31,7 +30,7 @@ interface Props {
  * in its colour. The cover opens it; the corner button (or a right-click) edits it, as on the
  * books' cards.
  */
-export function CoverCard({ item, index, enter, words, open = false, picked, layoutKey, onOpen, onEdit, onKeep }: Props) {
+export function CoverCard({ item, enter, words, open = false, picked, layoutKey, onOpen, onEdit, onKeep }: Props) {
   const b = item.book;
   const moreRef = useRef<HTMLButtonElement>(null);
   const [broken, setBroken] = useState(false);
@@ -44,11 +43,11 @@ export function CoverCard({ item, index, enter, words, open = false, picked, lay
     <motion.div
       className={`tile-slot cv${drawn ? ' is-drawn' : ''}${picked ? ' is-picked' : ''}`}
       style={bookVars(b)}
-      // The library's first appearance rises in; a series added or put back later settles in place.
-      initial={enter ? { opacity: 0, y: 18 } : { opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      // The library's first appearance is there at once; a series added or put back later settles in place.
+      initial={enter ? false : { opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
-      transition={{ ...springs.smooth, delay: enter ? Math.min(index, 24) * 0.028 : 0 }}
+      transition={springs.smooth}
       layout="position"
       layoutDependency={layoutKey}
     >

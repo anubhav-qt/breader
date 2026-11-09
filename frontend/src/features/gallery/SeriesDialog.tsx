@@ -36,14 +36,13 @@ export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdi
         {onKeepAll ? <KeepSeries name={s.name} books={s.books} onKeepAll={onKeepAll} /> : <span>{finished === n ? 'All finished' : `${finished} finished`}</span>}
       </p>
       <div ref={grid} className="sd-grid">
-        {s.books.map((b, k) => {
+        {s.books.map((b) => {
           const key = b.key ?? b.id;
           return (
             <Tile
               key={key}
               item={{ key, book: b, author: authors.get(b.id) }}
               variant="cover"
-              index={k}
               enter={false}
               now={now}
               radius="8px 18px 18px 8px"

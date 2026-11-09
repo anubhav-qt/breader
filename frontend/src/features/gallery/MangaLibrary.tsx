@@ -9,7 +9,7 @@ import type { SectionProps } from './types';
  * read, big, then every other one as its cover, the one read last first.
  */
 
-type Props = Omit<SectionProps, 'items' | 'indexBase'> & {
+type Props = Omit<SectionProps, 'items'> & {
   books: ShelfItem[];
   /** The covers without their titles on them (the header's eye). */
   coversOnly: boolean;
@@ -29,7 +29,6 @@ export function MangaLibrary({ books, coversOnly, ...shared }: Props) {
           variant="hero"
           manga
           art
-          index={0}
           enter={shared.enter}
           now={shared.now}
           radius={26}
@@ -44,13 +43,11 @@ export function MangaLibrary({ books, coversOnly, ...shared }: Props) {
       {rest.length > 0 && (
         <section className="mg-wall" aria-label="Your manga">
           <div className="cv-wall">
-            {rest.map((b, i) => (
+            {rest.map((b) => (
               <CoverCard
                 key={b.key ?? b.id}
                 item={{ key: b.key ?? b.id, book: b }}
                 words={!coversOnly}
-                // The entrance follows the covers in order, after the one being read.
-                index={i + 1}
                 enter={shared.enter}
                 open={(b.key ?? b.id) === shared.editingId}
                 picked={pickedOf(shared.picked, [b])}
