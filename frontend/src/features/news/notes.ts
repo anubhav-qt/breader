@@ -19,7 +19,7 @@ export const NOTES: Note[] = [
     title: 'Breader is optimized!',
     lines: [
       'Breader opens faster, and your books show up right away.',
-      'On a phone, Breader’s computer now reads aloud for you. Switch it off in Read aloud.',
+      'On a phone, Breader’s computer reads aloud for you. Turn it off in Read aloud.',
     ],
   },
 ];
