@@ -11,7 +11,8 @@
   bottom: 76px;
   translate: -50% 0;
   z-index: 9;
-  width: min(calc(var(--pw) + 48px), calc(100% - 32px));
+  /* At least as wide as the switch and the voices twice over, with play between: so play is in the middle. */
+  width: min(max(calc(var(--pw) + 48px), 720px), calc(100% - 32px));
   height: calc(var(--foot) - 76px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -43,7 +44,8 @@
 .rd.has-play .rd-chrome > .i3-hint { bottom: calc(var(--foot) + 8px); }
 .rd.has-play .i3-drop { max-height: calc(100% - 92px - var(--foot)); }
 .rd.has-play .i3-drop.is-up { top: auto; bottom: calc(var(--foot) + 8px); }
-.rd.has-play .i3-drop.is-voice.is-up { right: max(12px, calc(50% - var(--pw) / 2 - 24px)); }
+/* The voice sheet opens over the voices button, at the left of the row. */
+.rd.has-play .i3-drop.is-voice.is-up { left: max(12px, calc(50% - min(max(var(--pw) + 48px, 720px), 100% - 32px) / 2)); right: auto; }
 .rd.has-play .fv-next { padding-bottom: calc(var(--foot) + 20px); }
 .rd.has-play .fv.is-pages .fv-flow :is(img, svg) { max-height: calc(100dvh - 114px - var(--foot)); }
 
@@ -68,8 +70,16 @@
 /* Each dot two whole pixels (0.8em = 14px over 7 rows), so pause's two bars sit on the pixels alike
    and look the same: at a fraction of a pixel one comes out crisp and the other blurred. */
 .pl-main .i3-dots-icon { font-size: 17.5px; }
+/* Play's triangle sits at the left of its box and weighs on its flat side: moved over to look centred. */
+.pl-main.is-play .i3-dots-icon { translate: 2px 0; }
 .pl-deck.is-small .pl-skip { width: 34px; }
 .pl-skips { display: flex; align-items: center; }
+/* How fast, while it reads: minus, words a minute, plus. */
+.pl-speed { display: flex; align-items: center; }
+.pl-speed .pl-skip { width: 30px; }
+.pl-speed .pl-skip:disabled { opacity: 0.3; }
+.pl-wpm { display: inline-flex; align-items: baseline; gap: 3px; font: var(--ui-w-strong) 14px/1 var(--ui); color: var(--r-fg); }
+.pl-wpm small { font: var(--ui-w) 10px/1 var(--ui); color: var(--r-mu); }
 .pl-voices { position: relative; }
 .pl-voices.has-dot::after { content: ""; position: absolute; top: 9px; right: 8px; width: 5px; height: 5px; border-radius: 1px; background: var(--book-mark); }
 .pl-chip {
@@ -106,7 +116,57 @@
 .pl-seg button.is-on .i3-dots-icon { color: var(--book-mark); }
 .pl-seg .i3-dots-icon { font-size: 11px; }
 .pl-mw { position: relative; justify-self: start; display: flex; align-items: center; min-width: 0; }
-.pl-D { grid-template-columns: auto minmax(0, 1fr); }
+/* D: the switch and the voices, the player over on the right beside how fast. */
+.pl-D { grid-template-columns: auto minmax(0, 1fr) auto; }
+.pl-dm { justify-self: end; display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+/* On a narrow screen, the switch is one button of a fixed width, the others in a drop-up over it. */
+.pl-dropup { position: relative; display: none; }
+.pl-dropup-b {
+  width: 92px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  font: var(--ui-w) 10px/1 var(--ui);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--r-fg);
+  background: var(--r-fill);
+  transition: background-color 140ms ease;
+}
+.pl-dropup-t { flex: 1; min-width: 0; overflow: hidden; text-align: left; }
+.pl-dropup-b .i3-dots-icon { flex: none; font-size: 10px; }
+.pl-dropup-b .i3-dots-icon { color: var(--r-mu); font-size: 8px; transition: transform var(--dur-snappy) var(--ease-snappy); }
+.pl-dropup-b.is-open .i3-dots-icon { transform: rotate(180deg); }
+.pl-dropup-m {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  min-width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--r-bg);
+  box-shadow: 0 0 0 1px var(--r-line), 0 28px 60px -28px var(--r-shadow);
+}
+.pl-dropup-m button {
+  height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  font: var(--ui-w) 10px/1 var(--ui);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--r-fg);
+}
+.pl-dropup-m .i3-dots-icon { font-size: 10px; color: var(--book-mark); }
 
 /* Immersive's question, just above the switch: read or listen, and the music. */
 .pl-card {
@@ -152,6 +212,7 @@
 
 /* B: two pills. Immersive's own colour is the book's, so it reads as the special one. */
 .pl-split { justify-self: center; display: flex; align-items: center; gap: 8px; }
+.pl-B .pl-split { gap: 6px; }
 .pl-pill {
   height: 38px;
   padding: 0 14px;
@@ -256,29 +317,59 @@
 .pl-tray .pl-seg button { padding: 0 8px; }
 
 @media (hover: hover) {
-  .pl-icon:hover, .pl-skip:hover, .pl-word:hover, .pl-chip:hover, .pl-tag-x:hover, .pl-nudge-x:hover { background: var(--r-fill); color: var(--r-fg); }
+  .pl-icon:hover, .pl-skip:hover:not(:disabled), .pl-word:hover, .pl-chip:hover, .pl-tag-x:hover, .pl-nudge-x:hover { background: var(--r-fill); color: var(--r-fg); }
   .pl-pill:not(.is-on):hover { background: var(--r-fill); }
   .pl-seg button:not(.is-on):hover { color: var(--r-fg); }
   .pl-card-ways button:not(.is-on):hover { background: var(--r-fill); }
+  .pl-dropup-m button:hover { background: var(--r-fill); }
 }
 
 /* Phones: the middle takes what the ends leave; words that don't fit go, the buttons stay. In
    Immersive the voice is in the voice sheet on the narrowest. */
-@media (max-width: 520px) {
-  .i3-play, .pl-tray { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .pl-D { grid-template-columns: auto minmax(0, 1fr); }
+/* Up to where the switch side by side would push play off the middle: the drop-up, and play in
+   the very middle, the two ends taking the same room. */
+@media (max-width: 759.98px) {
+  .i3-play, .pl-tray, .pl-D { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
   .pl-E { grid-template-columns: minmax(0, 1fr); }
+  .pl-wide { display: none; }
+  .pl-dropup { display: block; }
+  .pl-dm { justify-self: center; }
+}
+@media (max-width: 520px) {
+  .i3-play { padding: 0 12px; gap: 4px; }
+  .pl-l, .pl-r { gap: 2px; }
+  .pl-voices { width: 34px; }
+  .pl-speed .pl-skip { width: 26px; }
   .pl-deck { gap: 2px; }
   .pl-skip { width: 32px; }
   .pl-seg button { padding: 0 7px; font-size: 10px; }
   .pl-chip { padding: 0 9px; }
   .pl-chip span { display: none; }
   .pl-pill { padding: 0 12px; }
-  :is(.pl-A, .pl-D) .pl-seg .i3-dots-icon { display: none; }
-  .pl-D .pl-skip { display: none; }
+  /* B: its pills are the player, too wide for the middle: on the left, how fast on the right. */
+  .pl-B { grid-template-columns: minmax(0, 1fr) auto; }
+  .pl-B .pl-l { display: none; }
+  .pl-B .pl-split { justify-self: start; gap: 4px; }
+  .pl-B .pl-pill .i3-dots-icon { display: none; }
+  /* C: Immersive's tag is its light and the way out. */
+  .pl-C .pl-tag > span { display: none; }
+  .pl-C .pl-tag { padding-left: 8px; gap: 4px; }
 }
 @media (max-width: 420px) {
   .pl-chip { display: none; }
-  .pl-A { gap: 4px; }
-  .pl-A .pl-skip { width: 28px; }
+  .pl-deck .pl-skip, .pl-deck.is-small .pl-skip { width: 24px; }
+  .pl-voices { width: 30px; }
+  .pl-tray { gap: 4px; padding: 8px; }
+  .pl-B .pl-pill { padding: 0 10px; }
+  .pl-dropup-b { width: 86px; padding: 0 7px 0 9px; font-size: 9.5px; }
+}
+/* The narrowest phones: everything a little tighter, play and the seeks still in the middle. */
+@media (max-width: 340px) {
+  .i3-play { padding: 0 8px; }
+  .pl-deck { gap: 0; }
+  .pl-deck .pl-skip, .pl-deck.is-small .pl-skip, .pl-speed .pl-skip { width: 22px; }
+  .pl-tray { padding: 8px 6px; }
+  .pl-B .pl-speed small { display: none; }
+  .pl-voices { width: 28px; }
+  .pl-dropup-b { width: 74px; padding: 0 4px 0 6px; gap: 4px; font-size: 9px; }
 }

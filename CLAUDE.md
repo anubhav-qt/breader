@@ -20,10 +20,14 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   (`server/src/mirror/feed.ts`, fed tables in `FED_TABLES`, `server/src/db/schema.ts`).
 - The app talks to `primary`, and switches to `fallback` on timeouts and gateway errors
   (`frontend/src/lib/api.ts`).
-- The ThinkPad's voices, audiobooks and panel model run in the `engine` service (ADR 0002,
+- The ThinkPad's voices and panel model run in the `engine` service (ADR 0002,
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
-  reading aloud first, then panels, then audiobooks; audiobooks wait while anyone reads aloud.
-  The server image is Debian (`node:24-trixie-slim`) for native ONNX.
+  reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
+  The server voice reads Piper's voices only; Kokoro (the heavy voices) runs on devices.
+- Audiobooks are made on readers' devices only. The server never makes them.
+- Reading aloud and finding panels run on the reader's device when it can
+  (`frontend/src/features/reader/able.ts`, checked as a book opens, nothing sent). Only a device too
+  weak for one uses the server for it, by itself. There is no switch.
 
 ## In progress
 

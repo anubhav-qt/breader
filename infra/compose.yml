@@ -69,14 +69,14 @@ services:
       REDIS_URL: "redis://redis:6379"
       # A manga search looks in Suwayomi's sources too.
       SUWAYOMI_URL: "http://suwayomi:4567"
-    # The server voice's files (SPEECH_EMAILS in .env turns it on), downloaded once, and the sound
+    # The server voice's files, downloaded once, and the sound
     # it made (SPEECH_CACHE_MB); and the manga pages read lately and kept ahead (MANGA_CACHE_MB).
     volumes: ["voices:/data/voices", "manga:/data/manga"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
 
   # The engine: the voices and the panel model, for the API's scheduler (server/src/engine/, ADR 0002).
   # It sizes itself from this machine's cores and memory (ENGINE_WORKERS, ENGINE_THREADS,
-  # ENGINE_BESIDE_LIVE, ENGINE_MEMORY_MB, ENGINE_LOW_MB override it), and keeps the voices'
+  # ENGINE_MEMORY_MB, ENGINE_LOW_MB override it), and keeps the voices'
   # files in the voices volume.
   # Only the API reaches it. More engines, on other machines: ENGINE_URLS, and ENGINE_TOKEN on both.
   engine:

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Scheduler, type Host, type Job, type Kind, type Model, type Payload, type Runner } from '../src/engine/scheduler.ts';
 import { coresOf, sizeOf } from '../src/engine/serve.ts';
-import { bytesOf, floats, frame, unframe } from '../src/engine/wire.ts';
+import { frame, unframe } from '../src/engine/wire.ts';
 
 /*
  * The engine's scheduler (ADR 0002), with a fake runner: each job it's given waits until the test
@@ -71,17 +71,15 @@ async function next(ran: Ran[]) {
 }
 
 describe('the engine’s scheduler', () => {
-  it('runs live reading first, then panels, then audiobooks', async () => {
+  it('runs live reading first, then panels', async () => {
     const { ran, job } = setup();
-    void job('book', 'first book');
+    void job('panel', 'first panel');
     await tick();
-    void job('book', 'book');
     void job('panel', 'panel');
     void job('live', 'live');
-    expect(ran.map((r) => r.name)).toEqual(['first book']);
+    expect(ran.map((r) => r.name)).toEqual(['first panel']);
     expect(await next(ran)).toEqual(['live']);
     expect(await next(ran)).toEqual(['panel']);
-    expect(await next(ran)).toEqual(['book']);
   });
 
   it('gives each reader a turn, a job each', async () => {
@@ -110,56 +108,17 @@ describe('the engine’s scheduler', () => {
 
   it('remembers a reader’s turn while their line is empty for a moment', async () => {
     const { ran, job } = setup();
-    void job('book', 'a1', { who: 'a' });
+    void job('panel', 'a1', { who: 'a' });
     await tick();
-    void job('book', 'b1', { who: 'b' });
-    void job('book', 'b2', { who: 'b' });
-    // a's next comes only after a1 is done, as a book's next paragraph does: b still goes first.
+    void job('panel', 'b1', { who: 'b' });
+    void job('panel', 'b2', { who: 'b' });
+    // a's next comes only after a1 is done, as a reader's next page does: b still goes first.
     ran[0].finish();
-    void job('book', 'a2', { who: 'a' });
+    void job('panel', 'a2', { who: 'a' });
     await tick();
     const order = ['a1', ...ran.slice(1).map((r) => r.name)];
     for (let i = 0; i < 2; i++) order.push(...(await next(ran)));
     expect(order).toEqual(['a1', 'b1', 'a2', 'b2']);
-  });
-
-  it('gives a library’s books turns inside its own', async () => {
-    const { ran, job } = setup();
-    void job('book', 'busy', { who: 'x' });
-    await tick();
-    // Library a: two books of three sentences each. Library b: one book of one.
-    for (const n of [1, 2, 3]) void job('book', `a-one-${n}`, { who: 'a', sub: 'one' });
-    for (const n of [1, 2, 3]) void job('book', `a-two-${n}`, { who: 'a', sub: 'two' });
-    void job('book', 'b-one-1', { who: 'b', sub: 'one' });
-    const order = [];
-    for (let i = 0; i < 7; i++) order.push(...(await next(ran)));
-    expect(order).toEqual(['a-one-1', 'b-one-1', 'a-two-1', 'a-one-2', 'a-two-2', 'a-one-3', 'a-two-3']);
-  });
-
-  it('runs what finishes a paragraph before its book’s other sentences', async () => {
-    const { ran, job } = setup();
-    void job('book', 'busy', { who: 'x' });
-    await tick();
-    for (const n of [1, 2, 3]) void job('book', `s${n}`, { who: 'a', sub: 'one' });
-    void job('book', 'mp3-1', { who: 'a', sub: 'one', soon: true });
-    void job('book', 'mp3-2', { who: 'a', sub: 'one', soon: true });
-    void job('book', 'other', { who: 'a', sub: 'two' });
-    const order = [];
-    for (let i = 0; i < 6; i++) order.push(...(await next(ran)));
-    expect(order).toEqual(['mp3-1', 'other', 'mp3-2', 's1', 's2', 's3']);
-  });
-
-  it('turns away what a book has waiting when asked, and only that', async () => {
-    const { s, ran, job } = setup();
-    void job('book', 'busy', { who: 'x' });
-    await tick();
-    const one = [1, 2].map((n) => job('book', `one-${n}`, { who: 'a', sub: 'one' }));
-    void job('book', 'two-1', { who: 'a', sub: 'two' });
-    s.drop('book', 'a', 'one');
-    s.drop('book', 'nobody', 'one');
-    for (const p of one) await expect(p).rejects.toMatchObject({ dropped: true });
-    expect(s.waiting('book', 'a')).toBe(1);
-    expect(await next(ran)).toEqual(['two-1']);
   });
 
   it('reads a reader’s live sentences one at a time, in order', async () => {
@@ -173,82 +132,28 @@ describe('the engine’s scheduler', () => {
     expect(ran.map((r) => r.name)).toEqual(['a1', 'b1', 'a2']);
   });
 
-  it('leaves a worker for live reading, and more while anyone reads aloud', async () => {
-    let t = 1_000;
-    const { ran, job } = setup({ hosts: [host(4, { besideLive: 1 })], now: () => t, liveHoldMs: 60_000 });
-    // No one reading: other work takes all but one worker.
-    for (const n of [1, 2, 3, 4]) void job('book', `book${n}`, { who: `l${n}` });
+  it('leaves a worker for live reading, and shares a lone one', async () => {
+    const { ran, job } = setup({ hosts: [host(4)] });
+    // Panels take all but one worker.
+    for (const n of [1, 2, 3, 4]) void job('panel', `p${n}`, { who: `r${n}` });
     await tick();
-    expect(ran.map((r) => r.name)).toEqual(['book1', 'book2', 'book3']);
+    expect(ran.map((r) => r.name)).toEqual(['p1', 'p2', 'p3']);
     // A reader's first sentence starts at once, on the one left.
     void job('live', 'a1', { who: 'a' });
     await tick();
     expect(ran.at(-1)!.name).toBe('a1');
-    // While they read, other work gets one worker: as books finish, no more start till one is left.
-    for (const r of ran) if (r.name !== 'book3') r.finish();
-    await tick();
-    expect(ran.length).toBe(4);
-    for (const n of [5, 6]) void job('book', `book${n}`, { who: `l${n}` });
-    await tick();
-    expect(ran.length).toBe(4);
-    ran.find((r) => r.name === 'book3')!.finish();
-    await tick();
-    expect(ran.slice(4).map((r) => r.name)).toEqual(['book4']);
-    // More readers find workers at once.
-    for (const who of ['b', 'c', 'd']) void job('live', `${who}1`, { who });
-    await tick();
-    expect(ran.slice(5).map((r) => r.name)).toEqual(['b1', 'c1', 'd1']);
-    // A minute after the last sentence, no one's reading: all but one again.
-    for (const r of ran.slice(5)) r.finish();
-    await tick();
-    t += 60_000;
-    ran[4].finish();
-    await tick();
-    expect(ran.slice(8).map((r) => r.name)).toEqual(['book5', 'book6']);
-  });
-
-  it('finds panels while anyone reads aloud, though audiobooks wait', async () => {
-    const { s, ran, job } = setup({ hosts: [host(3, { besideLive: 0 })], liveHoldMs: 60_000 });
-    void job('live', 'a1', { who: 'a' });
-    await tick();
-    ran[0].finish();
-    void job('book', 'book1');
-    void job('panel', 'p1', { who: 'x' });
-    void job('panel', 'p2', { who: 'y' });
-    void job('panel', 'p3', { who: 'z' });
-    await tick();
-    // Two panels: one worker is still left for live reading.
-    expect(ran.slice(1).map((r) => r.name)).toEqual(['p1', 'p2']);
-    for (const r of ran.slice(1)) r.finish();
-    await tick();
-    expect(ran.at(-1)!.name).toBe('p3');
-    ran.at(-1)!.finish();
-    await tick();
-    // The book waits for the reader to stop.
-    expect(ran.length).toBe(4);
-    expect(s.waiting('book')).toBe(1);
-  });
-
-  it('never gives other work every worker, however it’s set, and shares a lone one', async () => {
-    const one = setup({ hosts: [host(3, { besideLive: 10 })], liveHoldMs: 60_000 });
-    void one.job('live', 'a1', { who: 'a' });
-    await tick();
-    one.ran[0].finish();
-    for (const n of [1, 2, 3]) void one.job('book', `book${n}`, { who: `l${n}` });
-    await tick();
-    expect(one.ran.slice(1).map((r) => r.name)).toEqual(['book1', 'book2']);
-    // One worker: a book still runs between a reader's sentences.
-    const lone = setup({ hosts: [host(1, { besideLive: 0 })], liveHoldMs: 60_000 });
+    // One worker: panels still run between a reader's sentences.
+    const lone = setup({ hosts: [host(1)] });
     void lone.job('live', 'a1', { who: 'a' });
-    void lone.job('book', 'book1');
+    void lone.job('panel', 'p1');
     await tick();
-    expect(await next(lone.ran)).toEqual(['book1']);
+    expect(await next(lone.ran)).toEqual(['p1']);
   });
 
   it('puts other work on the workers that read live longest ago', async () => {
     let now = 1_000;
     const { ran, job } = setup({ hosts: [host(3)], now: () => now, liveHoldMs: 60_000 });
-    void job('book', 'book', { model: PANELS });
+    void job('panel', 'panel', { model: PANELS });
     void job('live', 'live', { model: KOKORO });
     await tick();
     const liveSlot = ran[1].slot;
@@ -256,8 +161,8 @@ describe('the engine’s scheduler', () => {
     ran[1].finish();
     ran[0].finish();
     await tick();
-    void job('book', 'b1', { model: PIPER });
-    void job('book', 'b2', { model: PIPER });
+    void job('panel', 'p1', { model: PIPER, who: 'x' });
+    void job('panel', 'p2', { model: PIPER, who: 'y' });
     await tick();
     expect(ran.slice(2).map((r) => r.slot)).not.toContain(liveSlot);
   });
@@ -271,7 +176,7 @@ describe('the engine’s scheduler', () => {
     ran[0].finish();
     ran[1].finish();
     await tick();
-    void job('book', 'k2', { model: KOKORO });
+    void job('panel', 'k2', { model: KOKORO });
     await tick();
     expect(ran[2].slot).toBe(kSlot);
   });
@@ -325,20 +230,19 @@ describe('the engine’s scheduler', () => {
     const plenty = host(2, { lowMb: 1_000 });
     const short = host(2, { lowMb: 1_000, freeMb: 500 });
     const { ran, job, s, stopped, lows } = setup({ hosts: [plenty] });
-    // Both workers busy: a live sentence and a book's.
+    // Both workers busy: a live sentence and a page's panels.
     void job('live', 'live 1');
-    void job('book', 'book 1');
+    void job('panel', 'panel 1');
     await tick();
     const panel = job('panel', 'waiting panel');
-    const book = job('book', 'waiting book');
     s.host(0, short);
     expect(lows).toEqual([[0, true]]);
     await expect(panel).rejects.toMatchObject({ busy: true });
     await expect(job('panel', 'new panel')).rejects.toMatchObject({ busy: true });
-    // The book's worker comes free: no book starts on it, and it's let go.
+    // The panel's worker comes free, and it's let go.
     ran[1].finish();
     await tick();
-    expect(ran.map((r) => r.name)).toEqual(['live 1', 'book 1']);
+    expect(ran.map((r) => r.name)).toEqual(['live 1', 'panel 1']);
     s.host(0, short);
     expect(stopped).toEqual([[0, ran[1].slot]]);
     // Live reading still runs.
@@ -348,14 +252,14 @@ describe('the engine’s scheduler', () => {
     ran.at(-1)!.finish();
     ran[0].finish();
     await tick();
-    expect(s.waiting('book')).toBe(1);
-    // Memory again: the book goes on.
+    // Memory again: panels are found again.
     s.host(0, plenty);
     expect(lows).toEqual([[0, true], [0, false]]);
+    const later = job('panel', 'later panel');
     await tick();
-    expect(ran.at(-1)!.name).toBe('waiting book');
+    expect(ran.at(-1)!.name).toBe('later panel');
     ran.at(-1)!.finish();
-    await expect(book).resolves.toBe('waiting book');
+    await expect(later).resolves.toBe('later panel');
   });
 
   it('keeps a worker that read live lately when short of memory, for a minute', async () => {
@@ -363,44 +267,37 @@ describe('the engine’s scheduler', () => {
     const plenty = host(2, { lowMb: 1_000 });
     const short = host(2, { lowMb: 1_000, freeMb: 500 });
     const { ran, job, s, stopped } = setup({ hosts: [plenty], now: () => t, liveHoldMs: 60_000 });
-    void job('book', 'book');
+    void job('panel', 'panel');
     void job('live', 'live', { who: 'a' });
     await tick();
-    const [bookSlot, liveSlot] = [ran[0].slot, ran[1].slot];
+    const [panelSlot, liveSlot] = [ran[0].slot, ran[1].slot];
     for (const r of ran) r.finish();
     await tick();
     s.host(0, short);
-    expect(stopped).toEqual([[0, bookSlot]]);
+    expect(stopped).toEqual([[0, panelSlot]]);
     t += 60_000;
     s.tick();
-    expect(stopped).toEqual([[0, bookSlot], [0, liveSlot]]);
+    expect(stopped).toEqual([[0, panelSlot], [0, liveSlot]]);
   });
 
-  it('turns live reading and panels away with no engine up, and holds audiobooks till one is', async () => {
+  it('turns live reading and panels away with no engine up', async () => {
     const f = fakeRunner();
     const s = new Scheduler(f.runner, { hosts: 1, liveHoldMs: 0 });
     await expect(s.run({ kind: 'live', who: '', model: null, body: () => ({ ask: 'l' }) })).rejects.toMatchObject({ off: true });
     await expect(s.run({ kind: 'panel', who: '', model: null, body: () => ({ ask: 'p' }) })).rejects.toMatchObject({ off: true });
-    const book = s.run({ kind: 'book', who: '', model: null, body: () => ({ ask: 'b' }) });
-    await tick();
     expect(f.ran.length).toBe(0);
-    s.host(0, host(1));
-    await tick();
-    expect(f.ran.map((r) => r.name)).toEqual(['b']);
-    f.ran[0].finish();
-    await expect(book).resolves.toBe('b');
   });
 
   it('turns away live reading and panels waiting when the last engine goes', async () => {
     const { s, job } = setup();
-    void job('book', 'busy');
+    void job('panel', 'busy');
     await tick();
     const live = job('live', 'live');
-    const book = job('book', 'book');
+    const panel = job('panel', 'panel', { who: 'x' });
     s.host(0, null);
     await expect(live).rejects.toMatchObject({ off: true });
-    expect(s.waiting('book')).toBe(1);
-    void book;
+    await expect(panel).rejects.toMatchObject({ off: true });
+    expect(s.waiting('panel')).toBe(0);
   });
 
   it('turns live reading away past its most waiting', async () => {
@@ -431,7 +328,7 @@ describe('the engine’s scheduler', () => {
   it('lets a worker go after a quiet while', async () => {
     let now = 0;
     const { ran, job, s, stopped } = setup({ now: () => now, idleMs: 1_000 });
-    void job('book', 'b');
+    void job('panel', 'p');
     await tick();
     ran[0].finish();
     await tick();
@@ -446,8 +343,8 @@ describe('the engine’s scheduler', () => {
 
   it('shares work across engines, each to its own budget', async () => {
     const { ran, job, s } = setup({ hosts: [host(1, { budgetMb: 800 }), host(1, { budgetMb: 800 })] });
-    void job('book', 'one', { model: KOKORO });
-    void job('book', 'two', { model: KOKORO });
+    void job('panel', 'one', { model: KOKORO, who: 'a' });
+    void job('panel', 'two', { model: KOKORO, who: 'b' });
     await tick();
     expect(ran.map((r) => r.host).sort()).toEqual([0, 1]);
     expect(s.stats().engines.map((e) => e.heldMb)).toEqual([750, 750]);
@@ -473,11 +370,11 @@ describe('the engine’s size', () => {
     expect(coresOf(eight)).toBe(8);
   });
 
-  it('gives a worker of four threads for each two cores, half the memory, and audiobooks none while reading aloud', () => {
-    expect(sizeOf({}, 8, 16_000)).toEqual({ workers: 4, threads: 4, budgetMb: 8_000, lowMb: 1_024, besideLive: 0 });
-    expect(sizeOf({}, 2, 2_000)).toEqual({ workers: 1, threads: 2, budgetMb: 1_000, lowMb: 250, besideLive: 0 });
+  it('gives a worker of four threads for each two cores, and half the memory', () => {
+    expect(sizeOf({}, 8, 16_000)).toEqual({ workers: 4, threads: 4, budgetMb: 8_000, lowMb: 1_024 });
+    expect(sizeOf({}, 2, 2_000)).toEqual({ workers: 1, threads: 2, budgetMb: 1_000, lowMb: 250 });
     expect(sizeOf({}, 1, 2_000)).toMatchObject({ workers: 1, threads: 1 });
-    expect(sizeOf({ ENGINE_WORKERS: 5, ENGINE_THREADS: 1, ENGINE_MEMORY_MB: 3_000, ENGINE_LOW_MB: 10, ENGINE_BESIDE_LIVE: 2 }, 8, 16_000)).toEqual({ workers: 5, threads: 1, budgetMb: 3_000, lowMb: 10, besideLive: 2 });
+    expect(sizeOf({ ENGINE_WORKERS: 5, ENGINE_THREADS: 1, ENGINE_MEMORY_MB: 3_000, ENGINE_LOW_MB: 10 }, 8, 16_000)).toEqual({ workers: 5, threads: 1, budgetMb: 3_000, lowMb: 10 });
   });
 });
 
@@ -494,14 +391,4 @@ describe('the engine’s wire', () => {
     expect(() => unframe(new Uint8Array([0, 0, 0, 9, 1]))).toThrow();
   });
 
-  it('reads sound however its bytes lie', () => {
-    const audio = new Float32Array([0.5, -0.25, 1]);
-    const f = frame({ x: 1 }, bytesOf(audio));
-    const { bytes } = unframe(f);
-    expect([...floats(bytes)]).toEqual([0.5, -0.25, 1]);
-    const odd = new Uint8Array(13);
-    odd.set(bytesOf(audio), 1);
-    expect([...floats(odd.subarray(1))]).toEqual([0.5, -0.25, 1]);
-    expect(() => floats(new Uint8Array(5))).toThrow();
-  });
 });

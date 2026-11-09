@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { AnimatePresence } from 'motion/react';
 import { keepChapters, letGo, stopKeeping, useKept } from '../../books/kept';
 import type { LoadedBook, MangaBook, TocItem } from '../../books/types';
-import { api, sayAway } from '../../lib/api';
 import { duration, minutesFor } from '../../lib/format';
 import { IconCheck } from '../../components/icons';
-import { Modal } from '../../components/Modal';
 import { useBarHidden } from './focus';
 import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
 import { usePanelModel } from './panelModel';
-import { answerSeatOffer, setPanelsNotify, setServerPanels, useServerPanels } from './serverPanels';
+import { useServerPanels } from './serverPanels';
+import { useAble } from './able';
 import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, measureOf, styleFor, useNarrowPortrait, type MangaDir, type PdfLook, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -240,73 +238,36 @@ function DataSaver() {
 }
 
 /**
- * Panels found on Breader's own computer (serverPanels.ts): this device's choice. It has a few
- * seats; when they're all taken the switch stays off, and the reader sees how full it is, live,
- * and can ask to be told when there's room.
+ * Panels found on Breader's own computer (serverPanels.ts), on a device that can't find them itself
+ * (able.ts): no switch, only what's happening. It has a few seats; while they're all taken, how
+ * full it is, live, and the first to free up is taken by itself.
  */
 function ServerPanels() {
   const s = useServerPanels();
-  if (!s.allowed) return null;
-  const on = s.on && !s.full;
+  const able = useAble();
+  if (!s.allowed || able.panels) return null;
+  if (s.seated) return <p className="p-note">Breader’s computer finds this manga’s panels, as this device can’t.</p>;
+  if (!s.full) return null;
   return (
-    <>
-      <div className="ctl tgrow">
-        <span className="clbl">Find panels on the server</span>
-        <button type="button" className="tg" role="switch" aria-checked={on} aria-label="Find panels on Breader’s own computer" onClick={() => {
-          if (!on && api.away) sayAway('this device finds the panels itself');
-          setServerPanels(!on);
-        }} />
-      </div>
-      {s.on && s.full && (
-        <>
-          <p className="p-note p-seats" aria-live="polite">
-            {s.used < s.seats
-              ? `There’s room now: ${s.used}/${s.seats} readers are using it. Turn it on to take a seat.`
-              : `It’s full: ${s.used}/${s.seats} readers are using it. This device finds the panels meanwhile.`}
-          </p>
-          <div className="ctl tgrow">
-            <span className="clbl">Tell me when there’s room</span>
-            <button type="button" className="tg" role="switch" aria-checked={s.notify} aria-label="Tell me when there’s room on the server" onClick={() => setPanelsNotify(!s.notify)} />
-          </div>
-        </>
-      )}
-    </>
+    <p className="p-note p-seats" aria-live="polite">
+      Breader’s computer is full: {s.used}/{s.seats} readers are using it. Panels come here once there’s room.
+    </p>
   );
 }
 
 /** The panel model coming to this device (panelModel.ts), the first time: it's about 40 MB. Or not, where it can't run. */
 function ModelComing() {
   const m = usePanelModel();
-  if (m.state === 'unfit') return <p className="p-note">This device can’t find panels itself, so they come from the server only.</p>;
+  if (m.state === 'unfit') return null;
   if (m.state !== 'loading' || !m.size) return null;
   return <p className="p-note" aria-live="polite">Fetching the panel model for this device: {Math.round(m.bytes / 1e6)} of {Math.round(m.size / 1e6)} MB.</p>;
-}
-
-/** The popup when a seat at the server's panel model frees up, for a reader who asked to be told. */
-export function SeatOffer() {
-  const s = useServerPanels();
-  return (
-    <AnimatePresence>
-      {s.offer && (
-        <Modal title="There’s room on the server" onClose={() => answerSeatOffer(false)} width={400}>
-          <div className="seat-offer">
-            <p>A seat is free: {s.used}/{s.seats} readers are using it now. Take it, and Breader’s own computer finds this manga’s panels.</p>
-            <div className="seat-offer-b">
-              <button type="button" className="btn btn-quiet" onClick={() => answerSeatOffer(false)}>Not now</button>
-              <button type="button" className="btn btn-primary" onClick={() => answerSeatOffer(true)}>Take the seat</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </AnimatePresence>
-  );
 }
 
 /**
  * A manga's layout, the way its pages turn, how wide they scroll, and whether they turn two at a
  * time on a wide screen. On a narrow screen it opens scrolled, and keeps a layout there apart from
  * wider ones; the column of pages is as wide as the screen, and pages turn one at a time.
- * Panels, and finding them on the server, are for manga from Japan only, and a manhwa or manhua has
+ * Panels are for manga from Japan only, and a manhwa or manhua has
  * no layout to pick: it only scrolls.
  */
 function MangaLookControls({ look, pick, widen, pair, saver, panels, strip }: MangaControls) {

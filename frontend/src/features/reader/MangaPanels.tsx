@@ -85,7 +85,7 @@ export function PanelsNote() {
   if (s.allowed && s.seated) return null;
   let say = '';
   if (m.state === 'loading' && m.size) say = `Getting panels ready on this device: ${Math.round(m.bytes / 1e6)} of ${Math.round(m.size / 1e6)} MB`;
-  else if (m.state === 'unfit') say = s.allowed ? 'This device can’t find panels itself, so only pages someone’s read before have them. Turn on Find panels on the server in Look.' : 'This device can’t find panels itself, so only pages someone’s read before have them.';
+  else if (m.state === 'unfit') say = s.allowed && s.full ? 'Breader’s computer is full just now, so only pages someone’s read before have panels until there’s room.' : 'This device can’t find panels itself, so only pages someone’s read before have them.';
   else if (m.state === 'failed') say = 'Panels couldn’t be found on this device, so only pages someone’s read before have them.';
   if (!say) return null;
   return <p className="mg-note" aria-live="polite">{say}</p>;

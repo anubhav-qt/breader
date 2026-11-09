@@ -19,7 +19,7 @@ export function healthRoutes(deps: Deps) {
       up: up.length,
       workers: up.reduce((n, e) => n + e.workers, 0),
       busy: up.reduce((n, e) => n + e.busy, 0),
-      waiting: s.waiting.live + s.waiting.panel + s.waiting.book,
+      waiting: s.waiting.live + s.waiting.panel,
       low: !!engine?.short,
     };
     return c.json({ ok: true, role: env.ROLE, release: env.RELEASE, ...(busy ? { engine: busy } : {}) });

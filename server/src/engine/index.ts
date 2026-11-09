@@ -10,7 +10,7 @@ import { frame, unframe, type Answered, type Done, type Info, type Run } from '.
  */
 
 export type { Job, Kind, Stats } from './scheduler.ts';
-export { busyError, droppedError, offError } from './scheduler.ts';
+export { busyError, offError } from './scheduler.ts';
 
 export interface Result {
   head: Done;
@@ -20,8 +20,6 @@ export interface Result {
 export interface Engine {
   run(job: Job): Promise<Result>;
   waiting(kind: Kind, who?: string): number;
-  /** Turns away what waits in `who`'s line for `sub`. */
-  drop(kind: Kind, who: string, sub: string): void;
   /** No engine up, or every one short of memory. */
   readonly short: boolean;
   /** The panel model's round on an engine that has it, or null. */
@@ -34,7 +32,7 @@ export interface Engine {
 
 /** How often each engine is asked how it is. */
 const TICK_MS = 2_000;
-/** Longer than any job: a page of a long strip, a long paragraph's MP3. */
+/** Longer than any job: a page of a long strip, a long sentence. */
 const RUN_MS = 5 * 60_000;
 const ASK_MS = 1_500;
 
@@ -111,7 +109,6 @@ export function makeEngine(env: Pick<Env, 'ENGINE_URLS' | 'ENGINE_TOKEN'>): Engi
   return {
     run: (job) => s.run(job) as Promise<Result>,
     waiting: (kind, who) => s.waiting(kind, who),
-    drop: (kind, who, sub) => s.drop(kind, who, sub),
     get short() {
       return s.short;
     },

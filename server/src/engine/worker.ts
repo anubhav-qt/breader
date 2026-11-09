@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { parentPort, workerData } from 'node:worker_threads';
 import { Mp3Encoder } from '@breezystack/lamejs';
 import * as ort from 'onnxruntime-node';
-import { KOKORO_PACK_BYTES, KOKORO_RATE, kokoroInput, piperInput, type PiperConfig } from '@breader/shared/speech';
+import { piperInput, type PiperConfig } from '@breader/shared/speech';
 import { SIZE, pagePanels, type Fit } from '@breader/shared/panels';
 import type { VoiceFiles } from '../speech/files.ts';
 import { PANELS } from './models.ts';
@@ -17,19 +17,15 @@ import { PANELS } from './models.ts';
  * raw sound's bytes) for phones on mobile data. Panels: the panel model trained on the owner's
  * labels (ai/panels), on a page's windows as the API cut them (panels/index.ts).
  *
- * Measured on a Ryzen 7 9800X3D, 2 threads: a Kokoro sentence about 1.7 s while three others run,
- * a Piper one about 90 ms, a panel window about 110 ms. Held: Kokoro about 750 MB (one model for
- * all its voices), a Piper voice about 250 MB, the panel model about 500 MB.
+ * Measured on a Ryzen 7 9800X3D, 2 threads: a Piper sentence about 90 ms, a panel window about
+ * 110 ms. Held: a Piper voice about 250 MB, the panel model about 500 MB. The heavy voices (Kokoro)
+ * run on devices only.
  */
 
 /** Voices name their model by `key` (models.ts), which may speak for several of them. */
 export type Body =
   | { type: 'load'; key: string; files: VoiceFiles }
   | { type: 'say'; key: string; files: VoiceFiles; text: string; speed: number }
-  /** An audiobook's sentence, as sound, to be put together with the rest of its paragraph. */
-  | { type: 'sound'; key: string; files: VoiceFiles; text: string; speed: number }
-  /** An audiobook's paragraph, put together, as MP3. */
-  | { type: 'encode'; audio: Float32Array; rate: number }
   /** A page's panels: each window as the model sees it, its square's pixels, and where it came from. */
   | { type: 'panels'; model: string; w: number; h: number; windows: Array<{ input: Float32Array; fit: Fit; span: [number, number] }> };
 
@@ -42,7 +38,6 @@ export interface Message {
 
 export interface Answer {
   mp3?: Uint8Array;
-  audio?: Float32Array;
   samples?: number;
   rate?: number;
   panels?: Array<Array<[number, number]>>;
@@ -61,8 +56,6 @@ const { threads } = workerData as { threads: number };
 
 const sessions = new Map<string, Promise<ort.InferenceSession>>();
 const configs = new Map<string, Promise<PiperConfig>>();
-/** Kokoro's voice packs, by their files: small (0.5 MB), let go with the model. */
-const packs = new Map<string, Promise<Float32Array>>();
 
 const open = (key: string, file: string) => {
   let s = sessions.get(key);
@@ -86,37 +79,11 @@ async function drop(keys: string[]) {
     const s = sessions.get(key);
     sessions.delete(key);
     configs.delete(key);
-    if (key === 'kokoro') packs.clear();
     await s?.then((x) => x.release()).catch(() => {});
   }
 }
 
-async function packOf(file: string) {
-  const b = await readFile(file);
-  if (b.byteLength !== KOKORO_PACK_BYTES) throw new Error('That isn’t a Kokoro voice pack.');
-  return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
-}
-
-/** A Kokoro voice's pack: its own, or a blend's two averaged, style by style. */
-function kokoroPack(files: Extract<VoiceFiles, { engine: 'kokoro' }>) {
-  const key = `${files.pack}\n${files.mix ?? ''}`;
-  let p = packs.get(key);
-  if (!p) {
-    p = (async () => {
-      const one = await packOf(files.pack);
-      if (!files.mix) return one;
-      const other = await packOf(files.mix);
-      const both = new Float32Array(one.length);
-      for (let i = 0; i < one.length; i++) both[i] = (one[i] + other[i]) / 2;
-      return both;
-    })();
-    packs.set(key, p);
-    p.catch(() => packs.delete(key));
-  }
-  return p;
-}
-
-function piperConfig(key: string, files: Extract<VoiceFiles, { engine: 'piper' }>) {
+function piperConfig(key: string, files: VoiceFiles) {
   let c = configs.get(key);
   if (!c) {
     c = readFile(files.config, 'utf8').then((t) => JSON.parse(t) as PiperConfig);
@@ -128,23 +95,13 @@ function piperConfig(key: string, files: Extract<VoiceFiles, { engine: 'piper' }
 
 async function load(key: string, files: VoiceFiles) {
   await open(key, files.model);
-  if (files.engine === 'kokoro') await kokoroPack(files);
-  else await piperConfig(key, files);
+  await piperConfig(key, files);
 }
 
 const int64 = (ids: number[]) => BigInt64Array.from(ids, (n) => BigInt(n));
 
 async function sound(key: string, files: VoiceFiles, text: string, speed: number): Promise<{ audio: Float32Array; rate: number }> {
   const s = await open(key, files.model);
-  if (files.engine === 'kokoro') {
-    const { ids, style } = await kokoroInput(text, files.british, await kokoroPack(files));
-    const out = await s.run({
-      input_ids: new ort.Tensor('int64', int64(ids), [1, ids.length]),
-      style: new ort.Tensor('float32', style, [1, 256]),
-      speed: new ort.Tensor('float32', new Float32Array([speed]), [1]),
-    });
-    return { audio: (out.waveform as ort.Tensor).data as Float32Array, rate: KOKORO_RATE };
-  }
   const config = await piperConfig(key, files);
   const { ids, scales, speakers } = await piperInput(text, config, speed);
   const feeds: Record<string, ort.Tensor> = {
@@ -193,13 +150,6 @@ async function handle(b: Body): Promise<Answer> {
       const { audio, rate } = await sound(b.key, b.files, b.text, b.speed);
       return { mp3: mp3(audio, rate), samples: audio.length, rate };
     }
-    case 'sound': {
-      const { audio, rate } = await sound(b.key, b.files, b.text, b.speed);
-      // A copy of its own, to hand over: the engine's may share its memory.
-      return { audio: audio.slice(), rate };
-    }
-    case 'encode':
-      return { mp3: mp3(b.audio, b.rate) };
     case 'panels':
       return await panels(b);
   }
@@ -217,7 +167,7 @@ parentPort!.on('message', (m: Message) => {
     } catch (err) {
       r = { id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-    const moved = r.ok ? [r.answer.mp3?.buffer, r.answer.audio?.buffer].filter((b): b is ArrayBuffer => b instanceof ArrayBuffer) : [];
+    const moved = r.ok && r.answer.mp3?.buffer instanceof ArrayBuffer ? [r.answer.mp3.buffer] : [];
     parentPort!.postMessage(r, moved);
   });
 });

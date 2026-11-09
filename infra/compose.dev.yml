@@ -76,7 +76,7 @@ services:
       S3_PUBLIC_ENDPOINT: "http://localhost:9000"
       # Where Google sends readers back after logging in; account emails print their links in the logs.
       PUBLIC_URL: "http://localhost:8787"
-      # The server voice, for these accounts: SPEECH_EMAILS=you@example.com npm run stack
+      # The owner's accounts (a panel seat always): SPEECH_EMAILS=you@example.com npm run stack
       SPEECH_EMAILS: "${SPEECH_EMAILS:-}"
       # MangaDex's answers are kept here. Stop "redis" to watch the API carry on without it.
       REDIS_URL: "redis://redis:6379"
@@ -88,7 +88,7 @@ services:
 
   # The engine: the voices and the panel model, for the API's scheduler (server/src/engine/, ADR 0002).
   # It sizes itself from this machine's cores and memory (ENGINE_WORKERS, ENGINE_THREADS,
-  # ENGINE_BESIDE_LIVE, ENGINE_MEMORY_MB, ENGINE_LOW_MB override it), and keeps the voices'
+  # ENGINE_MEMORY_MB, ENGINE_LOW_MB override it), and keeps the voices'
   # files in the voices volume.
   # Only the API reaches it. More engines, on other machines: ENGINE_URLS, and ENGINE_TOKEN on both.
   engine:

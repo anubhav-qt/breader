@@ -59,8 +59,10 @@ export const FEATURES: Feature[] = [
   // Listening
   { id: 'listen', group: 'Listening', name: 'Listen', what: 'A voice reads the page aloud, from where you pick.', where: 'Listen, at the bottom of a book', keys: ['Space', 'K'] },
   { id: 'immersive', group: 'Listening', name: 'Immersive', what: 'The page dims and the words light up at your pace, with a voice or without.', where: 'Immersive, at the bottom of a book' },
-  { id: 'voices', group: 'Listening', name: 'Voices and speed', what: 'Sixty voices, each with a hello to hear before it downloads.', where: 'The button right of play', keys: ['<', '>'] },
+  { id: 'voices', group: 'Listening', name: 'Voices and speed', what: 'Sixty voices, each with a hello to hear before it downloads.', where: 'The button right of Read, Listen and Immersive', keys: ['<', '>'] },
+  { id: 'speed-bar', group: 'Listening', name: 'Speed on the play row', what: 'Minus and plus, in words a minute: how fast the voice reads, or Immersive’s pace. Change it as it reads.', where: 'The right of the play row, at the bottom of a book', since: day(2026, 11, 9) },
   { id: 'sayas', group: 'Listening', name: 'Say it your way', what: 'Click a word while a voice reads, or select a few, to change how it’s said.', where: 'Any word, while a voice reads' },
+  { id: 'voice-anywhere', group: 'Listening', name: 'Any device', what: 'This device reads aloud itself. One too slow to keep up has Breader’s computer read for it, with Piper’s voices (Kokoro is too heavy for such a device).', where: 'Happens by itself', since: day(2026, 11, 9) },
   { id: 'sleep', group: 'Listening', name: 'Did you sleep?', what: 'After an hour untouched the voice fades out, then shows where you were, to go back to.', where: 'Happens by itself' },
 
   // AI reading along
@@ -72,12 +74,13 @@ export const FEATURES: Feature[] = [
   { id: 'first', group: 'AI reading along', name: 'Do this one first', what: 'The AI reads this book before your others.', where: 'A book’s ⋯, while its AI is reading' },
 
   // Audiobooks
-  { id: 'audiobook', group: 'Audiobooks', name: 'Make an audiobook', what: 'Any book, made on this device or on Breader’s computer, and kept as MP3. Listen while the rest is made.', where: 'The arrow on a book’s card', since: day(2026, 11, 7) },
+  { id: 'audiobook', group: 'Audiobooks', name: 'Make an audiobook', what: 'Any book, made on this device while Breader is open, and kept as MP3. Listen while the rest is made.', where: 'The arrow on a book’s card', since: day(2026, 11, 7) },
   { id: 'audiobook-bar', group: 'Audiobooks', name: 'Keep listening', what: 'Close the audiobook and it plays on. Play and pause stay at the top, beside Select.', where: 'The top of the library', keys: ['Space', '←', '→', 'J', 'L', ',', '.'], since: day(2026, 11, 7) },
 
   // Manga
   { id: 'series-page', group: 'Manga', name: 'A series’ page', what: 'Its chapters, each read from the sharpest copy found.', where: 'Pick a series in Find manga' },
   { id: 'panels', group: 'Manga', name: 'Panel by panel', what: 'One panel at a time, fitted to the screen.', where: 'Aa, then Layout, then Panels' },
+  { id: 'panels-anywhere', group: 'Manga', name: 'Panels on any device', what: 'This device finds a page’s panels itself. One that can’t has Breader’s computer find them.', where: 'Happens by itself, in Panels', since: day(2026, 11, 9) },
   { id: 'zoom', group: 'Manga', name: 'Zoom', what: 'Tap a panel to bring it close. Tap twice to zoom where you tapped, and drag it about.', where: 'Any manga page' },
   { id: 'direction', group: 'Manga', name: 'Direction', what: 'Right to left or left to right, one page or two side by side.', where: 'Aa, in a manga' },
   { id: 'offline', group: 'Manga', name: 'Download', what: 'Keep a whole series in this browser to read offline.', where: 'A manga’s ⋯, then Download' },

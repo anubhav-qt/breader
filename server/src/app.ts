@@ -84,7 +84,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', aiRoutes(deps));
   app.route('/v1', commentRoutes(deps));
   app.route('/v1', speechRoutes(deps));
-  app.route('/v1', audiobookRoutes(deps));
+  app.route('/v1', audiobookRoutes());
   app.route('/v1', panelRoutes(deps));
   app.route('/v1', mangaRoutes(deps));
 

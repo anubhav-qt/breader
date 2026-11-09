@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { fitOf, squareOf, windows } from '@breader/shared/panels';
 import { log } from '../log.ts';
 import { makeFiles, modelOfVoice, VOICES } from '../speech/files.ts';
-import { bytesOf, floats, frame, unframe, type Answered, type Info, type Run } from './wire.ts';
+import { frame, unframe, type Answered, type Info, type Run } from './wire.ts';
 import type { Answer, Body, Reply } from './worker.ts';
 
 /*
@@ -32,7 +32,6 @@ export const EngineEnv = z.object({
   ENGINE_THREADS: z.coerce.number().int().min(1).max(16).optional(),
   ENGINE_MEMORY_MB: z.coerce.number().int().min(256).max(1_000_000).optional(),
   ENGINE_LOW_MB: z.coerce.number().int().min(0).max(1_000_000).optional(),
-  ENGINE_BESIDE_LIVE: z.coerce.number().int().min(0).max(64).optional(),
 });
 export type EngineEnv = z.infer<typeof EngineEnv>;
 
@@ -58,24 +57,19 @@ export interface Size {
   threads: number;
   budgetMb: number;
   lowMb: number;
-  besideLive: number;
 }
 
 /**
  * The pool's size: a worker for each two cores, of four threads each (measured on 8 cores, test
- * stack: a Kokoro sentence alone in 0.72 s, against 1.1 s with 3 of 2; audiobooks alone 2.95
- * sentences a second, against 2.5). Models held up to half the memory free; short of memory under
- * a quarter of that, or 1 GB if less. While anyone reads aloud, audiobooks use no worker
- * (ENGINE_BESIDE_LIVE): each one at it slows a live sentence by a third or so.
+ * stack: a Kokoro sentence alone in 0.72 s, against 1.1 s with 3 of 2). Models held up to half
+ * the memory free; short of memory under a quarter of that, or 1 GB if less.
  */
-export function sizeOf(env: Pick<EngineEnv, 'ENGINE_WORKERS' | 'ENGINE_THREADS' | 'ENGINE_MEMORY_MB' | 'ENGINE_LOW_MB' | 'ENGINE_BESIDE_LIVE'>, cores: number, freeMb: number): Size {
+export function sizeOf(env: Pick<EngineEnv, 'ENGINE_WORKERS' | 'ENGINE_THREADS' | 'ENGINE_MEMORY_MB' | 'ENGINE_LOW_MB'>, cores: number, freeMb: number): Size {
   const threads = env.ENGINE_THREADS ?? Math.min(4, cores);
   const workers = env.ENGINE_WORKERS ?? Math.max(1, Math.floor(cores / 2));
   const budgetMb = env.ENGINE_MEMORY_MB ?? Math.max(512, Math.floor(freeMb / 2));
   const lowMb = env.ENGINE_LOW_MB ?? Math.min(1024, Math.floor(budgetMb / 4));
-  // Any audiobook work slows a live sentence (a third, with one worker of four at it), so none.
-  const besideLive = env.ENGINE_BESIDE_LIVE ?? 0;
-  return { workers, threads, budgetMb, lowMb, besideLive };
+  return { workers, threads, budgetMb, lowMb };
 }
 
 /** The panel model and its round: beside the bundle in the image (Dockerfile), or in ai/panels from the source. */
@@ -109,7 +103,7 @@ export function threadPool(threads: number, file?: URL): Pool {
   let closed = false;
 
   // Ended mid-run, ONNX Runtime's native run calls back into a thread that's gone, and the whole
-  // engine aborts (seen when the API stopped while audiobooks were made), so a worker ends idle.
+  // engine aborts (seen when the API stopped mid-job), so a worker ends idle.
   function endIfIdle(w: Worker) {
     for (const p of pending.values()) if (p.w === w) return;
     leaving.delete(w);
@@ -258,15 +252,10 @@ export function makeEngineApp(d: EngineDeps) {
     try {
       let body: Body;
       let transfer: ArrayBuffer[] = [];
-      if (ask.type === 'load' || ask.type === 'say' || ask.type === 'sound') {
+      if (ask.type === 'load' || ask.type === 'say') {
         const f = await files.ensure(ask.voice);
         const key = modelOfVoice(ask.voice);
-        body = ask.type === 'load' ? { type: 'load', key, files: f } : { type: ask.type, key, files: f, text: ask.text, speed: ask.speed };
-      } else if (ask.type === 'encode') {
-        // A copy of its own, to hand to the worker.
-        const audio = floats(bytes).slice();
-        body = { type: 'encode', audio, rate: ask.rate };
-        transfer = [audio.buffer as ArrayBuffer];
+        body = ask.type === 'load' ? { type: 'load', key, files: f } : { type: 'say', key, files: f, text: ask.text, speed: ask.speed };
       } else if (ask.type === 'panels') {
         if (!d.panel) return answer({ ok: false, error: 'This engine hasn’t the panel model.' });
         body = await cut(bytes, d.panel.file);
@@ -276,8 +265,6 @@ export function makeEngineApp(d: EngineDeps) {
       }
       const r = await d.pool.run(slot, body, transfer, drop);
       if (ask.type === 'say') return answer({ ok: true, samples: r.samples, rate: r.rate }, r.mp3);
-      if (ask.type === 'sound') return answer({ ok: true, rate: r.rate }, bytesOf(r.audio!));
-      if (ask.type === 'encode') return answer({ ok: true }, r.mp3);
       if (ask.type === 'panels') return answer({ ok: true, panels: r.panels, sure: r.sure, w: r.w, h: r.h });
       return answer({ ok: true });
     } catch (err) {

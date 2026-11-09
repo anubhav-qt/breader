@@ -1,17 +1,15 @@
 import { join } from 'node:path';
 import type { Engine } from '../engine/index.ts';
 import { voiceModel } from '../engine/models.ts';
-import { bytesOf, floats } from '../engine/wire.ts';
 import type { Env } from '../env.ts';
 import { Disk } from '../manga/disk.ts';
 import { VOICES } from './files.ts';
 
 /*
  * The server voice: the laptop reads aloud for a phone that can't run a voice itself, a sentence
- * at a time, as the app asks (routes/speech.ts), and makes audiobooks (books.ts). The voices' files
- * download the first time each is wanted (files.ts), and the laptop's one engine runs them
- * (engine/, ADR 0002): a sentence read live goes first, and an audiobook's when nothing more
- * urgent waits.
+ * at a time, as the app asks (routes/speech.ts). The voices' files download the first time each is
+ * wanted (files.ts), and the laptop's one engine runs them (engine/, ADR 0002), a sentence read
+ * live before any other work. Audiobooks are made on readers' own devices, never here.
  *
  * What it says is kept on the laptop's disk, up to SPEECH_CACHE_MB, the sentences heard longest ago
  * going first, so a sentence heard again (a page read twice, a rewind, a second reader of the same
@@ -36,15 +34,6 @@ export interface Speech {
   ready(voice: string, wait: number, who?: string): Promise<{ ready: boolean; loaded: number; total: number }>;
   /** A sentence read live, in `who`'s turn. */
   say(voice: string, text: string, speed: number, who?: string): Promise<Said>;
-  /**
-   * A sentence's sound for an audiobook (books.ts), in `who`'s turn and, inside it, `book`'s: not
-   * kept, as the audiobook keeps it.
-   */
-  sound(voice: string, text: string, speed: number, who?: string, book?: string): Promise<{ audio: Float32Array; rate: number }>;
-  /** An audiobook's paragraph as MP3, in the engine, in the same turns, before the book's sentences waiting: it finishes a paragraph. */
-  encode(audio: Float32Array, rate: number, who?: string, book?: string): Promise<Uint8Array>;
-  /** Turns away `book`'s sentences waiting, as it's paused or removed: they fail with `dropped`. */
-  drop(who: string, book: string): void;
   close(): Promise<void>;
 }
 
@@ -100,17 +89,6 @@ ${text}`, async () => {
         return { data: pack({ mp3: r.bytes, samples: r.head.samples!, rate: r.head.rate! }), type: 'audio/mpeg' };
       });
       return unpack(kept.data);
-    },
-    async sound(voice, text, speed, who = '', book) {
-      const r = await engine.run({ kind: 'book', who, sub: book, model: voiceModel(voice), body: () => ({ ask: { type: 'sound', voice, text, speed } }) });
-      return { audio: floats(r.bytes), rate: r.head.rate! };
-    },
-    async encode(audio, rate, who = '', book) {
-      const r = await engine.run({ kind: 'book', who, sub: book, soon: true, model: null, body: () => ({ ask: { type: 'encode', rate }, bytes: bytesOf(audio) }) });
-      return r.bytes;
-    },
-    drop(who, book) {
-      engine.drop('book', who, book);
     },
     // The engines are the API's to let go of (api.ts).
     async close() {},

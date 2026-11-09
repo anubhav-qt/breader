@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /*
- * The engine's load test (ADR 0002): readers reading aloud live while libraries make audiobooks and
- * readers have manga panels found, all through one API and its engines. Test stack only, never
+ * The engine's load test (ADR 0002): readers reading aloud live while other readers have manga
+ * panels found, all through one API and its engines. Test stack only, never
  * production. How to run it, and the numbers: docs/load-tests.md.
  *
- *   node voices.mjs --base http://api:8787 --live 4 --books 12 --panels 4 --minutes 2
+ *   node voices.mjs --base http://api:8787 --live 4 --panels 4 --minutes 2
  *
  * OWNER_EMAIL, OWNER_PASSWORD: an account in the API's SPEECH_EMAILS, its address confirmed. Each
  * live reader logs in to it, so each has a login, and a line at the engine, of its own.
@@ -12,8 +12,6 @@
  * Live reader: reads passages of --passage sentences aloud as the app does, a sentence playing while the next two are
  * asked for, a few seconds' rest between passages. Reported: time to first sound (each passage's
  * first sentence), and stalls (playing waits for the next sentence).
- * Audiobooks: each library sends a book of --paragraphs paragraphs, 3 sentences each, and waits for
- * it. Reported: paragraphs made a minute, all books together.
  * Panels: each reader takes a seat and has the pages of a chapter of Yotsuba to! found, a page every
  * --page-ms. Reported: time a page. Pages found before are kept, so clear page_panels first.
  */
@@ -22,11 +20,8 @@ const args = {
   base: 'http://localhost:8797',
   origin: 'http://localhost:5173',
   live: 1,
-  voice: 'kokoro:af_heart',
+  voice: 'piper:kristin',
   passage: 8,
-  books: 0,
-  bookVoice: 'kokoro:af_heart',
-  paragraphs: 40,
   panels: 0,
   pageMs: 2_000,
   minutes: 1,
@@ -44,7 +39,7 @@ const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
 /* ---------- What's seen ---------- */
 
-const seen = { ttfs: [], stalls: [], say: [], sayErr: {}, passages: 0, sentences: 0, pages: [], pageErr: {}, made: 0, books: [] };
+const seen = { ttfs: [], stalls: [], say: [], sayErr: {}, passages: 0, sentences: 0, pages: [], pageErr: {} };
 const pct = (xs, p) => {
   if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);
@@ -166,31 +161,6 @@ async function liveReader() {
   }
 }
 
-/* ---------- Audiobooks ---------- */
-
-async function bookMaker(i) {
-  const c = await library();
-  const engine = args.bookVoice.split(':')[0];
-  const path = `/v1/audiobooks/load-${run}-${i}/${engine}`;
-  const parts = Array.from({ length: args.paragraphs }, () => [sentence(), sentence(), sentence()]);
-  for (let from = 0; from < parts.length; from += 100) {
-    const res = await ask(c, 'POST', `${path}/text`, { voice: args.bookVoice, total: parts.length, from, parts: parts.slice(from, from + 100) });
-    if (!res.ok) throw new Error(`An audiobook's text was turned away: ${res.status} ${await res.text()}`);
-  }
-  const t = Date.now();
-  let made = 0;
-  let state = 'queued';
-  while (timeLeft() && state !== 'ready' && state !== 'failed') {
-    await sleep(1_000);
-    const s = await (await ask(c, 'GET', path)).json();
-    seen.made += s.made - made;
-    made = s.made;
-    state = s.state;
-  }
-  seen.books.push({ state, made, ms: Date.now() - t });
-  await ask(c, 'DELETE', path);
-}
-
 /* ---------- Panels ---------- */
 
 async function chapters(c) {
@@ -247,10 +217,9 @@ async function watch() {
 
 const list = args.panels ? await chapters(await library()) : [];
 const jobs = [watch()];
-for (let i = 0; i < args.books; i++) jobs.push(bookMaker(i));
 for (let i = 0; i < args.panels; i++) jobs.push(panelReader(i, list));
 // Live readers start once the rest are under way, a second apart.
-await sleep(args.books || args.panels ? 5_000 : 0);
+await sleep(args.panels ? 5_000 : 0);
 for (let i = 0; i < args.live; i++) {
   jobs.push(liveReader());
   await sleep(1_000);
@@ -259,15 +228,11 @@ const results = await Promise.allSettled(jobs);
 for (const r of results) if (r.status === 'rejected') console.error('failed:', r.reason?.message ?? r.reason);
 
 const minutes = (Date.now() - startedAt) / 60_000;
-console.log(`\n${args.live} live (${args.voice}), ${args.books} audiobooks (${args.bookVoice}), ${args.panels} panel readers, ${minutes.toFixed(1)} min`);
+console.log(`\n${args.live} live (${args.voice}), ${args.panels} panel readers, ${minutes.toFixed(1)} min`);
 console.log(`engine: ${health.workers} workers, most busy ${health.busy}, most waiting ${health.waiting}${health.low ? ', went short of memory' : ''}`);
 if (args.live) {
   console.log(`live: ${seen.passages} passages, ${seen.sentences} sentences; first sound p50 ${ms(pct(seen.ttfs, 50))} p95 ${ms(pct(seen.ttfs, 95))} max ${ms(pct(seen.ttfs, 100))}`);
   console.log(`      a sentence p50 ${ms(pct(seen.say, 50))} p95 ${ms(pct(seen.say, 95))}; stalls ${seen.stalls.length}, p95 ${ms(pct(seen.stalls, 95))}, max ${ms(pct(seen.stalls, 100))}; failed ${JSON.stringify(seen.sayErr)}`);
-}
-if (args.books) {
-  const ready = seen.books.filter((b) => b.state === 'ready');
-  console.log(`audiobooks: ${seen.made} paragraphs made, ${(seen.made / minutes).toFixed(1)} a minute (${((seen.made * 3) / (minutes * 60)).toFixed(2)} sentences a second); ${ready.length} of ${args.books} done${ready.length ? `, slowest ${ms(Math.max(...ready.map((b) => b.ms)))}` : ''}`);
 }
 if (args.panels) {
   console.log(`panels: ${seen.pages.length} pages, p50 ${ms(pct(seen.pages, 50))} p95 ${ms(pct(seen.pages, 95))} max ${ms(pct(seen.pages, 100))}; failed ${JSON.stringify(seen.pageErr)}`);

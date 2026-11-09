@@ -7,17 +7,16 @@ import { serve, type ServerType } from '@hono/node-server';
 import { afterAll, describe, expect, it } from 'vitest';
 import { makeEngine, type Engine } from '../src/engine/index.ts';
 import { makeEngineApp, threadPool, type Pool } from '../src/engine/serve.ts';
-import { bytesOf, frame, unframe } from '../src/engine/wire.ts';
+import { frame, unframe } from '../src/engine/wire.ts';
 import type { Body } from '../src/engine/worker.ts';
 import { makePanels } from '../src/panels/index.ts';
-import { makeBooks } from '../src/speech/books.ts';
 import { makeSpeech } from '../src/speech/index.ts';
 import { env } from './helpers.ts';
 
 /*
  * An engine (serve.ts) and the API talking to it over HTTP (index.ts), with a fake pool of workers
- * in place of ONNX Runtime: a sentence's "MP3" is its text, its sound one sample a letter, a page's
- * panels one for each of its windows.
+ * in place of ONNX Runtime: a sentence's "MP3" is its text, a page's panels one for each of its
+ * windows.
  */
 
 const TOKEN = 'a-token-of-sixteen-or-more';
@@ -38,10 +37,6 @@ function fakePool(o: { wait?: () => Promise<void> } = {}) {
       switch (body.type) {
         case 'say':
           return { mp3: mp3(body.text), samples: body.text.length * 10, rate: 24_000 };
-        case 'sound':
-          return { audio: new Float32Array(body.text.length).fill(0.5), rate: 24_000 };
-        case 'encode':
-          return { mp3: mp3(`${body.audio.length}@${body.rate}`) };
         case 'panels':
           return { panels: body.windows.map(() => [[0, 0], [1, 0], [1, 1]] as Array<[number, number]>), sure: body.windows.map(() => 0.9), w: body.w, h: body.h };
         default:
@@ -56,10 +51,8 @@ function fakePool(o: { wait?: () => Promise<void> } = {}) {
 
 const files = {
   ensure: async (voice: string) => {
-    if (!voice.startsWith('piper:') && !voice.startsWith('kokoro:')) throw new Error(`No such voice: ${voice}`);
-    return voice.startsWith('kokoro:')
-      ? { engine: 'kokoro' as const, model: '/m/kokoro.onnx', pack: `/m/${voice}.bin`, british: false }
-      : { engine: 'piper' as const, model: `/m/${voice}.onnx`, config: `/m/${voice}.json` };
+    if (!voice.startsWith('piper:')) throw new Error(`No such voice: ${voice}`);
+    return { engine: 'piper' as const, model: `/m/${voice}.onnx`, config: `/m/${voice}.json` };
   },
   progress: async () => ({ loaded: 5, total: 10 }),
 };
@@ -84,7 +77,7 @@ async function start(o: { workers?: number; token?: string; panel?: boolean; wai
   const f = fakePool({ wait: o.wait });
   const app = makeEngineApp({
     pool: f.pool,
-    size: { workers: o.workers ?? 2, threads: 2, budgetMb: 4_000, lowMb: 500, besideLive: 0 },
+    size: { workers: o.workers ?? 2, threads: 2, budgetMb: 4_000, lowMb: 500 },
     cores: 4,
     speechDir: '/nowhere',
     panel: o.panel === false ? null : { file: '/m/live.onnx', round: 9 },
@@ -136,6 +129,9 @@ describe('an engine', () => {
     expect((await runOn(app, { slot: 0.5, drop: [], ask: { type: 'load', voice: 'piper:a' } })).status).toBe(400);
     expect((await runOn(app, { slot: 0, drop: 'x', ask: { type: 'load', voice: 'piper:a' } })).status).toBe(400);
     expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'dance' } })).status).toBe(400);
+    // Audiobooks are made on readers' devices: an engine makes no sound or MP3 for one.
+    expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'sound', voice: 'piper:a', text: 'Hi.', speed: 1 } })).status).toBe(400);
+    expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'encode', rate: 16_000 } }, new Uint8Array(8))).status).toBe(400);
     expect((await app.request('/v1/run', { method: 'POST', body: 'no' })).status).toBe(400);
     expect((await app.request('/v1/run', { method: 'POST', body: new Uint8Array(0) })).status).toBe(400);
     expect((await app.request('/v1/progress?voice=piper:nope')).status).toBe(400);
@@ -168,17 +164,12 @@ describe('an engine', () => {
 });
 
 describe('the API and its engines', () => {
-  it('reads aloud, makes sound, and MP3, through an engine', async () => {
+  it('reads aloud through an engine', async () => {
     const { url, seen } = await start({ token: TOKEN });
     const engine = await connect([url], TOKEN);
     const dir = await mkdtemp(join(tmpdir(), 'said-'));
     try {
       const speech = makeSpeech({ ...env, SPEECH_DIR: dir }, engine);
-      // Audiobook work first: once someone reads aloud, it waits a minute (ENGINE_BESIDE_LIVE 0).
-      const sound = await speech.sound('kokoro:af_heart', 'Four', 1, 'lib', 'book');
-      expect([...sound.audio]).toEqual([0.5, 0.5, 0.5, 0.5]);
-      const made = await speech.encode(new Float32Array(7), 22_050, 'lib', 'book');
-      expect(text(made)).toBe('7@22050');
       const said = await speech.say('piper:kristin', 'It was dark.', 1, 'me');
       expect(text(said.mp3)).toBe('It was dark.');
       expect(said).toMatchObject({ samples: 120, rate: 24_000 });
@@ -225,138 +216,6 @@ describe('the API and its engines', () => {
     (one.server as import('node:http').Server).closeAllConnections();
     for (let i = 0; i < 200 && engine.stats().engines[0].up; i++) await new Promise((r) => setTimeout(r, 20));
     expect(engine.stats().engines[0].up).toBe(false);
-  });
-
-  it('makes several people’s audiobooks at once, a library at a time', async () => {
-    let open: () => void = () => {};
-    let gate = new Promise<void>((r) => { open = r; });
-    const { url, seen } = await start({ workers: 1, wait: () => gate });
-    const engine = await connect([url]);
-    const dir = await mkdtemp(join(tmpdir(), 'books-'));
-    try {
-      const speech = makeSpeech({ ...env, SPEECH_DIR: dir }, engine);
-      const books = makeBooks(dir, speech, 12);
-      const book = (who: string) => ({ voice: 'piper:kristin', total: 2, from: 0, parts: [[`${who} one.`, `${who} two.`], [`${who} three.`]] });
-      await books.text('lib-a', 'book', 'piper', book('A'));
-      await books.text('lib-b', 'book', 'piper', book('B'));
-      // Both libraries' sentences waiting, the first of A's on the one worker.
-      for (let i = 0; i < 100 && !(seen.length >= 1 && engine.waiting('book', 'lib-b') > 0); i++) await new Promise((r) => setTimeout(r, 10));
-      expect(engine.waiting('book', 'lib-b')).toBeGreaterThan(0);
-      // Both are being made at once: neither waits behind the other.
-      expect((await books.status('lib-a', 'book', 'piper')).ahead).toBe(0);
-      expect((await books.status('lib-b', 'book', 'piper')).ahead).toBe(0);
-      // The one worker takes them in turns, a library at a time.
-      for (let step = 0; step < 50; step++) {
-        open();
-        gate = new Promise<void>((r) => { open = r; });
-        await new Promise((r) => setTimeout(r, 20));
-        const a = await books.status('lib-a', 'book', 'piper');
-        const b = await books.status('lib-b', 'book', 'piper');
-        if (a.state === 'ready' && b.state === 'ready') break;
-      }
-      open();
-      const sounds = seen.filter((s) => s.body.type === 'sound').map((s) => (s.body as { text: string }).text[0]);
-      expect(sounds.slice(0, 4).sort().join('')).toBe('AABB');
-      expect(sounds.slice(0, 2).sort().join('')).toBe('AB');
-      expect((await books.status('lib-a', 'book', 'piper')).state).toBe('ready');
-      expect((await books.status('lib-b', 'book', 'piper')).state).toBe('ready');
-      const part = await books.part('lib-a', 'book', 'piper', 0);
-      expect(text(part!)).toBe(`${'A one.'.length + 'A two.'.length}@24000`);
-    } finally {
-      open();
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('pauses and removes a book at once, its sentences waiting turned away', async () => {
-    let open: () => void = () => {};
-    let gate = new Promise<void>((r) => { open = r; });
-    const { url, seen } = await start({ workers: 1, wait: () => gate });
-    const engine = await connect([url]);
-    const dir = await mkdtemp(join(tmpdir(), 'books-'));
-    const sounds = () => seen.filter((s) => s.body.type === 'sound').length;
-    const until = async (ok: () => boolean | Promise<boolean>) => {
-      for (let i = 0; i < 200 && !(await ok()); i++) await new Promise((r) => setTimeout(r, 10));
-    };
-    try {
-      const books = makeBooks(dir, makeSpeech({ ...env, SPEECH_DIR: dir }, engine), 12);
-      const text = { voice: 'piper:kristin', total: 3, from: 0, parts: [['One.', 'Two.'], ['Three.', 'Four.'], ['Five.']] };
-      await books.text('lib-a', 'one', 'piper', text);
-      await until(() => sounds() === 1 && engine.waiting('book') > 0);
-
-      // Paused: what waits is turned away, the one sentence being read finishes.
-      const paused = await books.pause('lib-a', 'one', 'piper');
-      expect(paused.state).toBe('paused');
-      expect(engine.waiting('book')).toBe(0);
-      open();
-      gate = new Promise<void>((r) => { open = r; });
-      await until(async () => (await books.status('lib-a', 'one', 'piper')).state === 'paused' && engine.stats().engines[0].busy === 0);
-      expect(sounds()).toBe(1);
-      expect((await books.status('lib-a', 'one', 'piper')).state).toBe('paused');
-
-      // Carried on, it's made whole.
-      await books.go('lib-a', 'one', 'piper');
-      open();
-      gate = Promise.resolve();
-      await until(async () => (await books.status('lib-a', 'one', 'piper')).state === 'ready');
-      expect(await books.status('lib-a', 'one', 'piper')).toMatchObject({ state: 'ready', made: 3 });
-      expect(text.parts.flat().every((t) => seen.some((s) => s.body.type === 'sound' && (s.body as { text: string }).text === t))).toBe(true);
-
-      // Removed while it's made: done in a moment, with nothing left waiting.
-      let hold: () => void = () => {};
-      gate = new Promise<void>((r) => { hold = r; });
-      await books.text('lib-a', 'two', 'piper', text);
-      const before = sounds();
-      await until(() => sounds() === before + 1);
-      const removing = books.remove('lib-a', 'two', 'piper');
-      expect(engine.waiting('book')).toBe(0);
-      hold();
-      await removing;
-      expect(sounds()).toBe(before + 1);
-      expect((await books.status('lib-a', 'two', 'piper')).state).toBe('none');
-    } finally {
-      open();
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('makes no more books at once than it may, and says how many are ahead', async () => {
-    let open: () => void = () => {};
-    const gate = new Promise<void>((r) => { open = r; });
-    const { url } = await start({ workers: 1, wait: () => gate });
-    const engine = await connect([url]);
-    const dir = await mkdtemp(join(tmpdir(), 'books-'));
-    try {
-      const books = makeBooks(dir, makeSpeech({ ...env, SPEECH_DIR: dir }, engine), 1);
-      const text = { voice: 'piper:kristin', total: 1, from: 0, parts: [['Hi.']] };
-      await books.text('lib-a', 'one', 'piper', text);
-      await books.text('lib-a', 'two', 'piper', text);
-      await books.text('lib-b', 'three', 'piper', text);
-      // One being made; lib-b's goes before lib-a's second, as lib-a has one being made.
-      expect((await books.status('lib-a', 'one', 'piper')).ahead).toBe(0);
-      expect((await books.status('lib-b', 'three', 'piper')).ahead).toBe(1);
-      expect((await books.status('lib-a', 'two', 'piper')).ahead).toBe(2);
-      open();
-      const state = async (b: string, l: string) => (await books.status(l, b, 'piper')).state;
-      for (let i = 0; i < 100 && (await state('two', 'lib-a')) !== 'ready'; i++) await new Promise((r) => setTimeout(r, 20));
-      expect((await books.status('lib-b', 'three', 'piper')).state).toBe('ready');
-      expect((await books.status('lib-a', 'two', 'piper')).state).toBe('ready');
-    } finally {
-      open();
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-});
-
-// bytesOf is what the API sends sound as: the engine must read the same samples back.
-describe('sound on the wire', () => {
-  it('arrives as it left', async () => {
-    const { app, seen } = await start();
-    const audio = new Float32Array([0.1, -0.2, 0.3]);
-    await runOn(app, { slot: 0, drop: [], ask: { type: 'encode', rate: 16_000 } }, bytesOf(audio));
-    const b = seen[0].body as { audio: Float32Array; rate: number };
-    expect([...b.audio]).toEqual([...audio]);
-    expect(b.rate).toBe(16_000);
   });
 });
 

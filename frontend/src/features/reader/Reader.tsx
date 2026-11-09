@@ -27,8 +27,8 @@ import { overlaps, usePacing, type Spot } from './pacing';
 import { PdfView } from './PdfView';
 import { castInSeries } from './voice/cast';
 import { refreshVoices } from './voice/list';
-import { SeatOffer } from './Panels';
 import { useServerSeat } from './serverPanels';
+import { checkDevice, voiceHere } from './able';
 import { refreshSpeech } from './voice/server';
 import { setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
@@ -134,10 +134,16 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   const pacing = usePacing(view, immersive && !closing, loc);
   // Background music while the voice reads or the light moves, on a book that has it (music.ts).
   useMusic(view, record.id, aiStatus, !closing, narration, pacing);
-  // Voices readers uploaded, so the one picked last time is known, and whether the server reads for this account.
-  useEffect(() => { if (canNarrate && !pictures) { void refreshVoices(); void refreshSpeech(); } }, [pictures]);
-  // A seat at the server's panel model while a manga from Japan is open, for a reader who turned it on (serverPanels.ts).
-  useServerSeat(panels && !closing);
+  // What this device can do itself, checked while the book loads (able.ts). Voices readers uploaded,
+  // so the one picked last time is known; and, only where this device can't keep up, whether the
+  // server reads for this account.
+  useEffect(() => {
+    void checkDevice().then(() => { if (canNarrate && !pictures && !voiceHere()) void refreshSpeech(); });
+    if (canNarrate && !pictures) void refreshVoices();
+  }, [pictures]);
+  // A seat at the server's panel model in the Panels layout of a manga from Japan, where this device
+  // can't find panels itself (serverPanels.ts).
+  useServerSeat(panels && mangaLook.layout === 'panels' && !closing);
   const { busy: speaking, media } = narration;
   const { busy: lighting } = pacing;
   const busy = useCallback(() => speaking() || lighting(), [speaking, lighting]);
@@ -891,7 +897,6 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
       <AnimatePresence>
         {behind && !closing && <ChapterBack here={names(behind.here)} mark={names(behind.mark)} onKeep={keepHere} onBack={backToMark} onClose={() => setBehind(null)} />}
       </AnimatePresence>
-      {panels && <SeatOffer />}
     </div>
   );
 }

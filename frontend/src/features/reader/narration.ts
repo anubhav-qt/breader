@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { Loc, ViewHandle } from './FlowView';
 import { lookAt, lookFor, stopLook } from './look';
 import { unlockMusic } from './music';
+import { checkDevice, useAble } from './able';
 import { checkGpu, type Mode, type VoiceInfo } from './voice/catalog';
 import { heardWords } from './voice/list';
 import { askFirst, onServer, pairFor, rateOf, readsOnServer, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
@@ -595,6 +596,12 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (pic) {
         // Looked at, or passed.
       } else if (!clip) {
+        // Breader's computer reads for this device, which can't itself: it couldn't, even asked again
+        // (voice/server.ts), so reading stops here and says why, rather than skip on.
+        if (where === 'server' && !cutOff) {
+          failed(`${lastError || 'Breader’s computer couldn’t read this part.'} Tap Read aloud to go on from here.`);
+          break;
+        }
         if (++failures >= 3) {
           failed(`The voice couldn’t read this part of the book${lastError ? ` (${lastError})` : ''}.`);
           openSheet();
@@ -653,6 +660,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     // Sound can only start in the tap itself.
     unlock();
     unlockMusic();
+    // Whether this device keeps up itself, or Breader's computer reads (able.ts): known by now, mostly.
+    await checkDevice();
     if (p.mode === 'immersive') await checkGpu();
     let want = [voiceFor(p.mode)];
     if (marks.current && p.count[p.mode] === 2) want = both(p.mode);
@@ -701,7 +710,8 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   // A new voice or speed takes over mid-sentence, and so does the server's voice or this device's.
   const prefs = useVoicePrefs();
   const speech = useSpeech();
-  const server = readsOnServer(prefs, speech.allowed);
+  const able = useAble();
+  const server = readsOnServer(speech.allowed, able.voice);
   const picked = voiceFor(prefs.mode).key;
   const speed = rateOf(prefs);
   // 2 voices: on or off, the pair, and who reads with no point of view, as the loop sees them.

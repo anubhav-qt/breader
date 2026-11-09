@@ -45,6 +45,8 @@ const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f
 export const useSpeed = () => useSyncExternalStore(subscribe, () => kept);
 export const modeNow = () => kept.mode;
 export const setMode = (mode: Mode) => save({ mode });
+/** The processor's check, once it's been done here (measure). */
+export const processorScore = () => kept.score;
 
 /** What the device has to give: threads, memory in GB, and whether it's a phone or tablet. */
 export interface Device { cores: number; memory: number; handheld: boolean }
@@ -73,8 +75,6 @@ const PIPER_PER_POINT = 6;
 const SPREAD = 0.88;
 /** Kokoro on a computer's graphics chip, with one engine and two, until one is measured here. */
 const KOKORO: Record<Mode, number> = { min: 5, max: 5.6 };
-/** Breader's computer. */
-export const SERVER_PACE: Record<Engine, number> = { piper: 12, kokoro: 1.5 };
 
 /** Minutes of sound this device makes in a minute: measured if a book was made here, else guessed. */
 export function devicePace(engine: Engine, mode: Mode, k: Kept = kept, d: Device = device()) {

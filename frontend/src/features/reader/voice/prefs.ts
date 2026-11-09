@@ -4,6 +4,7 @@ import { handheld } from '../../../lib/handheld';
 import { BUILT_IN, DEFAULT_VOICE, fromListed, hasGpu, type Engine, type Mode, type VoiceInfo } from './catalog';
 import { listedVoices } from './list';
 import { serverHas, speechAllowed } from './server';
+import { voiceHere } from '../able';
 import type { Two } from './two';
 
 /*
@@ -12,13 +13,18 @@ import type { Two } from './two';
  * (pacing.ts) and the voice alike.
  *
  * Normal reads with Normal's voices. Immersive reads with any: Normal's, or the heavy ones, which
- * only a computer runs well. On a phone they can hang the whole browser, so phones start Immersive
- * on their Normal voice.
+ * only a computer runs well. Immersive reads with Normal's voice (an empty pick) until the reader
+ * picks one in Immersive: going from one mode to the other never changes the voice by itself.
+ * Before 2026-11-09, a computer's Immersive started on a heavy voice, kept as if picked: such a
+ * pick, the first heavy one, is let go once (`follows`).
+ *
+ * Where it reads isn't a choice: on this device when it can keep up, else on Breader's computer
+ * (able.ts).
  */
 
 export interface VoicePrefs {
   mode: Mode;
-  /** The voice picked for each mode (catalog.ts keys). Immersive's can be any voice. */
+  /** The voice picked for each mode (catalog.ts keys). Immersive's can be any voice; empty, it's Normal's. */
   voice: Record<Mode, string>;
   /** Normal's voice speed. */
   rate: number;
@@ -28,12 +34,12 @@ export interface VoicePrefs {
   paceKept: boolean;
   /** 1 voice, or 2 (a woman's and a man's) for books an AI has marked, in each mode. */
   count: Record<Mode, 1 | 2>;
-  /** 2 voices: her voice and his in each mode. Both of one kind: Normal, or heavy. */
+  /** 2 voices: her voice and his in each mode. Both of one kind: Normal, or heavy. Immersive's empty, Normal's. */
   pair: Record<Mode, Record<Two, string>>;
+  /** Immersive's picks were let go of a heavy voice the reader never picked (see above). */
+  follows?: boolean;
   /** 2 voices: who reads narration that isn't anyone's point of view. */
   noPov: Two;
-  /** Read with the server's voices (server.ts), for accounts it's open to. */
-  server: boolean;
   /** How loud the voice is, 0 to 1, and whether it's muted (the keys' up, down and M). */
   volume: number;
   muted: boolean;
@@ -64,12 +70,15 @@ export const rateOf = (p: VoicePrefs) => (p.mode === 'immersive' ? Math.min(RATE
 
 export { handheld };
 
-/** 2 voices' first pair in each mode. A phone's Immersive starts on Normal's, like its one voice. */
+/** 2 voices' first pair of each kind: Normal's, and the heavy ones'. */
 const DEFAULT_PAIR: Record<Mode, Record<Two, string>> = {
   normal: { F: 'piper:kristin', M: 'piper:norman' },
   immersive: { F: 'kokoro:af_heart', M: 'kokoro:am_michael' },
 };
-const defaultPair = (m: Mode) => (m === 'immersive' && handheld() ? DEFAULT_PAIR.normal : DEFAULT_PAIR[m]);
+/** No pick: Normal's pair is the first; Immersive's is Normal's as picked. */
+const defaultPair = (m: Mode) => (m === 'immersive' ? prefs.pair.normal : DEFAULT_PAIR.normal);
+/** Immersive with no pick reads with Normal's. */
+const FOLLOW: Record<Two, string> = { F: '', M: '' };
 /** The first pair of one kind. */
 const pairOfKind = (e: Engine) => DEFAULT_PAIR[e === 'kokoro' ? 'immersive' : 'normal'];
 
@@ -87,8 +96,16 @@ if (hung) writeLocal(STARTING, null);
 
 const stored = readLocal<Partial<VoicePrefs> | null>(KEY, null) ?? fromOld(readLocal<Partial<VoicePrefs>>(OLD, {}));
 const normal = stored.voice?.normal ?? DEFAULT_VOICE.normal;
-const voice = { normal, immersive: handheld() ? normal : DEFAULT_VOICE.immersive, ...stored.voice };
-const pair = { normal: { ...defaultPair('normal'), ...stored.pair?.normal }, immersive: { ...defaultPair('immersive'), ...stored.pair?.immersive } };
+const voice = { normal, immersive: '', ...stored.voice };
+const pair = { normal: { ...DEFAULT_PAIR.normal, ...stored.pair?.normal }, immersive: { ...FOLLOW, ...stored.pair?.immersive } };
+// Once: the heavy voice a computer's Immersive started on, never picked, is let go, and so is a
+// phone's copy of Normal's voice, so Immersive goes with Normal's from now on.
+if (!stored.follows) {
+  if (voice.immersive === DEFAULT_VOICE.immersive || voice.immersive === normal) voice.immersive = '';
+  const was = stored.pair?.immersive;
+  const same = (a: Record<Two, string> | undefined, b: Record<Two, string>) => !!a && a.F === b.F && a.M === b.M;
+  if (!was || same(was, DEFAULT_PAIR.immersive) || same(was, DEFAULT_PAIR.normal)) pair.immersive = { ...FOLLOW };
+}
 let prefs: VoicePrefs = {
   mode: stored.mode ?? 'normal',
   rate: stored.rate ?? 1,
@@ -98,25 +115,14 @@ let prefs: VoicePrefs = {
   count: { normal: 1, immersive: 1, ...stored.count },
   pair,
   noPov: stored.noPov ?? 'F',
-  server: stored.server ?? false,
   volume: stored.volume ?? 1,
   muted: stored.muted ?? false,
   music: stored.music ?? true,
   musicVolume: stored.musicVolume ?? MUSIC_VOLUME.start,
+  follows: true,
 };
-/*
- * Reading on the server sends every sentence's sound over the reader's own connection, so it's
- * theirs to turn on: switched off once for everyone who had it on, then left as they set it.
- */
-const SERVER_OFF = 'breader.voice.server-off';
-if (!readLocal(SERVER_OFF, false)) {
-  if (prefs.server) writeLocal(KEY, (prefs = { ...prefs, server: false }));
-  writeLocal(SERVER_OFF, true);
-}
-if (hung && voice.immersive === hung) {
-  voice.immersive = normal;
-  writeLocal(KEY, prefs);
-}
+if (hung && voice.immersive === hung) voice.immersive = '';
+if (!stored.follows || hung) writeLocal(KEY, prefs);
 const subs = new Set<() => void>();
 
 export function setVoicePrefs(patch: Partial<VoicePrefs>) {
@@ -160,34 +166,31 @@ const enginesOf = (mode: Mode): Engine[] => (mode === 'normal' ? ['piper'] : ['p
 
 /** The kind of voice picked in the mode in use: hers, when it reads in 2 voices. */
 export function pickedEngine(p: VoicePrefs): Engine | undefined {
-  let key = p.voice[p.mode];
-  if (p.count[p.mode] === 2) key = p.pair[p.mode].F;
+  let key = p.voice[p.mode] || p.voice.normal;
+  if (p.count[p.mode] === 2) key = p.pair[p.mode].F || p.pair.normal.F;
   return find(key, enginesOf(p.mode))?.engine;
 }
 
 /**
- * Reading with the server's voices: switched on and open to this account (`allowed`), and not with
- * a heavy voice, which the switch is for Normal's alone. The switch itself is kept as it was, so
- * going back to a Normal voice reads on the server again.
+ * Reading with the server's voices: only where this device is too slow to keep up itself (able.ts),
+ * and the server voice is open to this account (`allowed`). Otherwise this device reads, even a
+ * slow one, as best it can.
  */
-export function readsOnServer(p: VoicePrefs, allowed: boolean): boolean {
-  if (!p.server || !allowed) return false;
-  return pickedEngine(p) !== 'kokoro';
-}
+export const readsOnServer = (allowed: boolean, here = voiceHere()) => allowed && !here;
 
-export const onServer = () => readsOnServer(prefs, speechAllowed());
+export const onServer = () => readsOnServer(speechAllowed());
 
 /**
- * The voice a mode reads with: the one picked, or the default when that one has gone. A heavy
- * voice where the graphics chip can't run it reads with Normal's pick instead. The server reads
- * with its own voices, Normal's and the heavy ones, on its own processor, so any device can have
- * them: the mode's pick, or Normal's, if it has them.
+ * The voice a mode reads with: the one picked, or the default when that one has gone. Immersive
+ * with no pick, or a heavy voice where the graphics chip can't run it, reads with Normal's pick. The server reads
+ * with Normal's voices only (the heavy ones are too much for it), for a device too slow to read
+ * itself: the mode's pick if it's one of them, else Normal's.
  */
 export function voiceFor(mode: Mode): VoiceInfo {
   const normal = find(prefs.voice.normal, ['piper']) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
   if (onServer()) return [find(prefs.voice[mode], enginesOf(mode)), normal].find(serverHas) ?? find(DEFAULT_VOICE.normal, ['piper'])!;
   if (mode === 'normal') return normal;
-  const v = find(prefs.voice.immersive, ['piper', 'kokoro']) ?? (handheld() ? normal : find(DEFAULT_VOICE.immersive, ['kokoro'])!);
+  const v = find(prefs.voice.immersive, ['piper', 'kokoro']) ?? normal;
   return v.engine === 'kokoro' && !hasGpu() ? normal : v;
 }
 
@@ -214,12 +217,12 @@ const sameKind = (F: VoiceInfo, M: VoiceInfo): Record<Two, VoiceInfo> => ({ F, M
 /**
  * The voices 2 voices reads with in a mode: the pair picked, or the default where one has gone,
  * or isn't a woman's or a man's any more. Heavy voices where the graphics chip can't run them
- * read with Normal's pair instead; on the server, they read there.
+ * read with Normal's pair instead, and so do they on the server, which has only Normal's.
  */
 export function pairFor(mode: Mode): Record<Two, VoiceInfo> {
   const pick = (m: Mode, g: Two, engines: Engine[]) => {
     const v = find(prefs.pair[m][g], engines);
-    return v && sideOf(v) === g ? v : find(defaultPair(m)[g], engines)!;
+    return v && sideOf(v) === g ? v : find(defaultPair(m)[g], engines) ?? find(DEFAULT_PAIR.normal[g], ['piper'])!;
   };
   const normal = { F: pick('normal', 'F', ['piper']), M: pick('normal', 'M', ['piper']) };
   if (onServer()) {
@@ -239,6 +242,7 @@ export function pickSide(mode: Mode, v: VoiceInfo) {
   const now = pairFor(mode)[other];
   const next = { ...prefs.pair[mode], [g]: v.key };
   if (now.engine !== v.engine) next[other] = pairOfKind(v.engine)[other];
+  else if (!next[other]) next[other] = now.key;
   setVoicePrefs({ pair: { ...prefs.pair, [mode]: next } });
 }
 

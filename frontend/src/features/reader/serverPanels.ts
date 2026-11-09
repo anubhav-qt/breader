@@ -5,7 +5,8 @@ import { api, ApiError } from '../../lib/api';
 import { readMangaPrefs } from '../../lib/mangadex';
 import { readLocal, writeLocal } from '../../lib/store';
 import { framesKnown, framesSoon, type Frames } from './frames';
-import { framesOfPanels, gpuHere, modelFramesKnown, modelFramesSoon, modelPanelsOf, panelModelReady, panelModelRound, startPanelModel } from './panelModel';
+import { checkDevice, gpuHere, panelModelBroke, panelsHere } from './able';
+import { framesOfPanels, modelFramesKnown, modelFramesSoon, modelPanelsOf, panelModelReady, panelModelRound, startPanelModel } from './panelModel';
 import { panelled } from './settings';
 
 /*
@@ -13,12 +14,12 @@ import { panelled } from './settings';
  * (server panels/), instead of on this device. For manga from Japan only (settings.ts panelled), as
  * the model learned from no other.
  *
- * It finds them for a few readers at once (server panels/seats.ts), so it's off until a reader
- * turns it on, and then it's theirs while they read: a manga from Japan open with it on takes a
- * seat, kept every half a minute and given back when the manga closes. When every seat is taken,
- * the switch stays off, the look panel says how full it is as that changes, and the reader can ask
- * to be told when there's room, in a popup. Whether the server finds panels at all is asked of it
- * when a manga opens, and remembered for when it can't be reached.
+ * It finds them for a few readers at once (server panels/seats.ts), so only for devices that can't
+ * find them themselves (able.ts): there's no switch. Such a device reading a manga from Japan in the
+ * Panels layout takes a seat, kept every half a minute and given back when it leaves the layout or
+ * the manga. When every seat is taken, the look panel says how full it is as that changes, and the
+ * first seat to free up is taken by itself. Whether the server finds panels at all is asked of it
+ * then, and remembered for when it can't be reached.
  *
  * A page's panels are asked for as its picture arrives, so they're there when it's zoomed into.
  * First of what the server keeps for every reader (server panels/kept.ts), a chapter's at once, with
@@ -30,28 +31,21 @@ import { panelled } from './settings';
  */
 
 const STATE = 'breader.panels.v2';
-const PREFS = 'breader.panels.prefs.v2';
 /** A seat is kept this often while a manga's open (the server lets one go after 75 seconds). */
 const KEEP_MS = 30_000;
 
-interface Prefs {
-  /** The reader wants panels from the server. */
-  on: boolean;
-  /** And a popup when a seat frees up, while they're all taken. */
-  notify: boolean;
-}
-
 let state = readLocal<PanelsState>(STATE, { allowed: false, round: 0, used: 0, seats: 0 });
-let prefs = readLocal<Prefs>(PREFS, { on: false, notify: false });
 /** This tab, to the server: one library's devices share its seat. */
 const device = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `d-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-/** Whether this tab has a seat now, whether it asked and they were all taken, and whether the popup's up. */
-let seat = { seated: false, full: false, offer: false };
-/** A manga from Japan is open. */
+/** Whether this tab has a seat now, and whether it asked and they were all taken. */
+let seat = { seated: false, full: false };
+/** A manga from Japan is open in the Panels layout. */
 let reading = false;
+/** A seat is wanted: reading, on a device that can't find the panels itself. */
+const wanted = () => reading && !panelsHere();
 const subs = new Set<() => void>();
 
-const snapshot = () => ({ ...state, ...prefs, ...seat });
+const snapshot = () => ({ ...state, ...seat });
 let shown = snapshot();
 const tell = () => {
   shown = snapshot();
@@ -84,12 +78,12 @@ async function take() {
   try {
     const r = await api.laptop.post<PanelSeat>('/v1/panels/seat', { device });
     count(r);
-    // Turned off or closed while it was asked.
-    if (!prefs.on || !reading) {
+    // Closed while it was asked.
+    if (!wanted()) {
       if (r.seated) void leave(true);
       return;
     }
-    seat = { seated: r.seated, full: !r.seated, offer: seat.offer && !r.seated };
+    seat = { seated: r.seated, full: !r.seated };
   } catch (e) {
     // The server's gone: what it found already stands, and this device finds the rest.
     if (e instanceof ApiError && e.code === 'panels_off') state = { ...state, allowed: false };
@@ -100,7 +94,7 @@ async function take() {
 }
 
 async function leave(had = seat.seated) {
-  seat = { seated: false, full: false, offer: false };
+  seat = { seated: false, full: false };
   watching();
   tell();
   if (!had) return;
@@ -114,13 +108,13 @@ async function leave(had = seat.seated) {
 
 /*
  * How full it is, as that changes, while the reader waits for a seat: the server streams it
- * (routes/panels.ts), and a seat freeing up pops the question when they asked to be told.
+ * (routes/panels.ts), and the first seat to free up is taken.
  */
 let stream: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let again = 0;
 
 function watching() {
-  const want = reading && prefs.on && seat.full;
+  const want = wanted() && seat.full;
   if (want && !stream && !again) {
     // Held at once, so a second call doesn't open another while this one connects.
     again = -1;
@@ -156,8 +150,8 @@ async function watch() {
         buf = buf.slice(end + 2);
         if (!data) continue;
         count(JSON.parse(data) as PanelSeats);
-        if (state.used < state.seats && prefs.notify && seat.full) seat = { ...seat, offer: true };
         tell();
+        if (state.used < state.seats && seat.full) void take();
       }
     }
   } catch {
@@ -167,7 +161,7 @@ async function watch() {
   stream = null;
   again = 0;
   // Still waiting: again in a little while.
-  if (reading && prefs.on && seat.full) {
+  if (wanted() && seat.full) {
     again = window.setTimeout(() => {
       again = 0;
       watching();
@@ -175,39 +169,20 @@ async function watch() {
   }
 }
 
-/** Turns server panels on or off for this device; on takes a seat now, if there's one. */
-export function setServerPanels(on: boolean) {
-  prefs = { ...prefs, on };
-  writeLocal(PREFS, prefs);
-  if (on && reading) void take();
-  else if (!on) void leave();
-  tell();
-}
+/** Takes a seat where it's wanted, once the server's said whether it finds panels. */
+const seatUp = () => refreshPanels().then(() => { if (wanted()) void take(); });
 
-/** Whether to pop up when a seat frees up. */
-export function setPanelsNotify(notify: boolean) {
-  prefs = { ...prefs, notify };
-  writeLocal(PREFS, prefs);
-  if (notify && seat.full && state.used < state.seats) seat = { ...seat, offer: true };
-  tell();
-}
-
-/** The popup's answer: take the seat that's free, or not now (and no more popups). */
-export function answerSeatOffer(yes: boolean) {
-  seat = { ...seat, offer: false };
-  if (yes) void take();
-  else setPanelsNotify(false);
-  tell();
-}
-
-/** Holds a seat while a manga from Japan is open with server panels on, and gives it back after. */
+/**
+ * Holds a seat while a manga from Japan is open in the Panels layout on a device that can't find
+ * its panels itself, and gives it back after. The device is checked first (able.ts).
+ */
 export function useServerSeat(open: boolean) {
   useEffect(() => {
     if (!open) return;
     reading = true;
-    void refreshPanels().then(() => { if (prefs.on && reading) void take(); });
+    void checkDevice().then(() => { if (wanted()) void seatUp(); });
     // Kept while it's held; asked again while it isn't and they weren't all taken (the server was away).
-    const keep = window.setInterval(() => { if (prefs.on && !seat.full) void take(); }, KEEP_MS);
+    const keep = window.setInterval(() => { if (wanted() && !seat.full) void take(); }, KEEP_MS);
     return () => {
       reading = false;
       window.clearInterval(keep);
@@ -379,7 +354,11 @@ export async function pageFramesSoon(book: MangaBook, i: number, img: HTMLImageE
   if (want === 'ahead' && !(await gpuHere())) return meanwhile;
   const ready = startPanelModel();
   if (want === 'tap' && !panelModelReady()) return meanwhile;
-  if (!(await ready)) return meanwhile;
+  if (!(await ready)) {
+    // The model broke here: Breader's computer finds them from now on.
+    if (panelModelBroke() && !seat.seated && wanted()) void seatUp();
+    return meanwhile;
+  }
   const found = await modelFramesSoon(img);
   if (found) offer(book, i, img);
   return found ?? meanwhile;

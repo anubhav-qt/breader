@@ -133,12 +133,12 @@ function credentialsFor(path: string): RequestCredentials {
 }
 
 /** One try at one copy of the server, with no switching: a 504 of its own when nothing answers. */
-async function fetchFrom(base: ApiBase, path: string, body: unknown, timeout: number, method?: string): Promise<Response> {
+async function fetchFrom(base: ApiBase, path: string, body: unknown, timeout: number): Promise<Response> {
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutFor(base, timeout));
   try {
     const res = await fetch(BASES[base] + path, {
-      method: method ?? (body === undefined ? 'GET' : 'POST'),
+      method: body === undefined ? 'GET' : 'POST',
       headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       credentials: credentialsFor(path),
@@ -168,14 +168,13 @@ async function failure(res: Response, off: string): Promise<ApiError> {
   return new ApiError(res.status, data?.code ?? 'error', data?.message ?? `The server answered ${res.status}.`);
 }
 
-const VOICE_OFF = 'Breader’s computer can’t be reached. Turn off Read on the server to use this device’s voice.';
-const BOOKS_OFF = 'Breader’s computer can’t be reached. Make it on this device, or try again later.';
+const VOICE_OFF = 'Breader’s computer can’t be reached just now.';
 
-async function laptop(path: string, body: unknown, timeout: number, off = VOICE_OFF, method?: string): Promise<Response> {
+async function laptop(path: string, body: unknown, timeout: number): Promise<Response> {
   if (navigator.onLine === false) throw new OfflineError();
-  const res = await fetchFrom('primary', path, body, timeout, method);
+  const res = await fetchFrom('primary', path, body, timeout);
   if (res.ok) return res;
-  throw await failure(res, off);
+  throw await failure(res, VOICE_OFF);
 }
 
 /*
@@ -214,13 +213,6 @@ export const api = {
     get: async <T>(path: string, timeout = TIMEOUT) => (await laptop(path, undefined, timeout)).json() as Promise<T>,
     post: async <T>(path: string, body: unknown, timeout = TIMEOUT) => (await laptop(path, body, timeout)).json() as Promise<T>,
     raw: (path: string, body: unknown, timeout = TIMEOUT) => laptop(path, body, timeout),
-  },
-  /** Audiobooks made on Breader's computer: the laptop alone, which makes and keeps them. */
-  books: {
-    get: async <T>(path: string) => (await laptop(path, undefined, TIMEOUT, BOOKS_OFF)).json() as Promise<T>,
-    post: async <T>(path: string, body: unknown = {}) => (await laptop(path, body, 60_000, BOOKS_OFF)).json() as Promise<T>,
-    del: async (path: string) => { await laptop(path, undefined, TIMEOUT, BOOKS_OFF, 'DELETE'); },
-    raw: (path: string) => laptop(path, undefined, 60_000, BOOKS_OFF),
   },
   /** Manga, from the laptop or the fallback, whichever answers: JSON, or the response itself for a picture. */
   manga: {

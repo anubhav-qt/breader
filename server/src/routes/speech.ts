@@ -4,28 +4,28 @@ import { Hono } from 'hono';
 import { SpeechReadyRequest, SpeechRequest, type SpeechReady, type SpeechState } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
-import { ownerCheck } from '../lib/owner.ts';
+import { readerCheck } from '../lib/owner.ts';
 import { log } from '../log.ts';
 
 /*
- * The server voice (src/speech/), for the accounts in SPEECH_EMAILS once their address is
- * confirmed: a phone that can't run a voice sends a sentence and gets its sound back. The text
+ * The server voice (src/speech/), for any reader signed in with a confirmed address: a device too
+ * slow to keep up itself (the app's reader/able.ts, which decides on the device) sends a sentence and gets its sound back. The text
  * isn't kept or logged; the sound is, by a hash of it (speech/index.ts), so it's spoken once. Only the laptop speaks; the fallback answers that it can't.
  */
 export function speechRoutes(deps: Deps) {
-  const { env, auth, speech } = deps;
+  const { auth, speech } = deps;
   const r = new Hono<AppEnv>();
 
-  /** Whether the logged-in reader may use it. */
-  const allowed = ownerCheck(env, auth);
+  /** Whether the logged-in reader may use it: signed in, with a confirmed address. */
+  const allowed = readerCheck(auth);
 
   /** Whose turn a sentence waits in at the engine: a line per login (its cookies, hashed). */
   const who = (c: Context<AppEnv>) => createHash('sha256').update(c.req.header('cookie') ?? '').digest('base64url').slice(0, 16);
 
   const gate = async (c: Context<AppEnv>, voice: string) => {
-    if (!speech) throw new ApiError(503, 'speech_off', 'The server voice isn’t reading aloud just now. Turn off Read on the server to read with this device’s voice.');
-    if (!(await allowed(c))) throw new ApiError(403, 'speech_not_allowed', 'The server voice isn’t open to this account.');
-    if (!speech.voices.includes(voice)) throw new ApiError(400, 'speech_voice', 'The server doesn’t have that voice. Pick a Normal or heavy one; voices people uploaded read on their own devices.');
+    if (!speech) throw new ApiError(503, 'speech_off', 'The server voice isn’t reading aloud just now, so this device reads instead.');
+    if (!(await allowed(c))) throw new ApiError(403, 'speech_not_allowed', 'Sign in, with your address confirmed, for the server voice.');
+    if (!speech.voices.includes(voice)) throw new ApiError(400, 'speech_voice', 'The server doesn’t have that voice. Pick a Normal one; heavy voices and voices people uploaded read on their own devices.');
     return speech;
   };
 

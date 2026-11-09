@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { devicePace, lanesFor, learn, SERVER_PACE, timer, type Device } from './speed';
+import { devicePace, lanesFor, learn, timer, type Device } from './speed';
 
 const desktop: Device = { cores: 16, memory: 32, handheld: false };
 const laptop: Device = { cores: 4, memory: 8, handheld: false };
@@ -68,10 +68,6 @@ describe('devicePace', () => {
 
   it('guesses Kokoro faster at Maximum than Minimal', () => {
     expect(devicePace('kokoro', 'max', none, desktop)).toBeGreaterThan(devicePace('kokoro', 'min', none, desktop));
-  });
-
-  it('keeps Breader’s computer apart', () => {
-    expect(SERVER_PACE.piper).toBeGreaterThan(SERVER_PACE.kokoro);
   });
 });
 

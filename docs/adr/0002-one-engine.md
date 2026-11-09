@@ -4,6 +4,29 @@
   service of its own, so heavy work can be given more engines.
 - Goal: one scheduler shares the ThinkPad's processor and memory between reading aloud live,
   audiobooks and the panel model. Live reading stays quick. Many people make audiobooks at once.
+- Changed 2026-11-09: audiobooks are made on readers' devices only, never on the ThinkPad.
+  `server/src/speech/books.ts`, the audiobook kind of job, `ENGINE_BOOKS` and `ENGINE_BESIDE_LIVE`
+  are gone; the scheduler has two kinds, live and panels, and panels leave one worker of each
+  engine for live reading. The app also stopped offering the server as a choice: a reader's device
+  reads aloud and finds panels itself when it can, and only a device too weak for one has the
+  ThinkPad do it (`frontend/src/features/reader/able.ts`). The server voice, once `SPEECH_EMAILS`
+  only, is open to any signed-in reader with a confirmed address. What follows about audiobooks
+  and `SPEECH_EMAILS` is how it was decided then.
+- Changed later on 2026-11-09: the server voice reads Piper's voices only. Kokoro (the heavy
+  voices) runs on devices, and a device too slow to read itself can't pick it. Such a device reads
+  only on the server, never itself mid-book: busy, the app asks again for up to a minute; away or
+  off, reading stops and says so. Measured
+  that day (Ryzen 7 9800X3D, onnxruntime-node 1.31, scratch scripts, not kept), and not built:
+  - Several Piper sentences in one run: no faster (162 ms against 166 ms for four of one length),
+    and slower with lengths mixed (172 ms against 289 ms), as the short ones are padded.
+  - More threads for a job alone: a Piper sentence 81 ms on 4, 66 ms on 8, 98 ms on 16; Kokoro
+    683, 636 and 569 ms on 4, 8 and 12. Too little for a second copy of the model.
+  - One copy of a model for all workers: this onnxruntime-node won't take shared memory, and runs
+    a sentence on its worker's own thread. Kokoro's weights in a file of their own (external data),
+    which the system maps once, held 3 workers in 452 MB against 991 MB; Piper's gained nothing
+    (its memory is ONNX's arena, not weights). Moot with Kokoro off the server.
+  - The memory arena off: Kokoro 357 MB a copy against 598 MB at the same speed (not 2 times
+    slower, as below); Piper 35% slower. Moot for the same reason.
 
 ## Where we are (checked 2026-11-07)
 

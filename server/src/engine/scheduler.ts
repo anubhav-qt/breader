@@ -2,25 +2,23 @@
  * The scheduler (ADR 0002), in the API: which job runs next, and on which engine's worker. It knows
  * nothing of models' insides; a Runner reaches the engines (index.ts). So it's tested with a fake.
  *
- * - Three kinds of work, most urgent first: live reading, panels, audiobooks.
- * - Inside a kind, everyone waiting has a line, and the lines take turns, a job each. A line may
- *   hold lines of its own (a library's books), which take turns too.
+ * - Two kinds of work, most urgent first: live reading, then panels. Audiobooks are made on
+ *   readers' own devices, never here.
+ * - Inside a kind, everyone waiting has a line, and the lines take turns, a job each.
  * - A reader's live sentences run one at a time, in order: the first then has the CPU to itself,
  *   and the next are still made well before it has been played.
  * - Live reading is kept fast. Workers on one machine slow each other (they share its memory), so
- *   other work leaves room: panels, and audiobooks with no one reading aloud, take all but one
- *   worker, so a reader's first sentence starts at once. While anyone is (a live sentence within
- *   liveHoldMs), audiobooks take at most `besideLive` workers of each engine, none by default.
+ *   panels take all but one worker, and a reader's first sentence starts at once.
  * - Each worker holds the models its jobs needed. A job goes to a free worker that holds its model,
  *   else to one with room to load it (letting go of what it used longest ago), else it waits. What's
  *   held on each engine stays under that engine's memory budget.
  * - An engine short of memory starts only live reading, and its free workers stop. With every
  *   engine short, panels waiting are turned away (the app finds those itself).
- * - With no engine up, live reading and panels are turned away at once; audiobooks wait.
+ * - With no engine up, live reading and panels are turned away at once.
  */
 
-export type Kind = 'live' | 'panel' | 'book';
-export const KINDS: Kind[] = ['live', 'panel', 'book'];
+export type Kind = 'live' | 'panel';
+export const KINDS: Kind[] = ['live', 'panel'];
 /** How many lines' turns are kept once they're empty. */
 const FORGET_AFTER = 1_000;
 
@@ -40,10 +38,6 @@ export interface Job {
   kind: Kind;
   /** Whose line it waits in. */
   who: string;
-  /** Inside that line, what takes turns too: a library's books. */
-  sub?: string;
-  /** Goes before the rest of its own line: it finishes what someone waits for (a paragraph's MP3). */
-  soon?: boolean;
   model: Model | null;
   /** What the worker is sent. Made once a worker is free, so a job waiting holds nothing big. */
   body: () => Promise<Payload> | Payload;
@@ -64,8 +58,6 @@ export interface Host {
   freeMb: number;
   /** Changes when it starts again, its workers then holding nothing. */
   boot: string;
-  /** Workers audiobooks may use while anyone reads aloud. All but one if not given. */
-  besideLive?: number;
 }
 
 export interface Options {
@@ -94,48 +86,28 @@ interface Waiting {
   reject: (e: Error) => void;
 }
 
-/** One line: its own lines inside (a book each, say), taking turns, a job each. */
+/** One line: someone's jobs, in the order they came. */
 class Line {
-  private readonly subs = new Map<string, Waiting[]>();
-  size = 0;
+  private readonly jobs: Waiting[] = [];
+
+  get size() {
+    return this.jobs.length;
+  }
 
   push(w: Waiting) {
-    const sub = w.job.sub ?? '';
-    const l = this.subs.get(sub);
-    if (!l) this.subs.set(sub, [w]);
-    else if (!w.job.soon) l.push(w);
-    else {
-      // After the others that are soon, in the order they came.
-      const at = l.findIndex((x) => !x.job.soon);
-      l.splice(at < 0 ? l.length : at, 0, w);
-    }
-    this.size++;
+    this.jobs.push(w);
   }
 
   get head(): Waiting {
-    return this.subs.values().next().value![0];
+    return this.jobs[0];
   }
 
-  /** Takes the head; its own line goes to the back. */
   shift(): Waiting {
-    const [sub, l] = this.subs.entries().next().value!;
-    const w = l.shift()!;
-    this.subs.delete(sub);
-    if (l.length) this.subs.set(sub, l);
-    this.size--;
-    return w;
+    return this.jobs.shift()!;
   }
 
-  /** Takes out what waits in one of its own lines. */
-  take(sub: string): Waiting[] {
-    const l = this.subs.get(sub) ?? [];
-    this.subs.delete(sub);
-    this.size -= l.length;
-    return l;
-  }
-
-  *all(): Generator<Waiting> {
-    for (const l of this.subs.values()) yield* l;
+  all(): Waiting[] {
+    return this.jobs;
   }
 }
 
@@ -162,20 +134,17 @@ interface Engine {
 
 export const busyError = (what: string) => Object.assign(new Error(what), { busy: true });
 export const offError = (what: string) => Object.assign(new Error(what), { off: true });
-export const droppedError = (what: string) => Object.assign(new Error(what), { dropped: true });
 
 export class Scheduler {
   private readonly engines: Engine[];
   /** Each kind's lines, in the order they take turns. */
-  private readonly lines: Record<Kind, Map<string, Line>> = { live: new Map(), panel: new Map(), book: new Map() };
+  private readonly lines: Record<Kind, Map<string, Line>> = { live: new Map(), panel: new Map() };
   /** When each line last had a turn, counted in turns: the one that waited longest goes next. */
-  private readonly served: Record<Kind, Map<string, number>> = { live: new Map(), panel: new Map(), book: new Map() };
+  private readonly served: Record<Kind, Map<string, number>> = { live: new Map(), panel: new Map() };
   private turn = 0;
-  /** When each reader last asked for a live sentence: reading still, within liveHoldMs. */
-  private readonly reading = new Map<string, number>();
   /** Readers with a live sentence running. */
   private readonly readingNow = new Set<string>();
-  private readonly done: Record<Kind, number> = { live: 0, panel: 0, book: 0 };
+  private readonly done: Record<Kind, number> = { live: 0, panel: 0 };
   private readonly runner: Runner;
   private readonly o: Options;
   private readonly now: () => number;
@@ -234,14 +203,9 @@ export class Scheduler {
   }
 
   run(job: Job): Promise<unknown> {
-    if (job.kind !== 'book' && !this.up.length) return Promise.reject(offError('No engine is running just now.'));
+    if (!this.up.length) return Promise.reject(offError('No engine is running just now.'));
     if (job.kind === 'live' && this.waiting('live') >= this.mostLive) return Promise.reject(busyError('The voice is busy.'));
     if (job.kind === 'panel' && this.short) return Promise.reject(busyError('The server is short of memory.'));
-    if (job.kind === 'live') {
-      // Moved to the end, so the list runs from read longest ago to just now.
-      this.reading.delete(job.who);
-      this.reading.set(job.who, this.now());
-    }
     return new Promise((resolve, reject) => {
       const lines = this.lines[job.kind];
       let line = lines.get(job.who);
@@ -254,42 +218,19 @@ export class Scheduler {
     });
   }
 
-  /** Turns away what waits in `who`'s line for `sub` (a book paused or removed); what runs finishes. */
-  drop(kind: Kind, who: string, sub: string) {
-    const line = this.lines[kind].get(who);
-    if (!line) return;
-    const gone = line.take(sub);
-    if (!line.size) this.lines[kind].delete(who);
-    const err = droppedError('Stopped.');
-    for (const w of gone) w.reject(err);
-  }
-
   private heldMb(e: Engine) {
     let mb = 0;
     for (const s of e.slots) for (const m of s.held.values()) mb += m.mb;
     return mb;
   }
 
-  /** Readers who asked for a live sentence within liveHoldMs. */
-  private readers(): number {
-    const since = this.now() - this.liveHoldMs;
-    for (const [who, at] of this.reading) {
-      if (at > since) break;
-      this.reading.delete(who);
-    }
-    return this.reading.size;
-  }
-
   /**
-   * How many workers of engine `e` a job of `kind` may share with other work (not live reading)
-   * just now. One worker is all it has, so it's shared; else one is left for live reading, and
-   * while anyone reads aloud, audiobooks keep to `besideLive`.
+   * How many workers of engine `e` panels may use just now. One worker is all it has, so it's
+   * shared; else one is left for live reading.
    */
-  private room(e: Engine, kind: Kind, reading: boolean): number {
+  private room(e: Engine): number {
     const n = e.slots.length;
-    if (n <= 1) return n;
-    if (kind !== 'book' || !reading) return n - 1;
-    return Math.max(0, Math.min(n - 1, e.info!.besideLive ?? n - 1));
+    return n <= 1 ? n : n - 1;
   }
 
   /**
@@ -297,13 +238,13 @@ export class Scheduler {
    * model; else the free one that needs to let go of least (an empty one first) to stay in its
    * engine's budget.
    */
-  private place(job: Job, reading: boolean): { slot: Slot; drop: string[] } | null {
+  private place(job: Job): { slot: Slot; drop: string[] } | null {
     const free: Slot[] = [];
     for (const e of this.up) {
       if (job.kind !== 'live') {
         if (e.low) continue;
         const others = e.slots.filter((s) => s.running && s.running !== 'live').length;
-        if (others >= this.room(e, job.kind, reading)) continue;
+        if (others >= this.room(e)) continue;
       }
       for (const s of e.slots) if (!s.busy) free.push(s);
     }
@@ -344,7 +285,6 @@ export class Scheduler {
   private pump() {
     for (;;) {
       let started = false;
-      const reading = this.readers() > 0;
       for (const kind of KINDS) {
         // The lines in turn, the one served longest ago (or never) first: the first whose next job
         // has a place goes.
@@ -353,7 +293,7 @@ export class Scheduler {
         for (const [who, line] of order) {
           // A reader's live sentences one at a time.
           if (kind === 'live' && this.readingNow.has(who)) continue;
-          const at = this.place(line.head.job, reading);
+          const at = this.place(line.head.job);
           if (!at) continue;
           const w = line.shift();
           if (!line.size) this.lines[kind].delete(who);
@@ -465,7 +405,7 @@ export class Scheduler {
         low: e.low,
         models: e.slots.map((s) => [...s.held.keys()]),
       })),
-      waiting: { live: this.waiting('live'), panel: this.waiting('panel'), book: this.waiting('book') },
+      waiting: { live: this.waiting('live'), panel: this.waiting('panel') },
       done: { ...this.done },
     };
   }

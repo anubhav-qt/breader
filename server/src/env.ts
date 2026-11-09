@@ -88,9 +88,9 @@ const Env = z.object({
   HEARTBEAT_URL: z.string().url().optional(),
 
   /**
-   * The server voice (src/speech/): the laptop reads aloud for phones that can't run a voice
-   * themselves. Only for these accounts, by email, once the address is confirmed. Off while
-   * empty, and always off on the fallback, which is too small to speak.
+   * The owner's accounts, by email, once the address is confirmed: a seat at the panel model always,
+   * and their devices' panels kept at once. (The server voice was once theirs alone; it's now for any
+   * signed-in reader with a confirmed address, on a device too slow to read itself.)
    */
   SPEECH_EMAILS: list.transform((l) => l.map((e) => e.toLowerCase())).default([]),
   /** Where the laptop keeps the voices' files once downloaded. */
@@ -109,14 +109,13 @@ const Env = z.object({
   /**
    * The engines that run the voices and the panel model (src/engine/, ADR 0002): a service of
    * their own, `node dist/engine/main.js`, beside the API (http://engine:8790) or on another
-   * machine. None: the server voice, audiobooks and panels are off here. ENGINE_TOKEN, when set,
-   * is what the API shows them (they ask for it when they have it too). ENGINE_BOOKS audiobooks are
-   * made at once; the rest wait their turn. An engine sizes itself: ENGINE_WORKERS, ENGINE_THREADS,
-   * ENGINE_BESIDE_LIVE, ENGINE_MEMORY_MB and ENGINE_LOW_MB are its own settings (engine/serve.ts).
+   * machine. None: the server voice and panels are off here. ENGINE_TOKEN, when set,
+   * is what the API shows them (they ask for it when they have it too). An engine sizes itself:
+   * ENGINE_WORKERS, ENGINE_THREADS, ENGINE_MEMORY_MB and ENGINE_LOW_MB are its own settings
+   * (engine/serve.ts).
    */
   ENGINE_URLS: list.default([]),
   ENGINE_TOKEN: z.string().min(16).optional(),
-  ENGINE_BOOKS: z.coerce.number().int().min(1).max(1000).default(12),
 
   /**
    * Manga through the server (src/manga/): on unless this says false. Pages read are kept in

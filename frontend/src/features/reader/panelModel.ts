@@ -3,6 +3,7 @@ import { readLocal, writeLocal } from '../../lib/store';
 import { pictureFile, type Frames } from './frames';
 import type { PanelsAsk, PanelsReply, PanelsWork } from './panels.worker';
 import { forget, type Want } from './voice/store';
+import { modelBroke, modelFits } from './able';
 
 /*
  * The panel model trained on the owner's labels, on this device: the same one the laptop runs
@@ -93,29 +94,9 @@ let starting: Promise<boolean> | null = null;
 /** When it last couldn't start, so it's tried again a while after (offline, say), not on every page. */
 let failedAt = 0;
 const AGAIN_MS = 30_000;
-let gpu: Promise<boolean> | null = null;
 
 /** It's here and started. */
 export const panelModelReady = () => status.state === 'ready';
-
-/**
- * Whether this device can hold the model. Not a phone or tablet with Safari underneath (every browser
- * on an iPhone or iPad is), which lets a tab go at about a gigabyte and a half: the model working
- * through 1024-pixel squares on top of a manga's pictures took it past that on an iPhone 13, and the
- * tab crashed every time the manga opened again. Nor a device that says it has under 4 GB.
- */
-export function modelFits(): boolean {
-  const ua = navigator.userAgent;
-  const apple = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
-  return !apple && !(memory !== undefined && memory < 4);
-}
-
-/** Whether the browser lends a graphics chip (WebGPU), where the model takes a tenth of a second a page. */
-export const gpuHere = () => (gpu ??= (async () => {
-  const g = (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
-  return !!(await g?.requestAdapter().catch(() => null));
-})());
 
 /** Fetches the model and starts it, once; true when it's ready. */
 export function startPanelModel(): Promise<boolean> {
@@ -139,6 +120,7 @@ export function startPanelModel(): Promise<boolean> {
         waiting.clear();
         worker?.terminate();
         worker = null;
+        modelBroke();
         failed();
       };
       const r = await call({ type: 'start', model: wantOf(file) }, [], (bytes) => set({ bytes }));
@@ -146,6 +128,8 @@ export function startPanelModel(): Promise<boolean> {
       return true;
     } catch (e) {
       console.warn('The panel model couldn’t start here:', e);
+      // Offline, it only couldn't be fetched.
+      if (navigator.onLine !== false) modelBroke();
       worker?.terminate();
       worker = null;
       failed();

@@ -114,39 +114,39 @@ instead of sending them.
 - `PUBLIC_URL` is each server's own address, where Google sends readers back:
   `https://api.breader.example` on the laptop, `https://fb.breader.example` on Render.
 
-**The server voice.** The laptop can read aloud for phones too slow for a voice of their own,
-with the app's five Normal voices and its five heavy ones (2 voices too), sending each sentence as
-MP3 (about 22 MB an hour). It's open only to the accounts in `SPEECH_EMAILS` (comma separated,
-laptop only; Render is too small to speak), and only once each address is confirmed; they then see
-**Read on the server** in the voice sheet. Each voice downloads into the `voices` volume the first
-time it's asked for: about 64 MB for a Normal one, and 326 MB once for all the heavy ones. The
-voices run in the engine (below). A heavy sentence takes about 0.7 s on the engine alone, and a
-reader's first one starts at once: one worker is always left for reading aloud.
+**The server voice.** The laptop can read aloud for devices too slow for a voice of their own,
+with the app's Normal voices (Piper; 2 voices too), sending each sentence as
+MP3 (about 22 MB an hour). There's no switch: the app checks the device as a book opens
+(`frontend/src/features/reader/able.ts`: under 2 GB, no workers, or making sound under 1.5 times
+faster than it's said) and only such a device reads on the server; the check stays on the device.
+It's open to any reader signed in with a confirmed address (laptop only; Render is too small to
+speak); a slow device that isn't signed in reads itself as best it can. Each login has its own line
+at the engine, so one reader can't hold up the rest, and past 24 sentences waiting it answers busy.
+Such a device reads only on the laptop, never itself mid-book (it couldn't keep up, and hasn't the
+voice): busy, the app asks again for up to a minute; away or off, reading stops and says so. The
+heavy voices (Kokoro) are too much for the laptop and for such a device, so the app doesn't offer
+them there. Each voice downloads into the `voices` volume the
+first time it's asked for, about 64 MB. The voices run in the engine (below). A sentence takes
+about 0.1 s on the engine, and a reader's first one starts at once: one worker is always left for
+reading aloud.
 Each sentence's sound is kept in the `voices` volume, by a hash of its voice, speed and text, up to
 `SPEECH_CACHE_MB` (4096 by default), the ones used longest ago going first: a book read again, or
 on another phone, is spoken once. The sound is kept, though no text is.
 
-**Audiobooks.** Anyone with a library key can have the laptop make a book's audiobook (EPUB and
-text books, Piper or Kokoro, at 1x): the app sends the book's text, and the engine reads it a
-paragraph at a time (`server/src/speech/books.ts`). Up to `ENGINE_BOOKS` books (12) are made at
-once, sharing the engine's workers by turns, a library's books taking turns inside its own; the
-rest wait, the app showing how many are ahead. While anyone reads aloud on the server, audiobooks
-wait, and carry on a minute after. Each paragraph is an MP3 in `voices/books/<hash>/`, with the text
-beside it, and the app downloads them as they're made. They're kept for good, so the same book on
-another device downloads at once; nothing caps their size yet (about 22 MB an hour of book). A
-book being made when the server stops carries on when it starts. Because of this the voice engine
-now runs on the laptop whatever `SPEECH_EMAILS` holds; reading live is still only for those accounts.
+**Audiobooks** are made on readers' own devices only, never on the laptop. `/v1/audiobooks/info`
+says so, and the rest of `/v1/audiobooks/*` answers 410, for apps opened before this. Books once
+made on the laptop carry on on the device from the parts it downloaded. What the laptop made is
+still in `voices/books/`; nothing reads it now, and it can be deleted.
 
 **The engine** (`server/src/engine/`, ADR 0002) runs the voices and the panel model for the API:
 the `engine` service, the same image run as `node dist/engine/main.js`, reached only by the API
 at `ENGINE_URLS` (`http://engine:8790`). The API's scheduler hands it each job: reading aloud
-first, then panels, then audiobooks, everyone taking turns. It sizes itself from the machine: a
+first, then panels, everyone taking turns. It sizes itself from the machine: a
 worker for each two cores, of four threads each (4 of 4 on the ThinkPad), each holding the models
 its jobs need, up to half the memory free at start. Its own settings, in `infra/.env`:
 `ENGINE_WORKERS`, `ENGINE_THREADS` (threads a worker), `ENGINE_MEMORY_MB` (what its models may
 hold), `ENGINE_LOW_MB` (short of memory below this: it then starts only live reading; 1 GB or a
-quarter of that), and `ENGINE_BESIDE_LIVE` (workers audiobooks may use while anyone reads aloud;
-0, since each one at it slows a live sentence by a third or so). `/health` says how busy it is;
+quarter of that). Panels leave one worker of each engine for reading aloud. `/health` says how busy it is;
 `/admin/engine` (admin token) gives each worker's models and memory. More engines, on other
 machines with Docker: run the `engine` service there with `ENGINE_TOKEN` set (16 characters or
 more) and port 8790 published, open to the laptop only (a firewall rule, or a private network
@@ -234,7 +234,7 @@ kind is taken for manga. Every reader's device runs the model itself, about 40 M
 time (a tenth of a second a page where the browser lends it the graphics chip, a second or more on
 the processor), all but iPhones, iPads and devices with under 4 GB, which can't hold it (it crashed
 Safari on an iPhone 13). Nothing else finds a manga's panels: until the model's ready, and on those
-devices without a seat on the server, a page nobody's read before shows whole.
+devices while the laptop has no seat for them, a page nobody's read before shows whole.
 
 A page's panels, once anyone has them, are kept in Supabase for every reader (`page_panels`, by
 chapter and page, either size of it), and the app asks for a chapter's as it opens, with no seat
@@ -249,12 +249,13 @@ numbers, so a Suwayomi started afresh needs its rows cleared:
 `DELETE FROM page_panels WHERE chapter LIKE 'sw:%'`. A page takes a few hundred bytes. The tables
 aren't fed to the laptop's copy or its backups: lost, a page's panels are only found again.
 
-Readers can also have the laptop find them, with Find panels on the server in the
-manga's look panel, while there's a seat: the laptop finds them for `PANEL_SEATS` readers at once
-(8), and the owner's accounts (`SPEECH_EMAILS`) always have one besides. When they're all taken, the
-app says how full it is, live, and can pop up when there's room. A reader's library takes a seat
-when it opens a manga from Japan with it on, and gives it back on closing it, or after 75 seconds
-without a word. The model runs in the engine (above), and readers' pages take turns. A bigger
+The laptop finds them only for devices that can't (`frontend/src/features/reader/able.ts`: iPhones,
+iPads, under 4 GB, a panel model that broke there, or no graphics chip and a slow processor). There's
+no switch. Such a device takes a seat in the Panels layout of a manga from Japan, and gives it back
+on leaving the layout or the manga, or after 75 seconds without a word. The laptop finds them for
+`PANEL_SEATS` readers at once (8), and the owner's accounts (`SPEECH_EMAILS`) always have one
+besides. When they're all taken, the app says how full it is, live, and takes the first seat that
+frees up. The model runs in the engine (above), and readers' pages take turns. A bigger
 machine, or another engine, finds more pages at once: then raise `PANEL_SEATS` with it.
 Render never has it.
 

@@ -8,9 +8,7 @@ import manifest from '@breader/shared/voice-files.json';
 
 /*
  * The voices the server reads with, and their files on the laptop's disk. They're the app's thirty
- * Normal voices (Piper: a model each, or one speaker of a model of several) and its thirty heavy ones
- * (Kokoro: one model for all of them, and a small pack for each, or two packs a blend averages),
- * fetched from where the app's build fetches them (shared voice-files.json: a fixed
+ * Normal voices (Piper: a model each, or one speaker of a model of several), fetched from where the app's build fetches them (shared voice-files.json: a fixed
  * revision on Hugging Face) the first time each is wanted, checked against its SHA-256, and kept. A
  * file is only ever written under its final name once it has checked out, so one that is there is
  * whole.
@@ -18,47 +16,33 @@ import manifest from '@breader/shared/voice-files.json';
 
 type Entry = { from?: string; path?: string; size: number; sha256: string };
 const files = manifest.files as Record<string, Entry>;
-/** Speakers of one Piper model, and Kokoro blends, by their voice id. */
+/** Speakers of one Piper model, by their voice id. */
 const speakers = manifest.speakers as Record<string, { model: string; id: number }>;
-const mixes = manifest.mixes as Record<string, { of: string[]; british: boolean }>;
 /** Models of several speakers: a voice only as one of them. */
 const shared = new Set(Object.values(speakers).map((s) => s.model));
 
 const ids = (re: RegExp) => Object.keys(files).map((name) => re.exec(name)?.[1]).filter((id): id is string => !!id);
 
-/** The voices, by their key in the app's catalog: piper:kristin, kokoro:af_heart… */
+/**
+ * The voices, by their key in the app's catalog: piper:kristin… Only Normal ones: the heavy voices
+ * (Kokoro) are each device's own, so a device too slow for them doesn't offer them.
+ */
 export const VOICES = [
   ...ids(/^piper-([a-z_]+)$/).filter((id) => !!files[`piper-${id}-config`] && !shared.has(id)).map((id) => `piper:${id}`),
   ...Object.keys(speakers).map((id) => `piper:${id}`),
-  ...(files.kokoro ? ids(/^kokoro-([a-z]{2}_[a-z]+)$/).map((id) => `kokoro:${id}`) : []),
-  ...(files.kokoro ? Object.keys(mixes).map((id) => `kokoro:${id}`) : []),
 ];
 
-/**
- * A voice's files on disk. A Kokoro voice says words the British way if it's one of the b voices,
- * or a blend made to; a blend averages its two packs.
- */
-export type VoiceFiles =
-  | { engine: 'piper'; model: string; config: string; speaker?: number }
-  | { engine: 'kokoro'; model: string; pack: string; mix?: string; british: boolean };
+/** A voice's files on disk. */
+export type VoiceFiles = { engine: 'piper'; model: string; config: string; speaker?: number };
 
-/**
- * The model a voice runs on, for the engine (engine/models.ts): Kokoro's one model for all its
- * voices, or a Piper model, which may speak for several.
- */
+/** The model a voice runs on, for the engine (engine/models.ts): a Piper model may speak for several voices. */
 export function modelOfVoice(key: string): string {
-  const [engine, id] = key.split(':');
-  if (engine === 'kokoro') return 'kokoro';
+  const id = key.split(':')[1];
   return `piper:${speakers[id]?.model ?? id}`;
 }
 
 const parts = (key: string) => {
-  const [engine, id] = key.split(':');
-  if (engine === 'kokoro') {
-    const mix = mixes[id];
-    if (mix) return [files.kokoro, files[`kokoro-${mix.of[0]}`], files[`kokoro-${mix.of[1]}`]];
-    return [files.kokoro, files[`kokoro-${id}`]];
-  }
+  const id = key.split(':')[1];
   const one = speakers[id];
   if (one) return [files[`piper-${one.model}`], files[`piper-${one.model}-config`]];
   return [files[`piper-${id}`], files[`piper-${id}-config`]];
@@ -126,13 +110,8 @@ export function makeFiles(dir: string) {
     /** A voice's files, fetched first if they aren't here. */
     async ensure(key: string): Promise<VoiceFiles> {
       if (!VOICES.includes(key)) throw new Error(`No such voice: ${key}`);
-      const [model, other, third] = await Promise.all(parts(key).map(one));
-      const [engine, id] = key.split(':');
-      if (engine === 'kokoro') {
-        const mix = mixes[id];
-        if (mix) return { engine: 'kokoro', model, pack: other, mix: third, british: mix.british };
-        return { engine: 'kokoro', model, pack: other, british: id.startsWith('b') };
-      }
+      const [model, other] = await Promise.all(parts(key).map(one));
+      const id = key.split(':')[1];
       const speaker = speakers[id]?.id;
       if (speaker !== undefined) return { engine: 'piper', model, config: other, speaker };
       return { engine: 'piper', model, config: other };

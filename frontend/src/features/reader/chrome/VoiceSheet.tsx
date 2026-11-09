@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AI_LABEL } from '../../../books/ai';
-import { api, sayAway } from '../../../lib/api';
+import { api } from '../../../lib/api';
 import { springs } from '../../../lib/springs';
 import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, useGpu, type Engine, type Mode, type VoiceInfo } from '../voice/catalog';
 import { refreshVoices } from '../voice/list';
 import { unlockMusic } from '../music';
-import { hung, MUSIC_VOLUME, PACE, pairFor, pickedEngine, pickSide, RATES, readsOnServer, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
+import { checkDevice, useAble, voiceHere } from '../able';
+import { hung, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, readsOnServer, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
 import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
 import { missingAll, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { SheetAi } from '../../ai/AiStatus';
@@ -34,6 +35,8 @@ import { CloseDots, DotIcon } from './parts';
 const NO_KOKORO = {
   normal: 'Immersive only.',
   fallback: 'Needs a newer computer.',
+  /** A device too slow to read itself: Breader's computer reads Piper only. */
+  weak: 'Too heavy for this device.',
 };
 /** A browser that can't run any voice still has Immersive. */
 const NO_VOICES = 'This browser can’t run voices.';
@@ -99,12 +102,12 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   const load = useLoadState();
   const mode = prefs.mode;
   const speech = useSpeech();
-  const server = readsOnServer(prefs, speech.allowed);
-  // A heavy voice reads on this device only, so the server switch sits off.
-  const heavy = pickedEngine(prefs) === 'kokoro';
-  // Immersive where the GPU can't run Kokoro offers only Piper (prefs.ts, voiceFor).
+  const able = useAble();
+  const server = readsOnServer(speech.allowed, able.voice);
+  // Immersive where the GPU can't run Kokoro offers only Piper (prefs.ts, voiceFor), and so does a
+  // device too slow to read itself: Breader's computer reads only Piper's voices.
   const gpu = useGpu();
-  const fallback = mode === 'immersive' && gpu === false && !server;
+  const fallback = mode === 'immersive' && (gpu === false || server);
   const voices: Mode = fallback ? 'normal' : mode;
   const current = voiceFor(mode);
   // 2 voices: her pick and his lit in their colours.
@@ -120,7 +123,8 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   // What the card in the middle says isn't ready yet.
   const [waiting, setWaiting] = useState<Soon | null>(null);
 
-  useEffect(() => { void refreshVoices(); void refreshSpeech(); }, []);
+  // Whether the server voice is open to this account: asked only where this device can't keep up.
+  useEffect(() => { void refreshVoices(); void checkDevice().then(() => { if (!voiceHere()) void refreshSpeech(); }); }, []);
   // Whether Immersive can run here, asked before it offers a download.
   useEffect(() => { if (mode === 'immersive') void checkGpu(); }, [mode]);
   useEffect(() => stopSample, []);
@@ -150,6 +154,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     else setVoicePrefs({ voice: { ...prefs.voice, [voices]: v.key } });
   };
   // Another model starts on its first voice, or its first woman's for her side, and his follows.
+  // Immersive back on Piper reads with Normal's voices again, as it did before Kokoro was picked.
   const setModel = (e: Engine) => {
     if (e === 'kokoro' && voices !== 'immersive') {
       setNoKokoro(true);
@@ -157,6 +162,11 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     }
     setNoKokoro(false);
     if (e === model) return;
+    if (e === 'piper' && voices === 'immersive') {
+      if (paired) setVoicePrefs({ pair: { ...prefs.pair, immersive: { F: '', M: '' } } });
+      else setVoicePrefs({ voice: { ...prefs.voice, immersive: '' } });
+      return;
+    }
     const all = voicesOf(e);
     const first = paired ? all.find((v) => sideOf(v) === 'F') : all[0];
     if (first) pick(first);
@@ -233,7 +243,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
 
   // Why Kokoro can't be picked, when it can't.
   let modelNote: string | null = null;
-  if (noKokoro && fallback) modelNote = NO_KOKORO.fallback;
+  if (noKokoro && fallback) modelNote = server ? NO_KOKORO.weak : NO_KOKORO.fallback;
   else if (noKokoro) modelNote = NO_KOKORO.normal;
   // A tap on a face picks that voice and plays it.
   const pickAndHear = (v: VoiceInfo) => {
@@ -255,17 +265,8 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       <Step n={2} title="Model">
         <Segmented bare label="Model" value={model} onChange={setModel} options={modelsOf(voices === 'immersive')} />
         {modelNote && <p className="p-note vs-heavy">{modelNote}</p>}
-        {/* Only Piper reads on the server: with Kokoro, the switch makes way for where it reads. */}
-        {speech.allowed && !heavy && (
-          <div className="ctl tgrow">
-            <span className="clbl">Read on the server</span>
-            <button type="button" className="tg" role="switch" aria-checked={server} aria-label="Read aloud on Breader’s own computer" onClick={() => {
-              if (!prefs.server && api.away) sayAway('it can’t read aloud on the server');
-              setVoicePrefs({ server: !prefs.server });
-            }} />
-          </div>
-        )}
-        {speech.allowed && heavy && <p className="p-note vs-where">Kokoro reads on this device.</p>}
+        {/* Where it reads isn't a choice: this device when it keeps up, else Breader's computer (able.ts). */}
+        {server && <p className="p-note vs-where">Breader’s computer reads this aloud, as this device is too slow to keep up.</p>}
         {hung && mode === 'immersive' && !server && <p className="p-note vs-where vs-err">{HUNG}</p>}
       </Step>
       <Step n={3} title="Voices">

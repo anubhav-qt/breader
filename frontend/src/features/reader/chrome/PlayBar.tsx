@@ -5,10 +5,10 @@ import { springs } from '../../../lib/springs';
 import { readLocal, writeLocal } from '../../../lib/store';
 import type { PlayDesign } from '../../design/round';
 import { unlockMusic } from '../music';
-import { setVoicePrefs, useVoicePrefs } from '../voice/prefs';
+import { PACE, RATES, setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs } from '../voice/prefs';
 import { useLoadState } from '../voice/speaker';
-import { BACK, CROSS, LIGHT, ON, PAUSE, PLAY, UP, VOICES } from './icons';
-import { DotIcon, Typed } from './parts';
+import { BACK, CROSS, LIGHT, MINUS, ON, PAUSE, PLAY, PLUS, UP, VOICES } from './icons';
+import { Digits, DotIcon, Typed } from './parts';
 import { HeadTips } from './Tip';
 import type { ChromeProps, PanelName } from './types';
 import { NotYet } from './VoiceSheet';
@@ -23,6 +23,10 @@ import './play.css';
  *   C Nudge   one play button; a note, once, says Immersive is there, and the voices wear a dot
  *   D Modes   Read, Listen and Immersive as one switch, with the player beside it
  *   E Peek    a slim strip that opens a tray with all of it
+ *
+ * In each, the voices button sits just after the way of reading, and how fast (in words a minute)
+ * on the right, so it changes without the voice sheet. On a phone, play is in the middle, and the
+ * switch of ways is one button showing the way it reads now, with the others in a drop-up.
  *
  * While Immersive asks something (where to begin, how fast), the question takes the row. In A and
  * D, picking a way never starts it: play does. Picking Immersive asks, just above the switch,
@@ -106,6 +110,8 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, mu
   const voices = (
     <VoicesButton open={panel === 'voice'} dot={design === 'C' && !seen} onClick={() => toggle('voice')} />
   );
+  // How fast, on the right, wherever there's something to play.
+  const speed = main && <Speed />;
   // In Immersive, play lights the words; a voice reading them is a button of its own.
   const aloud = immersion && narration && !narration.playing && !immersion.running && (
     <button type="button" className="pl-chip" onClick={narration.toggle} data-tip="Read aloud, from where you pick">
@@ -182,17 +188,20 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, mu
   } else if (design === 'A') {
     row = (
       <>
-        <span className="pl-l">{modes}</span>
+        <span className="pl-l">{modes}{voices}</span>
         <Transport {...bits} />
-        <span className="pl-r">{voices}</span>
+        <span className="pl-r">{speed}</span>
       </>
     );
   } else if (design === 'B') {
     row = (
       <>
         <span className="pl-l">{going && <Skips transport={transport} />}</span>
-        <Split mode={mode} canImmerse={canImmerse} narration={narration} immersion={immersion} loading={loading} onListen={listen} onLight={light} onLeave={() => switchTo('normal', null)} />
-        <span className="pl-r">{voices}</span>
+        <span className="pl-split">
+          <Split mode={mode} canImmerse={canImmerse} narration={narration} immersion={immersion} loading={loading} onListen={listen} onLight={light} onLeave={() => switchTo('normal', null)} />
+          {voices}
+        </span>
+        <span className="pl-r">{speed}</span>
       </>
     );
   } else if (design === 'C') {
@@ -200,26 +209,27 @@ export function PlayBar({ book, narration, immersion, transport, panel, body, mu
       <>
         <span className="pl-l">
           {immersion && <LeaveTag onLeave={() => switchTo('normal', null)} />}
+          {voices}
           {speaker}
         </span>
         <Transport {...bits} />
-        <span className="pl-r">{aloud}{voices}</span>
+        <span className="pl-r">{aloud}{speed}</span>
         {canImmerse && !immersion && <Nudge going={going} onTry={() => switchTo('immersive', 'light')} />}
       </>
     );
   } else if (design === 'D') {
     row = (
       <>
-        {modes}
-        <span className="pl-r">
+        <span className="pl-l">{modes}{voices}</span>
+        <span className="pl-dm">
           {speaker}
           <Transport {...bits} small />
-          {voices}
         </span>
+        <span className="pl-r">{speed}</span>
       </>
     );
   } else {
-    row = <Peek bits={bits} mode={mode} canImmerse={canImmerse} narration={narration} immersion={immersion} panel={panel} aloud={aloud} voices={voices} onListen={listen} onLight={light} onMode={(m) => switchTo(m, null)} />;
+    row = <Peek bits={bits} mode={mode} canImmerse={canImmerse} narration={narration} immersion={immersion} panel={panel} aloud={aloud} voices={voices} speed={speed} onListen={listen} onLight={light} onMode={(m) => switchTo(m, null)} />;
   }
 
   return (
@@ -268,7 +278,7 @@ function Transport({ main, loading, lit, transport, small = false }: Bits & { sm
   return (
     <span className={`pl-deck${small ? ' is-small' : ''}`}>
       <Skip dir={-1} transport={transport} />
-      <button type="button" className="pl-icon pl-main" onClick={main.act} aria-label={main.label} data-tip={main.label}>
+      <button type="button" className={`pl-icon pl-main${icon === PLAY ? ' is-play' : ''}`} onClick={main.act} aria-label={main.label} data-tip={main.label}>
         <DotIcon rows={icon} lit={loading ? lit : undefined} />
       </button>
       <Skip dir={1} transport={transport} />
@@ -294,6 +304,30 @@ function Skips({ transport }: { transport: Props['transport'] }) {
   );
 }
 
+/**
+ * How fast, in words a minute, a step down or up: Immersive's pace (the light, and a voice reading
+ * with it), or Normal's speeds, said in the words a minute a voice reads at each.
+ */
+function Speed() {
+  const p = useVoicePrefs();
+  const pace = p.mode === 'immersive';
+  const wpm = pace ? p.pace : Math.round(spokenWpm(p));
+  const slowest = pace ? p.pace <= PACE.min : p.rate <= RATES[0];
+  const fastest = pace ? p.pace >= PACE.max : p.rate >= RATES[RATES.length - 1];
+  const step = (dir: 1 | -1) => (pace ? stepPace(dir) : stepRate(dir));
+  return (
+    <span className="pl-speed" role="group" aria-label="Words a minute">
+      <button type="button" className="pl-skip" onClick={() => step(-1)} disabled={slowest} aria-label="Slower" data-tip="Slower">
+        <DotIcon rows={MINUS} />
+      </button>
+      <span className="pl-wpm" aria-live="polite"><Digits value={wpm} width={3} /><small>wpm</small></span>
+      <button type="button" className="pl-skip" onClick={() => step(1)} disabled={fastest} aria-label="Faster" data-tip="Faster">
+        <DotIcon rows={PLUS} />
+      </button>
+    </span>
+  );
+}
+
 function VoicesButton({ open, dot, onClick }: { open: boolean; dot: boolean; onClick: () => void }) {
   return (
     <button
@@ -312,16 +346,92 @@ function VoicesButton({ open, dot, onClick }: { open: boolean; dot: boolean; onC
 
 /** E's tray: Normal or Immersive, as a small switch. */
 function ModeSwitch({ mode, onPick }: { mode: 'normal' | 'immersive'; onPick: (m: 'normal' | 'immersive') => void }) {
+  const options: Array<Option<'normal' | 'immersive'>> = [
+    { v: 'normal', label: 'Normal', tip: 'The page as it is, the voice reading along' },
+    { v: 'immersive', label: 'Immersive', tip: 'The page dims, and the words light up as you read' },
+  ];
+  return <Ways label="Mode" now={mode} options={options} onPick={onPick} />;
+}
+
+interface Option<T> {
+  v: T;
+  label: string;
+  tip: string;
+}
+
+/**
+ * A switch of ways: side by side where there's room; on a narrow screen, one button of a fixed
+ * width saying the way it is now, and a drop-up above it with the others.
+ */
+function Ways<T extends string>({ label, now, options, onPick, className = '' }: {
+  label: string;
+  now: T;
+  options: Array<Option<T>>;
+  onPick: (v: T) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+  const current = options.find((o) => o.v === now) ?? options[0];
+  const icon = (v: T) => v === 'immersive' && <DotIcon rows={LIGHT} />;
+  const choose = (v: T) => {
+    setOpen(false);
+    onPick(v);
+  };
   return (
-    <span className="pl-seg" role="radiogroup" aria-label="Mode">
-      <button type="button" role="radio" aria-checked={mode === 'normal'} className={mode === 'normal' ? 'is-on' : ''} onClick={() => onPick('normal')} data-tip="The page as it is, the voice reading along">
-        Normal
-      </button>
-      <button type="button" role="radio" aria-checked={mode === 'immersive'} className={mode === 'immersive' ? 'is-on' : ''} onClick={() => onPick('immersive')} data-tip="The page dims, and the words light up as you read">
-        <DotIcon rows={LIGHT} />
-        Immersive
-      </button>
-    </span>
+    <>
+      <span className={`pl-seg pl-wide ${className}`} role="radiogroup" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.v} type="button" role="radio" aria-checked={now === o.v} className={now === o.v ? 'is-on' : ''} onClick={() => onPick(o.v)} data-tip={o.tip}>
+            {icon(o.v)}
+            {o.label}
+          </button>
+        ))}
+      </span>
+      <span ref={ref} className={`pl-dropup ${className}`}>
+        <button type="button" className={`pl-dropup-b${open ? ' is-open' : ''}`} onClick={() => setOpen(!open)} aria-label={label + ': ' + current.label} aria-expanded={open} aria-haspopup="menu">
+          <span className="pl-dropup-t">{current.label}</span>
+          <DotIcon rows={UP} />
+        </button>
+        <AnimatePresence>
+          {open && (
+            <motion.span
+              key="menu"
+              className="pl-dropup-m"
+              role="menu"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6, transition: { duration: 0.12 } }}
+              transition={springs.snappy}
+            >
+              {options.filter((o) => o.v !== current.v).map((o) => (
+                <button key={o.v} type="button" role="menuitem" onClick={() => choose(o.v)}>
+                  {icon(o.v)}
+                  {o.label}
+                </button>
+              ))}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </span>
+    </>
   );
 }
 
@@ -355,7 +465,7 @@ function Split({ mode, canImmerse, narration, immersion, loading, onListen, onLi
     }
   }
   return (
-    <span className="pl-split">
+    <>
       {narration && (
         <button type="button" className={`pl-pill${listening ? ' is-on' : ''}`} onClick={onListen} data-tip="The voice reads the page as it is">
           <DotIcon rows={listenIcon} />
@@ -375,7 +485,7 @@ function Split({ mode, canImmerse, narration, immersion, loading, onListen, onLi
           )}
         </span>
       )}
-    </span>
+    </>
   );
 }
 
@@ -524,24 +634,15 @@ function Modes({ now, canListen, canImmerse, onPick }: {
   canImmerse: boolean;
   onPick: (v: Way) => void;
 }) {
-  const options: Array<{ v: Way; label: string; tip: string }> = [{ v: 'read', label: 'Read', tip: 'Just the page' }];
+  const options: Array<Option<Way>> = [{ v: 'read', label: 'Read', tip: 'Just the page' }];
   if (canListen) options.push({ v: 'listen', label: 'Listen', tip: 'The voice reads the page as it is' });
   if (canImmerse) options.push({ v: 'immersive', label: 'Immersive', tip: 'The page dims, and the words light up as you read' });
   if (options.length < 2) return null;
-  return (
-    <span className="pl-seg pl-modes" role="radiogroup" aria-label="How to read">
-      {options.map((o) => (
-        <button key={o.v} type="button" role="radio" aria-checked={now === o.v} className={now === o.v ? 'is-on' : ''} onClick={() => onPick(o.v)} data-tip={o.tip}>
-          {o.v === 'immersive' && <DotIcon rows={LIGHT} />}
-          {o.label}
-        </button>
-      ))}
-    </span>
-  );
+  return <Ways label="How to read" now={now} options={options} onPick={onPick} className="pl-modes" />;
 }
 
 /** E: a slim strip saying what can play, with a tray above for the rest. */
-function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voices, onListen, onLight, onMode }: {
+function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voices, speed, onListen, onLight, onMode }: {
   bits: Bits;
   mode: 'normal' | 'immersive';
   canImmerse: boolean;
@@ -550,6 +651,7 @@ function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voic
   panel: PanelName | null;
   aloud: ReactNode;
   voices: ReactNode;
+  speed: ReactNode;
   onListen: () => void;
   onLight: () => void;
   onMode: (m: 'normal' | 'immersive') => void;
@@ -570,6 +672,7 @@ function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voic
           {word}
         </button>
         <Skips transport={bits.transport} />
+        <Speed />
       </>
     );
   } else {
@@ -611,9 +714,12 @@ function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voic
             exit={{ opacity: 0, y: 8 }}
             transition={springs.snappy}
           >
-            {canImmerse && <ModeSwitch mode={mode} onPick={onMode} />}
+            <span className="pl-l">
+              {canImmerse && <ModeSwitch mode={mode} onPick={onMode} />}
+              {voices}
+            </span>
             <Transport {...bits} />
-            <span className="pl-r">{aloud}{voices}</span>
+            <span className="pl-r">{aloud}{speed}</span>
           </motion.div>
         )}
       </AnimatePresence>

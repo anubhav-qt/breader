@@ -17,18 +17,25 @@
 - [ ] Poetry and verse in EPUBs lose their indentation, because publisher CSS is set aside.
 
 ## Audiobooks
-- [ ] Cap what Breader's computer keeps (`voices/books/`), the books listened to longest ago going first, and let a reader remove theirs from there too. Today only this device's copy can be removed.
+- [ ] Delete `voices/books/` on the ThinkPad: audiobooks are made on devices now, and nothing reads it.
+- [ ] Next release: remove the `/v1/audiobooks` stub (`server/src/routes/audiobooks.ts`) and its test, once apps from before it are gone.
 - [ ] PDFs: read their pages' words into an audiobook as well.
 - [ ] Chapters in the exported MP3 (ID3 CHAP frames), so players can jump between them.
 - [ ] Initials split a sentence: "by O. Henry" is said as "by O." and "Henry", with a pause between (`sentencesIn`, reading aloud too).
 - [ ] Kokoro on this device tops out near 6x on the graphics chip (`features/audiobook/speed.ts`). Several sentences in one run would need a Kokoro export that masks padding; this one doesn't.
 - [ ] On a real phone: Maximum's three Piper engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
-- [x] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live, audiobooks and the panel model (ADR 0002, `server/src/engine/`).
-- [ ] The engine's numbers on the ThinkPad itself (`infra/load/voices.mjs`), and its memory, to check the default budget (half the memory free) and 4 workers of 4 against it.
+- [x] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live and the panel model (ADR 0002, `server/src/engine/`).
+- [x] Audiobooks made on devices only, never on the ThinkPad.
 - [ ] A smaller server image: Debian's `ffmpeg` brings a graphics stack (LLVM, Mesa, about 400 MB) Breader never uses. A static ffmpeg would take the image from 1.55 GB to about 1.2 GB.
-- [ ] Audiobooks while someone reads aloud for hours: they wait the whole time (`ENGINE_BESIDE_LIVE`, 0). If that's too long, let them run on one worker, at 1.6 s to first sound instead of 1.0 s.
+
+## Engine load tests (at the end of the day's work, with the typechecks and tests)
+- [ ] `infra/load/voices.mjs` on the ThinkPad itself (Piper only now): how many slow devices reading at once before a sentence waits, and its memory, to check the default budget (half the memory free) and 4 workers of 4.
+- [ ] Live readers and panels together (`--live N --panels M`): is one worker kept for reading aloud enough, and how often is a reader told it's busy (24 waiting) and kept waiting?
+- [ ] Fewer threads, more workers, for Piper only (a sentence gains little past 4 threads): try 8 workers of 2 threads against 4 of 4 on the ThinkPad.
 
 ## Testing on real phones
+- [ ] The device check (`features/reader/able.ts`) on real slow phones: is 1.5x for reading aloud, and a score of 0.5 for panels without a graphics chip, where they should be? Measured only on fast devices so far.
+- [x] The server voice is open to every signed-in reader with a confirmed address, on a slow device (it was `SPEECH_EMAILS` only).
 - [ ] Reproduce phone browsers properly, then tune voices and Immersive against them. So far both were tuned in code and a desktop browser only.
   - A real iPhone 13 with 1 to 2 GB free: Safari's memory ceiling for the voice worker, and what Cache Storage keeps when space is short.
   - Tapping a sentence to light it, the pace setter on the bottom line, and pages turning under the light.

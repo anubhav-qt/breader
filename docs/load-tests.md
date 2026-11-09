@@ -108,7 +108,7 @@ run in turn: before, after, before, after. CPU is the API container's average (`
 - Cloudflare keeping pages (once the Cache Rule is in) takes most page asks off the server too;
   not measured here.
 
-## Voices, audiobooks and panels: the engine (ADR 0002)
+## Voices and panels: the engine (ADR 0002)
 
 `infra/load/voices.mjs`, against an API with an engine (`ENGINE_URLS`). Test stack only, never
 production. It runs at once:
@@ -118,8 +118,10 @@ production. It runs at once:
   passages. Each logs in to `OWNER_EMAIL` (`OWNER_PASSWORD`), an account in the API's
   `SPEECH_EMAILS` with its address confirmed, so each has a line of its own. Reported: first sound
   (each passage's first sentence), each sentence, stalls (playing waits for the next).
-- `--books N` libraries each making an audiobook of `--paragraphs` paragraphs (40, 3 sentences
-  each). Reported: paragraphs made a minute.
+- Audiobooks were part of this until 2026-11-09, when they moved to readers' devices only; the
+  numbers below with audiobooks are from before.
+- The server voice reads Piper's voices only since 2026-11-09 (Kokoro runs on devices); the runs
+  below with Kokoro are from before. `--voice` is `piper:kristin` now.
 - `--panels N` readers having a chapter of Yotsuba to!'s panels found, a page every `--page-ms`.
   Clear `page_panels` first: pages found before are kept.
 - Every second it reads `/health`: the most workers busy and jobs waiting.

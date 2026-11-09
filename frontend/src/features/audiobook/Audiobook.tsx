@@ -12,8 +12,8 @@ import { BACK, ON, PAUSE, PLAY } from '../reader/chrome/icons';
 import { audiobookVoice, handheld, voiceByKey } from '../reader/voice/prefs';
 import { measure, setMode, useSpeed, type Mode } from './speed';
 import {
-  chaptersMade, exportMp3, kokoroHere, lengthOf, listenable, megabytes, minutes, onListenable, pause, refreshInfo, remove, sizeOf, start,
-  timeToMake, useAudiobook, useBooksInfo, useStage, wake, type Engine, type Made, type Where,
+  chaptersMade, exportMp3, kokoroHere, lengthOf, listenable, megabytes, minutes, onListenable, pause, remove, sizeOf, start,
+  timeToMake, useAudiobook, useStage, wake, type Engine, type Made,
 } from './audiobooks';
 import { canAudiobook } from './plan';
 import { useAudiobookKeys } from './keys';
@@ -22,8 +22,8 @@ import './audiobook.css';
 
 /*
  * A book's audiobook: the button on its card, beside the edit button, and the dialog it opens.
- * Not made yet, the dialog asks which voice and where to make it; while it's made, how far it's
- * got, and once its first chapter is made, it plays what's made while the rest is.
+ * Not made yet, the dialog asks which voice and how fast to make it on this device; while it's
+ * made, how far it's got, and once its first chapter is made, it plays what's made while the rest is.
  */
 
 const ENGINES: Engine[] = ['piper', 'kokoro'];
@@ -180,7 +180,6 @@ function AudiobookDialog({ book, listen: listenIn, onClose }: { book: Book; list
   const ab = useAudiobook(book.id);
   // Picked once, as it opens: it never moves on by itself while it's open.
   const [asked, setView] = useState<View | null>(() => (listenIn ? { kind: 'player', engine: listenIn } : null));
-  useEffect(() => { void refreshInfo(); }, []);
 
   // Those that can be listened to, made ones first; and those still on their first chapter.
   const hear = ENGINES.filter((e) => listenable(ab?.[e])).sort((a, b) => Number(ab![b]!.state === 'ready') - Number(ab![a]!.state === 'ready'));
@@ -238,34 +237,33 @@ function MakeView({ book, fixed, ab, onStarted, onBack }: {
   onStarted: (e: Engine) => void;
   onBack?: () => void;
 }) {
-  const info = useBooksInfo();
   const free = ENGINES.filter((e) => !ab?.[e]);
   const [engine, setEngine] = useState<Engine>(fixed ?? free[0] ?? 'piper');
-  const [where, setWhere] = useState<Where | null>(null);
   const [kokoro, setKokoro] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const stage = useStage(book.id, engine);
   const { mode } = useSpeed();
   useEffect(() => { void kokoroHere().then(setKokoro); void measure(); }, []);
+  // Kokoro can't run here: Piper is picked instead, unless it's made already or being carried on.
+  useEffect(() => {
+    if (kokoro === false && engine === 'kokoro' && !fixed && !ab?.piper) setEngine('piper');
+  }, [kokoro, engine, fixed, ab]);
 
   const m = ab?.[engine];
   const words = m?.words ?? book.words ?? 0;
   const left = m ? 1 - m.done / m.total : 1;
   const voice = m ? voiceByKey(m.voice) : audiobookVoice(engine);
-  const hereOff = engine === 'kokoro' && kokoro === false ? 'Can’t run Kokoro here' : null;
-  const serverOff = !info ? 'Asking…' : !info.on ? 'Can’t be reached just now' : voice && !info.voices.includes(voice.key) ? 'Your uploaded voice reads here only' : null;
-  const est = (w: Where, md: Mode = mode) => `~${minutes(timeToMake(words * left, engine, w, md))}`;
-  const pickable = where && !(where === 'device' ? hereOff : serverOff);
-  const step = m ? 1 : 2;
+  const cant = (e: Engine) => e === 'kokoro' && kokoro === false;
+  const est = (md: Mode) => `~${minutes(timeToMake(words * left, engine, md))}`;
   const phone = handheld();
 
   const go = async () => {
-    if (!where) return;
+    if (cant(engine)) return;
     setStarting(true);
     setError(null);
     try {
-      await start(book, engine, where);
+      await start(book, engine);
       onStarted(engine);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -283,34 +281,32 @@ function MakeView({ book, fixed, ab, onStarted, onBack }: {
           {ENGINES.map((e) => (
             <Choice
               key={e}
-              on={engine === e}
-              off={!!ab?.[e]}
+              on={engine === e && !cant(e)}
+              off={!!ab?.[e] || cant(e)}
               name={NAME[e]}
               aside={ab?.[e] ? 'Made' : audiobookVoice(e).name}
-              line={`${QUALITY[e]} · ${megabytes(sizeOf(words))}`}
+              line={cant(e) && !ab?.[e] ? 'Needs a computer with a graphics chip' : `${QUALITY[e]} · ${megabytes(sizeOf(words))}`}
               onPick={() => setEngine(e)}
             />
           ))}
         </Step>
       )}
-      <Step n={step} title="Make it on">
-        <Choice on={where === 'device' && !hereOff} off={!!hereOff} name="This device" line={hereOff ?? `${est('device')} · while Breader is open`} onPick={() => setWhere('device')} />
-        <Choice on={where === 'server' && !serverOff} off={!!serverOff} name="Breader’s computer" line={serverOff ?? `${est('server')} · even with Breader closed`} onPick={() => setWhere('server')} />
-      </Step>
-      {where === 'device' && !hereOff && (
-        <Step n={step + 1} title="Speed">
-          <Choice on={mode === 'max'} name="Maximum" line={`${est('device', 'max')} · uses the whole ${phone ? 'phone' : 'computer'}`} onPick={() => setMode('max')} />
-          <Choice on={mode === 'min'} name="Minimal" line={`${est('device', 'min')} · leaves room for other apps`} onPick={() => setMode('min')} />
+      {cant(engine) ? (
+        <p className="ab-error" role="alert">This device can’t run Kokoro. Remove it and make it with Piper.</p>
+      ) : (
+        <Step n={m ? 1 : 2} title="Speed">
+          <Choice on={mode === 'max'} name="Maximum" line={`${est('max')} · uses the whole ${phone ? 'phone' : 'computer'}`} onPick={() => setMode('max')} />
+          <Choice on={mode === 'min'} name="Minimal" line={`${est('min')} · leaves room for other apps`} onPick={() => setMode('min')} />
         </Step>
       )}
       {error && <p className="ab-error" role="alert">{error}</p>}
       <div className="ab-actions">
-        <button type="button" className="btn btn-primary ab-go is-wide" disabled={!pickable || starting} onClick={() => void go()}>
+        <button type="button" className="btn btn-primary ab-go is-wide" disabled={cant(engine) || starting} onClick={() => void go()}>
           {starting ? (stage ?? 'Starting…') : m ? 'Carry on' : 'Download as audiobook'}
         </button>
         {onBack && <button type="button" className="btn btn-ghost" onClick={onBack}>Back</button>}
       </div>
-      <p className="ab-note">Kept in this browser until you export it; clearing site data removes it.</p>
+      <p className="ab-note">Made on this device while Breader is open, and kept in this browser until you export it; clearing site data removes it.</p>
     </div>
   );
 }
@@ -331,20 +327,15 @@ function Making({ book, engine, m, first, onCarryOn, lead, children }: {
   const p = m.done / m.total;
   const chapters = m.chapters.length;
   const made = chaptersMade(m);
-  const there = m.where === 'server';
   useSpeed();
-  const togo = (parts: number) => `~${minutes(timeToMake((m.words * Math.max(0, parts)) / m.total, engine, m.where, m.mode))}`;
+  const togo = (parts: number) => `~${minutes(timeToMake((m.words * Math.max(0, parts)) / m.total, engine, m.mode))}`;
   const firstEnd = m.chapters[1]?.from ?? m.total;
   let line: string;
   if (m.state === 'making') {
-    const s = m.server;
-    const queued = there && !!s?.queued && s.ahead > 0;
     if (stage) line = stage;
-    else if (queued) line = `Waiting: ${s!.ahead} ${s!.ahead === 1 ? 'book' : 'books'} ahead on Breader’s computer`;
     else if (first && made === 0 && chapters > 1) line = `Chapter 1 in ${togo(firstEnd - m.done)}: listen then, or wait for the whole book`;
     else if (chapters > 1) line = `${made} of ${chapters} chapters made · the rest in ${togo(m.total - m.done)}`;
     else line = `${Math.round(p * 100)}% · ready in ${togo(m.total - m.done)}`;
-    if (!stage && !queued) line += there ? ' · on Breader’s computer' : ' · on this device';
   } else if (m.state === 'paused') {
     line = m.error ?? (chapters > 1 ? `Paused · ${made} of ${chapters} chapters made` : `Paused at ${Math.round(p * 100)}%`);
   } else if (m.state === 'ready') {
@@ -457,7 +448,7 @@ function PlayerView({ book, engine, ab, hear, onEngine, onOther, onCarryOn }: {
         </div>
       )}
       <p className="ab-note">
-        {ready ? `${megabytes(m.bytes / 1e6)} · ${m.kept ? 'in this browser, and kept on Breader’s computer.' : 'in this browser only.'} Export the MP3 to keep it for good.` : 'Export the MP3 once it’s all made.'}
+        {ready ? `${megabytes(m.bytes / 1e6)} · in this browser only. Export the MP3 to keep it for good.` : 'Export the MP3 once it’s all made.'}
       </p>
     </div>
   );

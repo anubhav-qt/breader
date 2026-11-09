@@ -8,6 +8,7 @@ import { IconAddBook, IconLock, IconPeople, IconStar, IconTrash } from './compon
 import { Hint, type HintSpec } from './features/guide/Hint';
 import type { Go } from './features/guide/list';
 import { markSeen, useGuideKept, useNews } from './features/guide/seen';
+import { checkDevice } from './features/reader/able';
 import { WelcomeBooks, WelcomeManga, WelcomeShared } from './features/guide/Welcome';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { DesignBar } from './features/design/DesignBar';
@@ -573,6 +574,8 @@ export default function App() {
   const startLoad = useCallback(async (id: string, given?: BookRecord, at?: Position) => {
     const rec = given ?? recordById.get(id);
     if (!rec) return null;
+    // What this device can do itself, reading aloud and finding panels, checked while the book loads (reader/able.ts).
+    void checkDevice();
     try {
       if (rec.source === 'remote') await ensureKey();
       // A series from a Suwayomi source opens a few chapters around its place.

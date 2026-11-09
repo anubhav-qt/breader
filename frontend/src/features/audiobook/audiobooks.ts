@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { AudiobookEngine, AudiobookStatus, AudiobooksInfo } from '@breader/shared/audiobook';
-import { api } from '../../lib/api';
+import type { AudiobookEngine } from '@breader/shared/audiobook';
 import { readLocal, store, writeLocal } from '../../lib/store';
 import type { BookRecord } from '../../books/types';
 import { checkGpu } from '../reader/voice/catalog';
@@ -9,41 +8,35 @@ import { bookVoices, releaseBookVoice, synthForBook, type Clip } from '../reader
 import { encode, releaseEncoder, tag } from './mp3';
 import { inOrder } from './order';
 import { planOf, type Chapter, type Plan } from './plan';
-import { devicePace, lanesFor, modeNow, SERVER_PACE, timer, type Mode } from './speed';
+import { devicePace, lanesFor, modeNow, timer, type Mode } from './speed';
 
 /*
  * Audiobooks: a book read aloud once, a paragraph at a time, kept in this browser as MP3 to listen
- * to apart from the reader, and exported as one MP3 to keep for good. Made with Piper or Kokoro, on
- * this device (while Breader is open, in an engine of its own, nothing sent anywhere) or on Breader's computer (server
- * speech/books.ts), which keeps going with the app closed and keeps what it made, downloaded here
- * as it's made. Reading aloud in the reader never uses them: it reads live.
+ * to apart from the reader, and exported as one MP3 to keep for good. Made with Piper or Kokoro on
+ * this device only, while Breader is open, in an engine of its own, nothing sent anywhere. Reading
+ * aloud in the reader never uses them: it reads live.
  *
- * What's made, where, and how far, is kept by book and engine in localStorage; the parts are in
- * IndexedDB, as `ab:<book>:<engine>:<n>`.
+ * What's made and how far is kept by book and engine in localStorage; the parts are in IndexedDB,
+ * as `ab:<book>:<engine>:<n>`. Books started on Breader's computer, before it stopped making them,
+ * carry on here from the parts already downloaded.
  */
 
 export type Engine = AudiobookEngine;
-export type Where = 'device' | 'server';
 
 export interface Made {
   voice: string;
   total: number;
   /** Parts here, from the first. */
   done: number;
-  where: Where;
-  /** Made on this device: how much of it, the last time it was making it. */
+  /** How much of the device it used, the last time it was making it. */
   mode?: Mode;
   state: 'making' | 'paused' | 'ready' | 'failed';
   error?: string;
-  /** Made on Breader's computer: how far it has got there, and how many books are ahead of it. */
-  server?: { made: number; ahead: number; queued: boolean };
   chapters: Chapter[];
   words: number;
   bytes: number;
   /** The part the player was at. */
   at: number;
-  /** Breader's computer keeps a copy. */
-  kept?: boolean;
   /** What's needed to open the book again, to carry on making it here after the page loads again. */
   book?: Pick<BookRecord, 'id' | 'title' | 'author' | 'format' | 'source' | 'url' | 'fileId' | 'origin' | 'shared' | 'words'>;
 }
@@ -117,23 +110,6 @@ export const useStage = (id: string, engine: Engine) => useSyncExternalStore(
   () => stages.get(`${id}:${engine}`) ?? null,
 );
 
-/* Breader's computer */
-
-let info: AudiobooksInfo | null = null;
-const infoSubs = new Set<() => void>();
-export async function refreshInfo() {
-  try {
-    info = await api.books.get<AudiobooksInfo>('/v1/audiobooks/info');
-  } catch {
-    info = { on: false, voices: [] };
-  }
-  infoSubs.forEach((f) => f());
-}
-export const useBooksInfo = () => useSyncExternalStore(
-  (f) => { infoSubs.add(f); return () => { infoSubs.delete(f); }; },
-  () => info,
-);
-
 /* How long it takes, and how big it is */
 
 /** Words a minute, read aloud at 1x. */
@@ -143,9 +119,8 @@ const MB_A_MINUTE = 0.36;
 
 export const lengthOf = (words: number) => words / WPM;
 export const sizeOf = (words: number) => lengthOf(words) * MB_A_MINUTE;
-/** Minutes to make this many words: on this device, at Maximum or Minimal (speed.ts). */
-export const timeToMake = (words: number, engine: Engine, where: Where, mode: Mode = modeNow()) =>
-  lengthOf(words) / (where === 'server' ? SERVER_PACE[engine] : devicePace(engine, mode));
+/** Minutes to make this many words on this device, at Maximum or Minimal (speed.ts). */
+export const timeToMake = (words: number, engine: Engine, mode: Mode = modeNow()) => lengthOf(words) / devicePace(engine, mode);
 
 export function minutes(m: number) {
   if (m < 1.5) return '1 min';
@@ -171,11 +146,8 @@ let hereRunning = false;
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/**
- * Starts making an audiobook, or carries on with one paused, on this device or Breader's computer.
- * Its voice stays the one it started with.
- */
-export async function start(rec: BookRecord, engine: Engine, where: Where) {
+/** Starts making an audiobook, or carries on with one paused. Its voice stays the one it started with. */
+export async function start(rec: BookRecord, engine: Engine) {
   const id = rec.id;
   stage(id, engine, 'Getting the book ready');
   try {
@@ -196,25 +168,14 @@ export async function start(rec: BookRecord, engine: Engine, where: Where) {
       done: had?.done ?? 0,
       bytes: had?.bytes ?? 0,
       at: had?.at ?? 0,
-      kept: had?.kept,
       book: { id, title: rec.title, author: rec.author, format: rec.format, source: rec.source, url: rec.url, fileId: rec.fileId, origin: rec.origin, shared: rec.shared, words: rec.words },
-      where,
       state: 'making',
       error: undefined,
-      server: undefined,
     });
-    if (where === 'device') {
-      // Breader's computer, if it had it, waits: this device carries on from here.
-      if (had?.where === 'server') void serverCall(id, engine, 'pause').catch(() => {});
-      // Once in the queue, however often it's started (a double click, say).
-      if (!hereQueue.some((j) => j.id === id && j.engine === engine && !j.stop)) hereQueue.push({ id, engine, plan, stop: false });
-      stage(id, engine, hereRunning ? 'Waiting for the book before it' : null);
-      void runHere();
-    } else {
-      await sendText(id, engine, plan, voice);
-      stage(id, engine, null);
-      void follow(id, engine);
-    }
+    // Once in the queue, however often it's started (a double click, say).
+    if (!hereQueue.some((j) => j.id === id && j.engine === engine && !j.stop)) hereQueue.push({ id, engine, plan, stop: false });
+    stage(id, engine, hereRunning ? 'Waiting for the book before it' : null);
+    void runHere();
   } catch (e) {
     stage(id, engine, null);
     put(id, engine, madeOf(id, engine) ? { state: 'failed', error: errorText(e) } : null);
@@ -232,12 +193,11 @@ export async function pause(id: string, engine: Engine) {
     // Not started yet: out of the queue at once.
     else hereQueue.splice(hereQueue.indexOf(job), 1);
   }
-  if (m.where === 'server') await serverCall(id, engine, 'pause').catch(() => {});
   stage(id, engine, null);
   put(id, engine, { state: 'paused' });
 }
 
-/** Takes it off this device. Breader's computer keeps its copy, so making it there again is quick. */
+/** Takes it off this device. */
 export async function remove(id: string, engine: Engine) {
   const m = madeOf(id, engine);
   if (!m) return;
@@ -289,7 +249,7 @@ async function makeHere(job: Job) {
     return;
   }
   if (engine === 'kokoro' && !(await kokoroHere())) {
-    put(id, engine, { state: 'failed', error: 'This device can’t run Kokoro. Make it on Breader’s computer.' });
+    put(id, engine, { state: 'failed', error: 'This device can’t run Kokoro. Remove it and make it with Piper.' });
     return;
   }
   const mode = modeNow();
@@ -352,86 +312,9 @@ function joined(clips: Clip[]): Clip {
   return { audio, rate: clips[0]?.rate ?? 22_050 };
 }
 
-const base = (id: string, engine: Engine) => `/v1/audiobooks/${encodeURIComponent(id)}/${engine}`;
-const serverCall = (id: string, engine: Engine, what: 'go' | 'pause') => api.books.post<AudiobookStatus>(`${base(id, engine)}/${what}`);
-
-/** Sends what Breader's computer hasn't had of the book's text, a slice under the request limit at a time. */
-async function sendText(id: string, engine: Engine, plan: Plan, voice: string) {
-  stage(id, engine, 'Sending the book’s text');
-  let s = await api.books.get<AudiobookStatus>(base(id, engine));
-  const same = s.voice === voice && s.total === plan.parts.length;
-  let from = same ? s.have : 0;
-  while (from < plan.parts.length) {
-    const parts: string[][] = [];
-    let size = 0;
-    for (let n = from; n < plan.parts.length && size < 600_000; n++) {
-      parts.push(plan.parts[n]);
-      size += JSON.stringify(plan.parts[n]).length;
-    }
-    s = await api.books.post<AudiobookStatus>(`${base(id, engine)}/text`, { voice, total: plan.parts.length, from, parts });
-    if (s.voice !== voice || s.have <= from) throw new Error('Breader’s computer is still making this book with another voice. Try again when it’s done.');
-    from = s.have;
-  }
-  if (s.state === 'paused' || s.state === 'failed') s = await serverCall(id, engine, 'go');
-  put(id, engine, { kept: true, server: { made: s.made, ahead: s.ahead, queued: s.state === 'queued' } });
-}
-
-const following = new Set<string>();
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** While the app is open, downloads the parts Breader's computer has made. */
-async function follow(id: string, engine: Engine) {
-  const k = `${id}:${engine}`;
-  if (following.has(k)) return;
-  following.add(k);
-  try {
-    for (;;) {
-      let m = madeOf(id, engine);
-      if (!m || m.where !== 'server' || m.state !== 'making') return;
-      let s: AudiobookStatus;
-      try {
-        s = await api.books.get<AudiobookStatus>(base(id, engine));
-        stage(id, engine, null);
-      } catch {
-        stage(id, engine, 'Breader’s computer can’t be reached; trying again');
-        await sleep(20_000);
-        continue;
-      }
-      if (s.state === 'none') {
-        put(id, engine, { state: 'failed', error: 'Breader’s computer no longer has it. Make it again.' });
-        return;
-      }
-      put(id, engine, { server: { made: s.made, ahead: s.ahead, queued: s.state === 'queued' } });
-      while ((m = madeOf(id, engine)) && m.state === 'making' && m.done < s.made) {
-        const n = m.done;
-        const res = await api.books.raw(`${base(id, engine)}/${n}`);
-        const blob = new Blob([await res.arrayBuffer()], { type: 'audio/mpeg' });
-        await store.set(partKey(id, engine, n), blob);
-        const now = madeOf(id, engine);
-        if (!now) return;
-        put(id, engine, { done: n + 1, bytes: now.bytes + blob.size });
-      }
-      m = madeOf(id, engine);
-      if (!m || m.state !== 'making') return;
-      if (m.done >= m.total) {
-        put(id, engine, { state: 'ready', server: undefined });
-        return;
-      }
-      if (s.state === 'paused') { put(id, engine, { state: 'paused' }); return; }
-      if (s.state === 'failed') { put(id, engine, { state: 'failed', error: s.error ?? 'Breader’s computer couldn’t make it.' }); return; }
-      await sleep(s.state === 'queued' ? 15_000 : 4_000);
-    }
-  } catch (e) {
-    if (madeOf(id, engine)) put(id, engine, { state: 'paused', error: errorText(e) });
-  } finally {
-    following.delete(k);
-    stage(id, engine, null);
-  }
-}
-
 /**
- * When the app opens: Breader's computer's books carry on downloading, and this device's carry on
- * being made where they were when the page closed. Only a pause stops them.
+ * When the app opens, books carry on being made where they were when the page closed, those once
+ * made on Breader's computer too. Only a pause stops them.
  */
 let woke = false;
 export function wake() {
@@ -440,8 +323,7 @@ export function wake() {
   for (const [id, book] of Object.entries(all)) {
     for (const [engine, m] of Object.entries(book) as Array<[Engine, Made]>) {
       if (m.state !== 'making') continue;
-      if (m.where === 'server') void follow(id, engine);
-      else if (m.book) void start(m.book as BookRecord, engine, 'device').catch(() => {});
+      if (m.book) void start(m.book as BookRecord, engine).catch(() => {});
       else put(id, engine, { state: 'paused', error: undefined });
     }
   }
