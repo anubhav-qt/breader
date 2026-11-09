@@ -57,8 +57,8 @@ interface Props {
 }
 
 /**
- * The cards rise in and their colour grows only the first time a library of books, and of manga,
- * appears after the page loads. The libraries stay once they've been seen (App.tsx), so switching
+ * The cards show at once, and their colour fades in, only the first time a library of books, and
+ * of manga, appears after the page loads. The libraries stay once they've been seen (App.tsx), so switching
  * back to one shows it at once.
  */
 const entered = { books: false, manga: false };
@@ -158,7 +158,6 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
           place={place}
           initial={view}
           root={scrollRef}
-          indexBase={RECENT}
           onSeries={showSeries}
           onKeepAll={onKeepAll}
           {...shared}

@@ -77,6 +77,10 @@
   pointer-events: none;
 }
 .tile-face.is-ink { z-index: 1; background: var(--bc); color: var(--bc-ink); }
+/* On the library's first appearance the patches fade in: opacity alone, so the graphics chip does it with no repaint. */
+.tile-face.is-ink.is-fading { animation: ink-in 420ms ease-out both; }
+@keyframes ink-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tile-face.is-ink.is-fading { animation: none; } }
 /* The first line of text keeps clear of the corner button. */
 .tile-face > :first-child { padding-right: calc(var(--tools, 1) * 36px); }
 .tile-hit { position: absolute; inset: 0; z-index: 2; border-radius: inherit; }

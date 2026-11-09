@@ -17,7 +17,6 @@ export type Variant = 'hero' | 'square' | 'wide' | 'tall' | 'small' | 'cover';
 export interface TileProps {
   item: GalleryItem;
   variant: Variant;
-  index: number;
   enter: boolean;
   now: number;
   /** Show the book's cover, when it has one and the card has room. Only the two most recent do. */
@@ -64,7 +63,7 @@ function setMask(el: HTMLElement | null, mask: string) {
  *
  * A full-size button opens the book; the corner button (or a right-click) opens the edit popover.
  */
-export function Tile({ item, variant, index, enter, now, art = false, className = '', style, radius = 22, open = false, picked, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onKeep }: TileProps) {
+export function Tile({ item, variant, enter, now, art = false, className = '', style, radius = 22, open = false, picked, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onKeep }: TileProps) {
   const b = item.book;
   const [ref, size] = useSize<HTMLDivElement>();
   const inkRef = useRef<HTMLDivElement>(null);
@@ -87,21 +86,18 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   // The cover keeps its own proportions, so it is never cropped.
   const [artRatio, setArtRatio] = useState(2 / 3);
 
-  // Blots grow in from nothing when the library first appears.
-  const grow = useMotionValue(enter ? 0 : 1);
-  useEffect(() => {
-    if (!enter) return;
-    const run = animate(grow, 1, { ...springs.smooth, delay: 0.3 + Math.min(index, 24) * 0.03 });
-    return () => run.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const apply = (k = grow.get()) => {
+  // The patches are drawn once, at their size; changing a mask costs a repaint of the whole card,
+  // so it only changes when the amount read does. On the library's first appearance they fade in.
+  const shown = useRef('');
+  const apply = () => {
     const p = fill.get();
-    setMask(inkRef.current, p >= 1 && k > 0.995 ? 'none' : maskFor(blots, radiiAt(p), k));
+    const mask = p >= 1 ? 'none' : maskFor(blots, radiiAt(p));
+    if (mask === shown.current || !inkRef.current) return;
+    shown.current = mask;
+    setMask(inkRef.current, mask);
   };
-  useEffect(() => grow.on('change', apply));
   useEffect(() => fill.on('change', () => apply()));
-  useLayoutEffect(() => { apply(grow.get()); });
+  useLayoutEffect(() => { apply(); });
 
   const roomy = variant === 'hero' || variant === 'square';
   const hasArt = art && !!b.coverUrl && roomy;
@@ -118,11 +114,21 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
   if (picked !== undefined) tools = 1 + (done ? 1 : 0) + (b.favorite ? 1 : 0);
   // A series' card has none, but for its tick while picking.
   if (stack) tools = picked === undefined ? 0 : 1;
-  useLayoutEffect(() => fitCard(ref.current), [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);
+  // Fitting measures the card many times over, so it waits for the card's size (the first render
+  // has none yet) and runs again only when fonts arrive, not on every page load.
+  const loadingFonts = useRef(false);
+  useLayoutEffect(() => {
+    if (!size.w) return;
+    loadingFonts.current = document.fonts.status === 'loading';
+    fitCard(ref.current);
+  }, [ref, size.w, size.h, b.title, b.line, b.author, item.author, stack?.name, variant, hasArt, artRatio, started, tools]);
   useEffect(() => {
-    let live = true;
-    void document.fonts.ready.then(() => { if (live) fitCard(ref.current); });
-    return () => { live = false; };
+    const fonts = document.fonts;
+    const refit = () => { loadingFonts.current = false; fitCard(ref.current); };
+    // Fonts that finished between the fit and now were missed by the listener.
+    if (loadingFonts.current && fonts.status === 'loaded') refit();
+    fonts.addEventListener('loadingdone', refit);
+    return () => fonts.removeEventListener('loadingdone', refit);
   }, [ref]);
   const face = <Face book={b} variant={variant} now={now} number={number} author={item.author} stack={stack} beside={hasArt || made} manga={manga} />;
 
@@ -131,11 +137,11 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
       ref={slotRef}
       className={`tile-slot ${className}${stack ? ' is-stack' : ''}${picked ? ' is-picked' : ''}`}
       style={{ ...style, borderRadius: radius }}
-      // The library's first appearance rises in; a book added or put back later settles in place.
-      initial={enter ? { opacity: 0, y: 18 } : { opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      // The library's first appearance is there at once; a book added or put back later settles in place.
+      initial={enter ? false : { opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
-      transition={{ ...springs.smooth, delay: enter ? Math.min(index, 24) * 0.028 : 0 }}
+      transition={springs.smooth}
       layout="position"
       layoutDependency={layoutKey}
     >
@@ -150,7 +156,7 @@ export function Tile({ item, variant, index, enter, now, art = false, className 
         }}
       >
         <div className="tile-face">{face}</div>
-        {started && <div ref={inkRef} className="tile-face is-ink" aria-hidden="true">{face}</div>}
+        {started && <div ref={inkRef} className={`tile-face is-ink${enter ? ' is-fading' : ''}`} aria-hidden="true">{face}</div>}
         <button
           type="button"
           className="tile-hit"
