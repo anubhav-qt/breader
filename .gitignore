@@ -25,3 +25,7 @@ ai/panels/data/labels/*.tmp
 # The Mac trainer's own Python (ai/panels/model/mac.sh), and YOLO's photo weights it fetches.
 ai/panels/model/.venv/
 ai/panels/model/yolo*.pt
+# The live panel model and, from round 21, each kept round's weights: in the round's GitHub release
+# (panels-<hash>), not Git LFS, whose budget is spent. live.json names the live one by its hash.
+ai/panels/model/live.onnx
+ai/panels/model/rounds/*/best.pt

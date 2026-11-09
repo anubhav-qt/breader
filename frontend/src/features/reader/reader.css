@@ -345,6 +345,15 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-more { position: absolute; left: 50%; bottom: 88px; z-index: 3; transform: translateX(-50%); box-shadow: 0 0 0 1px var(--r-line); }
 .mg-note { position: absolute; left: 50%; top: 84px; z-index: 3; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 8px 14px; border-radius: 10px; background: var(--r-fill); box-shadow: 0 0 0 1px var(--r-line); font: var(--ui-w) 13px/1.35 var(--ui); color: var(--r-fg); text-align: center; pointer-events: none; }
 
+/* The owner's thumbs up and down on the panel shown (MangaPanels.tsx, PanelVoteBar), between the sides that step. */
+.mg-vote { position: absolute; left: 50%; bottom: calc(var(--foot, 76px) + 10px); z-index: 3; transform: translateX(-50%); display: flex; gap: 6px; padding: 4px; border-radius: 999px; background: color-mix(in srgb, var(--r-bg) 82%, transparent); box-shadow: 0 0 0 1px var(--r-line); }
+.mg-vote button { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--r-fg); opacity: 0.7; cursor: pointer; }
+.mg-vote button svg { width: 20px; height: 20px; }
+.mg-vote button.is-down svg { transform: rotate(180deg); }
+.mg-vote button:hover { opacity: 1; }
+.mg-vote button.is-on { opacity: 1; background: var(--r-acc-soft); color: var(--r-acc); }
+.mg-vote button:focus-visible { outline: 2px solid var(--r-fg); outline-offset: 2px; }
+
 /* A page looked at closely (MangaZoom.tsx): over the controls, the rest of the page faded away. */
 .mg-zoom { position: fixed; inset: 0; z-index: 20; overflow: hidden; touch-action: none; cursor: zoom-out; }
 .mg-zoom.is-pan { cursor: grab; }

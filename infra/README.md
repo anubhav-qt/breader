@@ -227,14 +227,16 @@ comic) comes from its type among those genres too; one whose site doesn't say sh
 every kind is on in Browse.
 
 **Manga panels.** The panels on manga pages are found with the panel model (`ai/panels`, the
-round in `ai/panels/model/live.onnx`), and the app reads a page a panel at a time, and zooms, by
+round `ai/panels/model/live.json` names, published as a GitHub release, not kept in git), and the app reads a page a panel at a time, and zooms, by
 them instead of by its own finder. It's for manga from Japan only: a manhwa, manhua or comic is
 never read a panel at a time, nor its pages sent to the model; a series whose site doesn't say its
 kind is taken for manga. Every reader's device runs the model itself, about 40 MB fetched the first
 time (a tenth of a second a page where the browser lends it the graphics chip, a second or more on
 the processor), all but iPhones, iPads and devices with under 4 GB, which can't hold it (it crashed
 Safari on an iPhone 13). Nothing else finds a manga's panels: until the model's ready, and on those
-devices while the laptop has no seat for them, a page nobody's read before shows whole.
+devices while the laptop has no seat for them, a page nobody's read before shows whole. Device and
+laptop read a page exactly as the trainer's guesser does (`shared/src/panels.ts`, `findPanels`), so
+what they find is what the round was scored on (`ai/panels/README.md`, Keeping the model).
 
 A page's panels, once anyone has them, are kept in Supabase for every reader (`page_panels`, by
 chapter and page, either size of it), and the app asks for a chapter's as it opens, with no seat

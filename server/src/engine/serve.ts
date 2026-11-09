@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { fitOf, squareOf, windows } from '@breader/shared/panels';
 import { log } from '../log.ts';
 import { makeFiles, modelOfVoice, VOICES } from '../speech/files.ts';
 import { frame, unframe, type Answered, type Info, type Run } from './wire.ts';
@@ -175,18 +174,22 @@ export function threadPool(threads: number, file?: URL): Pool {
 type Sharp = (typeof import('sharp'))['default'];
 let sharp: Promise<Sharp> | null = null;
 
-/** The picture as the model sees it: each window letterboxed into its square, as channels of 0 to 1. */
-export async function windowsOf(data: Uint8Array, model: string): Promise<Extract<Body, { type: 'panels' }>> {
+/**
+ * The page's pixels, red first, as the labeller's guesser (ai/panels/model/guess.py) has them from
+ * OpenCV: turned as its camera said, with no colour profile applied. The worker fits them to the
+ * model (shared findPanels), off the API's thread.
+ */
+export async function pixelsOf(data: Uint8Array, model: string): Promise<Extract<Body, { type: 'panels' }>> {
   sharp ??= import('sharp').then((m) => m.default);
-  const { data: rgb, info } = await (await sharp)(data).removeAlpha().toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
+  const img = (await sharp)(data, { ignoreIcc: true, autoOrient: true });
+  // What a picture leaves clear, OpenCV has as the colour under it, and a GIF's as white.
+  const clear = (await img.metadata()).format === 'gif' ? img.flatten({ background: '#ffffff' }) : img.removeAlpha();
+  const { data: rgb, info } = await clear.toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h, channels } = info;
   if (channels !== 3) throw new Error(`The page came out with ${channels} channels.`);
-  const out: Extract<Body, { type: 'panels' }>['windows'] = [];
-  for (const span of windows(w, h)) {
-    const fit = fitOf(w, span[1] - span[0]);
-    out.push({ input: squareOf(rgb, w, 3, span, fit), fit, span });
-  }
-  return { type: 'panels', model, w, h, windows: out };
+  // Its own memory, to hand to the worker whole: a small one may share Node's.
+  const px = rgb.byteOffset === 0 && rgb.buffer.byteLength === rgb.length ? new Uint8Array(rgb.buffer) : new Uint8Array(rgb);
+  return { type: 'panels', model, w, h, px };
 }
 
 export interface EngineDeps {
@@ -197,8 +200,8 @@ export interface EngineDeps {
   panel: { file: string; round: number } | null;
   token?: string;
   free?: () => number;
-  /** Cuts a page into windows; tests pass their own. */
-  cut?: typeof windowsOf;
+  /** Opens a page; tests pass their own. */
+  cut?: typeof pixelsOf;
   /** The voices' files; tests pass their own, so nothing is downloaded. */
   files?: Pick<ReturnType<typeof makeFiles>, 'ensure' | 'progress'>;
 }
@@ -207,7 +210,7 @@ export interface EngineDeps {
 export function makeEngineApp(d: EngineDeps) {
   const files = d.files ?? makeFiles(d.speechDir);
   const free = d.free ?? (() => process.availableMemory() / MB);
-  const cut = d.cut ?? windowsOf;
+  const cut = d.cut ?? pixelsOf;
   const boot = crypto.randomUUID();
   const token = d.token ? Buffer.from(d.token) : null;
   const app = new Hono();
@@ -259,7 +262,7 @@ export function makeEngineApp(d: EngineDeps) {
       } else if (ask.type === 'panels') {
         if (!d.panel) return answer({ ok: false, error: 'This engine hasn’t the panel model.' });
         body = await cut(bytes, d.panel.file);
-        transfer = body.windows.map((x) => x.input.buffer as ArrayBuffer);
+        transfer = [body.px.buffer as ArrayBuffer];
       } else {
         return c.json({ error: 'No such job.' }, 400);
       }

@@ -18,16 +18,12 @@ from ultralytics import YOLO
 
 from pages import DATA, DEVICE, GUESSES, MODELS, SIZE, pages, windows, write
 
-# How sure the model has to be of a panel to guess it.
-SURE = 0.3
+# How sure the model has to be of a panel to guess it, the same as the app's (shared/src/panels.ts).
+# A panel skipped is worse than a box extra: at 0.4, not half, round 20 left 16 panels on its
+# held-back pages with nothing over them, not 21, for 38 extra boxes, not 31.
+SURE = 0.4
 # A panel this close to a window's cut, in pixels, may be cut by it.
 NEAR = 4
-# How sure the model has to be of a corner to take it wherever it puts it.
-CORNER = 0.5
-# A corner it's less sure of is taken this close to its panel's box, as a share of the box's shorter
-# side: a corner on the page's edge is always one, as it learned those as out of sight (training
-# crops pages), though it puts them where they are.
-ON_BOX = 0.1
 
 
 def area(b):
@@ -43,40 +39,12 @@ def iou(a, b):
     return both / ((area(a) + area(b) - both) or 1)
 
 
-def corners_of(box):
-    x0, y0, x1, y1 = box
-    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
-
-
-def sensible(q):
-    """Whether four corners make a panel: they turn the same way all round, and enclose something."""
-    turns = []
-    for i in range(4):
-        (ax, ay), (bx, by), (cx, cy) = q[i], q[(i + 1) % 4], q[(i + 2) % 4]
-        turns.append((bx - ax) * (cy - by) - (by - ay) * (cx - bx))
-    return all(t > 0 for t in turns) or all(t < 0 for t in turns)
-
-
-def shoelace(q):
-    return abs(sum(q[i][0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * q[i][1] for i in range(4))) / 2
-
-
-def quad_of(points, box, w, h):
+def quad_of(points, w, h):
     """
-    A panel's corners as guessed, in whole pixels on the page: where the model puts them, but its
-    box's for one it's unsure of away from the box, all four when it's sure of none, and when they
-    don't make a sensible panel. The same as the app's (shared/src/panels.ts).
+    A panel's corners as guessed: all four where the model puts them, in whole pixels on the page,
+    never squared off or moved. The same as the app's (shared/src/panels.ts).
     """
-    whole = lambda x, y: [int(min(max(round(x), 0), w)), int(min(max(round(y), 0), h))]
-    square = [whole(x, y) for x, y in corners_of(box)]
-    if all(sure < CORNER for _, _, sure in points):
-        return square
-    near = ON_BOX * min(box[2] - box[0], box[3] - box[1])
-    on_box = lambda x, y: min(abs(x - box[0]), abs(x - box[2]), abs(y - box[1]), abs(y - box[3])) <= near
-    q = [whole(x, y) if sure >= CORNER or on_box(x, y) else square[i] for i, (x, y, sure) in enumerate(points)]
-    if not sensible(q) or shoelace(q) < 0.6 * area(box):
-        return square
-    return q
+    return [[int(min(max(round(x), 0), w)), int(min(max(round(y), 0), h))] for x, y, _ in points]
 
 
 def merged(found):
@@ -94,7 +62,8 @@ def merged(found):
             across = min(a[2], b[2]) - max(a[0], b[0])
             if across >= 0.5 * min(a[2] - a[0], b[2] - b[0]) and min(a[3], b[3]) > max(a[1], b[1]):
                 j["box"] = (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
-                j["quad"] = corners_of(j["box"])
+                # The upper piece's top corners and the lower one's bottom corners, as the model put them.
+                j["quad"] = j["quad"][:2] + f["quad"][2:]
                 j["sure"] = max(j["sure"], f["sure"])
                 break
         else:
@@ -194,7 +163,8 @@ def guess(model, picture, w, h):
     found = []
     spans = windows(w, h)
     for k, (top, bottom) in enumerate(spans):
-        r = model.predict(picture[top:bottom], imgsz=SIZE, conf=SURE, device=DEVICE, verbose=False)[0]
+        # One panel once, of any class: a round from before (8) knew two kinds of panel.
+        r = model.predict(picture[top:bottom], imgsz=SIZE, conf=SURE, device=DEVICE, verbose=False, agnostic_nms=True)[0]
         boxes = r.boxes.xyxy.cpu().numpy()
         sure = r.boxes.conf.cpu().numpy()
         points = r.keypoints.data.cpu().numpy()
@@ -202,7 +172,7 @@ def guess(model, picture, w, h):
             box = (float(b[0]), float(b[1]) + top, float(b[2]), float(b[3]) + top)
             corners = [(float(x), float(y) + top, float(c)) for x, y, c in p]
             cut = (k > 0 and box[1] <= top + NEAR) or (k < len(spans) - 1 and box[3] >= bottom - NEAR)
-            found.append({"box": box, "quad": quad_of(corners, box, w, h), "sure": float(s), "cut": cut})
+            found.append({"box": box, "quad": quad_of(corners, w, h), "sure": float(s), "cut": cut})
     if len(spans) > 1:
         found = merged(found)
     return ordered(found)

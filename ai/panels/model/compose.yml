@@ -1,6 +1,7 @@
 # The panel model's trainer, on this machine's GPU (README.md):
 #   npm --prefix ai run panels-train     train the next round on every label, then guess the rest
 #   npm --prefix ai run panels-guess     guess the unlabelled pages again with the latest round
+#   npm --prefix ai run panels-live -- N export round N to live.onnx, for npm run ship to put live
 name: breader-panels
 
 x-model: &model
@@ -15,6 +16,20 @@ services:
   train:
     <<: *model
     command: ["python", "train.py"]
+    # A trial holds series back (PANELS_HOLDOUT, 0 for none), stops by PANELS_PATIENCE, learns by
+    # PANELS_SETTINGS (tuned or yolo) for up to PANELS_EPOCHS (train.py).
+    environment: ["PANELS_HOLDOUT", "PANELS_EPOCHS", "PANELS_PATIENCE", "PANELS_SETTINGS", "PANELS_SIGMA", "PANELS_REACH", "PANELS_BASE", "PANELS_LR", "PANELS_TRAIN_SEED", "PANELS_TILT", "PANELS_SKEW", "PANELS_TILTED", "PANELS_SLANTED", "PANELS_HARD"]
+  test:
+    <<: *model
+    command: ["python", "-m", "unittest", "-v", "test_train", "test_guess", "test_live"]
   guess:
     <<: *model
     command: ["python", "guess.py"]
+  score:
+    <<: *model
+    command: ["python", "score.py"]
+    environment: ["PANELS_ROUND"]
+  live:
+    <<: *model
+    entrypoint: ["python", "live.py"]
+    volumes: ["../data:/data", ".:/live"]

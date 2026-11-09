@@ -1,5 +1,9 @@
 # Breader: to do later
 
+## Demo
+- [ ] Check how all the demos look for new users.
+- [ ] Add demos for every single thing in the guide.
+
 ## Input mode setting
 - [ ] Add a setting for **mouse-first** (default) or **keyboard-first**.
   - Mouse-first is what the current design assumes: left nav, hover reveals, clicks.

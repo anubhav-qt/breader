@@ -15,8 +15,8 @@ import { env } from './helpers.ts';
 
 /*
  * An engine (serve.ts) and the API talking to it over HTTP (index.ts), with a fake pool of workers
- * in place of ONNX Runtime: a sentence's "MP3" is its text, a page's panels one for each of its
- * windows.
+ * in place of ONNX Runtime: a sentence's "MP3" is its text, a page's panels one for each row of
+ * its pixels.
  */
 
 const TOKEN = 'a-token-of-sixteen-or-more';
@@ -38,7 +38,7 @@ function fakePool(o: { wait?: () => Promise<void> } = {}) {
         case 'say':
           return { mp3: mp3(body.text), samples: body.text.length * 10, rate: 24_000 };
         case 'panels':
-          return { panels: body.windows.map(() => [[0, 0], [1, 0], [1, 1]] as Array<[number, number]>), sure: body.windows.map(() => 0.9), w: body.w, h: body.h };
+          return { panels: Array.from(body.px, () => [[0, 0], [1, 0], [1, 1]] as Array<[number, number]>), sure: Array.from(body.px, () => 0.9), w: body.w, h: body.h };
         default:
           return {};
       }
@@ -57,13 +57,13 @@ const files = {
   progress: async () => ({ loaded: 5, total: 10 }),
 };
 
-/** A page cut into as many windows as its picture has bytes. */
+/** A page opened as a row of pixels for each of its picture's bytes. */
 const cut = async (data: Uint8Array, model: string) => ({
   type: 'panels' as const,
   model,
   w: 100,
   h: 100 * data.length,
-  windows: Array.from(data, () => ({ input: new Float32Array(4), fit: { scale: 1, x: 0, y: 0 } as never, span: [0, 100] as [number, number] })),
+  px: new Uint8Array(data.length),
 });
 
 const servers: ServerType[] = [];

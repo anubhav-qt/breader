@@ -1,8 +1,11 @@
 import { animate, motion, useMotionValue, useTransform } from 'motion/react';
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, type MouseEvent } from 'react';
+import type { MangaBook } from '../../books/types';
+import { IconThumb } from '../../components/icons';
 import type { Box } from './frames';
 import { clipOf, fitOf, widestOf } from './MangaZoom';
 import { usePanelModel } from './panelModel';
+import { usePanelVote, useRater, votePageOf } from './panelVotes';
 import { useServerPanels } from './serverPanels';
 
 /*
@@ -89,4 +92,25 @@ export function PanelsNote() {
   else if (m.state === 'failed') say = 'Panels couldn’t be found on this device, so only pages someone’s read before have them.';
   if (!say) return null;
   return <p className="mg-note" aria-live="polite">{say}</p>;
+}
+
+/**
+ * The owner's thumbs up and down on the panel shown, a page read from a catalogue, for the panel
+ * model to learn from later (panelVotes.ts). Tapped again, a thumb takes the vote back.
+ */
+export function PanelVoteBar({ book, page, box }: { book: MangaBook; page: number; box: Box | null }) {
+  const rater = useRater();
+  const path = rater && box?.found ? votePageOf(book, page) : null;
+  const [good, give] = usePanelVote(path, box?.found);
+  if (!path) return null;
+  const tap = (g: boolean) => (e: MouseEvent) => {
+    e.stopPropagation();
+    give(good === g ? null : g);
+  };
+  return (
+    <div className="mg-vote" role="group" aria-label="Is this panel right?" onPointerDown={(e) => e.stopPropagation()}>
+      <button type="button" className={good === true ? 'is-on' : ''} aria-pressed={good === true} aria-label="Good panel" onClick={tap(true)}><IconThumb /></button>
+      <button type="button" className={`is-down${good === false ? ' is-on' : ''}`} aria-pressed={good === false} aria-label="Bad panel" onClick={tap(false)}><IconThumb /></button>
+    </div>
+  );
 }

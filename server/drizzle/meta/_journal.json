@@ -190,6 +190,13 @@
       "when": 1794220385631,
       "tag": "0026_news_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794262805277,
+      "tag": "0027_panel_votes",
+      "breakpoints": true
     }
   ]
 }

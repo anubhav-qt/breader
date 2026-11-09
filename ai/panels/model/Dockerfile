@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2
   && rm -rf /var/lib/apt/lists/*
 # Beside the image's own PyTorch, in its system Python, which Ubuntu guards unless told.
 RUN pip install --no-cache-dir --break-system-packages ultralytics==8.4.166
+# What its ONNX export needs (live.py), here rather than fetched on each export.
+RUN pip install --no-cache-dir --break-system-packages onnx==1.23.2 onnxslim==0.1.99
 WORKDIR /app
 # Nothing about a run is sent to Ultralytics, and the weights it starts from (trained on photos), the
 # ones it checks the GPU with and its font come with the image rather than on each run.

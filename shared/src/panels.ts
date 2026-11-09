@@ -10,8 +10,12 @@
 export const SIZE = 1024;
 /** A picture this many times taller than it's wide is a strip, looked at a window at a time. */
 const TALLEST = 2;
-/** How sure the model has to be of a panel to keep it. */
-const SURE = 0.3;
+/**
+ * How sure the model has to be of a panel to keep it, the same as guess.py's. A panel skipped is
+ * worse than a box extra: at 0.4, not half, round 20 left 16 panels on its held-back pages with
+ * nothing over them, not 21, for 38 extra boxes, not 31.
+ */
+export const SURE = 0.4;
 /** Two guesses at one panel overlap at least this much, and the less sure goes (Ultralytics' NMS). */
 const SAME = 0.7;
 /** A panel this close to a window's cut, in pixels, may be cut by it. */
@@ -30,13 +34,21 @@ export interface Found {
   cut: boolean;
 }
 
-/** How a window of the picture sits in the model's square: scaled by `r`, then moved by `left`, `top`. */
+/**
+ * How a window of the picture goes to the model, as Ultralytics' letterbox puts it: scaled to `w`
+ * by `h`, and put at `left`, `top` in the model's input, `wide` by `tall`; and how the model's pixels
+ * go back on the window, less `padX`, `padY`, over `r`, as its scale_boxes does.
+ */
 export interface Fit {
-  r: number;
+  wide: number;
+  tall: number;
   w: number;
   h: number;
   left: number;
   top: number;
+  r: number;
+  padX: number;
+  padY: number;
 }
 
 /** The rows of a picture the model looks at, as [top, bottom]: all of it, or a strip's windows, overlapping by half. */
@@ -58,14 +70,58 @@ function pyRound(x: number): number {
   return f % 2 === 0 ? f : f + 1;
 }
 
-/** Where a window w by h goes in the model's square, as Ultralytics' letterbox puts it. */
-export function fitOf(w: number, h: number): Fit {
-  const r = Math.min(SIZE / h, SIZE / w);
-  const nw = pyRound(w * r);
-  const nh = pyRound(h * r);
-  const dw = (SIZE - nw) / 2;
-  const dh = (SIZE - nh) / 2;
-  return { r, w: nw, h: nh, left: pyRound(dw - 0.1), top: pyRound(dh - 0.1) };
+/** A model whose input's sides are a multiple of this takes a window in the least rectangle round it. */
+const STRIDE = 32;
+
+/**
+ * Where a window w by h goes in the model's input, as the guesser's (guess.py) predict puts it:
+ * scaled so its longer side is SIZE, then, for a model that takes any size (`rect`), padded to the
+ * next multiple of STRIDE, and for one that takes only the square, padded to it. The grey is shared
+ * either side, the odd pixel after.
+ */
+export function fitOf(w: number, h: number, rect: boolean): Fit {
+  const s = Math.min(SIZE / h, SIZE / w);
+  const nw = pyRound(w * s);
+  const nh = pyRound(h * s);
+  const dw = rect ? (SIZE - nw) % STRIDE : SIZE - nw;
+  const dh = rect ? (SIZE - nh) % STRIDE : SIZE - nh;
+  const wide = nw + dw;
+  const tall = nh + dh;
+  const r = Math.min(tall / h, wide / w);
+  return {
+    wide,
+    tall,
+    w: nw,
+    h: nh,
+    left: pyRound(dw / 2 - 0.1),
+    top: pyRound(dh / 2 - 0.1),
+    r,
+    padX: pyRound((wide - pyRound(w * r)) / 2 - 0.1),
+    padY: pyRound((tall - pyRound(h * r)) / 2 - 0.1),
+  };
+}
+
+/** How a model takes its pictures: any size (`rect`) or only the square, and how many at once. */
+export interface Takes {
+  rect: boolean;
+  batch: number;
+}
+
+/**
+ * How many of a strip's windows go to the model at once, where it takes more than one: two, each
+ * half the square, hold what one square page does, so a device that reads a page reads them, in
+ * one run, not two.
+ */
+const BATCH = 2;
+
+/**
+ * How a model takes its pictures, by its input's shape: a side named, not numbered, is any size.
+ * Unknown, it's the square, one at a time, as every round before 21 was.
+ */
+export function takesOf(shape: ReadonlyArray<number | string> | undefined): Takes {
+  const any = (d: number | string | undefined) => typeof d !== 'number' || d < 0;
+  if (!shape || shape.length !== 4) return { rect: false, batch: 1 };
+  return { rect: any(shape[2]) || any(shape[3]), batch: any(shape[0]) ? BATCH : 1 };
 }
 
 const area = (b: Rect) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
@@ -74,53 +130,28 @@ function iou(a: Rect, b: Rect) {
   const both = overlap(a, b);
   return both / ((area(a) + area(b) - both) || 1);
 }
-const cornersOf = (b: Rect): Pt[] => [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
-
-/** Whether four corners make a panel: they turn the same way all round. */
-function sensible(q: Pt[]) {
-  const turns = q.map((a, i) => {
-    const b = q[(i + 1) % 4];
-    const c = q[(i + 2) % 4];
-    return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
-  });
-  return turns.every((t) => t > 0) || turns.every((t) => t < 0);
-}
-
-const shoelace = (q: Pt[]) => Math.abs(q.reduce((s, a, i) => s + a[0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * a[1], 0)) / 2;
-
-/** How sure the model has to be of a corner to take it wherever it puts it. */
-const CORNER = 0.5;
-/**
- * A corner it's less sure of is taken this close to its panel's box, as a share of the box's shorter
- * side: a corner on the page's edge is always one, as it learned those as out of sight (training
- * crops pages), though it puts them where they are.
- */
-const ON_BOX = 0.1;
 
 /**
- * A panel's corners in whole pixels: where the model puts them, but its box's for one it's unsure
- * of away from the box, all four when it's sure of none, and when they don't make a sensible panel.
+ * A panel's corners: all four where the model puts them, in whole pixels on the page, never squared
+ * off or moved. The same as the guesser's (ai/panels/model/guess.py).
  */
-function quadOf(points: Array<[number, number, number]>, box: Rect, w: number, h: number): Pt[] {
-  const whole = (x: number, y: number): Pt => [Math.trunc(Math.min(Math.max(pyRound(x), 0), w)), Math.trunc(Math.min(Math.max(pyRound(y), 0), h))];
-  const square = cornersOf(box).map(([x, y]) => whole(x, y));
-  if (points.every(([, , sure]) => sure < CORNER)) return square;
-  const near = ON_BOX * Math.min(box[2] - box[0], box[3] - box[1]);
-  const onBox = (x: number, y: number) => Math.min(Math.abs(x - box[0]), Math.abs(x - box[2]), Math.abs(y - box[1]), Math.abs(y - box[3])) <= near;
-  const q = points.map(([x, y, sure], i) => (sure >= CORNER || onBox(x, y) ? whole(x, y) : square[i]));
-  if (!sensible(q) || shoelace(q) < 0.6 * area(box)) return square;
-  return q;
+export function quadOf(points: Array<[number, number, number]>, w: number, h: number): Pt[] {
+  return points.map(([x, y]): Pt => [Math.trunc(Math.min(Math.max(pyRound(x), 0), w)), Math.trunc(Math.min(Math.max(pyRound(y), 0), h))]);
 }
 
 /**
- * One window's panels from the model's answer, `out` as it comes ([1, 17, n]: box, how sure, and
+ * One window's panels from the model's answer, `out` as it comes ([1, 16 + classes, n]: box, how sure of each class, and
  * four corners each with how sure), in the page's pixels.
  */
 export function panelsIn(out: Float32Array, n: number, fit: Fit, span: [number, number], last: boolean, first: boolean, w: number, h: number): Found[] {
   const [top, bottom] = span;
+  // Each guess is its box, how sure of each class, and four corners: 16 numbers and one per class.
+  // A model has one class, a panel; round 8 alone had two kinds of panel, read as one.
+  const classes = Math.round(out.length / n) - 16;
   const raw: Array<{ box: Rect; sure: number; i: number }> = [];
   for (let i = 0; i < n; i++) {
-    const sure = out[4 * n + i];
+    let sure = out[4 * n + i];
+    for (let c = 1; c < classes; c++) sure = Math.max(sure, out[(4 + c) * n + i]);
     if (sure <= SURE) continue;
     const cx = out[i];
     const cy = out[n + i];
@@ -135,13 +166,14 @@ export function panelsIn(out: Float32Array, n: number, fit: Fit, span: [number, 
     if (kept.every((k) => iou(f.box, k.box) <= SAME)) kept.push(f);
   }
   const tall = bottom - top;
-  const x = (v: number) => Math.min(Math.max((v - fit.left) / fit.r, 0), w);
-  const y = (v: number) => Math.min(Math.max((v - fit.top) / fit.r, 0), tall) + top;
+  const x = (v: number) => Math.min(Math.max((v - fit.padX) / fit.r, 0), w);
+  const y = (v: number) => Math.min(Math.max((v - fit.padY) / fit.r, 0), tall) + top;
+  const at = 4 + classes;
   return kept.map(({ box: b, sure, i }) => {
     const box: Rect = [x(b[0]), y(b[1]), x(b[2]), y(b[3])];
-    const points: Array<[number, number, number]> = [0, 1, 2, 3].map((k) => [x(out[(5 + 3 * k) * n + i]), y(out[(6 + 3 * k) * n + i]), out[(7 + 3 * k) * n + i]]);
+    const points: Array<[number, number, number]> = [0, 1, 2, 3].map((k) => [x(out[(at + 3 * k) * n + i]), y(out[(at + 1 + 3 * k) * n + i]), out[(at + 2 + 3 * k) * n + i]]);
     const cut = (!first && box[1] <= top + NEAR) || (!last && box[3] >= bottom - NEAR);
-    return { box, quad: quadOf(points, box, w, h), sure, cut };
+    return { box, quad: quadOf(points, w, h), sure, cut };
   });
 }
 
@@ -162,7 +194,8 @@ export function merged(found: Found[]): Found[] {
     if (j) {
       const b = j.box;
       j.box = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
-      j.quad = cornersOf(j.box);
+      // The upper piece's top corners and the lower one's bottom corners, as the model put them.
+      j.quad = [j.quad[0], j.quad[1], f.quad[2], f.quad[3]];
       j.sure = Math.max(j.sure, f.sure);
     } else {
       joined.push({ ...f });
@@ -253,46 +286,148 @@ export function ordered(found: Found[]): Found[] {
   return cut(found);
 }
 
+/** Each 0 to 255 as the model has it, 0 to 1. */
+const UNIT = Float32Array.from({ length: 256 }, (_, i) => i / 255);
+
+/** OpenCV's bilinear weights are whole numbers out of this (INTER_RESIZE_COEF_BITS, 11). */
+const ONE = 2048;
+
 /**
- * A window scaled into the model's square the way OpenCV's bilinear resize does it, as the model
- * was trained and checked on: each pixel from the four nearest, with no smoothing first. Another
- * resize moves the corners the model's less sure of by tens of pixels. `px` is the picture's pixels,
- * `channels` to each (3 from the laptop's decoder, 4 from a canvas), red first.
+ * OpenCV's bilinear weights for a side scaled from `src` pixels to `dst`: each pixel's two it's
+ * made from, and how much of each, out of ONE, worked out in 32-bit floats as OpenCV does. Across
+ * (`edge`), a pixel past the edge takes the edge's; down, only the row is kept on the picture, its
+ * weights as they are.
  */
-export function squareOf(px: ArrayLike<number>, w: number, channels: number, [top, bottom]: [number, number], fit: Fit): Float32Array {
-  const plane = SIZE * SIZE;
-  const input = new Float32Array(3 * plane).fill(PAD / 255);
-  const sx = w / fit.w;
-  const sy = (bottom - top) / fit.h;
-  const last = bottom - top - 1;
+function weightsOf(dst: number, src: number, edge: boolean) {
+  const scale = 1 / (dst / src);
+  const i0 = new Int32Array(dst);
+  const i1 = new Int32Array(dst);
+  const w0 = new Int32Array(dst);
+  const w1 = new Int32Array(dst);
+  for (let d = 0; d < dst; d++) {
+    let f = Math.fround((d + 0.5) * scale - 0.5);
+    let s = Math.floor(f);
+    // Exact in 32 bits as it is.
+    f -= s;
+    if (edge && s < 0) [f, s] = [0, 0];
+    if (edge && s >= src - 1) [f, s] = [0, src - 1];
+    i0[d] = Math.min(Math.max(s, 0), src - 1);
+    i1[d] = Math.min(Math.max(s + 1, 0), src - 1);
+    w0[d] = pyRound(Math.fround(1 - f) * ONE);
+    w1[d] = pyRound(f * ONE);
+  }
+  return { i0, i1, w0, w1 };
+}
+
+/**
+ * A window scaled into the model's input exactly as the guesser's OpenCV does it (cv2.resize,
+ * INTER_LINEAR, on 8-bit pixels), to the last shade: its whole-number weights and its rounding
+ * (which make its half size, averaging each four, the same). Even a shade off here and there moves corners the
+ * model's unsure of by tens of pixels. `px` is the picture's pixels, `channels` to each (3 from the
+ * laptop's decoder, 4 from a canvas), red first; `into` is where it goes, 3 planes of fit.wide by fit.tall.
+ */
+export function squareOf(px: ArrayLike<number>, w: number, channels: number, [top, bottom]: [number, number], fit: Fit, into = new Float32Array(3 * fit.wide * fit.tall)): Float32Array {
+  const { wide, tall } = fit;
+  const plane = wide * tall;
+  const grey = PAD / 255;
+  // Only the grey round the picture is filled: the picture covers the rest.
+  for (let c = 0; c < 3; c++) {
+    const o = c * plane;
+    into.fill(grey, o, o + fit.top * wide);
+    into.fill(grey, o + (fit.top + fit.h) * wide, o + plane);
+    for (let y = fit.top; y < fit.top + fit.h; y++) {
+      into.fill(grey, o + y * wide, o + y * wide + fit.left);
+      into.fill(grey, o + y * wide + fit.left + fit.w, o + (y + 1) * wide);
+    }
+  }
+  const h = bottom - top;
+  const nw = fit.w;
+  const put = (x: number, y: number, c: number, v: number) => {
+    into[c * plane + (y + fit.top) * wide + fit.left + x] = UNIT[v];
+  };
+  const pixel = (x: number, y: number, c: number) => px[((top + y) * w + x) * channels + c];
+  if (nw === w && fit.h === h) {
+    // Its own size: as it is (Ultralytics doesn't resize it).
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (let c = 0; c < 3; c++) put(x, y, c, pixel(x, y, c));
+    return into;
+  }
+  const xs = weightsOf(nw, w, true);
+  const ys = weightsOf(fit.h, h, false);
+  const xa = xs.i0.map((i) => i * channels);
+  const xb = xs.i1.map((i) => i * channels);
+  // A row of the picture scaled across, as whole numbers (OpenCV's first pass): the last two kept.
+  const n = nw * 3;
+  const rows = [new Int32Array(n), new Int32Array(n)];
+  const held = [-1, -1];
+  const rowOf = (sy: number, keep: number) => {
+    if (held[0] === sy) return rows[0];
+    if (held[1] === sy) return rows[1];
+    const k = held[0] === keep ? 1 : 0;
+    const out = rows[k];
+    const base = (top + sy) * w * channels;
+    for (let x = 0; x < nw; x++) {
+      const a = base + xa[x];
+      const b = base + xb[x];
+      const w0 = xs.w0[x];
+      const w1 = xs.w1[x];
+      for (let c = 0; c < 3; c++) out[x * 3 + c] = px[a + c] * w0 + px[b + c] * w1;
+    }
+    held[k] = sy;
+    return out;
+  };
   for (let y = 0; y < fit.h; y++) {
-    const fy = Math.min(Math.max((y + 0.5) * sy - 0.5, 0), last);
-    const y0 = Math.floor(fy);
-    const y1 = Math.min(y0 + 1, last);
-    const ay = fy - y0;
-    const r0 = (top + y0) * w * channels;
-    const r1 = (top + y1) * w * channels;
-    const to = (y + fit.top) * SIZE + fit.left;
-    for (let x = 0; x < fit.w; x++) {
-      const fx = Math.min(Math.max((x + 0.5) * sx - 0.5, 0), w - 1);
-      const x0 = Math.floor(fx);
-      const x1 = Math.min(x0 + 1, w - 1) * channels;
-      const ax = fx - x0;
-      const a = x0 * channels;
-      for (let c = 0; c < 3; c++) {
-        const v0 = px[r0 + a + c] * (1 - ax) + px[r0 + x1 + c] * ax;
-        const v1 = px[r1 + a + c] * (1 - ax) + px[r1 + x1 + c] * ax;
-        input[c * plane + to + x] = Math.round(v0 * (1 - ay) + v1 * ay) / 255;
+    const s0 = ys.i0[y];
+    const s1 = ys.i1[y];
+    const r0 = rowOf(s0, s1);
+    const r1 = rowOf(s1, s0);
+    const b0 = ys.w0[y];
+    const b1 = ys.w1[y];
+    const to = (y + fit.top) * wide + fit.left;
+    for (let c = 0; c < 3; c++) {
+      const o = c * plane + to;
+      for (let x = 0; x < nw; x++) {
+        // OpenCV's second pass, as its vector code does it: each a sixteenth, times its weight's
+        // top half, then a quarter, rounded.
+        const v = (((r0[x * 3 + c] >> 4) * b0) >> 16) + (((r1[x * 3 + c] >> 4) * b1) >> 16);
+        into[o + x] = UNIT[Math.min(Math.max((v + 2) >> 2, 0), 255)];
       }
     }
   }
-  return input;
+  return into;
 }
 
-/** A page's panels from the model's answer for each of its windows, `outs[k]` as it comes ([1, 17, n]). */
+/** A page's panels from the model's answer for each of its windows, `outs[k]` as it comes ([1, 16 + classes, n]). */
 export function pagePanels(outs: Array<{ out: Float32Array; n: number; fit: Fit; span: [number, number] }>, w: number, h: number): { panels: Pt[][]; sure: number[] } {
   const found: Found[] = [];
   for (const [k, o] of outs.entries()) found.push(...panelsIn(o.out, o.n, o.fit, o.span, k === outs.length - 1, k === 0, w, h));
   const panels = ordered(outs.length > 1 ? merged(found) : found);
   return { panels: panels.map((p) => p.quad), sure: panels.map((p) => Math.round(p.sure * 1000) / 1000) };
+}
+
+/**
+ * The model on `k` windows at once, each 3 planes of fit.wide by fit.tall one after another: its
+ * answer for each in turn ([k, 16 + classes, n]), and n.
+ */
+export type RunModel = (input: Float32Array, k: number, fit: Fit) => Promise<{ out: Float32Array; n: number }>;
+
+/**
+ * A page's panels, found the way the guesser (guess.py) finds them: each window fitted as its
+ * predict does, run, and the panels read back, joined up and put in order. `px` is the page's
+ * pixels, `channels` to each, red first; `takes` how the model takes them (takesOf).
+ */
+export async function findPanels(px: ArrayLike<number>, w: number, h: number, channels: number, takes: Takes, run: RunModel): Promise<{ panels: Pt[][]; sure: number[] }> {
+  const spans = windows(w, h);
+  // A strip's windows are all one size.
+  const fit = fitOf(w, spans[0][1] - spans[0][0], takes.rect);
+  const one = 3 * fit.wide * fit.tall;
+  const outs: Array<{ out: Float32Array; n: number; fit: Fit; span: [number, number] }> = [];
+  for (let i = 0; i < spans.length; i += takes.batch) {
+    const some = spans.slice(i, i + takes.batch);
+    const input = new Float32Array(one * some.length);
+    some.forEach((span, k) => squareOf(px, w, channels, span, fit, input.subarray(k * one, (k + 1) * one)));
+    const { out, n } = await run(input, some.length, fit);
+    const each = out.length / some.length;
+    some.forEach((span, k) => outs.push({ out: out.subarray(k * each, (k + 1) * each), n, fit, span }));
+  }
+  return pagePanels(outs, w, h);
 }

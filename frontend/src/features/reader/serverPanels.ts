@@ -216,7 +216,7 @@ function ask(book: MangaBook, i: number): Promise<Frames | null> | null {
   if (!p) {
     p = api.laptop.get<PagePanels>(a.path, 20_000).then(
       (r) => {
-        const f = framesOfPanels(r.w, r.h, r.panels);
+        const f = framesOfPanels(r.w, r.h, r.panels, r.round);
         if (asked.has(a.key)) known.set(a.key, f);
         return f;
       },
@@ -261,7 +261,7 @@ function keptChapter(chapter: string): Promise<Map<number, KeptPage> | null> {
   if (!p) {
     const asking: Promise<Map<number, KeptPage> | null> = api.get<ChapterPanels>(`/v1/panels/${chapter}/kept`, 8_000).then(
       (r) => {
-        const pages = new Map(Object.entries(r.pages).map(([n, x]) => [Number(n), { frames: framesOfPanels(x.w, x.h, x.panels), round: x.round }]));
+        const pages = new Map(Object.entries(r.pages).map(([n, x]) => [Number(n), { frames: framesOfPanels(x.w, x.h, x.panels, x.round), round: x.round }]));
         if (chapters.get(chapter) === asking) chaptersKnown.set(chapter, pages);
         return pages;
       },
@@ -306,7 +306,7 @@ function offer(book: MangaBook, i: number, img: HTMLImageElement) {
   // The laptop's alone: it says which round it keeps. Off, it's only one reader's less.
   api.laptop.post<PanelsOffered>(`/v1/panels/${at.chapter}/${at.n}`, found).then(
     (r) => {
-      if (r.kept) chaptersKnown.get(at.chapter)?.set(at.n, { frames: framesOfPanels(found.w, found.h, found.panels), round: found.round });
+      if (r.kept) chaptersKnown.get(at.chapter)?.set(at.n, { frames: framesOfPanels(found.w, found.h, found.panels, found.round), round: found.round });
     },
     () => {},
   );

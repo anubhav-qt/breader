@@ -146,14 +146,16 @@ function failed() {
   set({ state: 'failed' });
 }
 
-/** The model's corners as the reader's boxes: each panel's box, as a group of its own. */
-export function framesOfPanels(w: number, h: number, quads: Array<Array<[number, number]>>): Frames {
+/** The model's corners as the reader's boxes: each panel's box, with its corners, as a group of its own. */
+export function framesOfPanels(w: number, h: number, quads: Array<Array<[number, number]>>, round = 0): Frames {
   const panels = quads.map((q) => {
     const xs = q.map((c) => c[0]);
     const ys = q.map((c) => c[1]);
     const x = Math.min(...xs) / w;
     const y = Math.min(...ys) / h;
-    return { x, y, w: Math.max(...xs) / w - x, h: Math.max(...ys) / h - y };
+    const quad = q.map(([cx, cy]): [number, number] => [cx / w, cy / h]);
+    const found = { quad: q.map(([cx, cy]): [number, number] => [cx, cy]), w, h, round };
+    return { x, y, w: Math.max(...xs) / w - x, h: Math.max(...ys) / h - y, quad, found };
   });
   return { groups: panels.map((b) => ({ box: b, panels: [b] })), panels };
 }
@@ -181,11 +183,12 @@ async function find(img: HTMLImageElement, key: string): Promise<Frames | null> 
   if (file) {
     r = await call({ type: 'find', pic: file }, []);
   } else {
-    const pic = await createImageBitmap(img);
+    // As OpenCV opens it, as the worker opens a file.
+    const pic = await createImageBitmap(img, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
     r = await call({ type: 'find', pic }, [pic]);
   }
   answers.set(key, { round: status.round, w: r.w!, h: r.h!, panels: r.panels!, sure: r.sure ?? [] });
-  return framesOfPanels(r.w!, r.h!, r.panels!);
+  return framesOfPanels(r.w!, r.h!, r.panels!, status.round);
 }
 
 /** The round of the model here, once it's known which (0 until then). */

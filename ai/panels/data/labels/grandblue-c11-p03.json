@@ -1,0 +1,31 @@
+{
+ "v": 1,
+ "page": "grandblue-c11-p03",
+ "file": "grandblue-c11-p03.jpg",
+ "sha256": "4737f8cec23d985e72be8062b8c9a8d826374e1d9bbc28e0701a18f6ca96fc1e",
+ "width": 984,
+ "height": 1400,
+ "panels": [
+  [
+   [
+    0,
+    0
+   ],
+   [
+    888,
+    0
+   ],
+   [
+    888,
+    1400
+   ],
+   [
+    0,
+    1400
+   ]
+  ]
+ ],
+ "found": [],
+ "guessed": null,
+ "saved": "2026-11-09T10:57:28.494Z"
+}

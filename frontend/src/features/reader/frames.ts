@@ -18,6 +18,21 @@ export interface Box {
   y: number;
   w: number;
   h: number;
+  /**
+   * The panel's own four corners, 0 to 1 across and down the page, from its top left round, when
+   * the panel model found it: a slanted panel is shown cut to them, not to the box that holds them.
+   */
+  quad?: Array<[number, number]>;
+  /** The panel as the model gave it, before anything's shown: its corners in the pixels of the picture it read, w by h, and its round. */
+  found?: Found;
+}
+
+/** A panel as the model gave it. */
+export interface Found {
+  quad: Array<[number, number]>;
+  w: number;
+  h: number;
+  round: number;
 }
 
 /** Panels drawn together, and each panel in them. */

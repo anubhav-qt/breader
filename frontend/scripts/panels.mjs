@@ -4,9 +4,10 @@
  * (ai/panels/model/live.onnx) into public/panels, in parts under Cloudflare Pages' 25 MiB limit,
  * named by its hash, with model.json saying which round it is and how to check it.
  *
- * It's in Git LFS, whose downloads are metered. Checked out with LFS, as infra/ship.sh builds it,
- * it's copied. Left as its pointer, a build takes it from the GitHub release infra/ship.sh makes of
- * each round (panels-<hash>), waiting a few minutes when the round is new.
+ * It isn't kept in git: live.json names it by its hash, and infra/ship.sh publishes it once as a
+ * GitHub release (panels-<hash>). Where it's here (made by npm --prefix ai run panels-live, or
+ * fetched by infra/ship.sh), it's copied; otherwise a build takes it from that release, waiting a few
+ * minutes when the round is new. An LFS pointer left by a checkout from before is read the same way.
  * Without it, the app finds panels as before, so a build doesn't fail for want of it.
  *
  *   node scripts/panels.mjs             copy or fetch it
@@ -32,24 +33,26 @@ if (process.argv.includes('--if-pages') && !process.env.CF_PAGES) {
 
 const manifest = JSON.parse(await readFile(join(root, '../shared/src/voice-files.json'), 'utf8'));
 const PART = manifest.partBytes;
-const { round } = JSON.parse(await readFile(join(model, 'live.json'), 'utf8'));
-const file = await readFile(join(model, 'live.onnx'));
+const live = JSON.parse(await readFile(join(model, 'live.json'), 'utf8'));
+const { round } = live;
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
-/** The model's hash and size: from its pointer, when LFS left one. */
-let oid;
-let size;
+/** The model's hash and size: live.json's, or from its pointer where LFS left one. */
+let oid = live.sha256;
+let size = live.size;
 let bytes = null;
-const pointer = file.length < 1024 ? file.toString('utf8') : '';
+const file = existsSync(join(model, 'live.onnx')) ? await readFile(join(model, 'live.onnx')) : null;
+const pointer = file && file.length < 1024 ? file.toString('utf8') : '';
 if (pointer.startsWith('version https://git-lfs')) {
-  oid = /oid sha256:([0-9a-f]{64})/.exec(pointer)?.[1];
-  size = Number(/size (\d+)/.exec(pointer)?.[1]);
-} else {
+  oid ??= /oid sha256:([0-9a-f]{64})/.exec(pointer)?.[1];
+  size ??= Number(/size (\d+)/.exec(pointer)?.[1]);
+} else if (file) {
   bytes = file;
+  if (oid && sha(bytes) !== oid) throw new Error(`panels: ai/panels/model/live.onnx isn't round ${round}, as live.json says: npm --prefix ai run panels-live -- N`);
   oid = sha(bytes);
   size = bytes.length;
 }
-if (!oid || !size) throw new Error('panels: ai/panels/model/live.onnx is neither the model nor its pointer');
+if (!oid || !size) throw new Error('panels: ai/panels/model/live.json names no model, and live.onnx isn\'t here');
 
 const name = oid.slice(0, 12);
 const n = Math.ceil(size / PART);

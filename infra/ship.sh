@@ -123,15 +123,20 @@ step_push() {
   git push origin dev
 }
 
-# Each round of the panel model goes out once as a release, which the app build fetches.
+# Each round of the panel model goes out once as a release, which the app build fetches. It isn't
+# in git (Git LFS's budget is spent): live.json names it by its hash, and a machine that didn't make
+# it fetches it from its release, for the server image.
 step_model() {
   say "model"
   local file=ai/panels/model/live.onnx
-  if [ "$(head -c 7 "$file")" = version ]; then
-    fail "$file is only its LFS pointer: git lfs pull --include $file"
+  local want
+  want=$(node -p "require('./ai/panels/model/live.json').sha256")
+  local tag="panels-${want:0:12}"
+  if [ ! -f "$file" ] || [ "$(head -c 7 "$file")" = version ] || [ "$(sha256 "$file")" != "$want" ]; then
+    gh release download "$tag" -p live.onnx -O "$file" --clobber \
+      || fail "$file isn't here, nor in the release $tag: make it with npm --prefix ai run panels-live -- N"
   fi
-  local tag
-  tag="panels-$(sha256 "$file" | cut -c1-12)"
+  [ "$(sha256 "$file")" = "$want" ] || fail "$file isn't the model live.json names"
   if gh release view "$tag" > /dev/null 2>&1; then
     echo "$tag is out already"
     return

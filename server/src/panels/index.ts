@@ -9,7 +9,7 @@ import { makeSeats, type Seats } from './seats.ts';
  * Manga panels found with the panel model trained on the owner's labels (ai/panels), for any
  * reader who takes one of its seats (seats.ts): the app asks for a page's panels as it fetches the
  * page, and zooms on them itself. The engines run the model (engine/, ADR 0002), after live
- * reading: the page's picture goes to one, which cuts it into the model's windows.
+ * reading: the page's picture goes to one, which opens it and finds them as the labeller's guesser does.
  * What it finds is kept for every reader after (kept.ts).
  *
  * Readers take turns: each one's pages wait in a line of their own at the scheduler, and the lines

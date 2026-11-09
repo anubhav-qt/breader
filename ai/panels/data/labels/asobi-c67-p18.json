@@ -1,0 +1,31 @@
+{
+ "v": 1,
+ "page": "asobi-c67-p18",
+ "file": "asobi-c67-p18.png",
+ "sha256": "ae3f73a455caf1ab1f0b3fa4bdbd3810fb83cbaaf3ca031d4108515814ca5e24",
+ "width": 844,
+ "height": 1200,
+ "panels": [
+  [
+   [
+    38,
+    869
+   ],
+   [
+    328,
+    869
+   ],
+   [
+    328,
+    1138
+   ],
+   [
+    38,
+    1138
+   ]
+  ]
+ ],
+ "found": [],
+ "guessed": null,
+ "saved": "2026-11-09T10:55:47.951Z"
+}

@@ -3,7 +3,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { Mp3Encoder } from '@breezystack/lamejs';
 import * as ort from 'onnxruntime-node';
 import { piperInput, type PiperConfig } from '@breader/shared/speech';
-import { SIZE, pagePanels, type Fit } from '@breader/shared/panels';
+import { findPanels, takesOf } from '@breader/shared/panels';
 import type { VoiceFiles } from '../speech/files.ts';
 import { PANELS } from './models.ts';
 
@@ -15,7 +15,8 @@ import { PANELS } from './models.ts';
  * Voices: the same engine and text-to-sounds steps as the voices in the browser (frontend
  * voice/tts.worker.ts), so a voice sounds alike either way, answered as MP3 (about a seventh of the
  * raw sound's bytes) for phones on mobile data. Panels: the panel model trained on the owner's
- * labels (ai/panels), on a page's windows as the API cut them (panels/index.ts).
+ * labels (ai/panels), on a page's pixels as the API opened them (serve.ts), fitted and read as the
+ * labeller's guesser does (shared findPanels).
  *
  * Measured on a Ryzen 7 9800X3D, 2 threads: a Piper sentence about 90 ms, a panel window about
  * 110 ms. Held: a Piper voice about 250 MB, the panel model about 500 MB. The heavy voices (Kokoro)
@@ -26,8 +27,8 @@ import { PANELS } from './models.ts';
 export type Body =
   | { type: 'load'; key: string; files: VoiceFiles }
   | { type: 'say'; key: string; files: VoiceFiles; text: string; speed: number }
-  /** A page's panels: each window as the model sees it, its square's pixels, and where it came from. */
-  | { type: 'panels'; model: string; w: number; h: number; windows: Array<{ input: Float32Array; fit: Fit; span: [number, number] }> };
+  /** A page's panels, from its pixels, red first, three to each. */
+  | { type: 'panels'; model: string; w: number; h: number; px: Uint8Array };
 
 export interface Message {
   id: number;
@@ -132,13 +133,13 @@ function mp3(audio: Float32Array, rate: number) {
 
 async function panels(b: Extract<Body, { type: 'panels' }>) {
   const s = await open(PANELS, b.model);
-  const outs = [];
-  for (const win of b.windows) {
-    const out = await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', win.input, [1, 3, SIZE, SIZE]) });
+  const m = s.inputMetadata[0];
+  const found = await findPanels(b.px, b.w, b.h, 3, takesOf(m?.isTensor ? m.shape : undefined), async (input, k, fit) => {
+    const out = await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', input, [k, 3, fit.tall, fit.wide]) });
     const t = out[s.outputNames[0]] as ort.Tensor;
-    outs.push({ out: (t.data as Float32Array).slice(), n: t.dims[2], fit: win.fit, span: win.span });
-  }
-  return { ...pagePanels(outs, b.w, b.h), w: b.w, h: b.h };
+    return { out: t.data as Float32Array, n: t.dims[2] };
+  });
+  return { ...found, w: b.w, h: b.h };
 }
 
 async function handle(b: Body): Promise<Answer> {

@@ -75,11 +75,26 @@ function aroundOf(b: Box): Box {
   return { x, y, w: right - x, h: bottom - y };
 }
 
-/** The clip showing just a part of the page, and the page around it. */
+const WHOLE: Array<[number, number]> = [
+  [0, 0],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+];
+
+/**
+ * The clip showing just a part of the page, and the page around it: cut to the panel's own corners
+ * when the model found them, so a slanted panel shows none of the panels beside it, or else to its
+ * box. Always four corners, so one clip glides into the next.
+ */
 export function clipOf(b: Box | null): string {
-  if (!b) return 'inset(0% 0% 0% 0%)';
-  const a = aroundOf(b);
-  return `inset(${pct(a.y)} ${pct(1 - a.x - a.w)} ${pct(1 - a.y - a.h)} ${pct(a.x)})`;
+  if (!b) return `polygon(${WHOLE.map(([x, y]) => `${pct(x)} ${pct(y)}`).join(', ')})`;
+  const corners = b.quad?.length === 4 ? b.quad : WHOLE.map(([x, y]): [number, number] => [b.x + x * b.w, b.y + y * b.h]);
+  const cx = corners.reduce((s, c) => s + c[0], 0) / 4;
+  const cy = corners.reduce((s, c) => s + c[1], 0) / 4;
+  // Each corner moved out from the middle, as far as the page goes, as a box's sides are.
+  const out = (v: number, mid: number) => Math.min(1, Math.max(0, v + AROUND * Math.sign(v - mid)));
+  return `polygon(${corners.map(([x, y]) => `${pct(out(x, cx))} ${pct(out(y, cy))}`).join(', ')})`;
 }
 
 /** The room kept around a part fitted to a screen this wide. */

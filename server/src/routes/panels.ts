@@ -1,8 +1,10 @@
+import { and, eq, sql } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { MangaId, MangaPageQuery, PanelSeatAsk, PanelsOffer, SourceId, type ChapterPanels, type PagePanels, type PanelSeat, type PanelsOffered, type PanelsState } from '@breader/shared';
+import { MangaId, MangaPageQuery, PanelSeatAsk, PanelsOffer, PanelVote, SourceId, type ChapterPanels, type PagePanels, type PanelRater, type PanelSeat, type PanelsOffered, type PanelsState, type PanelVotes } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
+import { panelVotes } from '../db/schema.ts';
 import { ApiError, parse, readJson, signedOut } from '../lib/errors.ts';
 import { ownerCheck } from '../lib/owner.ts';
 import { readSession } from '../lib/session.ts';
@@ -20,6 +22,9 @@ import { makeKept } from '../panels/kept.ts';
  * seat, a chapter's at once, from the fallback too. A device that finds a page's panels itself sends
  * them, and they're kept once another library's device sends the same. Readers on the same page at
  * once share the one finding.
+ *
+ * The owner, reading in the Panels layout, gives each panel found a thumbs up or down (panel_votes),
+ * to train the model on later: its corners as the model gave them, in the pixels of its picture.
  */
 
 const PING_MS = 20_000;
@@ -140,6 +145,43 @@ export function panelRoutes(deps: Deps) {
     if (offer.round !== p.round) throw new ApiError(409, 'panels_round', `The server keeps round ${p.round} of the panel model's panels.`);
     const done = await kept.offer(page.chapter, page.n, lib, await owner(c), offer);
     return c.json({ kept: done } satisfies PanelsOffered);
+  });
+
+  /** Only the owner's accounts vote on panels. */
+  const rater = async (c: Context<AppEnv>) => {
+    c.header('Cache-Control', 'private, no-store');
+    if (!(await owner(c))) throw new ApiError(403, 'not_rater', 'Only Breader’s owner votes on panels.');
+  };
+  const votePage = (c: Context<AppEnv>) => ({ chapter: chapterOf(c.req.param('id')!), n: Number(c.req.param('n')) });
+
+  r.get('/panels/rater', async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({ rater: await owner(c) } satisfies PanelRater);
+  });
+
+  r.get('/panels/:id/:n{[0-9]{1,4}}/votes', async (c) => {
+    await rater(c);
+    const { chapter, n } = votePage(c);
+    const rows = await deps.db.select({ quad: panelVotes.quad, good: panelVotes.good }).from(panelVotes).where(and(eq(panelVotes.chapter, chapter), eq(panelVotes.n, n)));
+    return c.json({ votes: rows.map((v) => ({ quad: v.quad as Array<[number, number]>, good: v.good })) } satisfies PanelVotes);
+  });
+
+  // A vote again replaces the last on that panel; none takes it back. Safe to send twice.
+  r.post('/panels/:id/:n{[0-9]{1,4}}/votes', async (c) => {
+    await rater(c);
+    const { chapter, n } = votePage(c);
+    const v = parse(PanelVote, await readJson(c));
+    const quad = sql`${JSON.stringify(v.quad)}::jsonb`;
+    if (v.good === null) {
+      await deps.db.delete(panelVotes).where(and(eq(panelVotes.chapter, chapter), eq(panelVotes.n, n), eq(panelVotes.quad, quad)));
+    } else {
+      const libraryId = readSession(c, env)?.libraryId ?? null;
+      await deps.db
+        .insert(panelVotes)
+        .values({ chapter, n, quad: v.quad, w: v.w, h: v.h, round: v.round, good: v.good, libraryId })
+        .onConflictDoUpdate({ target: [panelVotes.chapter, panelVotes.n, panelVotes.quad], set: { good: v.good, w: v.w, h: v.h, round: v.round, libraryId, at: new Date() } });
+    }
+    return c.json({ ok: true });
   });
 
   return r;

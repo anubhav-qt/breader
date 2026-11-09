@@ -315,3 +315,58 @@ describe('seats', () => {
     seats.close();
   });
 });
+
+describe('votes on panels', () => {
+  /** The top half of HALVES, voted on as the model gave it. */
+  const top = HALVES.panels[0];
+  const vote = (good: boolean | null, quad = top) => ({ w: HALVES.w, h: HALVES.h, round: HALVES.round, quad, good });
+  const votes = (id: string) => `${pageOf(id)}/votes`;
+
+  it('are the owner’s alone', async () => {
+    const app = appWith(fake());
+    const owner = await owned(app);
+    const { b } = await reader(app);
+    expect((await owner.get('/v1/panels/rater')).body).toEqual({ rater: true });
+    expect((await b.get('/v1/panels/rater')).body).toEqual({ rater: false });
+    expect((await browser(undefined, app).get('/v1/panels/rater')).body).toEqual({ rater: false });
+    const id = chapter();
+    expect((await b.post(votes(id), vote(true))).status).toBe(403);
+    expect((await b.get(votes(id))).status).toBe(403);
+    expect((await primary.pool.query('SELECT 1 FROM panel_votes WHERE chapter = $1', [`md:${id}`])).rows).toEqual([]);
+  });
+
+  it('keeps the corners as the model gave them, one vote a panel, the latest', async () => {
+    // No model on: votes don't need it.
+    const app = appWith(null);
+    const owner = await owned(app);
+    const id = chapter();
+    expect((await owner.post(votes(id), vote(true))).status).toBe(200);
+    expect((await owner.post(votes(id), vote(false, HALVES.panels[1]))).status).toBe(200);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: expect.arrayContaining([{ quad: top, good: true }, { quad: HALVES.panels[1], good: false }]) });
+    // Changed: still one vote on it.
+    expect((await owner.post(votes(id), vote(false))).status).toBe(200);
+    const rows = (await primary.pool.query('SELECT n, quad, w, h, round, good, library_id FROM panel_votes WHERE chapter = $1 ORDER BY good, quad', [`md:${id}`])).rows;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ n: 3, quad: top, w: 1000, h: 1500, round: 7, good: false });
+    expect(rows[0].library_id).toEqual(expect.any(String));
+    // Taken back.
+    expect((await owner.post(votes(id), vote(null))).status).toBe(200);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [{ quad: HALVES.panels[1], good: false }] });
+    // Another page's are its own.
+    expect((await owner.get(`/v1/panels/${id}/4/votes`)).body).toEqual({ votes: [] });
+  });
+
+  it('turns away a panel that isn’t one the model could give', async () => {
+    const app = appWith(null);
+    const owner = await owned(app);
+    const id = chapter();
+    const bad = [
+      vote(true, [[0, 0], [1001, 0], [1000, 750], [0, 750]]),
+      vote(true, [[0, 0], [1000, 0], [1000, 750]]),
+      vote(true, [[0, 0], [999.5, 0], [1000, 750], [0, 750]]),
+      { ...vote(true), w: 0 },
+    ];
+    for (const v of bad) expect((await owner.post(votes(id), v)).status).toBe(400);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [] });
+  });
+});

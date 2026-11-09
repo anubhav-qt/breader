@@ -367,6 +367,33 @@ export type PanelsOffer = z.infer<typeof PanelsOffer>;
 export const PanelsOffered = z.object({ kept: z.boolean() });
 export type PanelsOffered = z.infer<typeof PanelsOffered>;
 
+/** A panel's four corners as the model gave them, in whole pixels of the picture it read. */
+const PanelCorners = z.array(z.tuple([z.number().int(), z.number().int()])).length(4);
+
+/**
+ * The owner's thumbs up (good) or down on one panel the model found, as data to train it on later
+ * (server routes/panels.ts): its corners as the model gave them, not as shown, with the size of the
+ * picture they're in and the round that found them. No `good` takes the vote back.
+ */
+export const PanelVote = z
+  .object({
+    w: z.number().int().min(1).max(20_000),
+    h: z.number().int().min(1).max(20_000),
+    round: z.number().int().min(0).max(100_000),
+    quad: PanelCorners,
+    good: z.boolean().nullable(),
+  })
+  .refine((v) => v.quad.every(([x, y]) => x >= 0 && x <= v.w && y >= 0 && y <= v.h), 'That panel isn’t on the page.');
+export type PanelVote = z.infer<typeof PanelVote>;
+
+/** A page's votes, by the corners voted on. */
+export const PanelVotes = z.object({ votes: z.array(z.object({ quad: PanelCorners, good: z.boolean() })) });
+export type PanelVotes = z.infer<typeof PanelVotes>;
+
+/** Whether this account votes on panels: the owner's. */
+export const PanelRater = z.object({ rater: z.boolean() });
+export type PanelRater = z.infer<typeof PanelRater>;
+
 /* ---- The server voice ---- */
 
 /** Whether this account may read aloud with the server's voices, and which voices those are. */

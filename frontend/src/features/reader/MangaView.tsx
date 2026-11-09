@@ -6,7 +6,7 @@ import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
 import { frameAt, type Box } from './frames';
 import { pageFramesKnown, pageFramesSoon, panelsAhead } from './serverPanels';
-import { PanelPicture, PanelsNote } from './MangaPanels';
+import { PanelPicture, PanelsNote, PanelVoteBar } from './MangaPanels';
 import { MangaZoom, type Look } from './MangaZoom';
 import { useNarrowPortrait, type MangaDir, type MangaLayout } from './settings';
 import { WHOLE, shownOf, stepsOf } from './steps';
@@ -1133,6 +1133,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
           <PanelsNote />
           {moreAt}
           {zones('panel')}
+          <PanelVoteBar book={pics.book} page={at.page} box={step && step.page === at.page ? step.steps[step.k] : null} />
         </>
       ) : layout === 'pages' ? (
         <>

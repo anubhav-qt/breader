@@ -1,0 +1,31 @@
+{
+ "v": 1,
+ "page": "aria-c48-p03",
+ "file": "aria-c48-p03.jpg",
+ "sha256": "3acef9f86669a0ee5053e0fac73b1569de6fcabaad18500eafb67b1b92c76016",
+ "width": 818,
+ "height": 1200,
+ "panels": [
+  [
+   [
+    388,
+    770
+   ],
+   [
+    755,
+    768
+   ],
+   [
+    755,
+    1135
+   ],
+   [
+    388,
+    1136
+   ]
+  ]
+ ],
+ "found": [],
+ "guessed": null,
+ "saved": "2026-11-09T10:54:15.167Z"
+}

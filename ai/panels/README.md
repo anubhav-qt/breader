@@ -85,10 +85,11 @@ again, and each round's guesses need less fixing.
 npm --prefix ai run panels-train
 ```
 
-Exports the labels, then trains the next round on every one of them, on this machine's GPU in
+Exports the labels, then trains the next round on them (a trial, below, unless told otherwise), on this machine's GPU in
 Docker (`model/`: PyTorch for CUDA 12.8 and Ultralytics' YOLO, about 9 GB once built). It starts
 each round again from YOLO's weights trained on photos, finds each panel's box and four corners,
-and takes a few minutes. Each round is kept in `data/model/round-N`. Then it guesses every page not
+and takes a few minutes. The model does it all: the guesser, and the app, take its four corners
+just where it puts them, in whole pixels on the page, never squared off, snapped or moved. Each round is kept in `data/model/round-N`. Then it guesses every page not
 labelled yet into `data/guesses/<page>.json`. A strip is looked at a window at a time, each twice as
 tall as it's wide.
 
@@ -97,6 +98,49 @@ npm --prefix ai run panels-guess
 ```
 
 Guesses again with the latest round, say for a set fetched since.
+
+### Trials, held back by series
+
+By default a round is a trial: it holds back about 15% of the series (picked by a fixed seed, so
+every trial holds back the same; a colour edition goes with its ink one), learns from the rest, and
+judges each epoch on the pages held back. It stops once they stop getting better for 50 epochs
+(`PANELS_PATIENCE`) and keeps its best epoch on them. Its `round.json` lists the series and pages
+held back. A trial never becomes the latest round and guesses nothing.
+
+```bash
+PANELS_ROUND=8 npm --prefix ai run panels-score
+```
+
+Measures a round against the labels in pixels, on the pages it learned from and on those it never
+saw, into `data/model/round-N/score.json`. A big gap between the two means the round learned its
+pages by heart.
+
+Corners are judged tightly (`PANELS_SIGMA`, 0.035 of a panel's size): YOLO's own tolerance for
+four corners lets a big panel's corners be hundreds of pixels off, so round 9's corners came out
+32 pixels off on the pages held back. At a twentieth, round 10's were 23, and at 0.035 round 11's
+were 8. Too tight is as bad: at a fiftieth, a corner a little off counts as much as one across the
+page, and the model never learns where corners go.
+
+`PANELS_SETTINGS=yolo` learns with YOLO's own settings instead of the tuned ones (`train.py`
+`SETTINGS`), to compare them on the pages held back. Once the settings hold up there, the round kept
+learns from every page with them: `PANELS_HOLDOUT=0 PANELS_EPOCHS=N npm --prefix ai run
+panels-train`, `N` being about where the trials did best. It keeps its last epoch, since there's
+nothing held back to pick one by, and becomes the latest round.
+
+```bash
+npm --prefix ai run panels-watch
+```
+
+Watches a round train, live in a terminal (`model/watch.py`, this machine's Python): a progress
+bar, a chart of how well it finds panels on the pages held back, and one line saying whether that's
+still getting better, has stopped, or is slipping (learning its own pages by heart). A run started
+later is picked up by itself. With none running, it shows each scored round as a bar.
+
+```bash
+npm --prefix ai run panels-test
+```
+
+Checks the split and what's written for YOLO, without the GPU.
 
 ### On a Mac
 
@@ -151,17 +195,27 @@ round learns from whatever's saved.
 ### Keeping the model
 
 `data/` stays on this machine, so each round worth keeping is committed to
-`model/rounds/round-N/`: its `best.pt` (in Git LFS), `round.json` and `results.csv`. No pages or
-labels go with it. To keep a new round, copy those three files from `data/model/round-N/`.
+`model/rounds/round-N/`: its `round.json` and `results.csv`, and its `best.pt`, in Git LFS up to
+round 7 and, from round 21 (Git LFS's budget is spent), in the round's release as `round-N-best.pt`
+(`gh release upload panels-<hash> best.pt#round-N-best.pt`, after `npm run ship` has made it). No
+pages or labels go with it. To keep a new round, copy those three files from `data/model/round-N/`.
 
-To bring a round back, `git lfs pull` its `best.pt`, copy it to `data/model/round-N/` and set
+To bring a round back, get its `best.pt` (`git lfs pull`, or `gh release download`), copy it to `data/model/round-N/` and set
 `data/model/latest.json` to `{"round": N}`. Then `npm --prefix ai run panels-guess` (or
 `panels-guess-mac`) guesses with it.
 
-To put a round live, in the app and on the laptop, export its `best.pt` to ONNX the way the live
-one is (`YOLO(best).export(format="onnx", imgsz=1024, batch=1, dynamic=False, simplify=True,
-opset=17)`: one 1024 × 1024 picture in, the raw answers out), save it as `model/live.onnx` and set
-`model/live.json` to `{"round": N}`. `npm run ship` (`infra/ship.sh`) builds it into the server image,
+To put a round live, in the app and on the laptop, `npm --prefix ai run panels-live -- N`
+(`model/live.py`) exports its `best.pt` to `model/live.onnx` and sets `model/live.json` to the
+round and the model's hash and size. `live.onnx` isn't kept in git: `npm run ship` publishes it as a
+release (`panels-<its hash>`), and every build, and `npm run ship` on a machine that didn't make it,
+fetches it from there by `live.json`. The export takes any number of pictures of any size, and gives the raw answers, so
+the app and the laptop (`shared/src/panels.ts`, `findPanels`) find a page's panels exactly as
+`guess.py` does: the page opened as OpenCV opens it (no colour profile; a GIF's clear pixels white),
+scaled as OpenCV scales it (to the shade), padded only to the next multiple of 32 as Ultralytics'
+letterbox does for such a model, and read back as its `scale_boxes` does. Checked on all 2030
+labelled pages against `guess.py` on the GPU: 2021 the same to 2 pixels, the rest moved by the
+GPU's rounding on corners the model is unsure of, none with a panel more or less. Rounds before 21
+were exported for the 1024 square only, and are still read so. `npm run ship` (`infra/ship.sh`) builds it into the server image,
 publishes it once as a release (`panels-<its hash>`), and builds it into the app for readers' devices (`frontend/scripts/panels.mjs`); `npm --prefix frontend run panels` does the same
 for the dev server.
 

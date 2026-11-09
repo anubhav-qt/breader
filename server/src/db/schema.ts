@@ -540,6 +540,28 @@ export const pagePanelOffers = pgTable(
   (t) => [primaryKey({ columns: [t.chapter, t.n, t.libraryId] }), index('page_panel_offers_at_idx').on(t.at)],
 );
 
+/**
+ * The owner's thumbs up (good) or down on a panel the model found, read in the Panels layout, to
+ * train the panel model on later (routes/panels.ts). The page as page_panels names it; `quad` its
+ * four corners as the model gave them, in the pixels of the picture it read (w by h), not as the
+ * app shows them; `round` the model's round that found it. One vote a panel, the latest. Not fed.
+ */
+export const panelVotes = pgTable(
+  'panel_votes',
+  {
+    chapter: text('chapter').notNull(),
+    n: integer('n').notNull(),
+    quad: jsonb('quad').notNull(),
+    w: integer('w').notNull(),
+    h: integer('h').notNull(),
+    round: integer('round').notNull(),
+    good: boolean('good').notNull(),
+    libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.chapter, t.n, t.quad] }), index('panel_votes_at_idx').on(t.at)],
+);
+
 /** What the admin page changes: one row, id 1 (shared/src/admin.ts, AdminState). */
 export const adminState = pgTable('admin_state', {
   id: integer('id').primaryKey(),
