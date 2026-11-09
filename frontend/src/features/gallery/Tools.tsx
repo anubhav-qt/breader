@@ -3,7 +3,7 @@ import type { ShelfItem } from '../../data/useLibrary';
 import { IconAddBook, IconCheck, IconMore, IconStar } from '../../components/icons';
 import { colorVars } from '../../data/colors';
 import { AudiobookButton } from '../audiobook/Audiobook';
-import { Spark } from '../ai/AiStatus';
+import { Spark } from '../ai/Spark';
 import { useCardProgress } from '../ai/progress';
 import { stageText } from '../ai/words';
 import { useRound } from '../design/round';

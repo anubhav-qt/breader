@@ -26,7 +26,7 @@
   top: calc(100% + 8px);
   right: 0;
   z-index: 60;
-  width: min(300px, calc(100vw - 32px));
+  width: min(310px, calc(100vw - 32px));
   display: grid;
   gap: 10px;
   padding: 14px;

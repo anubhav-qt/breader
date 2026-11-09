@@ -51,3 +51,7 @@ export const CLEANUP = {
   /** Rows of deleted files are kept this long, so the laptop's copy hears about the deletion. */
   deletedRowDays: 30,
 } as const;
+
+/** The synced setting a library's own name is kept in, which the people it's shared with see. */
+export const LIBRARY_NAME = 'libraryName';
+export const LIBRARY_NAME_CHARS = 60;

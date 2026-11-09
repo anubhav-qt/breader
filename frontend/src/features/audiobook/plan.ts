@@ -1,4 +1,4 @@
-import type { BookRecord, Format } from '../../books/types';
+import type { BookRecord } from '../../books/types';
 import { loadRecord } from '../../books/load';
 import { collectBlocks } from '../reader/dom';
 import { sentencesIn, wordsIn } from '../reader/narration';
@@ -7,10 +7,6 @@ import { sentencesIn, wordsIn } from '../reader/narration';
  * What an audiobook reads: the book's paragraphs and headings in order, each as its sentences, as
  * reading aloud splits them. A part is one of them, made and played as one MP3.
  */
-
-/** Books made of words: a PDF's pages and a manga's pictures aren't read this way yet. */
-export const AUDIOBOOK_FORMATS: Format[] = ['EPUB', 'TXT', 'MD', 'Text'];
-export const canAudiobook = (b: Pick<BookRecord, 'format' | 'source'>) => AUDIOBOOK_FORMATS.includes(b.format) && b.source !== 'placeholder';
 
 export interface Chapter {
   title: string;

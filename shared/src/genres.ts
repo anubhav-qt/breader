@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 /*
  * The genres a book can be filed under, as many as fit it. Whoever adds a book picks them (or
  * none); readers of a shared copy start from theirs and can pick their own. Stored by id, joined by
@@ -35,12 +33,6 @@ export type GenreId = (typeof GENRES)[number]['id'];
 
 /** What a book with no genre is filed under. */
 export const UNSET_GENRE = 'Unset';
-
-/**
- * A book's genres on the wire: ids of lowercase letters joined by commas, so ids added later still
- * pass older servers.
- */
-export const GenreList = z.string().regex(/^[a-z]{1,24}(,[a-z]{1,24}){0,19}$/, 'Not a genre');
 
 const byId = new Map<string, string>(GENRES.map((g) => [g.id, g.name]));
 const order = new Map<string, number>(GENRES.map((g, i) => [g.id, i]));

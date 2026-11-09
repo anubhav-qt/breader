@@ -30,7 +30,6 @@ interface Props {
   root: RefObject<HTMLElement | null>;
   now: number;
   enter: boolean;
-  indexBase: number;
   editingId?: string;
   /** Picking books to favourite or remove together: the ones ticked. Absent while not picking. */
   picked?: ReadonlySet<string>;
@@ -46,7 +45,7 @@ interface Props {
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, indexBase, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: Props) {
   const key = `breader.view.${place}.v1`;
   const [chosen, setChosen] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
@@ -136,7 +135,8 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
         role="tabpanel"
         aria-labelledby={`${panel}-title`}
         className="shelf-list"
-        initial={{ opacity: 0, y: 10 }}
+        // Only a change of view slides in; the library's first appearance is there at once.
+        initial={enter ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={springs.smooth}
       >
@@ -148,7 +148,6 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
           root={root}
           now={now}
           enter={enter}
-          indexBase={indexBase}
           editingId={editingId}
           picked={picked}
           onOpen={onOpen}
@@ -162,7 +161,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
   );
 }
 
-type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'indexBase' | 'editingId' | 'picked' | 'onOpen' | 'onEdit' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
+type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'editingId' | 'picked' | 'onOpen' | 'onEdit' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
   shelves: Shelf[];
   lazy: boolean;
 };
@@ -184,16 +183,16 @@ function ShelfList({ shelves, lazy, root, ...rest }: ListProps) {
 
   return (
     <>
-      {(lazy ? shelves.slice(0, limit) : shelves).map((s, i) => <Row key={s.key} shelf={s} index={i} {...rest} />)}
+      {(lazy ? shelves.slice(0, limit) : shelves).map((s) => <Row key={s.key} shelf={s} {...rest} />)}
       {more && <div ref={end} className="shelf-more" aria-hidden="true" />}
     </>
   );
 }
 
-type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'root'> & { shelf: Shelf; index: number };
+type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'root'> & { shelf: Shelf };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-function Row({ shelf, index, authors, now, enter, indexBase, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: RowProps) {
+function Row({ shelf, authors, now, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -259,14 +258,13 @@ function Row({ shelf, index, authors, now, enter, indexBase, editingId, picked, 
       </header>
       <motion.div ref={row} className="shelf-row" data-start={ends.start || undefined} data-end={ends.end || undefined} onScroll={check} layoutScroll>
         <AnimatePresence mode="popLayout" initial={false}>
-          {entries.map((e, k) => {
+          {entries.map((e) => {
             const stack = e.stack;
             return (
               <Tile
                 key={e.key}
                 item={{ key: e.key, book: e.book, author: authors.get(e.book.id) }}
                 variant="cover"
-                index={indexBase + index * 2 + k}
                 enter={enter}
                 now={now}
                 radius="8px 18px 18px 8px"

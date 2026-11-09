@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { IconEye, IconKey, IconList, IconPencil, IconSettings } from '../../components/icons';
+import { IconChat, IconEye, IconKey, IconList, IconPencil, IconSettings } from '../../components/icons';
 import { DEFAULT_LABELS, LABEL_CHARS, readLabels, renameLabel, type LibraryLabels } from '../../data/labels';
 import { useSyncStatus } from '../../data/sync';
 import { loginError, sendVerification, type AccountState } from '../../lib/account';
@@ -21,13 +21,16 @@ interface Props {
   onGuide: () => void;
   /** How much in the guide is new since it was last opened: a dot on the button says so. */
   news: number;
+  /** Asking for a feature or telling us something (features/feedback). */
+  onFeedback: () => void;
 }
 
 /**
  * The header's settings: the guide first, then manga's covers on their own, the names of the
- * switch between libraries, the library key, and logging in, or who's logged in and logging out.
+ * switch between libraries, the library key, asking for a feature or giving feedback, and logging
+ * in, or who's logged in and logging out.
  */
-export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, onCoversOnly, onGuide, news }: Props) {
+export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, onCoversOnly, onGuide, news, onFeedback }: Props) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [naming, setNaming] = useState(false);
@@ -161,6 +164,9 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
             )}
             <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onKey)}>
               <IconKey /> Library key
+            </button>
+            <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onFeedback)}>
+              <IconChat /> Request a feature / Feedback
             </button>
             {ending}
           </motion.div>

@@ -1,4 +1,5 @@
 import { baseUrl, type ApiBase } from '../lib/api';
+import type { FeedbackItem } from '@breader/shared/feedback';
 import { STEPS, UPLOAD_STEPS, type Admin, type Marker, type Snapshot, type Working } from './types';
 
 /*
@@ -279,6 +280,12 @@ export function liveAdmin(token: string): Admin {
       }
       const r = await send<{ cues: number; tracks: number; soundtrack: number }>('POST', '/admin/music', undefined, text);
       return `${r.cues} cues, ${r.tracks} tracks`;
+    },
+    async feedback() {
+      return (await send<{ items: FeedbackItem[] }>('GET', '/admin/feedback')).items;
+    },
+    async feedbackDone(id, done) {
+      await send('POST', `/admin/feedback/${id}/done`, { done });
     },
   };
 }

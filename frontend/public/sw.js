@@ -75,7 +75,10 @@ async function file(req, cache) {
     return kept;
   }
   const res = await fetch(req);
-  if (res.ok || res.type === 'opaque') await c.put(req, res.type === 'opaque' ? res.clone() : await stamped(res.clone()));
+  // A file a past build had answers with the app's page once a new one is out (Pages does that for
+  // anything missing): kept, it would stand in for that file for good.
+  const page = (res.headers.get('content-type') ?? '').includes('text/html');
+  if ((res.ok && !page) || res.type === 'opaque') await c.put(req, res.type === 'opaque' ? res.clone() : await stamped(res.clone()));
   return res;
 }
 

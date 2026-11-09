@@ -1,0 +1,18 @@
+/* Request a feature / Feedback (Feedback.tsx): which it is, a box to write in, then send. */
+.fb-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 12px; border-radius: 12px; background: var(--fill); }
+.fb-kind { height: 34px; border-radius: 9px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); transition: background-color 140ms ease, color 140ms ease; }
+.fb-kind:hover { color: var(--ink); }
+.fb-kind[aria-checked='true'] { background: var(--canvas); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.fb-text {
+  width: 100%; height: 180px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--canvas);
+  padding: 10px 12px; font: 400 21px/1.2 var(--read); color: var(--ink);
+  outline: none; transition: border-color 140ms ease;
+}
+.fb-text:focus { border-color: var(--accent); }
+.fb-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 18px; margin: 8px 0 14px; font: var(--ui-w) 12px/1.4 var(--ui); }
+.fb-note { margin: 0; color: var(--ink-3, var(--ink-2)); }
+.fb-error { margin: 0; color: var(--danger); }
+.fb-count { flex: none; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.fb-over { color: var(--danger); }
+.fb-actions { display: flex; justify-content: flex-end; gap: 8px; }

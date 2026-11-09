@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { GenreList } from './genres.ts';
-import { PREFS_CHARS, SPEECH_CHARS, SYNC } from './limits.ts';
+import { LIBRARY_NAME_CHARS, PREFS_CHARS, SPEECH_CHARS, SYNC } from './limits.ts';
 
 /*
  * The wire format between the app and the server. Both sides validate with these schemas, so a
@@ -12,6 +11,12 @@ import { PREFS_CHARS, SPEECH_CHARS, SYNC } from './limits.ts';
 export const Id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'Not a valid id');
 export const Sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'Not a SHA-256 hex digest');
 const Millis = z.number().int().nonnegative();
+
+/**
+ * A book's genres on the wire: ids of lowercase letters joined by commas, so ids added later still
+ * pass older servers.
+ */
+export const GenreList = z.string().regex(/^[a-z]{1,24}(,[a-z]{1,24}){0,19}$/, 'Not a genre');
 
 /** CBZ: a manga or comic, its pages as pictures in a zip. */
 export const Format = z.enum(['EPUB', 'PDF', 'TXT', 'MD', 'Text', 'CBZ']);
@@ -284,10 +289,6 @@ export const SharedLinkRequest = z.object({ token: SharedToken, fileId: Id });
 export const SharedAddRequest = z.object({ token: SharedToken, book: Book });
 export const SharedAddResponse = z.object({ added: z.boolean() });
 export type SharedAddResponse = z.infer<typeof SharedAddResponse>;
-
-/** The synced setting a library's own name is kept in, which the people it's shared with see. */
-export const LIBRARY_NAME = 'libraryName';
-export const LIBRARY_NAME_CHARS = 60;
 
 /** A library made only to share, by its name: anyone given its key sees and adds to it. */
 export const SharedCreateRequest = z.object({ name: z.string().trim().min(1).max(LIBRARY_NAME_CHARS) });

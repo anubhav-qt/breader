@@ -10,15 +10,15 @@ import type { Go } from './features/guide/list';
 import { markSeen, useGuideKept, useNews } from './features/guide/seen';
 import { checkDevice } from './features/reader/able';
 import { WelcomeBooks, WelcomeManga, WelcomeShared } from './features/guide/Welcome';
+import type { Note } from './features/news/notes';
+import { markShown, unseen } from './features/news/seen';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
-import { DesignBar } from './features/design/DesignBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { AudiobookHost, AudiobookNav } from './features/audiobook/Audiobook';
 import { AddWhat } from './features/add/AddWhat';
 import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
-import { sweepKept } from './books/kept';
 import { placeChapter, readFrom, remoteCover, remoteOf, withAlso } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
@@ -30,18 +30,14 @@ import { useLabels } from './data/labels';
 import { addLibrary, keepShelfCover, libraryName, sharedNow, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
-import { AddWhere, type Where } from './features/add/AddWhere';
-import { KeyDialog } from './features/add/KeyDialog';
+import type { Where } from './features/add/AddWhere';
 import { SettingsMenu } from './features/account/SettingsMenu';
-import { LoginDialog, type LoginStart } from './features/account/LoginDialog';
+import type { LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
-import { RemoveDialog } from './features/gallery/RemoveDialog';
 import { detectSeries, seriesKey, seriesNames } from './features/gallery/series';
 import { fillGaps, genreFor } from './features/gallery/fill';
 import { urlOf } from './features/manga/copies';
 import type { About, Picked } from './features/manga/MangaPage';
-import { LibraryMenu } from './features/shared/LibraryMenu';
-import { OwnLibraryMenu } from './features/shared/OwnLibraryMenu';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
 import { api, sayAway } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
@@ -182,8 +178,29 @@ const Browse = lazy(() => loadBrowse().then((m) => ({ default: m.Browse })));
 const MangaPage = lazy(() => loadPage().then((m) => ({ default: m.MangaPage })));
 const AddBook = lazy(() => loadAdd().then((m) => ({ default: m.AddBook })));
 const Guide = lazy(() => import('./features/guide/Guide').then((m) => ({ default: m.Guide })));
+const News = lazy(() => import('./features/news/News').then((m) => ({ default: m.News })));
+const Feedback = lazy(() => import('./features/feedback/Feedback').then((m) => ({ default: m.Feedback })));
+/* The dialogs and menus too: none shows as the library opens. */
+const loadLogin = () => import('./features/account/LoginDialog');
+const loadKey = () => import('./features/add/KeyDialog');
+const loadWhere = () => import('./features/add/AddWhere');
+const loadRemove = () => import('./features/gallery/RemoveDialog');
+const loadLibraries = () => import('./features/shared/LibraryMenu');
+const loadOwn = () => import('./features/shared/OwnLibraryMenu');
+/** A book's edit popover (gallery/Gallery.tsx shows it). */
+const loadEditPopover = () => import('./features/gallery/EditPopover');
+/** A book's audiobook dialog and the making (audiobook/Audiobook.tsx shows it). */
+const loadAudiobooks = () => Promise.all([import('./features/audiobook/AudiobookDialog'), import('./features/audiobook/audiobooks')]);
+const LoginDialog = lazy(() => loadLogin().then((m) => ({ default: m.LoginDialog })));
+const KeyDialog = lazy(() => loadKey().then((m) => ({ default: m.KeyDialog })));
+const AddWhere = lazy(() => loadWhere().then((m) => ({ default: m.AddWhere })));
+const RemoveDialog = lazy(() => loadRemove().then((m) => ({ default: m.RemoveDialog })));
+const LibraryMenu = lazy(() => loadLibraries().then((m) => ({ default: m.LibraryMenu })));
+const OwnLibraryMenu = lazy(() => loadOwn().then((m) => ({ default: m.OwnLibraryMenu })));
+const DesignBar = lazy(() => import('./features/design/DesignBar').then((m) => ({ default: m.DesignBar })));
+const LATER = [loadReader, loadBrowse, loadPage, loadAdd, loadLogin, loadKey, loadWhere, loadRemove, loadLibraries, loadOwn, loadEditPopover, loadAudiobooks];
 function loadSoon() {
-  const all = () => { for (const load of [loadReader, loadBrowse, loadPage, loadAdd]) void load().catch(() => {}); };
+  const all = () => { for (const load of LATER) void load().catch(() => {}); };
   // Safari has no requestIdleCallback.
   const idle = window.requestIdleCallback as typeof window.requestIdleCallback | undefined;
   if (idle) window.requestIdleCallback(all, { timeout: 4000 });
@@ -300,6 +317,10 @@ export default function App() {
   const [login, setLogin] = useState<LoginStart | null>(null);
   /** The guide, open: when it was last opened before this, so what came since is New in it. */
   const [guide, setGuide] = useState<{ seenAt: number; q?: string } | null>(null);
+  /** What changed since this reader was last here, shown once, over the library. */
+  const [whatsNew, setWhatsNew] = useState<Note[] | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const newsAsked = useRef(false);
   /** The shared libraries' list, under the arrow beside the switch between libraries; `key`: opened to type someone's key in. */
   const [librariesOpen, setLibrariesOpen] = useState<false | 'list' | 'key'>(false);
   const guideKept = useGuideKept();
@@ -530,7 +551,7 @@ export default function App() {
   useEffect(() => {
     if (!lib.ready || swept.current) return;
     swept.current = true;
-    void sweepKept(haveSeries);
+    void import('./books/kept').then((m) => m.sweepKept(haveSeries));
   }, [lib.ready, haveSeries]);
   // Something just asked for waits for the laptop while it's away (lib/api.ts sayAway): said for a moment.
   useEffect(() => {
@@ -1352,7 +1373,16 @@ export default function App() {
     });
   }
   const readerHints: HintSpec[] = mouse ? [{ id: 'reader-keys', text: 'Press ? to see the keys.', ms: 6000 }] : [];
-  const busy = !!(choosing || adding || login || keyOpen || guide || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
+  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || feedbackOpen || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
+  // What's new waits for the library and for nothing else to be open, then shows once.
+  useEffect(() => {
+    if (newsAsked.current || busy || !lib.ready || route.name !== 'library') return;
+    newsAsked.current = true;
+    const notes = unseen();
+    if (!notes.length) return;
+    markShown();
+    setWhatsNew(notes);
+  }, [busy, lib.ready, route.name]);
 
   const flipCovers = () => {
     const next = !coversOnly;
@@ -1412,17 +1442,22 @@ export default function App() {
             onTab={setTab}
             onAdd={() => setChoosing(true)}
             libraries={(close) => (
-              <LibraryMenu
-                key="libraries"
-                sharing={sharing}
-                ownCount={ownShared}
-                focusKey={librariesOpen === 'key'}
-                onShow={(which: Showing) => { showLibrary(which); setTab('shelf'); }}
-                onClose={close}
-                say={say}
-              />
+              <Suspense key="libraries" fallback={null}>
+                <LibraryMenu
+                  sharing={sharing}
+                  ownCount={ownShared}
+                  focusKey={librariesOpen === 'key'}
+                  onShow={(which: Showing) => { showLibrary(which); setTab('shelf'); }}
+                  onClose={close}
+                  say={say}
+                />
+              </Suspense>
             )}
-            ownMenu={() => <OwnLibraryMenu key="own" name={labels.mine} count={items.mine.length} category={category} />}
+            ownMenu={() => (
+              <Suspense key="own" fallback={null}>
+                <OwnLibraryMenu name={labels.mine} count={items.mine.length} category={category} />
+              </Suspense>
+            )}
             librariesOpen={librariesOpen !== false}
             onLibrariesOpen={(o) => setLibrariesOpen(o ? 'list' : false)}
             dark={dark}
@@ -1441,6 +1476,7 @@ export default function App() {
                 coversOnly={manga && tab !== 'browse' && books.length > 0 ? coversOnly : undefined}
                 onCoversOnly={flipCovers}
                 onGuide={() => openGuide()}
+                onFeedback={() => setFeedbackOpen(true)}
                 news={news}
               />
             )}
@@ -1601,38 +1637,50 @@ export default function App() {
           />
           </Suspense>
         )}
-        {askingWhere && <AddWhere key="add-where" onChoose={chooseWhere} onCreated={madeLibrary} />}
-        {asking && <RemoveDialog key="remove" title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} />}
+        {askingWhere && <Suspense key="add-where" fallback={null}><AddWhere onChoose={chooseWhere} onCreated={madeLibrary} /></Suspense>}
+        {asking && <Suspense key="remove" fallback={null}><RemoveDialog title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} /></Suspense>}
         {askingAll && (
-          <RemoveDialog
-            key="remove-all"
-            title={askingAll.title}
-            count={askingAll.shared.length}
-            from="mine"
-            manga={askingAll.category === 'manga'}
-            onChoose={chooseRemoveAll}
-            onClose={() => setAskingAll(null)}
-          />
+          <Suspense key="remove-all" fallback={null}>
+            <RemoveDialog
+              title={askingAll.title}
+              count={askingAll.shared.length}
+              from="mine"
+              manga={askingAll.category === 'manga'}
+              onChoose={chooseRemoveAll}
+              onClose={() => setAskingAll(null)}
+            />
+          </Suspense>
         )}
-        {keyOpen && <KeyDialog key="key" libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} />}
+        {keyOpen && <Suspense key="key" fallback={null}><KeyDialog libraryKey={lib.key} loggedIn={loggedIn} onClose={() => setKeyOpen(false)} onShared={openShared} onOpen={openKey} /></Suspense>}
         {/* A key made as a series was read waits for the reader to close. */}
-        {freshKey && route.name !== 'read' && <KeyDialog key="fresh-key" libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} />}
+        {freshKey && route.name !== 'read' && <Suspense key="fresh-key" fallback={null}><KeyDialog libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} /></Suspense>}
+        {whatsNew && (
+          <Suspense key="news" fallback={null}>
+            <News notes={whatsNew} onClose={() => setWhatsNew(null)} onFeedback={() => { setWhatsNew(null); setFeedbackOpen(true); }} />
+          </Suspense>
+        )}
+        {feedbackOpen && (
+          <Suspense key="feedback" fallback={null}>
+            <Feedback onClose={() => setFeedbackOpen(false)} onSent={() => { setFeedbackOpen(false); say('Thanks! It’s sent.'); }} />
+          </Suspense>
+        )}
         {guide && (
           <Suspense key="guide" fallback={null}>
             <Guide seenAt={guide.seenAt} initial={guide.q} go={showMe} onClose={() => setGuide(null)} />
           </Suspense>
         )}
         {login && (
-          <LoginDialog
-            key="login"
-            start={login}
-            google={account.google}
-            ready={lib.ready}
-            localKey={lib.key}
-            enter={lib.joinAccount}
-            onDone={onLoggedIn}
-            onClose={() => setLogin(null)}
-          />
+          <Suspense key="login" fallback={null}>
+            <LoginDialog
+              start={login}
+              google={account.google}
+              ready={lib.ready}
+              localKey={lib.key}
+              enter={lib.joinAccount}
+              onDone={onLoggedIn}
+              onClose={() => setLogin(null)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
@@ -1649,7 +1697,7 @@ export default function App() {
           onReset={() => void lib.reset()}
         />
       )}
-      {devTools && <DesignBar />}
+      {devTools && <Suspense fallback={null}><DesignBar /></Suspense>}
     </MotionConfig>
   );
 }

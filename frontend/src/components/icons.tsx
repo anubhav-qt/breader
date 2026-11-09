@@ -7,6 +7,7 @@ export const IconBack = (p: P) => (<svg {...base} {...p}><path d="M14.5 5.5 8 12
 export const IconList = (p: P) => (
   <svg {...base} {...p}><path d="M9 6.5h10.5M9 12h10.5M9 17.5h10.5" /><g fill="currentColor" stroke="none"><circle cx="4.8" cy="6.5" r="1.4" /><circle cx="4.8" cy="12" r="1.4" /><circle cx="4.8" cy="17.5" r="1.4" /></g></svg>
 );
+export const IconChat = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 17h-8l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5z" /><path d="M8 10h8M8 13h5" /></svg>);
 export const IconSidebar = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><rect x="3.5" y="5" width="17" height="14" rx="3" /><path d="M9.5 5v14" /></svg>);
 export const IconSpeaker = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></svg>);
 export const IconUpload = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M12 15V4.5M7.5 9 12 4.5 16.5 9" /><path d="M4.5 14.5v3a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" /></svg>);

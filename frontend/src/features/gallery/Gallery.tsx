@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { BookEdit } from '../../books/types';
 import { canRemove, canShare } from '../../data/library';
 import type { ShelfItem } from '../../data/useLibrary';
 import { IconPlus } from '../../components/icons';
-import { EditPopover } from './EditPopover';
 import { Bento } from './layouts/Bento';
 import { RECENT } from './layouts/slots';
 import { MangaLibrary } from './MangaLibrary';
@@ -16,6 +15,9 @@ import type { View } from './shelving';
 import { TitleHint } from './TitleHint';
 import type { GalleryItem } from './types';
 import './gallery.css';
+
+/** A book's edit popover comes in a piece of its own, fetched once the app is idle (App's loadSoon). */
+const EditPopover = lazy(() => import('./EditPopover').then((m) => ({ default: m.EditPopover })));
 
 interface Props {
   books: ShelfItem[];
@@ -57,8 +59,8 @@ interface Props {
 }
 
 /**
- * The cards rise in and their colour grows only the first time a library of books, and of manga,
- * appears after the page loads. The libraries stay once they've been seen (App.tsx), so switching
+ * The cards show at once, and their colour fades in, only the first time a library of books, and
+ * of manga, appears after the page loads. The libraries stay once they've been seen (App.tsx), so switching
  * back to one shows it at once.
  */
 const entered = { books: false, manga: false };
@@ -158,35 +160,36 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
           place={place}
           initial={view}
           root={scrollRef}
-          indexBase={RECENT}
           onSeries={showSeries}
           onKeepAll={onKeepAll}
           {...shared}
         />
       )}
-      <AnimatePresence>
-        {editing && editingBook && (
-          <EditPopover
-            key={editing.id}
-            book={editingBook}
-            seriesNames={seriesNames}
-            noSeries={manga}
-            anchor={editing.anchor}
-            others={editingOthers}
-            // By the book's own id: a started shared book's card goes by the sharer's, its copy by its own.
-            onChange={(patch) => onEdit(editingBook.id, patch)}
-            onChangeOther={(b, patch) => onEdit(b.id, patch)}
-            onRemove={canRemove(editingBook) ? (fromKeyboard) => { setEditing(null); onRemove(editingBook, fromKeyboard); } : undefined}
-            onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
-            // A shared book not started has no reading of the reader's own to finish.
-            onFinish={onFinish && editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
-            onChapters={onChapters && editingBook.source === 'remote' ? () => { setEditing(null); onChapters(editingBook); } : undefined}
-            // Only the reader's own copy can be their first, and only with another book of theirs to go before.
-            canFirst={canBeFirst(editingBook) && books.filter(canBeFirst).length > 1}
-            onClose={closeEdit}
-          />
-        )}
-      </AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {editing && editingBook && (
+            <EditPopover
+              key={editing.id}
+              book={editingBook}
+              seriesNames={seriesNames}
+              noSeries={manga}
+              anchor={editing.anchor}
+              others={editingOthers}
+              // By the book's own id: a started shared book's card goes by the sharer's, its copy by its own.
+              onChange={(patch) => onEdit(editingBook.id, patch)}
+              onChangeOther={(b, patch) => onEdit(b.id, patch)}
+              onRemove={canRemove(editingBook) ? (fromKeyboard) => { setEditing(null); onRemove(editingBook, fromKeyboard); } : undefined}
+              onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
+              // A shared book not started has no reading of the reader's own to finish.
+              onFinish={onFinish && editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
+              onChapters={onChapters && editingBook.source === 'remote' ? () => { setEditing(null); onChapters(editingBook); } : undefined}
+              // Only the reader's own copy can be their first, and only with another book of theirs to go before.
+              canFirst={canBeFirst(editingBook) && books.filter(canBeFirst).length > 1}
+              onClose={closeEdit}
+            />
+          )}
+        </AnimatePresence>
+      </Suspense>
       <AnimatePresence>
         {open && (
           <SeriesDialog

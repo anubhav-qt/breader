@@ -11,6 +11,7 @@ import { accountRoutes } from './routes/account.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { aiRoutes } from './routes/ai.ts';
 import { commentRoutes } from './routes/comments.ts';
+import { feedbackRoutes } from './routes/feedback.ts';
 import { fileRoutes } from './routes/files.ts';
 import { healthRoutes } from './routes/health.ts';
 import { libraryRoutes } from './routes/libraries.ts';
@@ -83,6 +84,7 @@ export function makeApp(deps: Deps) {
   app.route('/v1', voiceRoutes(deps));
   app.route('/v1', aiRoutes(deps));
   app.route('/v1', commentRoutes(deps));
+  app.route('/v1', feedbackRoutes(deps));
   app.route('/v1', speechRoutes(deps));
   app.route('/v1', audiobookRoutes());
   app.route('/v1', panelRoutes(deps));

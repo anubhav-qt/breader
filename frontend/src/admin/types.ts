@@ -1,4 +1,5 @@
 import type { AiAccount } from '@breader/shared/accounts';
+import type { FeedbackItem } from '@breader/shared/feedback';
 import type { Stage, StagePick } from '@breader/shared/admin';
 
 export type { Stage, StagePick };
@@ -279,4 +280,7 @@ export interface Admin {
   startSignIn: (kind: string) => Promise<{ url: string; state: string }>;
   finishSignIn: (state: string, address: string) => Promise<void>;
   uploadMusic: (text: string) => Promise<string>;
+  /** What readers asked for or told us, the newest first. */
+  feedback: () => Promise<FeedbackItem[]>;
+  feedbackDone: (id: number, done: boolean) => Promise<void>;
 }

@@ -68,6 +68,17 @@ step_check() {
     fi
   done
 
+  # Every release tells readers what changed (frontend/src/features/news/notes.ts), once.
+  local live
+  live=$(curl -fsS https://api.breader.site/health 2> /dev/null | node -pe 'JSON.parse(require("fs").readFileSync(0)).release' 2> /dev/null || true)
+  if [ -n "$live" ] && git cat-file -e "$live^{commit}" 2> /dev/null; then
+    if git diff --quiet "$live" HEAD -- frontend/src/features/news/notes.ts; then
+      fail "say what's new for readers: a note at the top of frontend/src/features/news/notes.ts"
+    fi
+  else
+    echo "can't tell which release is live; check frontend/src/features/news/notes.ts has this one's note"
+  fi
+
   if ! gh auth status > /dev/null 2>&1; then
     fail "sign in to GitHub: gh auth login"
   fi

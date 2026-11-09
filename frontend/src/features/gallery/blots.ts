@@ -72,10 +72,10 @@ export function radiiFor(blots: Blot[], p: number, w: number, h: number): number
 }
 
 /** A CSS mask: one hard-edged circle per blot, unioned. */
-export function maskFor(blots: Blot[], radii: number[], scale = 1): string {
+export function maskFor(blots: Blot[], radii: number[]): string {
   const layers = blots
     .map((b, i) => {
-      const r = radii[i] * scale;
+      const r = radii[i];
       if (r < 0.5) return null;
       return `radial-gradient(circle ${r.toFixed(1)}px at ${(b.x * 100).toFixed(2)}% ${(b.y * 100).toFixed(2)}%, #000 ${(r - 0.8).toFixed(1)}px, transparent ${r.toFixed(1)}px)`;
     })

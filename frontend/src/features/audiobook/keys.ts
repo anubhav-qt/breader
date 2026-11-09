@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { playerKey } from '../reader/keys';
+import { playerKey } from '../reader/keymap';
 import * as player from './player';
 
 /*

@@ -6,10 +6,13 @@ import { DotIcon, Typed } from '../reader/chrome/parts';
 import { AI_ELSEWHERE, AI_WHY } from '../../books/ai';
 import { colorVars } from '../../data/colors';
 import { useRound, type AiDesign } from '../design/round';
-import { FEATURE, FEATURE_ICON, SPARK, SPARK_DIM } from './glyphs';
+import { FEATURE, FEATURE_ICON } from './glyphs';
 import { FEATURES, PHASES, useAiProgress, useMeterLife, type AiFeature, type AiProgress } from './progress';
 import { OFFER, phaseState, sentence, stageText, STATE_WORD, STEPS, stepText } from './words';
+import { Spark } from './Spark';
 import './ai.css';
+
+export { Spark };
 
 /*
  * The AI's progress for one book, drawn the way each design of this round draws it (design/round.ts):
@@ -21,16 +24,6 @@ import './ai.css';
  *   D Steps      its passes as a list of steps, ticked off as they finish
  *   E Note       a sentence or two, typed in, saying where it is and what comes next
  */
-
-/** The spark: beating while it reads or waits, lit when done, faint while off. */
-export function Spark({ p, className = '' }: { p: AiProgress; className?: string }) {
-  return (
-    <span className={`ai-spark is-${p.stage} ${className}`} aria-hidden="true">
-      <span className="ai-spark-a"><DotIcon rows={SPARK} /></span>
-      <span className="ai-spark-b"><DotIcon rows={SPARK_DIM} /></span>
-    </span>
-  );
-}
 
 /** A: what it unlocks, one tile each, with where each one is. */
 export function Tiles({ p, compact = false }: { p: AiProgress; compact?: boolean }) {

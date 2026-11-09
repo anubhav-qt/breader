@@ -2,9 +2,12 @@ import { filledIn, numberOf, pickChapters, PLACE_PER, placeChapter, placeKey, ty
 import { api, ApiError, OfflineError } from '../lib/api';
 import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
-import { countPages, keptNote, pageFor } from './kept';
-import { WORDS_PER_MANGA_PAGE } from './manga';
+import { WORDS_PER_MANGA_PAGE } from '../lib/format';
 import type { BookRecord, MangaBook, Position, RemoteChapter, TocItem } from './types';
+
+/* Chapters kept offline (kept.ts) come with a manga's first page, not with the library. */
+const keptHere = () => import('./kept');
+const pageFor = async (chapter: string, n: number) => (await keptHere()).pageFor(chapter, n);
 
 /*
  * A manga read from a catalogue, its chapters one after another in one book, so it scrolls on from
@@ -312,6 +315,7 @@ async function openWindowed(rec: BookRecord, id: string, about: About, picked: M
   const here = at ? chapterAt(all, at) : undefined;
   const start = here ? all.indexOf(here) : 0;
   const from = Math.max(0, start - BEFORE);
+  const { countPages, keptNote } = await keptHere();
   const note = await keptNote(id);
   /** A chapter's pages: counted by its source, unless they're kept here already. 0 when it can't say. */
   const count = async (c: MangaChapter): Promise<number> => {

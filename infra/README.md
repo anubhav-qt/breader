@@ -452,7 +452,11 @@ paid plan at the time of writing; Healthchecks.io's free plan has them.
 
 The status page, `https://api.breader.example/admin` (or `fb.` while the laptop is off), asks for
 `ADMIN_TOKEN` and shows which server answered, how far behind the copy is, how full Supabase and R2
-are, and when each worker job last worked or failed.
+are, and when each worker job last worked or failed. It fits one screen: what needs you across
+the top, then four panes that each scroll by themselves (the AI marker, health, accounts and music,
+feedback); a narrow screen shows one pane at a time. Feedback is what readers send from Request a
+feature / Feedback (in Settings, and under each What's new): newest first, each marked done here.
+It lives in Supabase's `feedback` table, which the ThinkPad's copy doesn't keep.
 
 ## Day to day
 
@@ -461,6 +465,12 @@ are, and when each worker job last worked or failed.
 the local stand-ins, pushes, publishes a new panel model round, builds and pushes the server image,
 migrates Supabase, redeploys Render, builds and uploads the app, then waits until all three are on
 the new commit. `infra/ship.sh app live` runs only the steps named. There is no CI on GitHub.
+Before anything, check makes sure this release has a note for readers at the top of
+`frontend/src/features/news/notes.ts`, different from the live release's: readers from before see
+it once, in a dialog over the library. A tab left open from before a release asks for files the
+release took away (Pages answers those with the app's page): it reloads onto the new build, once
+a minute at most (`frontend/src/lib/stale-build.ts`), and the service worker never keeps such a page
+in place of a file.
 The laptop picks the image up within 5 minutes. For those
 minutes the laptop and Render can run different versions. So a migration only ever adds: a new
 table, or a nullable column. Removals ship in a later release, once no running version reads them.

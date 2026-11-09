@@ -12,6 +12,9 @@ export function duration(minutes: number): string {
 
 export const minutesFor = (words: number) => words / WPM;
 
+/** Rough words a page of manga is worth, for time left: a quarter of a minute's reading. */
+export const WORDS_PER_MANGA_PAGE = 60;
+
 /*
  * Made once: making a date's words anew (toLocaleDateString) builds a formatter each time, and a
  * list of hundreds of dates, drawn again, keeps a phone busy.

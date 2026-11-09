@@ -1,0 +1,9 @@
+/* What's new (News.tsx): a line each on what changed, then two buttons the same width, one under the other on a phone. */
+.news-lines { margin: 0 0 20px; padding: 0; list-style: none; display: grid; gap: 10px; }
+.news-lines li { position: relative; padding-left: 18px; font: 400 19px/1.1 var(--read); color: var(--ink-2); }
+.news-lines li::before { content: ''; position: absolute; left: 3px; top: 0.42em; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
+.news-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.news-actions .btn { width: 100%; height: auto; min-height: 40px; padding: 8px 12px; white-space: normal; line-height: 1.2; text-align: center; }
+@media (max-width: 560px) {
+  .news-actions { grid-template-columns: 1fr; }
+}

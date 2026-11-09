@@ -52,7 +52,9 @@ describe('the AI marker', () => {
     startMarker({ filesDir: '/data/files', signal: stop.signal, script, againMs: 50 });
     await until(() => lines().length >= 2);
     await sleep(500);
-    expect(lines()).toEqual(['/data/files/ai/work /data/files/ai/out', '/data/files/ai/work /data/files/ai/out']);
+    // In this machine's own way of writing paths: \ on Windows.
+    const both = `${join('/data/files', 'ai/work')} ${join('/data/files', 'ai/out')}`;
+    expect(lines()).toEqual([both, both]);
     stop.abort();
   });
 

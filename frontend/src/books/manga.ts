@@ -1,4 +1,5 @@
 import { pictureSize, type Size } from './imagesize';
+import { WORDS_PER_MANGA_PAGE } from '../lib/format';
 import type { MangaBook, TocItem } from './types';
 import { canInflate, listZip, readEntry, readStart } from './zip';
 
@@ -7,8 +8,6 @@ import { canInflate, listZip, readEntry, readStart } from './zip';
  * optional ComicInfo.xml saying what it is. Pages come out of the zip one at a time, as they're read.
  */
 
-/** Rough words a page of manga is worth, for time left: a quarter of a minute's reading. */
-export const WORDS_PER_MANGA_PAGE = 60;
 
 const PICTURES: Record<string, string> = {
   jpg: 'image/jpeg',

@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { ACCOUNT_KINDS, FirstAction, MarkerPatch, MusicImport, QueueAction, StagesAction, musicImportKey, musicImportProblems, queueKey, withStages } from '@breader/shared';
+import { ACCOUNT_KINDS, FEEDBACK_LIMIT, FeedbackDone, FirstAction, MarkerPatch, MusicImport, QueueAction, StagesAction, musicImportKey, musicImportProblems, queueKey, withStages, type FeedbackItem, type FeedbackKind } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ADMIN_JOBS, addCommand, changeAdminState, runKind } from '../lib/admin.ts';
 import { adminHub, inUseOrder } from '../lib/admin-live.ts';
@@ -17,6 +17,7 @@ const FinishRequest = z.object({ state: State, redirectUrl: z.string().min(1).ma
 const CancelRequest = z.object({ state: State });
 const JobName = z.string().refine((n) => ADMIN_JOBS.includes(n), 'No such job.');
 const JobOn = z.object({ on: z.boolean() });
+const FeedbackId = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const ModelCheck = z.object({ id: z.string().regex(/^[\w.-]+\/[\w.:-]+$/).optional() });
 /** How many books asked to go next are remembered, the latest first. */
 const NEXT_KEPT = 200;
@@ -178,6 +179,34 @@ export function adminRoutes(deps: Deps) {
       const rest = st.jobsOff.filter((n) => n !== name);
       return { ...st, jobsOff: on ? rest : [...rest, name] };
     });
+    return c.json({ ok: true });
+  });
+
+  // What readers asked for or told us (routes/feedback.ts), the newest first.
+  r.get('/admin/feedback', control, async (c) => {
+    checkToken(c);
+    const { rows } = await pool.query<{ id: string; at: Date; kind: FeedbackKind; body: string; library_id: string | null; release: string | null; done_at: Date | null }>(
+      'SELECT id, at, kind, body, library_id, release, done_at FROM feedback ORDER BY at DESC, id DESC LIMIT $1',
+      [FEEDBACK_LIMIT],
+    );
+    const items: FeedbackItem[] = rows.map((f) => ({
+      id: Number(f.id),
+      at: f.at.getTime(),
+      kind: f.kind,
+      body: f.body,
+      library: f.library_id,
+      release: f.release,
+      done: f.done_at !== null,
+    }));
+    return c.json({ items });
+  });
+
+  r.post('/admin/feedback/:id/done', control, async (c) => {
+    checkToken(c);
+    const id = parse(FeedbackId, c.req.param('id'));
+    const { done } = parse(FeedbackDone, await readJson(c));
+    const { rowCount } = await pool.query(`UPDATE feedback SET done_at = ${done ? 'COALESCE(done_at, now())' : 'NULL'} WHERE id = $1`, [id]);
+    if (!rowCount) throw new ApiError(404, 'not_found', 'No such feedback.');
     return c.json({ ok: true });
   });
 

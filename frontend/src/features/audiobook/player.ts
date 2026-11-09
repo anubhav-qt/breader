@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
+import type { BookRecord } from '../../books/types';
 import { store } from '../../lib/store';
-import { madeOf, onMade, partKey, setAt, type Engine } from './audiobooks';
+import { madeOf, onMade, partKey, setAt, type Engine } from './made';
 
 /*
  * Plays an audiobook, a paragraph at a time, through one <audio> element of its own, so a phone
@@ -8,6 +9,12 @@ import { madeOf, onMade, partKey, setAt, type Engine } from './audiobooks';
  * pause, and back or on a paragraph. While the book is still being made it plays what's made, and
  * at the edge of that waits for the next paragraph, and carries on when it's there.
  */
+
+/** The book the player has open, for the top bar's button to open its dialog again. */
+let heard: BookRecord | null = null;
+export const heardBook = () => heard;
+/** The player has this book open, or none. */
+export const setHeard = (book: BookRecord | null) => { heard = book; };
 
 export interface PlayerState {
   id: string | null;

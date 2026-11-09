@@ -23,7 +23,6 @@ export function Bento({ items, now, enter, editingId, picked, onOpen, onEdit, on
               key={item.key}
               item={item}
               variant={v}
-              index={i}
               enter={enter}
               now={now}
               art={i < 2}
