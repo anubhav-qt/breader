@@ -5,8 +5,9 @@ import { readLocal, writeLocal } from '../../../lib/store';
 import type { VoiceInfo } from './catalog';
 
 /*
- * The server voice: Breader's own computer reads aloud and sends each sentence's sound, for a device
- * too slow to keep up itself (able.ts, server speech/), with Piper's voices only. It's open to any
+ * The server voice: Breader's own computer reads aloud and sends each sentence's sound, for a phone
+ * with Read on server on, or a device too slow to keep up itself (prefs.ts readsOnServer, able.ts,
+ * server speech/), with Piper's voices only. It's open to any
  * reader signed in with a confirmed address, so whether this one may use it, and which voices it
  * has, is asked of the server when a book or the voice sheet opens on such a device, and remembered
  * for when it can't be reached.

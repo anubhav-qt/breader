@@ -26,9 +26,9 @@ import { PdfView } from './PdfView';
 import { castInSeries } from './voice/cast';
 import { refreshVoices } from './voice/list';
 import { useServerSeat } from './serverPanels';
-import { checkDevice, voiceHere } from './able';
+import { checkDevice } from './able';
 import { refreshSpeech } from './voice/server';
-import { setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
+import { mayReadOnServer, setVoicePrefs, spokenWpm, stepPace, stepRate, useVoicePrefs, voicePrefs } from './voice/prefs';
 import { useLoadState } from './voice/speaker';
 import { SIZE_MAX, SIZE_MIN, TWO_COLORS, mangaLookOf, panelled, scrollOnly, useNarrow, useReaderSettings, withMangaLook, type ThemeName } from './settings';
 import { flash, readBook, type Found } from './search';
@@ -131,10 +131,10 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   // Background music while the voice reads or the light moves, on a book that has it (music.ts).
   useMusic(view, record.id, aiStatus, !closing, narration, pacing);
   // What this device can do itself, checked while the book loads (able.ts). Voices readers uploaded,
-  // so the one picked last time is known; and, only where this device can't keep up, whether the
-  // server reads for this account.
+  // so the one picked last time is known; and, on a phone or where this device can't keep up,
+  // whether the server reads for this account.
   useEffect(() => {
-    void checkDevice().then(() => { if (canNarrate && !pictures && !voiceHere()) void refreshSpeech(); });
+    void checkDevice().then(() => { if (canNarrate && !pictures && mayReadOnServer()) void refreshSpeech(); });
     if (canNarrate && !pictures) void refreshVoices();
   }, [pictures]);
   // A seat at the server's panel model in the Panels layout of a manga from Japan, where this device

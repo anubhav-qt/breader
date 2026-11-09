@@ -8,8 +8,8 @@ import { Segmented } from '../Panels';
 import { BUILT_IN, checkGpu, useGpu, type Engine, type Mode, type VoiceInfo } from '../voice/catalog';
 import { refreshVoices } from '../voice/list';
 import { unlockMusic } from '../music';
-import { checkDevice, useAble, voiceHere } from '../able';
-import { hung, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, readsOnServer, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor } from '../voice/prefs';
+import { checkDevice, useAble } from '../able';
+import { handheld, hung, mayReadOnServer, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, readsOnServer, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor, voicePrefs } from '../voice/prefs';
 import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
 import { missingAll, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { SheetAi } from '../../ai/AiStatus';
@@ -104,6 +104,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   const speech = useSpeech();
   const able = useAble();
   const server = readsOnServer(speech.allowed, able.voice);
+  const phone = handheld();
   // Immersive where the GPU can't run Kokoro offers only Piper (prefs.ts, voiceFor), and so does a
   // device too slow to read itself: Breader's computer reads only Piper's voices.
   const gpu = useGpu();
@@ -123,8 +124,8 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   // What the card in the middle says isn't ready yet.
   const [waiting, setWaiting] = useState<Soon | null>(null);
 
-  // Whether the server voice is open to this account: asked only where this device can't keep up.
-  useEffect(() => { void refreshVoices(); void checkDevice().then(() => { if (!voiceHere()) void refreshSpeech(); }); }, []);
+  // Whether the server voice is open to this account: asked on a phone, or where this device can't keep up.
+  useEffect(() => { void refreshVoices(); void checkDevice().then(() => { if (mayReadOnServer()) void refreshSpeech(); }); }, []);
   // Whether Immersive can run here, asked before it offers a download.
   useEffect(() => { if (mode === 'immersive') void checkGpu(); }, [mode]);
   useEffect(() => stopSample, []);
@@ -265,8 +266,9 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       <Step n={2} title="Model">
         <Segmented bare label="Model" value={model} onChange={setModel} options={modelsOf(voices === 'immersive')} />
         {modelNote && <p className="p-note vs-heavy">{modelNote}</p>}
-        {/* Where it reads isn't a choice: this device when it keeps up, else Breader's computer (able.ts). */}
-        {server && <p className="p-note vs-where">Breader’s computer reads this aloud, as this device is too slow to keep up.</p>}
+        {/* A phone picks where it reads. Anything else: this device when it keeps up, else Breader's computer (able.ts). */}
+        {phone && speech.allowed && <OnServer />}
+        {server && !phone && <p className="p-note vs-where">Breader’s computer reads this aloud, as this device is too slow to keep up.</p>}
         {hung && mode === 'immersive' && !server && <p className="p-note vs-where vs-err">{HUNG}</p>}
       </Step>
       <Step n={3} title="Voices">
@@ -398,6 +400,19 @@ function Pace({ bare = false }: { bare?: boolean }) {
  * Background music: on or off, and how loud, apart from the voice. A book whose music isn't made
  * yet has the switch looking off, and a tap on it says why (onLocked), as 2 voices does.
  */
+/** A phone or tablet's switch: Breader's computer reads aloud for it, or it reads itself. */
+function OnServer() {
+  const { server } = useVoicePrefs();
+  // The latest pick, not this render's: taps faster than a render each still flip it.
+  const flip = () => setVoicePrefs({ server: !voicePrefs().server });
+  return (
+    <div className="ctl tgrow">
+      <span className="clbl">Read on server</span>
+      <button type="button" className="tg" role="switch" aria-checked={server} aria-label="Read on server" onClick={flip} />
+    </div>
+  );
+}
+
 function Music({ onLocked }: { onLocked?: () => void }) {
   const { music, musicVolume } = useVoicePrefs();
   const toggle = () => {

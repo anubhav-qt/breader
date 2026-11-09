@@ -29,7 +29,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - Audiobooks are made on readers' devices only. The server never makes them.
 - Reading aloud and finding panels run on the reader's device when it can
   (`frontend/src/features/reader/able.ts`, checked as a book opens, nothing sent). Only a device too
-  weak for one uses the server for it, by itself. There is no switch.
+  weak for one uses the server for it, by itself. One exception: phones and tablets get a
+  Read on server switch in the voice sheet, on by default (`readsOnServer`, `voice/prefs.ts`).
 
 ## In progress
 

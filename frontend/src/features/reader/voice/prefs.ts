@@ -18,8 +18,8 @@ import type { Two } from './two';
  * Before 2026-11-09, a computer's Immersive started on a heavy voice, kept as if picked: such a
  * pick, the first heavy one, is let go once (`follows`).
  *
- * Where it reads isn't a choice: on this device when it can keep up, else on Breader's computer
- * (able.ts).
+ * Where it reads: a phone or tablet has a switch, Read on server, on to start with. Anything else
+ * reads on this device when it can keep up, else on Breader's computer (able.ts).
  */
 
 export interface VoicePrefs {
@@ -47,6 +47,8 @@ export interface VoicePrefs {
   music: boolean;
   /** How loud the music is, 0 to 1, apart from the voice. */
   musicVolume: number;
+  /** A phone or tablet reads on Breader's computer (when it's open to this account). */
+  server: boolean;
 }
 
 const KEY = 'breader.voice.v3';
@@ -119,6 +121,7 @@ let prefs: VoicePrefs = {
   muted: stored.muted ?? false,
   music: stored.music ?? true,
   musicVolume: stored.musicVolume ?? MUSIC_VOLUME.start,
+  server: stored.server ?? true,
   follows: true,
 };
 if (hung && voice.immersive === hung) voice.immersive = '';
@@ -172,11 +175,18 @@ export function pickedEngine(p: VoicePrefs): Engine | undefined {
 }
 
 /**
- * Reading with the server's voices: only where this device is too slow to keep up itself (able.ts),
- * and the server voice is open to this account (`allowed`). Otherwise this device reads, even a
- * slow one, as best it can.
+ * Reading with the server's voices, where the server voice is open to this account (`allowed`). A
+ * phone or tablet reads there while its switch is on. Anything else, only when it's too slow to keep
+ * up itself (able.ts). Otherwise this device reads, even a slow one, as best it can.
  */
-export const readsOnServer = (allowed: boolean, here = voiceHere()) => allowed && !here;
+export function readsOnServer(allowed: boolean, here = voiceHere(), phone = handheld()): boolean {
+  if (!allowed) return false;
+  if (phone) return prefs.server;
+  return !here;
+}
+
+/** Whether to ask the server if its voice is open to this account: a phone may use it, and so may a slow device. */
+export const mayReadOnServer = () => handheld() || !voiceHere();
 
 export const onServer = () => readsOnServer(speechAllowed());
 

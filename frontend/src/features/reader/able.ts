@@ -5,8 +5,9 @@ import { devicePace, measure, processorScore } from '../audiobook/speed';
  * What this device can do itself, checked as a book opens, while it loads: read aloud with
  * Normal's voices (Piper, on the processor), and find a manga's panels with the panel model.
  * Whatever it can do, it does, and Breader's computer never does it for it. Only what it's too weak
- * for is done there, by itself, with no switch; while Breader's computer can't (full, away, or not
- * open to this account), the device tries anyway.
+ * for is done there, by itself, with no switch (but a phone has one for reading aloud: Read on
+ * server, voice/prefs.ts); while Breader's computer can't (full, away, or not open to this account),
+ * the device tries anyway.
  *
  * Nothing about the device leaves it: the check runs here (a quarter of a second of sums in a
  * worker, speed.ts, and whether the browser lends a graphics chip), and is kept here.
