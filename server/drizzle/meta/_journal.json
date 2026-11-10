@@ -197,6 +197,13 @@
       "when": 1794262805277,
       "tag": "0027_panel_votes",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794289360623,
+      "tag": "0028_page_panels_archive",
+      "breakpoints": true
     }
   ]
 }

@@ -8,8 +8,8 @@ import type { Loc } from './FlowView';
 import { BOOK_COLORS } from '../../data/colors';
 import { readMangaPrefs, writeMangaPrefs } from '../../lib/mangadex';
 import { usePanelModel } from './panelModel';
-import { useServerPanels } from './serverPanels';
-import { useAble } from './able';
+import { panelsOnServer, refreshPanels, setPanelsOnServer, useServerPanels } from './serverPanels';
+import { checkDevice, useAble } from './able';
 import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, measureOf, styleFor, useNarrowPortrait, type MangaDir, type PdfLook, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
 
 /* Contents */
@@ -238,20 +238,37 @@ function DataSaver() {
 }
 
 /**
- * Panels found on Breader's own computer (serverPanels.ts), on a device that can't find them itself
- * (able.ts): no switch, only what's happening. It has a few seats; while they're all taken, how
- * full it is, live, and the first to free up is taken by itself.
+ * Panels found on Breader's own computer (serverPanels.ts): by itself on a device that can't find
+ * them itself (able.ts), and in the Panels layout, by its switch on any other (off to start with).
+ * It has a few seats; while they're all taken, how full it is, live, and the first to free up is
+ * taken by itself.
  */
-function ServerPanels() {
+function ServerPanels({ inPanels }: { inPanels: boolean }) {
   const s = useServerPanels();
   const able = useAble();
-  if (!s.allowed || able.panels) return null;
-  if (s.seated) return <p className="p-note">Breader’s computer finds this manga’s panels, as this device can’t.</p>;
-  if (!s.full) return null;
+  // Whether the server finds panels for this account, and whether this device can itself.
+  useEffect(() => {
+    void refreshPanels();
+    void checkDevice();
+  }, []);
+  if (!s.allowed) return null;
+  // The latest pick, not this render's: taps faster than a render each still flip it.
+  const flip = () => setPanelsOnServer(!panelsOnServer());
   return (
-    <p className="p-note p-seats" aria-live="polite">
-      Breader’s computer is full: {s.used}/{s.seats} readers are using it. Panels come here once there’s room.
-    </p>
+    <>
+      {inPanels && able.panels && (
+        <div className="ctl tgrow">
+          <span className="clbl">Panels on server</span>
+          <button type="button" className="tg" role="switch" aria-checked={s.chosen} aria-label="Panels on server" onClick={flip} />
+        </div>
+      )}
+      {s.seated && !able.panels && <p className="p-note">Breader’s computer finds this manga’s panels, as this device can’t.</p>}
+      {s.full && (
+        <p className="p-note p-seats" aria-live="polite">
+          Breader’s computer is full: {s.used}/{s.seats} readers are using it. Panels come here once there’s room.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -284,7 +301,7 @@ function MangaLookControls({ look, pick, widen, pair, saver, panels, strip }: Ma
         <Segmented label="Pages" value={look.pages} onChange={pair} options={[{ v: 1, label: 'One at a time' }, { v: 2, label: 'Two side by side' }]} />
       )}
       {saver && <DataSaver />}
-      {panels && <ServerPanels />}
+      {panels && <ServerPanels inPanels={look.layout === 'panels'} />}
       {panels && <ModelComing />}
     </>
   );

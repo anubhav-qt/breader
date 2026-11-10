@@ -67,6 +67,22 @@ export function alike(a: Data, b: Data): boolean {
   return a.panels.length === b.panels.length && a.panels.every((q, i) => overlap(boxOf(q, a.w, a.h), boxOf(b.panels[i], b.w, b.h)) >= AGREE);
 }
 
+/**
+ * Moves pages' panels from rounds before `round` into page_panels_archive, so readers get only the
+ * new round's, found again as they're read. Run as the API starts, before it keeps any in memory.
+ * Says how many it moved.
+ */
+export async function archiveOlder(db: pg.Pool | pg.PoolClient, round: number): Promise<number> {
+  const r = await db.query(
+    `WITH moved AS (DELETE FROM page_panels WHERE round < $1 RETURNING chapter, n, round, data, by, at)
+     INSERT INTO page_panels_archive (chapter, n, round, data, by, at)
+     SELECT chapter, n, round, data, by, at FROM moved
+     ON CONFLICT DO NOTHING`,
+    [round],
+  );
+  return r.rowCount ?? 0;
+}
+
 export function makeKept(pool: pg.Pool): Kept {
   const memo = new Map<string, PagePanels>();
   const looking = new Map<string, Promise<PagePanels | null>>();

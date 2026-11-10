@@ -7,6 +7,7 @@ import { purgeOffers } from '../src/jobs/cleanup.ts';
 import type { Manga } from '../src/manga/index.ts';
 import { chapterId, seriesId } from '../src/manga/suwayomi.ts';
 import type { Panels } from '../src/panels/index.ts';
+import { archiveOlder } from '../src/panels/kept.ts';
 import { HOLD_MS, makeSeats } from '../src/panels/seats.ts';
 import { browser, deps, primary } from './helpers.ts';
 
@@ -291,6 +292,41 @@ describe('panels kept for every reader', () => {
     await primary.pool.query(`UPDATE page_panel_offers SET at = now() - interval '31 days' WHERE chapter = $1 AND n = 3`, [`md:${id}`]);
     expect(await purgeOffers(primary.pool)).toBeGreaterThanOrEqual(1);
     expect((await primary.pool.query('SELECT n FROM page_panel_offers WHERE library_id = $1', [libraryId])).rows).toEqual([{ n: 4 }]);
+  });
+});
+
+describe('panels from an earlier round', () => {
+  it('go to the archive, so readers get only the new round’s', async () => {
+    const id = chapter();
+    const laptop = appWith(fake());
+    const { b } = await reader(laptop);
+    await b.post('/v1/panels/seat', DEVICE);
+    expect((await b.get(pageOf(id))).body.round).toBe(7);
+
+    // Round 8 goes live: the API starts on it, and archives round 7's first.
+    expect(await archiveOlder(primary.pool, 8)).toBeGreaterThanOrEqual(1);
+    const archived = await primary.pool.query('SELECT n, round, by, data FROM page_panels_archive WHERE chapter = $1', [`md:${id}`]);
+    expect(archived.rows).toEqual([{ n: 3, round: 7, by: 'server', data: WHOLE }]);
+    expect((await primary.pool.query('SELECT 1 FROM page_panels WHERE chapter = $1', [`md:${id}`])).rowCount).toBe(0);
+
+    // A new API, with nothing in memory: no old panels for anyone, the page is found again.
+    const fresh = appWith(fake());
+    const other = (await reader(fresh)).b;
+    expect((await other.get(`/v1/panels/${id}/kept`)).body).toEqual({ pages: {} });
+    expect((await other.get(pageOf(id))).body.code).toBe('panels_no_seat');
+
+    // Run again, and with the same page's same round archived already: nothing breaks.
+    await primary.pool.query(`INSERT INTO page_panels (chapter, n, round, data, by) VALUES ($1, 3, 7, $2, 'owner')`, [`md:${id}`, JSON.stringify(WHOLE)]);
+    await archiveOlder(primary.pool, 8);
+    expect((await primary.pool.query('SELECT 1 FROM page_panels WHERE chapter = $1', [`md:${id}`])).rowCount).toBe(0);
+    expect(await archiveOlder(primary.pool, 8)).toBe(0);
+  });
+
+  it('stay where they are when they’re the live round', async () => {
+    const id = chapter();
+    await primary.pool.query(`INSERT INTO page_panels (chapter, n, round, data, by) VALUES ($1, 3, 9, $2, 'server')`, [`md:${id}`, JSON.stringify(WHOLE)]);
+    await archiveOlder(primary.pool, 9);
+    expect((await primary.pool.query('SELECT round FROM page_panels WHERE chapter = $1', [`md:${id}`])).rows).toEqual([{ round: 9 }]);
   });
 });
 

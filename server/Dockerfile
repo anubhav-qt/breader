@@ -18,6 +18,8 @@ COPY ai/package.json ai/package-lock.json ai/
 RUN npm ci --prefix ai --omit=dev --ignore-scripts --no-audit --no-fund
 COPY shared shared
 COPY server server
+# The panel model's round, built into the API (src/panels/round.ts).
+COPY ai/panels/model/live.json ai/panels/model/
 RUN npm run build -w server
 COPY frontend/src/books frontend/src/books
 COPY frontend/src/lib/format.ts frontend/src/lib/

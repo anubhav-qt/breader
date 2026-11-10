@@ -20,6 +20,8 @@ import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makeSame, pgGroups } from './manga/same.ts';
 import { makeEngine } from './engine/index.ts';
 import { makePanels } from './panels/index.ts';
+import { archiveOlder } from './panels/kept.ts';
+import { PANEL_ROUND } from './panels/round.ts';
 import { makeSpeech } from './speech/index.ts';
 
 startReporting('api');
@@ -70,6 +72,15 @@ let panels: ReturnType<typeof makePanels> | null = null;
 if (manga && engine) panels = makePanels(env, engine);
 const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga, panels, engine, redis };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
+
+// Panels from an earlier round of the model go to the archive before any reader is served, so
+// readers get this round's (panels/kept.ts). Not done, the old ones are only served a while longer.
+try {
+  const moved = await archiveOlder(primary.pool, PANEL_ROUND);
+  if (moved > 0) log.info({ moved, round: PANEL_ROUND }, 'archived pages’ panels from earlier rounds');
+} catch (err) {
+  log.warn({ err }, 'couldn’t archive pages’ panels from earlier rounds');
+}
 
 const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.0.0.0' }, (info) =>
   log.info({ port: info.port, role: env.ROLE, release: env.RELEASE }, 'api listening'),

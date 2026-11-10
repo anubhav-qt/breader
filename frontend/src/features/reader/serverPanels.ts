@@ -14,9 +14,9 @@ import { panelled } from './settings';
  * (server panels/), instead of on this device. For manga from Japan only (settings.ts panelled), as
  * the model learned from no other.
  *
- * It finds them for a few readers at once (server panels/seats.ts), so only for devices that can't
- * find them themselves (able.ts): there's no switch. Such a device reading a manga from Japan in the
- * Panels layout takes a seat, kept every half a minute and given back when it leaves the layout or
+ * It finds them for a few readers at once (server panels/seats.ts): for devices that can't find
+ * them themselves (able.ts), and for any device with its Panels on server switch on (off to start
+ * with). Such a device reading a manga from Japan in the Panels layout takes a seat, kept every half a minute and given back when it leaves the layout or
  * the manga. When every seat is taken, the look panel says how full it is as that changes, and the
  * first seat to free up is taken by itself. Whether the server finds panels at all is asked of it
  * then, and remembered for when it can't be reached.
@@ -31,6 +31,8 @@ import { panelled } from './settings';
  */
 
 const STATE = 'breader.panels.v2';
+/** This device's Panels on server switch. */
+const CHOSEN = 'breader.panels.server.v1';
 /** A seat is kept this often while a manga's open (the server lets one go after 75 seconds). */
 const KEEP_MS = 30_000;
 
@@ -41,11 +43,13 @@ const device = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `
 let seat = { seated: false, full: false };
 /** A manga from Japan is open in the Panels layout. */
 let reading = false;
-/** A seat is wanted: reading, on a device that can't find the panels itself. */
-const wanted = () => reading && !panelsHere();
+/** Panels on server is on, on this device. */
+let chosen = readLocal<{ on?: unknown } | null>(CHOSEN, null)?.on === true;
+/** A seat is wanted: reading, with Panels on server on or on a device that can't find the panels itself. */
+const wanted = () => reading && (chosen || !panelsHere());
 const subs = new Set<() => void>();
 
-const snapshot = () => ({ ...state, ...seat });
+const snapshot = () => ({ ...state, ...seat, chosen });
 let shown = snapshot();
 const tell = () => {
   shown = snapshot();
@@ -172,9 +176,25 @@ async function watch() {
 /** Takes a seat where it's wanted, once the server's said whether it finds panels. */
 const seatUp = () => refreshPanels().then(() => { if (wanted()) void take(); });
 
+/** Turns Panels on server on or off here: a seat is taken or given back at once while reading. */
+export function setPanelsOnServer(on: boolean) {
+  chosen = on;
+  writeLocal(CHOSEN, { on });
+  tell();
+  if (!reading) return;
+  if (wanted()) {
+    void seatUp();
+    return;
+  }
+  void leave();
+}
+
+/** Whether Panels on server is on here, as it is now, not as a render last saw it. */
+export const panelsOnServer = () => chosen;
+
 /**
- * Holds a seat while a manga from Japan is open in the Panels layout on a device that can't find
- * its panels itself, and gives it back after. The device is checked first (able.ts).
+ * Holds a seat while a manga from Japan is open in the Panels layout, where one is wanted, and
+ * gives it back after. The device is checked first (able.ts).
  */
 export function useServerSeat(open: boolean) {
   useEffect(() => {

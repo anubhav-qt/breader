@@ -85,6 +85,7 @@ export const FEATURES: Feature[] = [
   { id: 'series-page', group: 'Manga', name: 'A series’ page', what: 'Its chapters, each read from the sharpest copy found.', where: 'Pick a series in Find manga' },
   { id: 'panels', group: 'Manga', name: 'Panel by panel', what: 'One panel at a time, fitted to the screen.', where: 'Aa, then Layout, then Panels' },
   { id: 'panels-anywhere', group: 'Manga', name: 'Panels on any device', what: 'This device finds a page’s panels itself. One that can’t has Breader’s computer find them.', where: 'Happens by itself, in Panels', since: day(2026, 11, 9) },
+  { id: 'panels-on-server', group: 'Manga', name: 'Panels on server', what: 'Breader’s computer finds a page’s panels for this device. Off to start with; this device finds them itself.', where: 'Aa, in the Panels layout', since: day(2026, 11, 10) },
   { id: 'zoom', group: 'Manga', name: 'Zoom', what: 'Tap a panel to bring it close. Tap twice to zoom where you tapped, and drag it about.', where: 'Any manga page' },
   { id: 'direction', group: 'Manga', name: 'Direction', what: 'Left to right (the start) or right to left, one page or two side by side.', where: 'Aa, in a manga' },
   { id: 'offline', group: 'Manga', name: 'Download', what: 'Keep a whole series in this browser to read offline.', where: 'A manga’s ⋯, then Download' },

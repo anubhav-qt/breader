@@ -144,7 +144,13 @@ export function threadPool(threads: number, file?: URL): Pool {
       const id = next++;
       return new Promise<Answer>((resolve, reject) => {
         pending.set(id, { w, resolve, reject });
-        w.postMessage({ id, body, drop }, transfer);
+        try {
+          w.postMessage({ id, body, drop }, transfer);
+        } catch (err) {
+          // Never sent, so it isn't the worker's to answer: left waiting, the worker could never end.
+          pending.delete(id);
+          reject(err);
+        }
       });
     },
     stop(slot) {
@@ -187,8 +193,8 @@ export async function pixelsOf(data: Uint8Array, model: string): Promise<Extract
   const { data: rgb, info } = await clear.toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h, channels } = info;
   if (channels !== 3) throw new Error(`The page came out with ${channels} channels.`);
-  // Its own memory, to hand to the worker whole: a small one may share Node's.
-  const px = rgb.byteOffset === 0 && rgb.buffer.byteLength === rgb.length ? new Uint8Array(rgb.buffer) : new Uint8Array(rgb);
+  // A copy in memory of its own, to hand to the worker whole: Node won't hand over sharp's.
+  const px = new Uint8Array(rgb);
   return { type: 'panels', model, w, h, px };
 }
 

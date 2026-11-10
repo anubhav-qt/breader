@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { serve, type ServerType } from '@hono/node-server';
 import { afterAll, describe, expect, it } from 'vitest';
 import { makeEngine, type Engine } from '../src/engine/index.ts';
-import { makeEngineApp, threadPool, type Pool } from '../src/engine/serve.ts';
+import { makeEngineApp, pixelsOf, threadPool, type Pool } from '../src/engine/serve.ts';
 import { frame, unframe } from '../src/engine/wire.ts';
 import type { Body } from '../src/engine/worker.ts';
 import { makePanels } from '../src/panels/index.ts';
@@ -261,6 +261,39 @@ parentPort.on('message', ({ id, body }) => setTimeout(() => parentPort.postMessa
       await expect(pool.run(1, job(0), [], [])).rejects.toMatchObject({ stopped: true });
       await closing;
       expect((await first).samples).toBeGreaterThan(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('takes a page sharp opened, as the engine hands it over', async () => {
+    // Sharp's pixels live in memory Node won't hand to a thread (round 21 failed every page so).
+    const ECHO = `import { parentPort } from 'node:worker_threads';
+parentPort.on('message', ({ id, body }) => parentPort.postMessage({ id, ok: true, answer: { w: body.w, h: body.h, samples: body.px.length } }));`;
+    const dir = await mkdtemp(join(tmpdir(), 'breader-pool-'));
+    const file = join(dir, 'echo.mjs');
+    await writeFile(file, ECHO);
+    const pool = threadPool(1, pathToFileURL(file));
+    try {
+      const sharp = (await import('sharp')).default;
+      const jpeg = await sharp({ create: { width: 40, height: 60, channels: 3, background: '#808080' } }).jpeg().toBuffer();
+      const body = await pixelsOf(new Uint8Array(jpeg), '/m/live.onnx');
+      const r = await pool.run(0, body, [body.px.buffer as ArrayBuffer], []);
+      expect(r).toMatchObject({ w: 40, h: 60, samples: 40 * 60 * 3 });
+    } finally {
+      await pool.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('lets a worker go after a job it couldn’t be sent', async () => {
+    const { pool, dir } = await slowPool();
+    try {
+      // A buffer Node won't hand over: one handed over already.
+      const gone = new ArrayBuffer(8);
+      structuredClone(gone, { transfer: [gone] });
+      await expect(pool.run(0, job(0), [gone], [])).rejects.toThrow();
+      await pool.close();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

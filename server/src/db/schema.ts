@@ -524,6 +524,25 @@ export const pagePanels = pgTable(
 );
 
 /**
+ * Pages' panels from an earlier round of the panel model, moved out of page_panels as the API starts
+ * on a newer round (panels/kept.ts, archiveOlder), so readers get the new round's. Kept to compare
+ * rounds or train on, never sent to readers. One row a page a round. Not fed.
+ */
+export const pagePanelsArchive = pgTable(
+  'page_panels_archive',
+  {
+    chapter: text('chapter').notNull(),
+    n: integer('n').notNull(),
+    round: integer('round').notNull(),
+    data: jsonb('data').notNull(),
+    by: text('by').notNull(),
+    at: at('at').notNull(),
+    archivedAt: at('archived_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.chapter, t.n, t.round] })],
+);
+
+/**
  * A page's panels as one library's device found them, until another library's agree (panels/kept.ts).
  * Let go of after 30 days unmatched (jobs/cleanup.ts).
  */

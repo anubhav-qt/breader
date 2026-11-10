@@ -245,15 +245,19 @@ iPhones included. What the laptop finds is kept at once, and so is what the owne
 what any other device finds waits in `page_panel_offers` until a second library's device finds the
 same (as many panels, each overlapping its match by 90%), so no one reader can put wrong panels on
 everyone's page, and is let go of after 30 days unmatched. Readers on the same page at once share
-the one finding. A new round of the model replaces a page's panels as it finds them again: the
-laptop for a reader with a seat, or two devices. Pages from Suwayomi are kept by its chapter
+the one finding. A new round of the model sends the earlier rounds' panels to `page_panels_archive`
+as the API starts on it (`server/src/panels/kept.ts`, `archiveOlder`, round built in from
+`live.json`), so readers get only the new round's, found again as they're read: by the laptop for a
+reader with a seat, or two devices. The archive is never sent to readers; it's kept to compare
+rounds or train on. Pages from Suwayomi are kept by its chapter
 numbers, so a Suwayomi started afresh needs its rows cleared:
 `DELETE FROM page_panels WHERE chapter LIKE 'sw:%'`. A page takes a few hundred bytes. The tables
 aren't fed to the laptop's copy or its backups: lost, a page's panels are only found again.
 
-The laptop finds them only for devices that can't (`frontend/src/features/reader/able.ts`: iPhones,
-iPads, under 4 GB, a panel model that broke there, or no graphics chip and a slow processor). There's
-no switch. Such a device takes a seat in the Panels layout of a manga from Japan, and gives it back
+The laptop finds them for devices that can't (`frontend/src/features/reader/able.ts`: iPhones,
+iPads, under 4 GB, a panel model that broke there, or no graphics chip and a slow processor), and for
+any other device with its Panels on server switch on (Aa, in the Panels layout; off to start with,
+kept on the device). Such a device takes a seat in the Panels layout of a manga from Japan, and gives it back
 on leaving the layout or the manga, or after 75 seconds without a word. The laptop finds them for
 `PANEL_SEATS` readers at once (8), and the owner's accounts (`SPEECH_EMAILS`) always have one
 besides. When they're all taken, the app says how full it is, live, and takes the first seat that

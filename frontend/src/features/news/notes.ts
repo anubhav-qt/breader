@@ -15,6 +15,14 @@ export interface Note {
 
 export const NOTES: Note[] = [
   {
+    id: '2026-11-10-2',
+    title: 'Panels on server',
+    lines: [
+      'Breader’s computer finds manga panels again, and only with the new model.',
+      'Turn on Panels on server in Aa to let it find them for you.',
+    ],
+  },
+  {
     id: '2026-11-10',
     title: 'Better manga panels',
     lines: [
