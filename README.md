@@ -48,6 +48,10 @@ No ads, no subscriptions, nothing locked away. If it earns a place in your readi
 
 Open source under the [MIT License](LICENSE). Running your own copy is covered in [infra/README.md](infra/README.md).
 
+## Contributing
+
+Help is welcome, from a typo to a feature. Start with an issue labelled [good first issue](https://github.com/anubhav-qt/breader/labels/good%20first%20issue), and read [CONTRIBUTING.md](.github/CONTRIBUTING.md) for how to run it and send a change.
+
 ---
 
 <p align="center"><sub>Fill your life with colours by reading books!</sub></p>

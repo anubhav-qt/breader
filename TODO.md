@@ -27,15 +27,15 @@
 - [ ] Delete `voices/books/` on the ThinkPad: audiobooks are made on devices now, and nothing reads it.
 - [ ] Next release: remove the `/v1/audiobooks` stub (`server/src/routes/audiobooks.ts`) and its test, once apps from before it are gone.
 - [ ] PDFs: read their pages' words into an audiobook as well.
-- [ ] Chapters in the exported MP3 (ID3 CHAP frames), so players can jump between them.
-- [ ] Initials split a sentence: "by O. Henry" is said as "by O." and "Henry", with a pause between (`sentencesIn`, reading aloud too).
+- [ ] Chapters in the exported MP3 (ID3 CHAP frames), so players can jump between them. Issue #7.
+- [ ] Initials split a sentence: "by O. Henry" is said as "by O." and "Henry", with a pause between (`sentencesIn`, reading aloud too). Issue #3.
 - [ ] Kokoro on this device tops out near 6x on the graphics chip (`features/audiobook/speed.ts`). Several sentences in one run would need a Kokoro export that masks padding; this one doesn't.
 - [ ] On a real phone: Maximum's three Piper engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
 - [x] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live and the panel model (ADR 0002, `server/src/engine/`).
 - [x] Audiobooks made on devices only, never on the ThinkPad.
 - [ ] After the engine's first release (96185ba, 2026-11-08), on the ThinkPad: `compose ps` shows engine healthy; `compose logs engine api` has no "terminate called" and no "engine down"; total and free memory (`free -m`); the budget, workers and threads at "engine listening". Seen from outside so far: engine up, 4 workers, budget 5553 MB, about 10.5 GB free.
 - [ ] On production, still untried after that release: a panel job on the engine (the pages tried had their panels kept already). Live reading on the server worked (21 sentences, 0.6 to 1.7 s each).
-- [ ] A smaller server image: Debian's `ffmpeg` brings a graphics stack (LLVM, Mesa, about 400 MB) Breader never uses. A static ffmpeg would take the image from 1.55 GB to about 1.2 GB.
+- [ ] A smaller server image: Debian's `ffmpeg` brings a graphics stack (LLVM, Mesa, about 400 MB) Breader never uses. A static ffmpeg would take the image from 1.55 GB to about 1.2 GB. Issue #8.
 
 ## Engine load tests (at the end of the day's work, with the typechecks and tests)
 - [ ] `infra/load/voices.mjs` on the ThinkPad itself (Piper only now): how many slow devices reading at once before a sentence waits, and its memory, to check the default budget (half the memory free) and 4 workers of 4.

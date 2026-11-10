@@ -1,0 +1,24 @@
+# A short hello on someone's first issue or pull request here.
+name: Welcome
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Thanks for opening your first issue here. You'll hear back within a few days.
+          pr-message: |
+            Thanks for your first pull request. While you wait for a review, check the boxes in the template and that CI is green. [CONTRIBUTING.md](https://github.com/anubhav-qt/breader/blob/dev/.github/CONTRIBUTING.md) has the details.
