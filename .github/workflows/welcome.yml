@@ -21,4 +21,4 @@ jobs:
           issue-message: |
             Thanks for opening your first issue here. You'll hear back within a few days.
           pr-message: |
-            Thanks for your first pull request. While you wait for a review, check the boxes in the template and that CI is green. [CONTRIBUTING.md](https://github.com/anubhav-qt/breader/blob/dev/.github/CONTRIBUTING.md) has the details.
+            Thanks for your first pull request. While you wait for a review, check the boxes in the template. [CONTRIBUTING.md](https://github.com/anubhav-qt/breader/blob/dev/.github/CONTRIBUTING.md) has the details.

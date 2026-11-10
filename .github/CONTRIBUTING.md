@@ -57,7 +57,7 @@ More on the stack is in [infra/README.md](../infra/README.md).
    npm run lint -w frontend
    npm test
    ```
-6. Open a pull request into `dev` and fill in the template. CI runs the same checks; a review follows within a few days.
+6. Open a pull request into `dev` and fill in the template. A review follows within a few days.
 
 ## How the code reads
 
