@@ -91,8 +91,12 @@ export const canNarrate = typeof window !== 'undefined' && typeof Audio !== 'und
 
 /** Long sentences wait longer for their sound, and Kokoro reads at most 510 sounds at once. */
 const LONGEST = 220;
-const ABBREV = /(?:^|\s)(?:mr|mrs|ms|dr|st|jr|sr|vs|etc|e\.g|i\.e|no|p|pp|vol|ch|fig)\.$/i;
-const INITIAL = /(?:^|\s)\p{Lu}\.$/u;
+const ABBREV = /(?:^|[\s"“‘([])(?:mr|mrs|ms|dr|st|jr|sr|vs|etc|e\.g|i\.e|no|p|pp|vol|ch|fig)\.$/i;
+/**
+ * One capital and a full stop is an initial, as in "O. Henry", so it doesn't end the sentence. Not
+ * "I", which ends a sentence far more often ("So did I."). Gets "Plan B. Then" and "I. M. Pei" wrong.
+ */
+const INITIAL = /(?:^|[\s"“‘([])(?!I\.)\p{Lu}\.$/u;
 const SAYABLE = /[\p{L}\p{N}]/u;
 
 /** Splits text into sentences from `from` on, as [start, end) character ranges. */
@@ -115,7 +119,9 @@ export function sentencesIn(text: string, from: number): Array<[number, number]>
   let start = from;
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const end = m.index + m[0].length;
-    if (ABBREV.test(text.slice(start, m.index + 1)) || INITIAL.test(text.slice(start, m.index + 1))) continue;
+    const upTo = text.slice(start, m.index + 1);
+    if (ABBREV.test(upTo)) continue;
+    if (INITIAL.test(upTo)) continue;
     push(start, end);
     start = end;
     if (end >= text.length) break;
