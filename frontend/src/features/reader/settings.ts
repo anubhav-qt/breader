@@ -156,7 +156,7 @@ export const NARROW_PORTRAIT = '(max-width: 899px) and (orientation: portrait)';
 /** Light pink and light blue on dark pages; their deeper shades on light ones. */
 export const TWO_COLORS: { F: BookColor; M: BookColor } = { F: 'rose', M: 'sky' };
 
-const DEFAULTS: ReaderSettings = {
+export const DEFAULTS: ReaderSettings = {
   style: 'book',
   theme: 'auto',
   book: { font: 'dongle', size: 22, lh: 1.45, measure: 'auto', layout: 'pages', justify: false, weight: 'regular' },

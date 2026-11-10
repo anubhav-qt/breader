@@ -15,6 +15,13 @@ export interface Note {
 
 export const NOTES: Note[] = [
   {
+    id: '2026-11-10-3',
+    title: 'New how-to videos',
+    lines: [
+      'The short videos on the start page now look just like Breader, in light or dark.',
+    ],
+  },
+  {
     id: '2026-11-10-2',
     title: 'Panels on server',
     lines: [
