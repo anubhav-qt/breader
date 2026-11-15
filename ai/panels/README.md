@@ -132,6 +132,17 @@ the right: look at every one before a round goes live, since a liked panel that 
 moved to the better. On 634 votes, round 21: likes kept 99.8%, dislikes changed 0%. Round 22: likes
 kept 78.1% (117 moved, 5 gone), dislikes changed 100%.
 
+The votes on a panel are for this check only, and no round learns from them: a page with a vote on
+any of its panels stays unseen. The check goes by the voted panel's own corners alone, never by the
+page's other panels, which nobody judged.
+
+Beside them the owner votes on a page whole (`page_votes`, kept with every panel the model gave for
+it): up, all its panels are right, and a page the model left whole (no panels, its own mark in the
+strip) was right to be. Those are for learning from. A liked page is a label as it stands; a
+disliked one says only that something's wrong, so it's labelled by hand first. A page with both
+kinds of vote stays with the check. Nothing reads `page_votes` yet: it needs an export like
+`panel_votes`'s first.
+
 ### Trials, held back by series
 
 By default a round is a trial: it holds back about 15% of the series (picked by a fixed seed, so

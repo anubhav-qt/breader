@@ -26,6 +26,8 @@ export interface Store {
   /** What's kept under the key, or undefined when nothing is (or the store can't say). */
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown, ttl: number): Promise<void>;
+  /** A way off (R2, lib/answers.ts): each kind keeps its own in memory in front of it (near()). */
+  readonly far?: boolean;
 }
 
 /** Redis, which the server lets go of when it stops. */
@@ -33,19 +35,47 @@ export interface Redis extends Store {
   close(): Promise<void>;
 }
 
-/** In this process's memory, up to `max` answers, those used longest ago going first. */
+let room = Infinity;
+
+/**
+ * How big each MemoryStore made from now on may grow, in characters of its answers as JSON; null:
+ * as many answers as it's given room for, whatever their size. The fallback sets it (api.ts): it
+ * has no Redis, so every answer is kept in its 512 MB, and a count alone let them fill it.
+ */
+export function memoryRoom(chars: number | null): void {
+  room = chars ?? Infinity;
+}
+
+/**
+ * In this process's memory, up to `max` answers, those used longest ago going first. With
+ * memoryRoom set, up to that size too, each answer measured as it's kept.
+ */
 export class MemoryStore implements Store {
-  private items = new Map<string, { value: unknown; until: number }>();
+  private items = new Map<string, { value: unknown; until: number; size: number }>();
   private readonly max: number;
+  private readonly room = room;
+  private total = 0;
   constructor(max: number) {
     this.max = max;
+  }
+
+  /** How much is kept: answers, and their size (0 when it isn't measured). */
+  get size() {
+    return { answers: this.items.size, chars: this.total };
+  }
+
+  private drop(key: string) {
+    const had = this.items.get(key);
+    if (!had) return;
+    this.total -= had.size;
+    this.items.delete(key);
   }
 
   async get(key: string): Promise<unknown> {
     const hit = this.items.get(key);
     if (!hit) return undefined;
     if (hit.until <= Date.now()) {
-      this.items.delete(key);
+      this.drop(key);
       return undefined;
     }
     // Most recently used goes last, so the oldest go first.
@@ -55,9 +85,13 @@ export class MemoryStore implements Store {
   }
 
   async set(key: string, value: unknown, ttl: number): Promise<void> {
-    this.items.delete(key);
-    this.items.set(key, { value, until: Date.now() + ttl });
-    while (this.items.size > this.max) this.items.delete(this.items.keys().next().value!);
+    this.drop(key);
+    let size = 0;
+    if (this.room !== Infinity) size = key.length + (JSON.stringify(value)?.length ?? 0);
+    this.items.set(key, { value, until: Date.now() + ttl, size });
+    this.total += size;
+    // An answer bigger than the room goes too: it isn't kept.
+    while (this.items.size > 0 && (this.items.size > this.max || this.total > this.room)) this.drop(this.items.keys().next().value!);
   }
 }
 
@@ -76,6 +110,16 @@ export function both(near: Store, far: Store): Store {
       await far.set(key, value, ttl).catch(() => {});
     },
   };
+}
+
+/**
+ * Where a kind's answers go: the shared store when there's one, with up to `max` kept in memory in
+ * front when it's a way off; or else memory alone.
+ */
+export function near(store: Store | null | undefined, max: number): Store {
+  if (!store) return new MemoryStore(max);
+  if (store.far) return both(new MemoryStore(max), store);
+  return store;
 }
 
 /** Redis at the URL, kept as JSON text. Connects in the background, and again whenever it drops. */

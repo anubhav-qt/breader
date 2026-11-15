@@ -25,6 +25,15 @@ export interface Box {
   quad?: Array<[number, number]>;
   /** The panel as the model gave it, before anything's shown: its corners in the pixels of the picture it read, w by h, and its round. */
   found?: Found;
+  /** On a page shown whole: the panel model read it and gave no panels (the picture it read, w by h, and its round). */
+  whole?: Read;
+}
+
+/** A picture the panel model read, and the round that read it. */
+export interface Read {
+  w: number;
+  h: number;
+  round: number;
 }
 
 /** A panel as the model gave it. */
@@ -45,6 +54,8 @@ export interface Group {
 export interface Frames {
   groups: Group[];
   panels: Box[];
+  /** When the panel model gave them: the picture it read and its round, there even when it gave no panels. */
+  of?: Read;
 }
 
 /** Pictures are looked at about this wide at most (a page, not a spread): plenty to find gutters in, and quick to go over. */

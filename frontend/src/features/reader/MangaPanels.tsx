@@ -1,11 +1,11 @@
 import { animate, motion, useMotionValue, useTransform } from 'motion/react';
 import { useLayoutEffect, useRef, type MouseEvent } from 'react';
 import type { MangaBook } from '../../books/types';
-import { IconThumb } from '../../components/icons';
+import { IconPage, IconPagePanels, IconThumb } from '../../components/icons';
 import type { Box } from './frames';
 import { clipOf, fitOf, widestOf } from './MangaZoom';
 import { usePanelModel } from './panelModel';
-import { usePanelVote, useRater, votePageOf } from './panelVotes';
+import { usePageVote, usePanelVote, useRater, useVoting, votePageOf } from './panelVotes';
 import { useServerPanels } from './serverPanels';
 
 /*
@@ -96,21 +96,38 @@ export function PanelsNote() {
 
 /**
  * The owner's thumbs up and down on the panel shown, a page read from a catalogue, for the panel
- * model to learn from later (panelVotes.ts). Tapped again, a thumb takes the vote back.
+ * model to learn from later (panelVotes.ts), and beside them, past a page's mark, the same on the
+ * page whole: whether all its panels were found right. Tapped again, a thumb takes the vote back.
+ * A page the model read and gave no panels for has the page's thumbs alone, by a bare page's mark:
+ * up, it was right to leave it whole. Off with Panel votes in Settings.
  */
-export function PanelVoteBar({ book, page, box }: { book: MangaBook; page: number; box: Box | null }) {
+export function PanelVoteBar({ book, page, box, steps }: { book: MangaBook; page: number; box: Box | null; steps?: Box[] }) {
   const rater = useRater();
-  const path = rater && box?.found ? votePageOf(book, page) : null;
+  const voting = useVoting();
+  const bare = !box?.found && !!box?.whole;
+  const path = rater && voting && (box?.found || bare) ? votePageOf(book, page) : null;
   const [good, give] = usePanelVote(path, box?.found);
+  const [whole, giveWhole] = usePageVote(path, steps);
   if (!path) return null;
-  const tap = (g: boolean) => (e: MouseEvent) => {
-    e.stopPropagation();
-    give(good === g ? null : g);
+  const thumbs = (now: boolean | null, to: (g: boolean | null) => void, what: string) => {
+    const tap = (g: boolean) => (e: MouseEvent) => {
+      e.stopPropagation();
+      to(now === g ? null : g);
+    };
+    return (
+      <>
+        <button type="button" className={now === true ? 'is-on' : ''} aria-pressed={now === true} aria-label={`Good ${what}`} title={`Good ${what}`} onClick={tap(true)}><IconThumb /></button>
+        <button type="button" className={`is-down${now === false ? ' is-on' : ''}`} aria-pressed={now === false} aria-label={`Bad ${what}`} title={`Bad ${what}`} onClick={tap(false)}><IconThumb /></button>
+      </>
+    );
   };
   return (
-    <div className="mg-vote" role="group" aria-label="Is this panel right?" onPointerDown={(e) => e.stopPropagation()}>
-      <button type="button" className={good === true ? 'is-on' : ''} aria-pressed={good === true} aria-label="Good panel" onClick={tap(true)}><IconThumb /></button>
-      <button type="button" className={`is-down${good === false ? ' is-on' : ''}`} aria-pressed={good === false} aria-label="Bad panel" onClick={tap(false)}><IconThumb /></button>
+    <div className="mg-vote" role="group" aria-label="Are the panels right?" onPointerDown={(e) => e.stopPropagation()}>
+      {!bare && thumbs(good, give, 'panel')}
+      <span className={`mg-vote-page${bare ? ' is-bare' : ''}`} role="img" aria-label={bare ? 'A page with no panels found' : 'The whole page'} title={bare ? 'No panels found on this page' : 'The whole page'}>
+        {bare ? <IconPage /> : <IconPagePanels />}
+      </span>
+      {thumbs(whole, giveWhole, bare ? 'page, left whole' : 'page')}
     </div>
   );
 }

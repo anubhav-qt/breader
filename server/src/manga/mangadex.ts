@@ -12,7 +12,7 @@ import {
   type MangaSeries,
   type MangaSort,
 } from '@breader/shared';
-import { Memo, MemoryStore, type Store } from '../lib/cache.ts';
+import { Memo, near, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover, Covers, CoverWidth } from './covers.ts';
@@ -374,10 +374,7 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
 
   /** Answers of a kind, kept so long (and on until `keep`): in the store when there's one, or else in memory, up to `max` of them. */
   function memo<T>(kind: string, ttl: number, max: number, keep = ttl): Memo<T> {
-    let store: Store;
-    if (opts.store) store = opts.store;
-    else store = new MemoryStore(max);
-    return new Memo<T>(store, `manga:v1:${kind}`, ttl, keep);
+    return new Memo<T>(near(opts.store, max), `manga:v1:${kind}`, ttl, keep);
   }
   const lists = memo<{ data: RawManga[]; total: number }>('search', 10 * MINUTE, 300, KEPT);
   const seriesMemo = memo<RawManga>('series', 6 * HOUR, 3000, KEPT);

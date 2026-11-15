@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { AniListKept, AniListPage } from '@breader/shared';
 import { makeApp } from '../src/app.ts';
+import { r2Answers } from '../src/lib/answers.ts';
 import { MemoryStore, type Store } from '../src/lib/cache.ts';
 import { searchKey } from '../src/manga/anilist.ts';
 import { makeManga } from '../src/manga/index.ts';
@@ -33,7 +34,7 @@ const FMA = media(30025, 'Fullmetal Alchemist');
 const KOREAN = media(105398, 'Solo Leveling', { countryOfOrigin: 'KR', title: { romaji: 'Na Honjaman Level Up', english: 'Solo Leveling', native: null } });
 const NEVER = media(9, 'Never', { tags: [{ name: 'Lolicon' }] });
 
-async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN, NEVER], store: Store | null = null) {
+async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN, NEVER], store: Store | null = null, light = false) {
   const calls: Array<{ query: string; variables: Record<string, unknown> }> = [];
   /** What MangaDex was asked: it finds nothing, so a series is read nowhere. */
   const dexCalls: string[] = [];
@@ -53,7 +54,7 @@ async function anilistApp(answer: Array<ReturnType<typeof media>> = [FMA, KOREAN
     return json({ data: { Page: { media: answer } } });
   }) as typeof globalThis.fetch;
   const dir = await mkdtemp(join(tmpdir(), 'breader-anilist-'));
-  const manga = makeManga({ dir, cacheBytes: 1024 * 1024, fetch, store, pace: { api: [1000, 1000], home: [1000, 1000] } });
+  const manga = makeManga({ dir, cacheBytes: 1024 * 1024, fetch, store, light, pace: { api: [1000, 1000], home: [1000, 1000] } });
   const app = makeApp({ ...deps, manga });
   const get = async <T>(path: string) => {
     const res = await app.request(`/v1/manga/anilist${path}`);
@@ -237,5 +238,34 @@ describe('warming AniList’s lists', () => {
     expect(lists).toHaveLength(20 * 3 + 5 * 3 * 3);
     // A page of every list before the next page of any.
     expect(lists.slice(0, 12).every((c) => c.variables.page === 1)).toBe(true);
+  });
+
+  it('reads only 2 pages of each list, and 1 of each kind alone, on a server short of memory', async () => {
+    const { calls, manga } = await anilistApp(undefined, null, true);
+    await manga.warm();
+    const lists = calls.filter((c) => c.query.includes('$sort'));
+    const pages = (country: string | undefined, sort: string) =>
+      lists.filter((c) => c.variables.country === country && JSON.stringify(c.variables.sort) === JSON.stringify([sort])).map((c) => c.variables.page);
+    for (const sort of ['POPULARITY_DESC', 'TRENDING_DESC', 'SCORE_DESC']) {
+      expect(pages(undefined, sort)).toEqual([1, 2]);
+      for (const country of ['JP', 'KR', 'CN']) expect(pages(country, sort)).toEqual([1]);
+    }
+    expect(lists).toHaveLength(2 * 3 + 1 * 3 * 3);
+  });
+
+  it('reads a list back from R2 after a restart, on the fallback', async () => {
+    // Keys of this run's own, as the bucket keeps what earlier runs left.
+    const run = `:${Date.now()}`;
+    const own = (r2: Store): Store => ({ far: true, get: (k) => r2.get(k + run), set: (k, v, ttl) => r2.set(k + run, v, ttl) });
+    const r2 = r2Answers(deps.storage);
+    const before = await anilistApp(undefined, own(r2));
+    await before.get('?sort=rated&page=7');
+    expect(before.calls).toHaveLength(1);
+    await r2.idle();
+    // A new server, its memory empty, and a new R2 store: nothing remembered but what's in the bucket.
+    const after = await anilistApp(undefined, own(r2Answers(deps.storage)));
+    const again = await after.get<AniListPage>('?sort=rated&page=7');
+    expect(again.body.items.map((c) => c.title)).toEqual(['Fullmetal Alchemist', 'Solo Leveling']);
+    expect(after.calls).toHaveLength(0);
   });
 });

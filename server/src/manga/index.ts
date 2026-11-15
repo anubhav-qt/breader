@@ -1,5 +1,5 @@
 import { ANILIST_SORTS, MANGA_KINDS, type AniListSort, type MangaChapter, type MangaChapters, type MangaCopies, type MangaCopy, type MangaFound, type MangaKind, type MangaSearchResult, type MangaSeries, type MangaSort, type SourceSeries } from '@breader/shared';
-import { both, freshly, Memo, MemoryStore, type Store } from '../lib/cache.ts';
+import { both, freshly, Memo, MemoryStore, near, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import { copiesOf, measure } from './copies.ts';
@@ -60,7 +60,7 @@ export interface MangaOptions {
   fetch?: typeof fetch;
   /** Calls a window: MangaDex's API overall (each source and AniList the same), and its page servers' addresses. Tests go faster. */
   pace?: { api: [number, number]; home: [number, number] };
-  /** Where answers are kept: Redis, when the server has one. Without, in memory. */
+  /** Where answers are kept: Redis, when the server has one, or R2 behind memory on the fallback (lib/answers.ts). Without, in memory. */
   store?: Store | null;
   /** Breader's Suwayomi server, when it has one. */
   suwayomi?: string;
@@ -72,6 +72,8 @@ export interface MangaOptions {
   curate?: Curate | null;
   /** Where every page and cover is kept for good, behind the cache (lib/archive.ts). */
   archive?: Archive | null;
+  /** A server short of memory (the fallback): only Browse's first screens of AniList's lists are warmed. */
+  light?: boolean;
 }
 
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
@@ -92,13 +94,16 @@ const ANI_FOUND_KEPT = 30 * 24 * 3_600_000;
 const ANI_WARM_PAGES = 20;
 const ANI_WARM_KIND_PAGES = 5;
 const ANI_WARM_AT_ONCE = 3;
+/** On a light server: what Browse opens on and the page after, and each kind's first. */
+const ANI_WARM_LIGHT_PAGES = 2;
+const ANI_WARM_LIGHT_KIND_PAGES = 1;
 /** The kinds Browse offers (Comics isn't), as it asks AniList for them. */
 const BROWSE_KINDS: readonly MangaKind[] = ['manga', 'manhwa', 'manhua'];
 
 export function makeManga(opts: MangaOptions): Manga {
   const disk = new Disk(opts.dir, opts.cacheBytes, pictureType, opts.archive?.pages ?? null);
   const store = opts.store ?? null;
-  const covers = new Covers(disk, store ?? new MemoryStore(20_000));
+  const covers = new Covers(disk, near(store, 20_000));
   const pace = opts.pace?.api;
   const dex = makeMangaDex({ disk, covers, fetch: opts.fetch, pace: opts.pace, store });
   const anilist = makeAniList({ covers, fetch: opts.fetch, store, pace });
@@ -111,8 +116,7 @@ export function makeManga(opts: MangaOptions): Manga {
     return suwayomi;
   }
 
-  let copyStore: Store = new MemoryStore(500);
-  if (store) copyStore = store;
+  const copyStore = near(store, 500);
   const copyMemo = new Memo<MangaCopies>(copyStore, 'manga:v1:copies', COPIES_FOR, COPIES_KEPT);
   const aniFoundMemo = new Memo<MangaFound[]>(both(new MemoryStore(20_000), copyStore), 'manga:v1:al-found', ANI_FOUND_FOR, ANI_FOUND_KEPT);
 
@@ -169,9 +173,11 @@ export function makeManga(opts: MangaOptions): Manga {
   function aniWarmAsks(): AniListAsk[] {
     const asks: AniListAsk[] = [];
     const ask = (sort: AniListSort, page: number, kinds: MangaKind[]) => asks.push({ sort, page, adult: false, adultOnly: false, kinds });
-    for (let page = 1; page <= ANI_WARM_PAGES; page++) {
+    const pages = opts.light ? ANI_WARM_LIGHT_PAGES : ANI_WARM_PAGES;
+    const kindPages = opts.light ? ANI_WARM_LIGHT_KIND_PAGES : ANI_WARM_KIND_PAGES;
+    for (let page = 1; page <= pages; page++) {
       for (const sort of ANILIST_SORTS) ask(sort, page, [...BROWSE_KINDS]);
-      if (page > ANI_WARM_KIND_PAGES) continue;
+      if (page > kindPages) continue;
       for (const kind of BROWSE_KINDS) {
         for (const sort of ANILIST_SORTS) ask(sort, page, [kind]);
       }

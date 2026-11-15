@@ -157,7 +157,7 @@ export function framesOfPanels(w: number, h: number, quads: Array<Array<[number,
     const found = { quad: q.map(([cx, cy]): [number, number] => [cx, cy]), w, h, round };
     return { x, y, w: Math.max(...xs) / w - x, h: Math.max(...ys) / h - y, quad, found };
   });
-  return { groups: panels.map((b) => ({ box: b, panels: [b] })), panels };
+  return { groups: panels.map((b) => ({ box: b, panels: [b] })), panels, of: { w, h, round } };
 }
 
 /** The model's own answer for a page: its corners in the picture's pixels, and how sure of each. */

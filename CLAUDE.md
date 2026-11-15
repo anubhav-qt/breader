@@ -18,6 +18,9 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - One Render free service (`fb.breader.site`) is the fallback.
 - Supabase (Mumbai) is the only writer. The ThinkPad keeps a copy fed from `change_log`
   (`server/src/mirror/feed.ts`, fed tables in `FED_TABLES`, `server/src/db/schema.ts`).
+- The fallback has 512 MB and no Redis (`light` in `server/src/api.ts`): each kind of answer gets
+  2 MB of memory (`memoryRoom`, `server/src/lib/cache.ts`), no daily prefetch, a small warm-up, and
+  manga's answers kept in R2 under `answers/` so a restart reads them back (`server/src/lib/answers.ts`).
 - The app talks to `primary`, and switches to `fallback` on timeouts and gateway errors
   (`frontend/src/lib/api.ts`).
 - The ThinkPad's voices and panel model run in the `engine` service (ADR 0002,
@@ -34,6 +37,12 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   find panels gets Panels on server in Aa, in the Panels layout, off by default (`serverPanels.ts`).
 - Kept panels (`page_panels`) from an earlier model round move to `page_panels_archive` as the API
   starts (`archiveOlder`, `server/src/panels/kept.ts`), so readers get only the live round's.
+
+- The owner's accounts (`SPEECH_EMAILS`) get thumbs in the Panels layout: on a panel (`panel_votes`)
+  and on the page whole (`page_votes`), also on a page the model gave no panels for
+  (`frontend/src/features/reader/panelVotes.ts`, `server/src/routes/panels.ts`). Panel votes in
+  Settings turns them off and on, on that device. Panel votes only check a round, by their own
+  corners; page votes are to learn from (`ai/panels/README.md`, The owner's votes).
 
 ## In progress
 

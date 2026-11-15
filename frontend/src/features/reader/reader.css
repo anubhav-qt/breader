@@ -351,6 +351,11 @@ html:has(.mgv) { overscroll-behavior-x: none; }
 .mg-vote button svg { width: 20px; height: 20px; }
 .mg-vote button.is-down svg { transform: rotate(180deg); }
 .mg-vote button:hover { opacity: 1; }
+/* Past this mark, the thumbs are on the page whole. */
+.mg-vote-page { display: grid; place-items: center; width: 26px; margin-left: 2px; padding-left: 8px; border-left: 1px solid var(--r-line); color: var(--r-fg); opacity: 0.55; }
+.mg-vote-page svg { width: 18px; height: 18px; }
+/* A page with no panels found: its mark comes first, with no line before it. */
+.mg-vote-page.is-bare { margin-left: 6px; padding-left: 0; border-left: 0; width: 22px; opacity: 0.8; }
 .mg-vote button.is-on { opacity: 1; background: var(--r-acc-soft); color: var(--r-acc); }
 .mg-vote button:focus-visible { outline: 2px solid var(--r-fg); outline-offset: 2px; }
 

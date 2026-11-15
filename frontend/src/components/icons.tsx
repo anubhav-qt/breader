@@ -16,6 +16,10 @@ export const IconPaste = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><rec
 export const IconKey = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><circle cx="8" cy="14" r="4.5" /><path d="m11.3 10.8 8.2-8.2M16.5 5.5l2.5 2.5M14 8l2 2" /></svg>);
 /** A thumb up: good. Turned over, a thumb down. */
 export const IconThumb = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M7.5 10.5v9H5a1.5 1.5 0 0 1-1.5-1.5v-6A1.5 1.5 0 0 1 5 10.5z" /><path d="M7.5 10.5 11 3.5a2.3 2.3 0 0 1 2.5 2.4l-.5 3.6h5.2a2 2 0 0 1 2 2.4l-1.3 6a2 2 0 0 1-2 1.6H7.5" /></svg>);
+/** A page cut into panels: what's beside it is on the page whole. */
+export const IconPagePanels = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><rect x="5" y="3.5" width="14" height="17" rx="2" /><path d="M5 10.5h14M12 10.5v10" /></svg>);
+/** A bare page: one the panel model found no panels on. */
+export const IconPage = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M7 3.5h7l4 4v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" /><path d="M14 3.5v4h4" /></svg>);
 export const IconClose = (p: P) => (<svg {...base} {...p}><path d="M6 6l12 12M18 6 6 18" /></svg>);
 export const IconCheck = (p: P) => (<svg {...base} strokeWidth={2.4} {...p}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
 export const IconPlus = (p: P) => (<svg {...base} strokeWidth={2.3} {...p}><path d="M12 5v14M5 12h14" /></svg>);

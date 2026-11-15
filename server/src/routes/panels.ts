@@ -2,9 +2,9 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { MangaId, MangaPageQuery, PanelSeatAsk, PanelsOffer, PanelVote, SourceId, type ChapterPanels, type PagePanels, type PanelRater, type PanelSeat, type PanelsOffered, type PanelsState, type PanelVotes } from '@breader/shared';
+import { MangaId, MangaPageQuery, PageVote, PanelSeatAsk, PanelsOffer, PanelVote, SourceId, type ChapterPanels, type PagePanels, type PanelRater, type PanelSeat, type PanelsOffered, type PanelsState, type PanelVotes } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
-import { panelVotes } from '../db/schema.ts';
+import { pageVotes, panelVotes } from '../db/schema.ts';
 import { ApiError, parse, readJson, signedOut } from '../lib/errors.ts';
 import { ownerCheck } from '../lib/owner.ts';
 import { readSession } from '../lib/session.ts';
@@ -25,6 +25,7 @@ import { makeKept } from '../panels/kept.ts';
  *
  * The owner, reading in the Panels layout, gives each panel found a thumbs up or down (panel_votes),
  * to train the model on later: its corners as the model gave them, in the pixels of its picture.
+ * And the page whole one too (page_votes): whether all its panels were found right.
  */
 
 const PING_MS = 20_000;
@@ -163,7 +164,25 @@ export function panelRoutes(deps: Deps) {
     await rater(c);
     const { chapter, n } = votePage(c);
     const rows = await deps.db.select({ quad: panelVotes.quad, good: panelVotes.good }).from(panelVotes).where(and(eq(panelVotes.chapter, chapter), eq(panelVotes.n, n)));
-    return c.json({ votes: rows.map((v) => ({ quad: v.quad as Array<[number, number]>, good: v.good })) } satisfies PanelVotes);
+    const [whole] = await deps.db.select({ good: pageVotes.good }).from(pageVotes).where(and(eq(pageVotes.chapter, chapter), eq(pageVotes.n, n)));
+    return c.json({ votes: rows.map((v) => ({ quad: v.quad as Array<[number, number]>, good: v.good })), page: whole?.good ?? null } satisfies PanelVotes);
+  });
+
+  // The page whole: a vote again replaces the last; none takes it back. Safe to send twice.
+  r.post('/panels/:id/:n{[0-9]{1,4}}/votes/page', async (c) => {
+    await rater(c);
+    const { chapter, n } = votePage(c);
+    const v = parse(PageVote, await readJson(c));
+    if (v.good === null) {
+      await deps.db.delete(pageVotes).where(and(eq(pageVotes.chapter, chapter), eq(pageVotes.n, n)));
+    } else {
+      const libraryId = readSession(c, env)?.libraryId ?? null;
+      await deps.db
+        .insert(pageVotes)
+        .values({ chapter, n, quads: v.quads, w: v.w, h: v.h, round: v.round, good: v.good, libraryId })
+        .onConflictDoUpdate({ target: [pageVotes.chapter, pageVotes.n], set: { good: v.good, quads: v.quads, w: v.w, h: v.h, round: v.round, libraryId, at: new Date() } });
+    }
+    return c.json({ ok: true });
   });
 
   // A vote again replaces the last on that panel; none takes it back. Safe to send twice.

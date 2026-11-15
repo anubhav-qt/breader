@@ -378,7 +378,7 @@ describe('votes on panels', () => {
     const id = chapter();
     expect((await owner.post(votes(id), vote(true))).status).toBe(200);
     expect((await owner.post(votes(id), vote(false, HALVES.panels[1]))).status).toBe(200);
-    expect((await owner.get(votes(id))).body).toEqual({ votes: expect.arrayContaining([{ quad: top, good: true }, { quad: HALVES.panels[1], good: false }]) });
+    expect((await owner.get(votes(id))).body).toEqual({ votes: expect.arrayContaining([{ quad: top, good: true }, { quad: HALVES.panels[1], good: false }]), page: null });
     // Changed: still one vote on it.
     expect((await owner.post(votes(id), vote(false))).status).toBe(200);
     const rows = (await primary.pool.query('SELECT n, quad, w, h, round, good, library_id FROM panel_votes WHERE chapter = $1 ORDER BY good, quad', [`md:${id}`])).rows;
@@ -387,9 +387,9 @@ describe('votes on panels', () => {
     expect(rows[0].library_id).toEqual(expect.any(String));
     // Taken back.
     expect((await owner.post(votes(id), vote(null))).status).toBe(200);
-    expect((await owner.get(votes(id))).body).toEqual({ votes: [{ quad: HALVES.panels[1], good: false }] });
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [{ quad: HALVES.panels[1], good: false }], page: null });
     // Another page's are its own.
-    expect((await owner.get(`/v1/panels/${id}/4/votes`)).body).toEqual({ votes: [] });
+    expect((await owner.get(`/v1/panels/${id}/4/votes`)).body).toEqual({ votes: [], page: null });
   });
 
   it('turns away a panel that isn’t one the model could give', async () => {
@@ -403,6 +403,56 @@ describe('votes on panels', () => {
       { ...vote(true), w: 0 },
     ];
     for (const v of bad) expect((await owner.post(votes(id), v)).status).toBe(400);
-    expect((await owner.get(votes(id))).body).toEqual({ votes: [] });
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [], page: null });
+  });
+
+  /** A vote on the page whole, with the panels the model gave for it. */
+  const whole = (good: boolean | null, quads = HALVES.panels) => ({ w: HALVES.w, h: HALVES.h, round: HALVES.round, quads, good });
+
+  it('keeps one vote on a page whole, the latest, with the panels it was on', async () => {
+    const app = appWith(null);
+    const owner = await owned(app);
+    const id = chapter();
+    expect((await owner.post(`${votes(id)}/page`, whole(true))).status).toBe(200);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [], page: true });
+    // Changed: still one vote on it, and no panel's vote made of it.
+    expect((await owner.post(`${votes(id)}/page`, whole(false, [top]))).status).toBe(200);
+    expect((await owner.post(`${votes(id)}/page`, whole(false, [top]))).status).toBe(200);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [], page: false });
+    const rows = (await primary.pool.query('SELECT n, quads, w, h, round, good, library_id FROM page_votes WHERE chapter = $1', [`md:${id}`])).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ n: 3, quads: [top], w: 1000, h: 1500, round: 7, good: false });
+    expect(rows[0].library_id).toEqual(expect.any(String));
+    // A panel's vote and the page's stand apart.
+    expect((await owner.post(votes(id), vote(true))).status).toBe(200);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [{ quad: top, good: true }], page: false });
+    // Another page's is its own.
+    expect((await owner.get(`/v1/panels/${id}/4/votes`)).body).toEqual({ votes: [], page: null });
+    // Taken back, twice over: the panel's vote stays.
+    expect((await owner.post(`${votes(id)}/page`, whole(null))).status).toBe(200);
+    expect((await owner.post(`${votes(id)}/page`, whole(null))).status).toBe(200);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [{ quad: top, good: true }], page: null });
+  });
+
+  it('takes a page’s vote from the owner alone, and only on panels the model could give', async () => {
+    const app = appWith(null);
+    const owner = await owned(app);
+    const { b } = await reader(app);
+    const id = chapter();
+    expect((await b.post(`${votes(id)}/page`, whole(true))).status).toBe(403);
+    expect((await browser(undefined, app).post(`${votes(id)}/page`, whole(true))).status).toBe(403);
+    const bad = [
+      whole(true, [[[0, 0], [1001, 0], [1000, 750], [0, 750]]]),
+      whole(true, [top, [[0, 0], [1000, 0], [1000, 750]]]),
+      whole(true, Array.from({ length: 101 }, () => top)),
+      { ...whole(true), h: 0 },
+      { ...whole(true), good: 'yes' },
+      { w: 1000, h: 1500, round: 7, good: true },
+    ];
+    for (const v of bad) expect((await owner.post(`${votes(id)}/page`, v)).status).toBe(400);
+    expect((await primary.pool.query('SELECT 1 FROM page_votes WHERE chapter = $1', [`md:${id}`])).rows).toEqual([]);
+    // A page the model gave no panels for can still be voted on.
+    expect((await owner.post(`${votes(id)}/page`, whole(false, []))).status).toBe(200);
+    expect((await owner.get(votes(id))).body).toEqual({ votes: [], page: false });
   });
 });

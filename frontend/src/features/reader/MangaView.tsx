@@ -1133,7 +1133,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
           <PanelsNote />
           {moreAt}
           {zones('panel')}
-          <PanelVoteBar book={pics.book} page={at.page} box={step && step.page === at.page ? step.steps[step.k] : null} />
+          <PanelVoteBar book={pics.book} page={at.page} box={step && step.page === at.page ? step.steps[step.k] : null} steps={step && step.page === at.page ? step.steps : undefined} />
         </>
       ) : layout === 'pages' ? (
         <>

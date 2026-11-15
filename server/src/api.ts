@@ -8,7 +8,8 @@ import { fillBlanks } from './jobs/fill.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
 import { asJob, runKind, takeCommands } from './lib/admin.ts';
 import { Archive } from './lib/archive.ts';
-import { archiveTo, connectRedis, MemoryStore, type Redis } from './lib/cache.ts';
+import { r2Answers } from './lib/answers.ts';
+import { archiveTo, connectRedis, memoryRoom, near, type Redis, type Store } from './lib/cache.ts';
 import { makeGemini } from './lib/gemini.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
@@ -40,6 +41,15 @@ const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
 // Answers worth keeping (manga's, AI notes) go to Redis when there's one, so they outlast a restart.
 let redis: Redis | null = null;
 if (env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
+// The fallback has 512 MB and no Redis: each kind of answer it keeps in memory gets this much room
+// (as JSON), so they can't fill it, and it does less ahead of readers (below).
+const light = env.ROLE === 'fallback';
+if (light) memoryRoom(2 * 1024 * 1024);
+const storage = makeStorage(env);
+// And what the sites were asked is kept in R2 behind that memory, so a restart there (Render's free
+// plan sleeps and restarts often) reads it back instead of asking again (lib/answers.ts).
+let answers: Store | null = redis;
+if (!answers && light) answers = r2Answers(storage);
 // The server voice runs on the laptop only: Render's free plan hasn't the processor for it. It reads
 // live for signed-in readers on slow devices. Audiobooks are made on readers' own devices, never here.
 // The engines run it and the panel model, a service of their own, shared out by the scheduler here
@@ -48,7 +58,7 @@ const engine = env.ROLE === 'laptop' ? makeEngine(env) : null;
 const speech = engine ? makeSpeech(env, engine) : null;
 // Manga on both: the fallback reads Suwayomi's sources through the one on AWS (SUWAYOMI_URL), or MangaDex alone without it.
 const mangaOn = env.MANGADEX;
-const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: mangaCacheMb(env) * 1024 * 1024, store: redis };
+const mangaOptions: MangaOptions = { dir: env.MANGA_CACHE_DIR, cacheBytes: mangaCacheMb(env) * 1024 * 1024, store: answers, light };
 // Everything fetched, kept for good on the laptop (lib/archive.ts).
 const archiveMb = mangaArchiveMb(env);
 if (archiveMb > 0) {
@@ -62,7 +72,7 @@ if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
 // which cards don't belong in Browse's tabs (manga/curate.ts).
 const gemini = env.ROLE === 'laptop' ? makeGemini(env) : null;
 if (mangaOn) {
-  mangaOptions.same = makeSame({ groups: pgGroups(primary.pool), gemini, store: redis ?? new MemoryStore(5_000) });
+  mangaOptions.same = makeSame({ groups: pgGroups(primary.pool), gemini, store: near(answers, 5_000) });
   mangaOptions.curate = makeCurate({ checks: pgChecks(primary.pool), gemini });
 }
 const manga = mangaOn ? makeManga(mangaOptions) : null;
@@ -70,7 +80,7 @@ const manga = mangaOn ? makeManga(mangaOptions) : null;
 // free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
 let panels: ReturnType<typeof makePanels> | null = null;
 if (manga && engine) panels = makePanels(env, engine);
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage: makeStorage(env), auth: makeAuth(env, primary.db), speech, manga, panels, engine, redis };
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, panels, engine, redis };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 // Panels from an earlier round of the model go to the archive before any reader is served, so
@@ -99,13 +109,14 @@ if (manga) {
 // And once a day, at 04:00 in India, the first 50 of each of Browse's lists and everything
 // their sheets ask for (manga/prefetch.ts). Here, not in the worker, as MangaDex's limits are one
 // address's and this process keeps to them. Also soon after a start, when the last was over a day
-// ago: the laptop may have been off at that hour.
+// ago: the laptop may have been off at that hour. Not on the fallback: some 900 series' answers
+// and covers at once is more than its memory holds, and a restart there loses them anyway.
 const prefetching = new AbortController();
 let prefetchAt: NodeJS.Timeout | undefined;
 let commands: NodeJS.Timeout | undefined;
 /** What the admin page may ask this process to run now, by command. */
 const runNow: Record<string, () => void> = {};
-if (manga) {
+if (manga && !light) {
   let running = false;
   // `now`: asked for from the admin page, which runs it even while it's switched off there.
   const run = async (now = false) => {

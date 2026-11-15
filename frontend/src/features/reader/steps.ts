@@ -8,9 +8,13 @@ import { same, type Box, type Frames } from './frames';
 /** The whole page, as a step. */
 export const WHOLE: Box = { x: 0, y: 0, w: 1, h: 1 };
 
-/** A page's steps in the order they're read: its panels, or with none, the page whole. */
+/**
+ * A page's steps in the order they're read: its panels, or with none, the page whole. One the panel
+ * model read and gave no panels for says so (Box.whole), so the owner can vote on that too.
+ */
 export function stepsOf(frames: Frames): Box[] {
   if (frames.panels.length) return frames.panels;
+  if (frames.of && frames.of.w >= 1 && frames.of.h >= 1) return [{ ...WHOLE, whole: frames.of }];
   return [WHOLE];
 }
 

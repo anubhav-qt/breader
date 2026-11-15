@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { IconChat, IconEye, IconKey, IconList, IconPencil, IconSettings } from '../../components/icons';
+import { IconChat, IconEye, IconKey, IconList, IconPencil, IconSettings, IconThumb } from '../../components/icons';
 import { DEFAULT_LABELS, LABEL_CHARS, readLabels, renameLabel, type LibraryLabels } from '../../data/labels';
 import { useSyncStatus } from '../../data/sync';
 import { loginError, sendVerification, type AccountState } from '../../lib/account';
 import { springs } from '../../lib/springs';
+import { setVoting, useRater, useVoting } from '../reader/panelVotes';
 import './account.css';
 
 interface Props {
@@ -26,7 +27,8 @@ interface Props {
 }
 
 /**
- * The header's settings: the guide first, then manga's covers on their own, the names of the
+ * The header's settings: the guide first, then manga's covers on their own, for the owner the thumbs
+ * on panels while reading (reader/panelVotes.ts), the names of the
  * switch between libraries, the library key, asking for a feature or giving feedback, and logging
  * in, or who's logged in and logging out.
  */
@@ -38,6 +40,9 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
   const [message, setMessage] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const sync = useSyncStatus();
+  // The owner's accounts only: the thumbs on panels, and on pages whole, in the Panels layout.
+  const rater = useRater();
+  const voting = useVoting();
 
   useEffect(() => {
     if (!open) return;
@@ -152,6 +157,12 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
             {coversOnly !== undefined && (
               <button type="button" role="menuitemcheckbox" aria-checked={coversOnly} className="acct-item acct-toggle" onClick={onCoversOnly}>
                 <IconEye /> Only covers
+                <span className="switch" aria-hidden="true" />
+              </button>
+            )}
+            {rater && (
+              <button type="button" role="menuitemcheckbox" aria-checked={voting} className="acct-item acct-toggle" onClick={() => setVoting(!voting)}>
+                <IconThumb /> Panel votes
                 <span className="switch" aria-hidden="true" />
               </button>
             )}

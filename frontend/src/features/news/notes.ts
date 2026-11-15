@@ -18,8 +18,7 @@ export const NOTES: Note[] = [
     id: '2026-11-15',
     title: 'Neater manga panels',
     lines: [
-      'Panels at the edge of a page now fit their corners.',
-      'Pages are looked at again as you read them.',
+      'Manga panels in the Panels mode now fit better and don’t get unnecessary slants.',
     ],
   },
   {

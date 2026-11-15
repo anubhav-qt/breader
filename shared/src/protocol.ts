@@ -386,8 +386,24 @@ export const PanelVote = z
   .refine((v) => v.quad.every(([x, y]) => x >= 0 && x <= v.w && y >= 0 && y <= v.h), 'That panel isn’t on the page.');
 export type PanelVote = z.infer<typeof PanelVote>;
 
-/** A page's votes, by the corners voted on. */
-export const PanelVotes = z.object({ votes: z.array(z.object({ quad: PanelCorners, good: z.boolean() })) });
+/**
+ * The owner's thumbs up or down on a whole page: whether the model found all its panels right. With
+ * it go the panels the model gave for the page (none, for a page it left whole), so the vote says
+ * what it was on. No `good` takes the vote back.
+ */
+export const PageVote = z
+  .object({
+    w: z.number().int().min(1).max(20_000),
+    h: z.number().int().min(1).max(20_000),
+    round: z.number().int().min(0).max(100_000),
+    quads: z.array(PanelCorners).max(100),
+    good: z.boolean().nullable(),
+  })
+  .refine((v) => v.quads.every((q) => q.every(([x, y]) => x >= 0 && x <= v.w && y >= 0 && y <= v.h)), 'Those panels aren’t on the page.');
+export type PageVote = z.infer<typeof PageVote>;
+
+/** A page's votes, by the corners voted on, and the vote on the page whole (null: none). */
+export const PanelVotes = z.object({ votes: z.array(z.object({ quad: PanelCorners, good: z.boolean() })), page: z.boolean().nullable() });
 export type PanelVotes = z.infer<typeof PanelVotes>;
 
 /** Whether this account votes on panels: the owner's. */

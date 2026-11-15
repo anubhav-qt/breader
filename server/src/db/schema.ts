@@ -581,6 +581,28 @@ export const panelVotes = pgTable(
   (t) => [primaryKey({ columns: [t.chapter, t.n, t.quad] }), index('panel_votes_at_idx').on(t.at)],
 );
 
+/**
+ * The owner's thumbs up (good) or down on a whole page read in the Panels layout: whether the model
+ * found all its panels right (routes/panels.ts). `quads` the panels it gave for the page, as in
+ * panel_votes: none for a page it left whole, where good says it was right to. One vote a page, the
+ * latest. To learn from, where panel_votes only check a round (ai/panels/README.md). Not fed.
+ */
+export const pageVotes = pgTable(
+  'page_votes',
+  {
+    chapter: text('chapter').notNull(),
+    n: integer('n').notNull(),
+    quads: jsonb('quads').notNull(),
+    w: integer('w').notNull(),
+    h: integer('h').notNull(),
+    round: integer('round').notNull(),
+    good: boolean('good').notNull(),
+    libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
+    at: at('at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.chapter, t.n] }), index('page_votes_at_idx').on(t.at)],
+);
+
 /** What the admin page changes: one row, id 1 (shared/src/admin.ts, AdminState). */
 export const adminState = pgTable('admin_state', {
   id: integer('id').primaryKey(),

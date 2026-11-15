@@ -68,6 +68,9 @@ pause after 7 days without activity; the worker and the monitor on `fb.` keep it
    ```
 3. `breader-backups` › Settings › Object lifecycle rules: delete prefix `daily/` after 7 days and
    prefix `weekly/` after 28 days.
+   `breader-files` › Settings › Object lifecycle rules: delete prefix `answers/` after 35 days.
+   Render keeps manga's answers there (step 8), each for a month at most, and R2 forgets nothing
+   by itself.
 4. Manage API tokens, two tokens:
    - **laptop**: Object Read & Write on both buckets → `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`
    - **render**: Object Read & Write on `breader-files` only
@@ -173,7 +176,8 @@ ago), the API fetches the first 100 series of each of Browse's orders, with ever
 each kind alone, and everything their sheets ask for: other places, copies, chapters and covers.
 The status page shows it as **Manga prefetch**. Browse's AniList lists (Popular, Trending, Top
 rated) are warmed every 15 minutes too: the first 20 pages of each (600 series), and 5 of each kind
-alone, each series looked for on the sites and its cover kept. A list's page and where a series is
+alone, each series looked for on the sites and its cover kept. Render, with 512 MB, does less
+ahead of readers: no daily prefetch, and only 2 pages of each list and 1 of each kind. A list's page and where a series is
 read are given straight away for a month, and asked again behind the reader after 6 hours and 3
 days. The app asks where a whole page of series is read in one call
 (`/v1/manga/anilist/found?ids=`), looking up alone only those the server doesn't know yet, and
@@ -190,7 +194,13 @@ don't count as a reader's, so a series only it has touched still looks unread. T
 the SSD**; `MANGA_KEEP=true` or `false` turns it on or off elsewhere. Series for adults show only to readers who turn on
 **Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
 Render has it too, with Suwayomi's sources through the one on AWS (*Suwayomi on AWS for Render*),
-without the panel model: readers' devices find panels there, and panels kept serve all.
+without the panel model: readers' devices find panels there, and panels kept serve all. It has no
+Redis, so each kind of answer gets 2 MB of its memory, the ones used longest ago going first, and
+what the sites were asked (searches, series, chapter lists, where a series is read) is kept in R2
+as well, under `answers/` in `breader-files` (`server/src/lib/answers.ts`): after a restart it's
+read back, not asked again. R2 slow (2 s) or down is a miss, never an error. To stay inside R2's
+free plan, an answer that hasn't changed isn't written again, and a day stops at 20,000 writes
+and 100,000 reads. Only Render writes there; the laptop doesn't.
 
 **Manga sources: Suwayomi.** One more service holds manga for every reader: `suwayomi` runs
 Mihon's extensions, from the Keiyoushi store. The API asks it itself, so a manga search looks in
@@ -349,7 +359,11 @@ S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY = the render token (files bucket only)
 CLIENT_IP_HEADER=cf-connecting-ip                 ADMIN_TOKEN=<same>
 SENTRY_DSN=<the DSN>     PUBLIC_URL=https://fb.breader.example
 GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / RESEND_API_KEY = <same>
+NODE_OPTIONS=--max-old-space-size=256             MALLOC_ARENA_MAX=2
 ```
+
+The last two keep it inside the free plan's 512 MB: Node's heap stops at 256 MB, and glibc keeps
+to 2 arenas, not one for each thread. `npm run stack` gives its fallback the same three limits.
 
 Leave out `MIRROR_URL`, `S3_BACKUP_BUCKET`, `BACKUP_RECIPIENT` and `TUNNEL_TOKEN`; the fallback
 has no copy and makes no backups. Render sets `PORT` itself.

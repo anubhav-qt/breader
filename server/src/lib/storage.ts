@@ -85,6 +85,24 @@ export function makeStorage(env: Env) {
       return r.Body as Readable;
     },
 
+    /** A small object whole (a kept answer, lib/answers.ts), or null when it isn't there. */
+    async read(key: string, signal?: AbortSignal): Promise<Buffer | null> {
+      try {
+        const r = await s3.send(new GetObjectCommand({ Bucket, Key: key }), { abortSignal: signal });
+        if (!r.Body) return null;
+        return Buffer.from(await r.Body.transformToByteArray());
+      } catch (e) {
+        const status = (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+        if (status === 404) return null;
+        throw e;
+      }
+    },
+
+    /** A small object whole, in place of what was there. */
+    async write(key: string, body: Buffer, signal?: AbortSignal): Promise<void> {
+      await s3.send(new PutObjectCommand({ Bucket, Key: key, Body: body, ContentLength: body.length, ContentType: 'application/json' }), { abortSignal: signal });
+    },
+
     /** With a SHA-256 (hex), storage refuses the object unless it arrives intact. */
     async put(key: string, body: Buffer | Readable, size: number, bucket = Bucket, sha256Hex?: string) {
       const checksum = sha256Hex ? { ChecksumSHA256: Buffer.from(sha256Hex, 'hex').toString('base64') } : {};

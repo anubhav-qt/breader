@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { gzipSync } from 'node:zlib';
 import { MANGA_PAGE, type MangaChapter, type MangaChapters, type SourceCard, type SourceSeries } from '@breader/shared';
-import { freshly, Memo, MemoryStore, type Store } from '../lib/cache.ts';
+import { freshly, Memo, MemoryStore, near, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover, Covers, CoverWidth } from './covers.ts';
@@ -429,10 +429,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
   /** Answers of a kind, kept so long (and on until `keep`): in the store when there's one, or else in memory, up to `max` of them. */
   function memo<T>(kind: string, ttl: number, max: number, keep = ttl): Memo<T> {
-    let store: Store;
-    if (opts.store) store = opts.store;
-    else store = new MemoryStore(max);
-    return new Memo<T>(store, `manga:v2:sw-${kind}`, ttl, keep);
+    return new Memo<T>(near(opts.store, max), `manga:v2:sw-${kind}`, ttl, keep);
   }
   const sourceList = memo<RawSource[]>('sources', 10 * MINUTE, 1, KEPT);
   const searches = memo<SearchPage>('search', 10 * MINUTE, 300, KEPT);

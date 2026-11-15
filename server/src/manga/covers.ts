@@ -36,7 +36,11 @@ let encoder: Promise<Sharp | null> | null = null;
 /** sharp, or null where it can't be loaded: covers are then sent as the sites sent them. */
 function sharp(): Promise<Sharp | null> {
   encoder ??= import('sharp').then(
-    (m) => m.default,
+    (m) => {
+      // Each cover is made once, so libvips's cache of past work (50 MB) would only hold memory.
+      m.default.cache(false);
+      return m.default;
+    },
     (err: unknown) => {
       log.warn({ err }, 'sharp couldn’t be loaded, so covers are sent as the sites sent them');
       return null;

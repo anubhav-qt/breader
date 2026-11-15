@@ -103,10 +103,15 @@ services:
     restart: unless-stopped
 
   # The Render copy: same image, no mirror. Stop "api" to watch the app fail over to it.
+  # Render's free plan gives it 512 MB, so it has that here too, and the two settings Render has
+  # (infra/README.md): Node's heap stops at 256 MB, and glibc keeps to 2 arenas.
   fallback:
     <<: *server
+    mem_limit: 512m
     environment:
       ROLE: fallback
+      NODE_OPTIONS: "--max-old-space-size=256"
+      MALLOC_ARENA_MAX: "2"
       S3_PUBLIC_ENDPOINT: "http://localhost:9000"
       PUBLIC_URL: "http://localhost:8788"
     ports: ["8788:8787"]
