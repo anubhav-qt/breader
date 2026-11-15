@@ -123,7 +123,7 @@ export function startPanelModel(): Promise<boolean> {
         modelBroke();
         failed();
       };
-      const r = await call({ type: 'start', model: wantOf(file) }, [], (bytes) => set({ bytes }));
+      const r = await call({ type: 'start', model: wantOf(file), round: file.round }, [], (bytes) => set({ bytes }));
       set({ state: 'ready', bytes: file.size, gpu: !!r.gpu });
       return true;
     } catch (e) {

@@ -235,7 +235,8 @@ time (a tenth of a second a page where the browser lends it the graphics chip, a
 the processor), all but iPhones, iPads and devices with under 4 GB, which can't hold it (it crashed
 Safari on an iPhone 13). Nothing else finds a manga's panels: until the model's ready, and on those
 devices while the laptop has no seat for them, a page nobody's read before shows whole. Device and
-laptop read a page exactly as the trainer's guesser does (`shared/src/panels.ts`, `findPanels`), so
+laptop read a page exactly as the trainer's guesser does (`shared/src/panels.ts`, `findPanels`; from
+round 22 with 40 pixels of blank paper round it, `marginOf`, so panels at a page's edge keep their corners), so
 what they find is what the round was scored on (`ai/panels/README.md`, Keeping the model).
 
 A page's panels, once anyone has them, are kept in Supabase for every reader (`page_panels`, by

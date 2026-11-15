@@ -13,7 +13,7 @@ import sys
 import cv2
 from ultralytics import YOLO
 
-from guess import guess
+from guess import guess, margin_of
 from pages import DATA, MODELS, write
 from score import matched
 
@@ -33,7 +33,7 @@ def main():
     hard = {}
     for r in rows:
         picture = cv2.imread(str(DATA / r["image"]), cv2.IMREAD_COLOR)
-        got = [g["quad"] for g in guess(model, picture, r["width"], r["height"])]
+        got = [g["quad"] for g in guess(model, picture, r["width"], r["height"], margin_of(int(n)))]
         k = missed(r["panels"], got)
         if k:
             hard[r["page"]] = k

@@ -58,9 +58,10 @@ const files = {
 };
 
 /** A page opened as a row of pixels for each of its picture's bytes. */
-const cut = async (data: Uint8Array, model: string) => ({
+const cut = async (data: Uint8Array, model: string, round: number) => ({
   type: 'panels' as const,
   model,
+  round,
   w: 100,
   h: 100 * data.length,
   px: new Uint8Array(data.length),
@@ -73,14 +74,14 @@ afterAll(async () => {
   for (const s of servers) s.close();
 });
 
-async function start(o: { workers?: number; token?: string; panel?: boolean; wait?: () => Promise<void>; free?: () => number } = {}) {
+async function start(o: { workers?: number; token?: string; panel?: boolean; round?: number; wait?: () => Promise<void>; free?: () => number } = {}) {
   const f = fakePool({ wait: o.wait });
   const app = makeEngineApp({
     pool: f.pool,
     size: { workers: o.workers ?? 2, threads: 2, budgetMb: 4_000, lowMb: 500 },
     cores: 4,
     speechDir: '/nowhere',
-    panel: o.panel === false ? null : { file: '/m/live.onnx', round: 9 },
+    panel: o.panel === false ? null : { file: '/m/live.onnx', round: o.round ?? 9 },
     token: o.token,
     files,
     cut,
@@ -154,6 +155,15 @@ describe('an engine', () => {
     const r = await runOn(app, { slot: 0, drop: [], ask: { type: 'panels' } }, new Uint8Array(1));
     expect(unframe(new Uint8Array(await r.arrayBuffer())).head).toMatchObject({ ok: false });
     expect(((await (await app.request('/v1/info')).json()) as { panels: unknown }).panels).toBeNull();
+  });
+
+  it('tells the worker the round of the model, which says how its pages are read', async () => {
+    for (const round of [21, 22]) {
+      const { app, seen } = await start({ round });
+      const r = await runOn(app, { slot: 0, drop: [], ask: { type: 'panels' } }, new Uint8Array(2));
+      expect(unframe(new Uint8Array(await r.arrayBuffer())).head).toMatchObject({ ok: true });
+      expect(seen.map((s) => s.body)).toMatchObject([{ type: 'panels', round }]);
+    }
   });
 
   it('stops a worker when asked, and only one it has', async () => {
@@ -277,7 +287,9 @@ parentPort.on('message', ({ id, body }) => parentPort.postMessage({ id, ok: true
     try {
       const sharp = (await import('sharp')).default;
       const jpeg = await sharp({ create: { width: 40, height: 60, channels: 3, background: '#808080' } }).jpeg().toBuffer();
-      const body = await pixelsOf(new Uint8Array(jpeg), '/m/live.onnx');
+      const body = await pixelsOf(new Uint8Array(jpeg), '/m/live.onnx', 22);
+      // The page as it is: the worker puts its round's blank paper round it (shared findPanels).
+      expect(body.round).toBe(22);
       const r = await pool.run(0, body, [body.px.buffer as ArrayBuffer], []);
       expect(r).toMatchObject({ w: 40, h: 60, samples: 40 * 60 * 3 });
     } finally {

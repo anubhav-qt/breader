@@ -24,6 +24,13 @@ from pages import DATA, DEVICE, GUESSES, MODELS, SIZE, pages, windows, write
 SURE = 0.4
 # A panel this close to a window's cut, in pixels, may be cut by it.
 NEAR = 4
+# The blank paper put round a page before the model sees it, in the page's pixels, and its shade: a
+# panel that runs off the picture's edge has its corners pulled in (50 pixels, on the pages the
+# owner disliked) unless there's paper past it. The same as the app's (shared/src/panels.ts).
+MARGIN = 40
+PAPER = 255
+# The first round read with the margin. The rounds before were kept, for every reader, read without.
+MARGIN_FROM = 22
 
 
 def area(b):
@@ -159,9 +166,21 @@ def ordered(found):
     return cut(found)
 
 
-def guess(model, picture, w, h):
+def margin_of(n):
+    """How wide a margin round n's pages are read with, in pixels: none before MARGIN_FROM."""
+    return MARGIN if n >= MARGIN_FROM else 0
+
+
+def guess(model, picture, w, h, margin=0):
+    """
+    A page's panels. With a margin, the page is read with that many pixels of blank paper put round
+    it, and the panels put back on the page as it is: the same as the app's (shared/src/panels.ts,
+    findPanels).
+    """
+    if margin:
+        picture = cv2.copyMakeBorder(picture, margin, margin, margin, margin, cv2.BORDER_CONSTANT, value=(PAPER, PAPER, PAPER))
     found = []
-    spans = windows(w, h)
+    spans = windows(w + 2 * margin, h + 2 * margin)
     for k, (top, bottom) in enumerate(spans):
         # One panel once, of any class: a round from before (8) knew two kinds of panel.
         r = model.predict(picture[top:bottom], imgsz=SIZE, conf=SURE, device=DEVICE, verbose=False, agnostic_nms=True)[0]
@@ -169,9 +188,9 @@ def guess(model, picture, w, h):
         sure = r.boxes.conf.cpu().numpy()
         points = r.keypoints.data.cpu().numpy()
         for b, s, p in zip(boxes, sure, points):
-            box = (float(b[0]), float(b[1]) + top, float(b[2]), float(b[3]) + top)
-            corners = [(float(x), float(y) + top, float(c)) for x, y, c in p]
-            cut = (k > 0 and box[1] <= top + NEAR) or (k < len(spans) - 1 and box[3] >= bottom - NEAR)
+            cut = (k > 0 and float(b[1]) <= NEAR) or (k < len(spans) - 1 and float(b[3]) + top >= bottom - NEAR)
+            box = (float(b[0]) - margin, float(b[1]) + top - margin, float(b[2]) - margin, float(b[3]) + top - margin)
+            corners = [(float(x) - margin, float(y) + top - margin, float(c)) for x, y, c in p]
             found.append({"box": box, "quad": quad_of(corners, w, h), "sure": float(s), "cut": cut})
     if len(spans) > 1:
         found = merged(found)
@@ -194,7 +213,7 @@ def main():
         if picture is None or picture.shape[:2] != (page["height"], page["width"]):
             print(f"{page['id']}: its picture doesn't read as {page['width']}x{page['height']}, not guessed.")
             continue
-        found = guess(model, picture, page["width"], page["height"])
+        found = guess(model, picture, page["width"], page["height"], margin_of(n))
         write(
             GUESSES / f"{page['id']}.json",
             {

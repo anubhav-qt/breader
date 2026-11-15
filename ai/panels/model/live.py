@@ -9,6 +9,8 @@ guesser's predict does (guess.py): scaled to SIZE on its longer side, then padde
 multiple of 32 (Ultralytics' letterbox for a model that takes any size), not to the square. The app
 reads that from the model's input (shared/src/panels.ts, takesOf) and fits pages the same way, so
 it finds what the guesser finds. Rounds before 21 were exported square, and are still read so.
+A round that only changes how pages are read (22: blank paper round the page, guess.py) has the
+same weights, so the same live.onnx and hash: only live.json's round moves on.
 
     npm --prefix ai run panels-live -- 21
 """

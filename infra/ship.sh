@@ -112,7 +112,7 @@ step_test() {
 standInsUp() {
   local port
   for port in 54322 54333 9000; do
-    if ! nc -z localhost "$port" 2> /dev/null; then
+    if ! (exec 3<> "/dev/tcp/localhost/$port") 2> /dev/null; then
       return 1
     fi
   done

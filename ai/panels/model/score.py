@@ -17,7 +17,7 @@ import sys
 import cv2
 from ultralytics import YOLO
 
-from guess import guess, iou
+from guess import guess, iou, margin_of
 from pages import DATA, MODELS, write
 
 # A guess is the marked panel it overlaps most, if they overlap at least this much.
@@ -92,7 +92,7 @@ def main():
         panels, missed, extra, in_order, spot_on, worst_pages = [], 0, 0, 0, 0, []
         for row in pages:
             picture = cv2.imread(str(DATA / row["image"]), cv2.IMREAD_COLOR)
-            guessed = [g["quad"] for g in guess(model, picture, row["width"], row["height"])]
+            guessed = [g["quad"] for g in guess(model, picture, row["width"], row["height"], margin_of(n))]
             marked = row["panels"]
             pairs = matched(marked, guessed)
             missed += len(marked) - len(pairs)
@@ -119,8 +119,9 @@ def main():
             "all": summary(panels),
             "worst pages (missed + extra, worst corner px)": [f"{p}: {m} wrong, {w}px" for m, w, p in sorted(worst_pages, reverse=True)[:15]],
         }
-    write(out / "score.json", {"round": n, **result})
-    print(json.dumps({"round": n, **result}, indent=1))
+    result = {"round": n, "margin": margin_of(n), **result}
+    write(out / "score.json", result)
+    print(json.dumps(result, indent=1))
 
 
 if __name__ == "__main__":

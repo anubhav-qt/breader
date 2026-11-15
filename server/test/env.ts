@@ -12,7 +12,8 @@ export const testEnv: Record<string, string> = {
   NODE_ENV: 'test',
   LOG_LEVEL: 'silent',
   ROLE: 'laptop',
-  PRIMARY_URL: 'postgres://postgres:postgres@localhost:54322/breader_test',
+  // TEST_PRIMARY_URL: another Postgres, where something else has the stack's port (a local Supabase takes 54322 too).
+  PRIMARY_URL: process.env.TEST_PRIMARY_URL ?? 'postgres://postgres:postgres@localhost:54322/breader_test',
   MIRROR_URL: 'postgres://breader:breader@localhost:54333/breader_test',
   KEY_PEPPER: dev.KEY_PEPPER,
   SESSION_SECRET: dev.SESSION_SECRET,

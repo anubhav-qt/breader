@@ -185,7 +185,7 @@ let sharp: Promise<Sharp> | null = null;
  * OpenCV: turned as its camera said, with no colour profile applied. The worker fits them to the
  * model (shared findPanels), off the API's thread.
  */
-export async function pixelsOf(data: Uint8Array, model: string): Promise<Extract<Body, { type: 'panels' }>> {
+export async function pixelsOf(data: Uint8Array, model: string, round: number): Promise<Extract<Body, { type: 'panels' }>> {
   sharp ??= import('sharp').then((m) => m.default);
   const img = (await sharp)(data, { ignoreIcc: true, autoOrient: true });
   // What a picture leaves clear, OpenCV has as the colour under it, and a GIF's as white.
@@ -195,7 +195,7 @@ export async function pixelsOf(data: Uint8Array, model: string): Promise<Extract
   if (channels !== 3) throw new Error(`The page came out with ${channels} channels.`);
   // A copy in memory of its own, to hand to the worker whole: Node won't hand over sharp's.
   const px = new Uint8Array(rgb);
-  return { type: 'panels', model, w, h, px };
+  return { type: 'panels', model, round, w, h, px };
 }
 
 export interface EngineDeps {
@@ -267,7 +267,7 @@ export function makeEngineApp(d: EngineDeps) {
         body = ask.type === 'load' ? { type: 'load', key, files: f } : { type: 'say', key, files: f, text: ask.text, speed: ask.speed };
       } else if (ask.type === 'panels') {
         if (!d.panel) return answer({ ok: false, error: 'This engine hasn’t the panel model.' });
-        body = await cut(bytes, d.panel.file);
+        body = await cut(bytes, d.panel.file, d.panel.round);
         transfer = [body.px.buffer as ArrayBuffer];
       } else {
         return c.json({ error: 'No such job.' }, 400);

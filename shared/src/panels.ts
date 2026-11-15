@@ -22,6 +22,18 @@ const SAME = 0.7;
 const NEAR = 4;
 /** The grey the model's square is padded with around a picture. */
 export const PAD = 114;
+/**
+ * The blank paper put round a page before the model sees it, in the page's pixels, and its shade: a
+ * panel that runs off the picture's edge has its corners pulled in (50 pixels, on the pages the
+ * owner disliked) unless there's paper past it. The same as the guesser's (guess.py).
+ */
+export const MARGIN = 40;
+const PAPER = 255;
+/** The first round read with the margin. The rounds before were kept, for every reader, read without. */
+const MARGIN_FROM = 22;
+
+/** How wide a margin a round's pages are read with, in pixels: none before MARGIN_FROM. */
+export const marginOf = (round: number): number => (round >= MARGIN_FROM ? MARGIN : 0);
 
 type Pt = [number, number];
 /** x0, y0, x1, y1 in pixels. */
@@ -101,10 +113,14 @@ export function fitOf(w: number, h: number, rect: boolean): Fit {
   };
 }
 
-/** How a model takes its pictures: any size (`rect`) or only the square, and how many at once. */
+/**
+ * How a model takes its pictures: any size (`rect`) or only the square, how many at once, and how
+ * much blank paper its round's pages are read with round them (marginOf).
+ */
 export interface Takes {
   rect: boolean;
   batch: number;
+  margin: number;
 }
 
 /**
@@ -116,12 +132,14 @@ const BATCH = 2;
 
 /**
  * How a model takes its pictures, by its input's shape: a side named, not numbered, is any size.
- * Unknown, it's the square, one at a time, as every round before 21 was.
+ * Unknown, it's the square, one at a time, as every round before 21 was. And by its `round`: how
+ * wide a margin its pages are read with.
  */
-export function takesOf(shape: ReadonlyArray<number | string> | undefined): Takes {
+export function takesOf(shape: ReadonlyArray<number | string> | undefined, round: number): Takes {
+  const margin = marginOf(round);
   const any = (d: number | string | undefined) => typeof d !== 'number' || d < 0;
-  if (!shape || shape.length !== 4) return { rect: false, batch: 1 };
-  return { rect: any(shape[2]) || any(shape[3]), batch: any(shape[0]) ? BATCH : 1 };
+  if (!shape || shape.length !== 4) return { rect: false, batch: 1, margin };
+  return { rect: any(shape[2]) || any(shape[3]), batch: any(shape[0]) ? BATCH : 1, margin };
 }
 
 const area = (b: Rect) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
@@ -396,10 +414,41 @@ export function squareOf(px: ArrayLike<number>, w: number, channels: number, [to
   return into;
 }
 
-/** A page's panels from the model's answer for each of its windows, `outs[k]` as it comes ([1, 16 + classes, n]). */
-export function pagePanels(outs: Array<{ out: Float32Array; n: number; fit: Fit; span: [number, number] }>, w: number, h: number): { panels: Pt[][]; sure: number[] } {
+/**
+ * A page with `margin` pixels of blank paper put round it, as the guesser's cv2.copyMakeBorder
+ * does: its pixels, `channels` to each, w + 2 margin across.
+ */
+export function withMargin(px: ArrayLike<number>, w: number, h: number, channels: number, margin: number): Uint8Array {
+  const wide = w + 2 * margin;
+  const out = new Uint8Array(wide * (h + 2 * margin) * channels).fill(PAPER);
+  const row = w * channels;
+  const view = ArrayBuffer.isView(px) ? new Uint8Array(px.buffer, px.byteOffset, px.byteLength) : null;
+  for (let y = 0; y < h; y++) {
+    const to = ((y + margin) * wide + margin) * channels;
+    if (view) out.set(view.subarray(y * row, (y + 1) * row), to);
+    else for (let i = 0; i < row; i++) out[to + i] = px[y * row + i];
+  }
+  return out;
+}
+
+/** A panel found on a page with a margin round it, put back on the page as it is, w by h. */
+function offMargin(f: Found, margin: number, w: number, h: number): Found {
+  const on = (v: number, most: number) => Math.min(Math.max(v - margin, 0), most);
+  const [x0, y0, x1, y1] = f.box;
+  return { ...f, box: [x0 - margin, y0 - margin, x1 - margin, y1 - margin], quad: f.quad.map(([x, y]): Pt => [on(x, w), on(y, h)]) };
+}
+
+/**
+ * A page's panels from the model's answer for each of its windows, `outs[k]` as it comes
+ * ([1, 16 + classes, n]). With a `margin`, the windows are of the page with that much paper round
+ * it, and the panels come back on the page as it is, w by h.
+ */
+export function pagePanels(outs: Array<{ out: Float32Array; n: number; fit: Fit; span: [number, number] }>, w: number, h: number, margin = 0): { panels: Pt[][]; sure: number[] } {
   const found: Found[] = [];
-  for (const [k, o] of outs.entries()) found.push(...panelsIn(o.out, o.n, o.fit, o.span, k === outs.length - 1, k === 0, w, h));
+  for (const [k, o] of outs.entries()) {
+    const some = panelsIn(o.out, o.n, o.fit, o.span, k === outs.length - 1, k === 0, w + 2 * margin, h + 2 * margin);
+    found.push(...(margin ? some.map((f) => offMargin(f, margin, w, h)) : some));
+  }
   const panels = ordered(outs.length > 1 ? merged(found) : found);
   return { panels: panels.map((p) => p.quad), sure: panels.map((p) => Math.round(p.sure * 1000) / 1000) };
 }
@@ -413,9 +462,14 @@ export type RunModel = (input: Float32Array, k: number, fit: Fit) => Promise<{ o
 /**
  * A page's panels, found the way the guesser (guess.py) finds them: each window fitted as its
  * predict does, run, and the panels read back, joined up and put in order. `px` is the page's
- * pixels, `channels` to each, red first; `takes` how the model takes them (takesOf).
+ * pixels, `channels` to each, red first; `takes` how the model takes them, and with how much blank
+ * paper round the page (takesOf).
  */
-export async function findPanels(px: ArrayLike<number>, w: number, h: number, channels: number, takes: Takes, run: RunModel): Promise<{ panels: Pt[][]; sure: number[] }> {
+export async function findPanels(page: ArrayLike<number>, pageW: number, pageH: number, channels: number, takes: Takes, run: RunModel): Promise<{ panels: Pt[][]; sure: number[] }> {
+  const { margin } = takes;
+  const px = margin ? withMargin(page, pageW, pageH, channels, margin) : page;
+  const w = pageW + 2 * margin;
+  const h = pageH + 2 * margin;
   const spans = windows(w, h);
   // A strip's windows are all one size.
   const fit = fitOf(w, spans[0][1] - spans[0][0], takes.rect);
@@ -429,5 +483,5 @@ export async function findPanels(px: ArrayLike<number>, w: number, h: number, ch
     const each = out.length / some.length;
     some.forEach((span, k) => outs.push({ out: out.subarray(k * each, (k + 1) * each), n, fit, span }));
   }
-  return pagePanels(outs, w, h);
+  return pagePanels(outs, pageW, pageH, margin);
 }

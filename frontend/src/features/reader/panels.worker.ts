@@ -17,7 +17,8 @@ import { hosted, load, type Want } from './voice/store';
 type Ort = typeof import('onnxruntime-web');
 
 export type PanelsWork =
-  | { type: 'start'; model: Want }
+  /** The model, and its round: a round says how its pages are read (shared marginOf). */
+  | { type: 'start'; model: Want; round: number }
   /** The page's picture: its file, opened here, or the picture itself. */
   | { type: 'find'; pic: Blob | ImageBitmap };
 export type PanelsAsk = PanelsWork & { id: number };
@@ -31,7 +32,7 @@ const scope = self as unknown as DedicatedWorkerGlobalScope;
 let ort: Ort | null = null;
 let session: InferenceSession | null = null;
 /** How the model takes its pictures (shared takesOf). */
-let takes: Takes = takesOf(undefined);
+let takes: Takes = takesOf(undefined, 0);
 /**
  * On the graphics chip, a model that takes any size is about a third faster made for one size
  * (measured in Chrome: 107 ms a page, not 152), with the same answers, but making one takes about
@@ -54,7 +55,7 @@ const shapeOf = (s: InferenceSession) => {
   return m && m.isTensor ? m.shape : undefined;
 };
 
-async function start(id: number, model: Want) {
+async function start(id: number, model: Want, round: number) {
   const gpu = !!(await (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu?.requestAdapter().catch(() => null));
   let bytes = 0;
   const heard = (n: number) => {
@@ -70,7 +71,7 @@ async function start(id: number, model: Want) {
     try {
       session = await ort.InferenceSession.create(onnx, { executionProviders: ['webgpu'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
       const shape = shapeOf(session);
-      takes = takesOf(shape);
+      takes = takesOf(shape, round);
       if (takes.rect && shape) anySize = { onnx, names: [...shape] };
       return { gpu: true };
     } catch (e) {
@@ -78,7 +79,7 @@ async function start(id: number, model: Want) {
     }
   }
   session = await ort.InferenceSession.create(onnx, { executionProviders: ['wasm'], graphOptimizationLevel: 'all', logSeverityLevel: 3 });
-  takes = takesOf(shapeOf(session));
+  takes = takesOf(shapeOf(session), round);
   return { gpu: false };
 }
 
@@ -154,7 +155,7 @@ scope.onmessage = (e: MessageEvent<PanelsAsk>) => {
   const m = e.data;
   waiting += 1;
   line = line
-    .then((): Promise<object> => (m.type === 'start' ? start(m.id, m.model) : find(m.pic)))
+    .then((): Promise<object> => (m.type === 'start' ? start(m.id, m.model, m.round) : find(m.pic)))
     .then(
       (r) => scope.postMessage({ id: m.id, ok: true, ...r } satisfies PanelsReply),
       (err: unknown) => scope.postMessage({ id: m.id, ok: false, error: err instanceof Error ? err.message : String(err) } satisfies PanelsReply),

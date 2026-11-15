@@ -99,6 +99,39 @@ npm --prefix ai run panels-guess
 
 Guesses again with the latest round, say for a set fetched since.
 
+### Blank paper round the page
+
+From round 22 a page is read with 40 pixels of white paper round it (`model/guess.py`, `MARGIN`;
+in the app and on the laptop `shared/src/panels.ts`, `marginOf`), and the panels put back where they
+are on the page. A panel that runs off the picture's edge had its two corners there pulled in by
+about 50 pixels: with paper past the edge the model sees where the panel stops. Round 22 is round
+21's weights as they are, read so; earlier rounds are still read without, as they were scored. On
+the 771 labelled pages: pages with every corner right 48 to 105, the worst corner of a panel
+typically 9.0 to 4.2 pixels, corners within 10 pixels 52% to 79%. White, grey and black paper and
+8 to 96 pixels were tried: black is worse, the rest much the same.
+
+### The owner's votes
+
+The owner can put a thumb up or down on each panel while reading in the Panels layout
+(`panel_votes`, `server/src/routes/panels.ts`; nobody else can). They are the check on pages no
+round has learned from, as readers get them: a liked panel has to come out where it was, a disliked
+one somewhere else.
+
+```bash
+npm --prefix ai run panels-votes                  # the latest round
+PANELS_ROUND=22 npm --prefix ai run panels-votes  # a given one
+```
+
+Reads `data/votes/votes.json` (an export of `panel_votes`: `{exportedAt, pages: [{chapter, n, url,
+title}], votes: [{chapter, n, quad, w, h, round, good}]}`, kept in the owner's private votes
+repository), fetches each voted page once into `data/votes/pages/`, guesses it as `guess.py` does,
+and writes `data/model/round-N/votes.json`: the share of likes that stayed (every corner within a
+hundredth of the page's longer side) and of dislikes that changed. For each page with a vote that
+didn't hold it draws `data/votes/round-N/NNNN.jpg`, the votes on the left and the round's panels on
+the right: look at every one before a round goes live, since a liked panel that moved may have
+moved to the better. On 634 votes, round 21: likes kept 99.8%, dislikes changed 0%. Round 22: likes
+kept 78.1% (117 moved, 5 gone), dislikes changed 100%.
+
 ### Trials, held back by series
 
 By default a round is a trial: it holds back about 15% of the series (picked by a fixed seed, so

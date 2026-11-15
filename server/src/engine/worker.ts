@@ -28,7 +28,8 @@ export type Body =
   | { type: 'load'; key: string; files: VoiceFiles }
   | { type: 'say'; key: string; files: VoiceFiles; text: string; speed: number }
   /** A page's panels, from its pixels, red first, three to each. */
-  | { type: 'panels'; model: string; w: number; h: number; px: Uint8Array };
+  /** A page's pixels, and the model's round: a round says how its pages are read (shared takesOf). */
+  | { type: 'panels'; model: string; round: number; w: number; h: number; px: Uint8Array };
 
 export interface Message {
   id: number;
@@ -134,7 +135,7 @@ function mp3(audio: Float32Array, rate: number) {
 async function panels(b: Extract<Body, { type: 'panels' }>) {
   const s = await open(PANELS, b.model);
   const m = s.inputMetadata[0];
-  const found = await findPanels(b.px, b.w, b.h, 3, takesOf(m?.isTensor ? m.shape : undefined), async (input, k, fit) => {
+  const found = await findPanels(b.px, b.w, b.h, 3, takesOf(m?.isTensor ? m.shape : undefined, b.round), async (input, k, fit) => {
     const out = await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', input, [k, 3, fit.tall, fit.wide]) });
     const t = out[s.outputNames[0]] as ort.Tensor;
     return { out: t.data as Float32Array, n: t.dims[2] };

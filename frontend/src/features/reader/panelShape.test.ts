@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import opencv from './opencvResize.json';
-import { findPanels, fitOf, merged, PAD, panelsIn, quadOf, squareOf, SURE, takesOf, windows } from '@breader/shared/panels';
+import { findPanels, fitOf, MARGIN, marginOf, merged, PAD, panelsIn, quadOf, squareOf, SURE, takesOf, windows, withMargin } from '@breader/shared/panels';
 
 // A slanted panel's corners, each with how sure the model is of it, on a 1000 x 1000 page.
 const slant: Array<[number, number, number]> = [
@@ -133,11 +133,11 @@ describe('a page fitted to the model, as the guesser does it', () => {
   });
 
   it('knows how a model takes its pictures by its input', () => {
-    expect(takesOf(['batch', 3, 'height', 'width'])).toEqual({ rect: true, batch: 2 });
-    expect(takesOf([1, 3, -1, -1])).toEqual({ rect: true, batch: 1 });
+    expect(takesOf(['batch', 3, 'height', 'width'], 21)).toEqual({ rect: true, batch: 2, margin: 0 });
+    expect(takesOf([1, 3, -1, -1], 21)).toEqual({ rect: true, batch: 1, margin: 0 });
     // Round 7, live before round 21: the square, one at a time.
-    expect(takesOf([1, 3, 1024, 1024])).toEqual({ rect: false, batch: 1 });
-    expect(takesOf(undefined)).toEqual({ rect: false, batch: 1 });
+    expect(takesOf([1, 3, 1024, 1024], 7)).toEqual({ rect: false, batch: 1, margin: 0 });
+    expect(takesOf(undefined, 0)).toEqual({ rect: false, batch: 1, margin: 0 });
   });
 
   it('scales a picture exactly as OpenCV does, to the shade', () => {
@@ -175,7 +175,7 @@ describe('a page fitted to the model, as the guesser does it', () => {
     const r = 0.3671566869845823;
     const at = (v: number, pad = 0) => v * r + pad;
     let asked: number[] = [];
-    const found = await findPanels(new Uint8Array(1782 * 2789 * 3), 1782, 2789, 3, { rect: true, batch: 2 }, async (input, k, fit) => {
+    const found = await findPanels(new Uint8Array(1782 * 2789 * 3), 1782, 2789, 3, { rect: true, batch: 2, margin: 0 }, async (input, k, fit) => {
       asked = [input.length, k, fit.wide, fit.tall];
       const q: Array<[number, number, number]> = [[at(100, 9), at(100), 1], [at(900, 9), at(100), 1], [at(900, 9), at(1000), 1], [at(100, 9), at(1000), 1]];
       return { out: new Float32Array([at(500, 9), at(550), at(800), at(900), 0.9, ...q.flat()]), n: 1 };
@@ -193,13 +193,13 @@ describe('a page fitted to the model, as the guesser does it', () => {
       return { out: new Float32Array(k * 17), n: 1 };
     };
     const runs: number[] = [];
-    await findPanels(new Uint8Array(w * h * 4), w, h, 4, { rect: true, batch: 2 }, run(runs));
+    await findPanels(new Uint8Array(w * h * 4), w, h, 4, { rect: true, batch: 2, margin: 0 }, run(runs));
     expect(runs.reduce((a, b) => a + b, 0)).toBe(windows(w, h).length);
     expect(runs.every((k) => k <= 2)).toBe(true);
     expect(runs.length).toBe(Math.ceil(windows(w, h).length / 2));
     // One that takes one at a time is given one at a time.
     const ones: number[] = [];
-    await findPanels(new Uint8Array(w * h * 4), w, h, 4, { rect: false, batch: 1 }, run(ones));
+    await findPanels(new Uint8Array(w * h * 4), w, h, 4, { rect: false, batch: 1, margin: 0 }, run(ones));
     expect(ones).toEqual(windows(w, h).map(() => 1));
   });
 });
@@ -216,5 +216,65 @@ describe("a strip's pieces joined", () => {
       [620, 1500],
       [110, 1480],
     ]);
+  });
+});
+
+describe('a page read with blank paper round it', () => {
+  it('is for round 22 on: the rounds before were kept read without', () => {
+    expect([7, 21, 22, 23].map(marginOf)).toEqual([0, 0, MARGIN, MARGIN]);
+    // A model says it with how it takes its pictures, whatever its input's shape.
+    expect(takesOf(['batch', 3, 'height', 'width'], 22)).toEqual({ rect: true, batch: 2, margin: MARGIN });
+    expect(takesOf(undefined, 22).margin).toBe(MARGIN);
+  });
+
+  it('puts white round the picture and leaves the picture as it is', () => {
+    // Two pixels by two, three numbers each.
+    const px = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    const white = [255, 255, 255];
+    const want = [
+      ...white, ...white, ...white, ...white,
+      ...white, 1, 2, 3, 4, 5, 6, ...white,
+      ...white, 7, 8, 9, 10, 11, 12, ...white,
+      ...white, ...white, ...white, ...white,
+    ];
+    expect([...withMargin(px, 2, 2, 3, 1)]).toEqual(want);
+    // A canvas's pixels (four each), and a view part way into its memory, read the same.
+    const held = new Uint8ClampedArray(20);
+    const canvas = held.subarray(4);
+    canvas.set([1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255]);
+    const out = withMargin(canvas, 2, 2, 4, 1);
+    expect(out.length).toBe(4 * 4 * 4);
+    expect([...out.subarray(20, 28)]).toEqual([1, 2, 3, 255, 4, 5, 6, 255]);
+    expect([...out.subarray(36, 44)]).toEqual([7, 8, 9, 255, 10, 11, 12, 255]);
+  });
+
+  // A page this wide and tall is the model's 1024 square with its margin: the model's pixels are the page's, a margin on.
+  const side = 1024 - 2 * MARGIN;
+  const far = 1024 - MARGIN;
+  const run = (seen: number[], q: Array<[number, number, number]>) => async (input: Float32Array, k: number, fit: { wide: number; tall: number }) => {
+    seen.push(k, fit.wide, fit.tall, input[0], input[MARGIN * 1024 + MARGIN - 1], input[MARGIN * 1024 + MARGIN]);
+    return { out: new Float32Array([512, 512, side, side, 0.9, ...q.flat()]), n: 1 };
+  };
+  const edgeToEdge: Array<[number, number, number]> = [[MARGIN, MARGIN, 1], [far, MARGIN, 1], [far, far, 1], [MARGIN, far, 1]];
+
+  it('shows the model the page with its margin, and puts the panels back on the page', async () => {
+    const seen: number[] = [];
+    const found = await findPanels(new Uint8Array(side * side * 3), side, side, 3, takesOf(['batch', 3, 'height', 'width'], 22), run(seen, edgeToEdge));
+    // One picture, the square: white at its corner and up to the page, the page's own black from there.
+    expect(seen).toEqual([1, 1024, 1024, 1, 1, 0]);
+    expect(found.panels).toEqual([[[0, 0], [side, 0], [side, side], [0, side]]]);
+  });
+
+  it('keeps a corner found out in the margin on the page', async () => {
+    const q: Array<[number, number, number]> = [[MARGIN - 28, MARGIN - 10, 1], [far + 26, MARGIN + 5, 1], [far + 16, far + 36, 1], [MARGIN + 100, 500, 1]];
+    const found = await findPanels(new Uint8Array(side * side * 3), side, side, 3, takesOf(['batch', 3, 'height', 'width'], 22), run([], q));
+    expect(found.panels).toEqual([[[0, 0], [side, 5], [side, side], [100, 500 - MARGIN]]]);
+  });
+
+  it('reads a page as before without one', async () => {
+    const seen: number[] = [];
+    const found = await findPanels(new Uint8Array(1024 * 1024 * 3), 1024, 1024, 3, takesOf(['batch', 3, 'height', 'width'], 21), run(seen, edgeToEdge));
+    expect(seen.slice(0, 4)).toEqual([1, 1024, 1024, 0]);
+    expect(found.panels).toEqual([[[MARGIN, MARGIN], [far, MARGIN], [far, far], [MARGIN, far]]]);
   });
 });
