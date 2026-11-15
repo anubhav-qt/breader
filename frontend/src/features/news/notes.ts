@@ -19,6 +19,7 @@ export const NOTES: Note[] = [
     title: 'Neater manga panels',
     lines: [
       'Panels at the edge of a page now fit their corners.',
+      'Pages are looked at again as you read them.',
     ],
   },
   {

@@ -96,6 +96,8 @@ if (!done) {
   await writeFile(join(out, 'model.json'), JSON.stringify({ round, size, sha256: oid, parts }));
   console.log(`panels: round ${round}, ${(size / 1e6).toFixed(1)} MB in ${n} parts`);
 } else {
+  // A round can keep the model's bytes and change only how pages are read (22), so say which again.
+  await writeFile(join(out, 'model.json'), JSON.stringify({ round, size, sha256: oid, parts }));
   console.log(`panels: round ${round} present`);
 }
 // Parts of a round before.
