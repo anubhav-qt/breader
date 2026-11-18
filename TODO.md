@@ -4,6 +4,10 @@
 - [ ] Check how all the demos look for new users.
 - [ ] Add demos for every single thing in the guide.
 
+## Feedback replies (admin page)
+- [ ] A **Working** button on each feedback: next time that account opens Breader, a subtle toast, once only: "Your feedback is being worked on, thanks for taking your time to help improve Breader!"
+- [ ] A **Done** button on each feedback, with a short one-liner of what was built: that account gets a modal once, like the release notes: "Your feedback has been implemented!" and the one-liner. Only the account that sent it.
+
 ## Input mode setting
 - [ ] Add a setting for **mouse-first** (default) or **keyboard-first**.
   - Mouse-first is what the current design assumes: left nav, hover reveals, clicks.
