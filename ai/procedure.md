@@ -238,7 +238,8 @@ Then the harder cases:
 - **A voice the text doesn't identify:** `unknown-man` or `unknown-woman` when the text says which ("a man's voice", "she"). Otherwise `unknown`.
 - **Identity reveals:** if a voice is later revealed as a known character and the reveal is meant to surprise, keep the unknown id until the reveal paragraph. Mark by who the reader knows is speaking at that point.
 - **The other end of a phone, radio or recording:** the person speaking there.
-- **Quoted words inside speech** (“She told me, ‘never come back,’ and left”) belong to the outer speaker, who is saying them.
+- **Someone else's words quoted inside a line** (“She told me, ‘never come back,’ and left”) are read in that person's voice. Add them by their exact words with that person's id, inside the line: `12:4 "never come back" elena`. The rest of the line stays with its speaker, and the tool cuts it around them. This holds however long the quoted words are: a whole message retold, a letter read out, a woman's words a man repeats. Leave them with the speaker when they quote themselves, or when the quoted words are no one's speech (a saying, a word as a word).
+- **The speech tag names the speaker:** in “…,” Elena said or Marlo laughed: “…”, the line is Elena's or Marlo's, never the last person who spoke. Check every tag that names someone against the mark. `check` lists lines whose tag names someone else, and they're read again before the book is packed.
 - **A first-person narrator's own dialogue:** the narrator's id.
 - **Animals, machines and spirits:** as the book refers to them. "It" means N.
 - **Two readings that still fit after rereading:** take the likelier one, add `?`, and write one line under "Unsure lines" in `research.md`.
@@ -385,11 +386,12 @@ One line per mark. Blank lines and lines starting with `#` are ignored.
 | `12:3.1 -` | Quote 1 of 12:3 isn't speech |
 | `12:5 "I should never have come back" elena think` | Speech the tool didn't number, by its exact words. `think` marks a thought |
 | `12:9@2 "No" marlo` | The second "No" in 12:9 |
+| `12:4.1 marlo` and `12:4 "never come back" elena` | Quote 1 is Marlo's, but the words he quotes Elena saying are hers |
 | `rest -` | Every quote in this part not marked above isn't speech. Only for front matter and nonfiction |
 
 - Copy the words exactly as the paragraph has them. Quote marks, capitals and spacing don't need to match.
 - To change a numbered quote's extent, mark it `-` and add the right words as a new line.
-- Two marks can't overlap.
+- Two marks can't overlap, except someone else's words inside a line (5.2): those sit wholly inside it, and the line is cut around them.
 - Never give a speaker with `rest`. Mark speech one line at a time.
 
 A small file:

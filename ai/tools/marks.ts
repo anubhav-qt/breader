@@ -156,14 +156,44 @@ export function readMarks(book: Book): Marks {
     }
   }
 
-  out.spans.sort((a, b) => cmp([a.s, a.b], [b.s, b.b]) || a.start - b.start);
-  for (let i = 1; i < out.spans.length; i++) {
-    const a = out.spans[i - 1];
-    const b = out.spans[i];
-    if (a.s === b.s && a.b === b.b && b.start < a.end) {
-      out.errors.push(`${b.where}: overlaps ${a.where} in ${a.s}:${a.b}; mark the numbered quote "-" before adding words inside it`);
-    }
-  }
+  // A line before the words inside it: the longer of two that start together goes first.
+  out.spans.sort((a, b) => cmp([a.s, a.b], [b.s, b.b]) || a.start - b.start || b.end - a.end);
+  out.spans = nest(out.spans, (sp) => blockAt(book, [sp.s, sp.b])?.text ?? '', out.errors);
   out.narration.sort((a, b) => cmp(a.at, b.at));
+  return out;
+}
+
+const SAYABLE = /[\p{L}\p{N}]/u;
+
+/**
+ * Someone else's words quoted inside a line ("She told me, ‘never come back’"), added by their
+ * words with that person's id (procedure.md, 5.2): the line is cut around them, so they're read in
+ * that person's voice and the rest stays with the speaker. A piece left with nothing to say (just
+ * the opening quote mark) goes. Any other two marks over each other are an error.
+ */
+export function nest(spans: Span[], textOf: (sp: Span) => string, errors: string[]): Span[] {
+  const out: Span[] = [];
+  const keep = (sp: Span) => {
+    if (SAYABLE.test(textOf(sp).slice(sp.start, sp.end))) out.push(sp);
+  };
+  for (const sp of spans) {
+    const line = out[out.length - 1];
+    const sameBlock = line !== undefined && line.s === sp.s && line.b === sp.b;
+    if (!sameBlock || sp.start >= line.end) {
+      out.push(sp);
+      continue;
+    }
+    const whole = sp.start === line.start && sp.end === line.end;
+    const inside = sp.via === 'words' && sp.start >= line.start && sp.end <= line.end && !whole;
+    if (!inside) {
+      errors.push(`${sp.where}: overlaps ${line.where} in ${sp.s}:${sp.b}; words added inside a line have to sit wholly inside it, or mark the numbered quote "-" first`);
+      out.push(sp);
+      continue;
+    }
+    out.pop();
+    keep({ ...line, end: sp.start });
+    out.push(sp);
+    keep({ ...line, start: sp.end });
+  }
   return out;
 }

@@ -163,12 +163,29 @@ const CHANGE = new RegExp(`^change\\s+(${ID})\\s+(\\d+:\\d+)\\s+([MFN])\\s*(?:\\
 const NAME = new RegExp(`^name\\s+(${ID})\\s+(\\d+:\\d+)\\s*\\|\\s*(.+)$`);
 export const isCastLine = (t: string) => /^(cast|change|name)\s/.test(t);
 
-/** A model's cast, change and name lines, into cast.json. Returns what it did, for the log. */
-export function mergeCast(book: Book, lines: string[], by: string): { added: number; notes: string[] } {
+/** A name as two cast lines are compared: no accents, case or punctuation, the words in any order. */
+const sameName = (name: string) => name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+
+export interface Merged {
+  added: number;
+  notes: string[];
+  /** New ids for someone already in the cast under the same name, and the id they keep. */
+  same: Map<string, string>;
+}
+
+/**
+ * A model's cast, change and name lines, into cast.json. Parts marked at once each meet a new
+ * person on their own, so one can come back under several ids (Devils had Marya Timofeyevna under
+ * four): a new id with the same name and voice as someone in the cast is that person. Returns what
+ * it did, for the log, and those ids, for the marks that use them (renameIds).
+ */
+export function mergeCast(book: Book, lines: string[], by: string): Merged {
   const file = join(bookDir(book.key), 'cast.json');
   const cast = castOf(book);
   const byId = new Map(cast.people.map((p) => [p.id, p]));
   const notes: string[] = [];
+  const same = new Map<string, string>();
+  const idOf = (id: string) => same.get(id) ?? id;
   let added = 0;
   for (const line of lines) {
     let m = line.match(CAST);
@@ -176,7 +193,11 @@ export function mergeCast(book: Book, lines: string[], by: string): { added: num
       const [name, role, evidence] = (m[4] ?? '').split('|').map((s) => s.trim());
       const gender = m[2] as Gender;
       const had = byId.get(m[1]);
-      if (!had) {
+      const twin = had || !name ? undefined : cast.people.find((p) => !p.generic && p.gender === gender && sameName(p.name) === sameName(name));
+      if (twin) {
+        same.set(m[1], twin.id);
+        notes.push(`${m[1]} is ${twin.id}`);
+      } else if (!had) {
         const p = { id: m[1], name: name || m[1], gender, ...(role ? { role } : {}), evidence: evidence || `${by}, no paragraph given`, ...(m[3] ? { minor: true } : {}) };
         cast.people.push(p);
         byId.set(p.id, p);
@@ -191,21 +212,38 @@ export function mergeCast(book: Book, lines: string[], by: string): { added: num
         notes.push(`${had.id} kept ${had.gender} (the model said ${gender})`);
       }
     } else if ((m = line.match(CHANGE))) {
-      const p = byId.get(m[1]);
+      const p = byId.get(idOf(m[1]));
       const at = parsePos(m[2])!;
       if (!p || p.changes?.some((c) => c.at === m![2])) continue;
       p.changes = [...(p.changes ?? []), { at: m[2], gender: m[3] as Gender, why: m[4]?.trim() || `A reveal, by ${by}.` }].sort((a, b) => cmp(parsePos(a.at)!, parsePos(b.at)!));
       notes.push(`${p.id} changes to ${m[3]} at ${posText(at)}`);
     } else if ((m = line.match(NAME))) {
       // The name the book uses from there on, so the app never shows one it hasn't told yet.
-      const p = byId.get(m[1]);
+      const p = byId.get(idOf(m[1]));
       const name = m[3].trim();
       if (!p || p.generic || p.names?.some((n) => n.at === m![2] || n.name === name)) continue;
       p.names = [...(p.names ?? []), { at: m[2], name }].sort((a, b) => cmp(parsePos(a.at)!, parsePos(b.at)!));
     }
   }
   if (lines.length) writeJson(file, cast);
-  return { added, notes };
+  return { added, notes, same };
+}
+
+const ID_AT_END = new RegExp(`(^|\\s)(${ID})(?=\\s|\\?|$)`, 'g');
+
+/** A marks file's text with the ids mergeCast found to be someone else's swapped for theirs. Words in quotes are left alone. */
+export function renameIds(marks: string, same: Map<string, string>): string {
+  if (!same.size) return marks;
+  return marks.split('\n').map((line) => {
+    const quoted = line.lastIndexOf('"');
+    const head = quoted >= 0 ? line.slice(0, quoted + 1) : '';
+    const tail = quoted >= 0 ? line.slice(quoted + 1) : line;
+    return head + tail.replace(ID_AT_END, (all, space: string, id: string) => {
+      const to = same.get(id);
+      if (!to) return all;
+      return space + to;
+    });
+  }).join('\n');
 }
 
 /** Who read the cast from the book, when no one researched it by hand (cast.ts). */

@@ -1,7 +1,9 @@
 /*
  * Finding a book's dialogue: the quoted stretches of each paragraph, numbered so the agent says who
  * speaks each one without counting characters. The book's own quote style decides which marks
- * count. The other kind, inside a quote, is a quote within the speech and stays part of it.
+ * count. The other kind, inside a quote, is a quote within the speech and stays part of it: when
+ * it's someone else's words, the agent adds them by their words, and the line is cut around them
+ * (marks.ts, nest).
  *
  * This only finds candidates. Scare quotes, titles and misread apostrophes get marked "-" by the
  * agent, and speech without quote marks gets added by its exact words (procedure.md, part 5).

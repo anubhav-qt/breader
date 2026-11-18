@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join } from 'node:path';
 import { Balancer } from './balancer.ts';
 import { castVoices } from './casting.ts';
-import { castText, context, isCastLine, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, PRIMARY, text } from './kimi.ts';
+import { castText, context, isCastLine, LADDER, marksLedger as ledger, marksLedgerFile as ledgerFile, mergeCast, mins, notesDone, packBy, PRIMARY, renameIds, text } from './kimi.ts';
 import { AI, bookDir, count, inPart, loadBook, partName, posText, writeJson, type Book } from './lib.ts';
 import type { Msg } from './nim.ts';
 import { packBook } from './pack.ts';
@@ -138,6 +138,7 @@ export async function markParts(book: Book, ns: number[], lb: Balancer, alsoFix:
     const { marks, cast } = split(reply.text);
     writeFileSync(marksFile(book, n), marks);
     const merged = mergeCast(book, cast, rung.name);
+    if (merged.same.size) writeFileSync(marksFile(book, n), renameIds(marks, merged.same));
     stamp(book, n, rung.name, reply.secs, true);
     answered.push(n);
     console.log(`  part ${n}: ${rung.name}, ${mins(reply.secs)} (${mins(reply.firstS)} before the first token), ${count(reply.promptTokens)} tokens in, ${count(reply.outTokens)} out; ${linesIn(book, n)}, ${merged.added} new in the cast${merged.notes.length ? ` (${merged.notes.join('; ')})` : ''}, ${errorsFor(book, n).length} errors`);
@@ -188,11 +189,11 @@ async function fixParts(book: Book, ns: number[], lb: Balancer) {
       else if (at !== null) byPart.get(at)!.push(raw);
     }
     const before = new Map(bad.map((n) => [n, errorsFor(book, n).length]));
-    mergeCast(book, castLines, rung.name);
+    const merged = mergeCast(book, castLines, rung.name);
     for (const [n, body] of byPart) {
       if (!bad.includes(n)) continue;
       const old = readFileSync(marksFile(book, n), 'utf8');
-      writeFileSync(marksFile(book, n), split(body.join('\n')).marks);
+      writeFileSync(marksFile(book, n), renameIds(split(body.join('\n')).marks, merged.same));
       if (errorsFor(book, n).length < before.get(n)!) {
         stamp(book, n, rung.name, reply.secs, false);
       } else {
@@ -210,23 +211,36 @@ async function fixParts(book: Book, ns: number[], lb: Balancer) {
   }
 }
 
-/** Every line marked "?", read again against the whole book in one call. */
+/**
+ * Every line marked "?", and every line whose speech tag names someone else (tags.ts), read again
+ * against the whole book in one call.
+ */
 async function settle(book: Book, lb: Balancer) {
   const c = validate(book, false);
-  const unsure = c.marks.spans.filter((s) => s.unsure);
-  if (!unsure.length) return console.log('  No unsure lines.');
+  const why = new Map<string, string>();
+  for (const sp of c.marks.spans) {
+    if (sp.unsure) why.set(sp.where, '');
+  }
+  for (const t of c.tagged) {
+    if (!why.has(t.span.where)) why.set(t.span.where, `its speech tag names ${t.names.join(' or ')}`);
+  }
+  if (!why.size) return console.log('  No unsure lines.');
   const lineOf = (where: string) => {
     const [file, n] = where.split(':');
     return { file: join(bookDir(book.key), file), n: Number(n) };
   };
-  const items = unsure.map((sp, i) => {
-    const { file, n } = lineOf(sp.where);
-    return { i: i + 1, file, n, line: readFileSync(file, 'utf8').split(/\r?\n/)[n - 1].trim() };
+  const items = [...why].map(([where, note], i) => {
+    const { file, n } = lineOf(where);
+    return { i: i + 1, file, n, note, line: readFileSync(file, 'utf8').split(/\r?\n/)[n - 1].trim() };
+  });
+  const listed = items.map((x) => {
+    if (x.note) return `U${x.i} ${x.line}    (${x.note})`;
+    return `U${x.i} ${x.line}`;
   });
   const user = (level: number) => [
     context(book, null, level),
     `# The cast (id | voice | name | role)\n\n${castText(book)}`,
-    `# Settle these\n\nThese ${items.length} marks are unsure. Read each one's paragraph again, with everything the book says around it, and decide. Answer with one line per item, its number and then the mark, fixed or kept, with ? only if two readings still fit:\nU1 12:2.1 marlo\nAnswer with those lines only, plus cast lines for anyone new.\n\n${items.map((x) => `U${x.i} ${x.line}`).join('\n')}`,
+    `# Settle these\n\nThese ${items.length} marks are unsure, or their speech tag names someone else (said in brackets after them). Read each one's paragraph again, with everything the book says around it, and decide. A tag names who speaks unless it's about someone else. Answer with one line per item, its number and then the mark, fixed or kept, with ? only if two readings still fit:\nU1 12:2.1 marlo\nAnswer with those lines only, plus cast lines for anyone new.\n\n${listed.join('\n')}`,
   ].join('\n\n');
   const { reply, rung } = await lb.chat((level) => [{ role: 'system', content: SYSTEM }, { role: 'user', content: user(level) }], { book: book.key, settle: items.length });
   // The last answer, to see why lines stayed unsure. Marks and cast lines only, never the book's text.
@@ -243,17 +257,20 @@ async function settle(book: Book, lb: Balancer) {
     const m = t.match(/^U(\d+)[:.]?\s+(.+)$/);
     const item = m && items[Number(m[1]) - 1];
     if (!item) continue;
+    // The note in brackets, if the answer copied it, isn't part of the mark.
+    const mark = m[2].replace(/\s+\([^()]*\)\s*$/, '');
     // The answer has to be about the same quote, or the same paragraph for one added by its words.
     const same = (a: string) => a.match(/^(\d+:\d+(?:\.\d+)?)/)?.[1];
-    if (same(m[2]) !== same(item.line)) continue;
-    if (m[2] !== item.line) changed++;
-    if (!/\s\?(\s|$)|\?$/.test(m[2])) settled++;
-    lines.get(item.file)![item.n - 1] = m[2];
+    if (same(mark) !== same(item.line)) continue;
+    if (mark !== item.line) changed++;
+    if (!/\s\?(\s|$)|\?$/.test(mark)) settled++;
+    lines.get(item.file)![item.n - 1] = mark;
   }
   for (const f of files) writeFileSync(f, lines.get(f)!.join('\n'));
   const cast = join(bookDir(book.key), 'cast.json');
   const castBefore = readFileSync(cast, 'utf8');
-  mergeCast(book, castLines, rung.name);
+  const merged = mergeCast(book, castLines, rung.name);
+  for (const f of files) writeFileSync(f, renameIds(lines.get(f)!.join('\n'), merged.same));
   const errors = validate(book, false).errors;
   if (errors.length) {
     for (const f of files) writeFileSync(f, before.get(f)!);
@@ -261,7 +278,7 @@ async function settle(book: Book, lb: Balancer) {
     console.log(`  ${rung.name}'s answer made ${errors.length} errors, so it was left out. The first: ${errors[0]}`);
     return;
   }
-  console.log(`  ${rung.name} settled ${settled} of ${items.length} unsure lines, ${changed} of them changed, in ${mins(reply.secs)}.`);
+  console.log(`  ${rung.name} settled ${settled} of ${items.length} unsure or tagged lines, ${changed} of them changed, in ${mins(reply.secs)}.`);
 }
 
 /**

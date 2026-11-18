@@ -9,10 +9,11 @@
 - [ ] A **Done** button on each feedback, with a short one-liner of what was built: that account gets a modal once, like the release notes: "Your feedback has been implemented!" and the one-liner. Only the account that sent it.
 
 ## AI marker: who says what (from a reader's report on Devils, 2026-11-18)
-- [ ] Someone else's words quoted inside a line ("she says, 'I want you...'") read in that person's voice. Today `ai/procedure.md` gives them to the outer speaker. The marker cuts the line around the quote, so the app needs no change.
-- [ ] A check that a line's speech tag names its speaker: Devils 12.226 says "Marya Timofeyevna suddenly laughed" and was given to Shatov.
-- [ ] One person under one id: Devils' cast has her as `marya-lebyadkina`, `lebyadkina-marya` and `marya-timofeyevna`, and Stepan Trofimovich under three.
-- [ ] Devils (sha256 `e60217b3…`) was fixed by hand on 2026-11-18: 21 lines cut or retagged on the server. A full re-mark of it would lose that.
+- [x] Someone else's words quoted inside a line read in that person's voice (`ai/procedure.md` 5.2, `nest` in `ai/tools/marks.ts`).
+- [x] Lines whose speech tag names someone else are read again before packing (`ai/tools/tags.ts`, `settle` in `ai/tools/mark.ts`).
+- [x] A new cast id with the same name as someone in the cast becomes theirs (`mergeCast`, `ai/tools/kimi.ts`).
+- [ ] Devils (sha256 `e60217b3…`) was fixed by hand on 2026-11-18: 65 lines cut or given to who says them. A full re-mark would lose that. Its cast still has old duplicate ids.
+- [ ] Other books marked before 2026-11-18 have the same kinds of mistakes: run the tag check over them (not checked yet).
 
 ## Input mode setting
 - [ ] Add a setting for **mouse-first** (default) or **keyboard-first**.

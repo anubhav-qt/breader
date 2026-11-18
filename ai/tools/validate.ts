@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { builtInVoice, VOICE_MODELS } from '../../shared/src/voices.ts';
 import { readMarks, type Marks } from './marks.ts';
+import { wrongTags, type Tagged } from './tags.ts';
 import { blockAt, bookDir, cmp, marksFiles, parsePos, posText, readJson, type Book, type Gender, type Pos } from './lib.ts';
 
 /*
@@ -63,6 +64,8 @@ export interface Checked {
   marks: Marks;
   errors: string[];
   warnings: string[];
+  /** Lines whose speech tag names someone else (tags.ts), read again before packing (mark.ts, settle). */
+  tagged: Tagged[];
   /** Parts with words and no marks file, in order. */
   todo: number[];
   /** How someone sounds at a paragraph: their gender, after any change the book has shown by then. */
@@ -190,6 +193,8 @@ export function validate(book: Book, final: boolean): Checked {
     if (n.pov && n.who !== 'third') errors.push(`${n.where}: "pov" only goes with "narrator third"`);
   }
   for (const u of unknown) errors.push(`not in cast.json: ${u}`);
+  const tagged = wrongTags(marks.spans, (sp) => blockAt(book, [sp.s, sp.b])?.text ?? '', [...people.values()]);
+  for (const t of tagged) warnings.push(`${t.span.where}: its speech tag names ${t.names.join(' or ')}, not ${t.span.who}`);
 
   const files = new Set(marksFiles(book.key));
   for (const f of files) if (!book.parts.some((p) => p.n === f)) errors.push(`marks/${String(f).padStart(4, '0')}.txt: this book has no part ${f}`);
@@ -280,7 +285,7 @@ export function validate(book: Book, final: boolean): Checked {
   const rest = marks.spans.filter((s) => s.via === 'rest' && s.who !== '-').length;
   if (rest) warnings.push(`${rest} lines were given a speaker with "rest"; mark speech one line at a time`);
 
-  return { book, cast, notes, marks, errors, warnings, todo, genderAt };
+  return { book, cast, notes, marks, errors, warnings, tagged, todo, genderAt };
 }
 
 export const posOf = (s: string): Pos => parsePos(s)!;
