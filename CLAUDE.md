@@ -25,6 +25,10 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   manga's answers kept in R2 under `answers/` so a restart reads them back (`server/src/lib/answers.ts`).
 - The app talks to `primary`, and switches to `fallback` on timeouts and gateway errors
   (`frontend/src/lib/api.ts`).
+- Each library's 2 comics read most lately go in the public R2 bucket `breader-pages`, the chapter
+  read to and 25 after it, put by the ThinkPad's keeper (`server/src/manga/cloud.ts`, ADR 0003,
+  `docs/adr/0003-pages-in-r2.md`). The app reads pages there first (`frontend/src/lib/cloud.ts`),
+  and a MangaFire series' list too while only Render is up. Free only: under 9 GB, 900,000 writes a month.
 - The ThinkPad's voices and panel model run in the `engine` service (ADR 0002,
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
@@ -69,7 +73,7 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - Every release to production tells readers what changed: a new note at the top of
   `frontend/src/features/news/notes.ts` (a title, one or two short plain lines), shown once in a
   dialog, and once only for an account, an address and a device (`server/src/routes/news.ts`).
-  `infra/ship.sh` won't ship without one.
+  `infra/ship.sh` won't ship without one, unless readers can't see the release: `NO_NEWS=1`.
 - Never print `infra/.env` or any secret.
 - Commits: one line, `type: message`. No em dashes. No Claude attribution.
 - Keep this file, `infra/README.md` and the ADRs in step with every change.

@@ -3,6 +3,7 @@
 #
 #   infra/ship.sh            every step, in order
 #   infra/ship.sh app        only the steps named (check always runs first)
+#   NO_NEWS=1 infra/ship.sh  a release readers can't see: no What's new note, none shown again
 #
 # Steps: check, test, push, model, image, migrate, render, app, live.
 # Settings come from infra/.env.ship (copy infra/.env.ship.example). The laptop picks the new
@@ -62,13 +63,30 @@ step_check() {
   . "$SETTINGS"
   set +a
   local name
-  for name in SUPABASE_SESSION_URL RENDER_DEPLOY_HOOK VITE_API_URL VITE_API_FALLBACK_URL VITE_SENTRY_DSN; do
+  for name in SUPABASE_SESSION_URL RENDER_DEPLOY_HOOK VITE_API_URL VITE_API_FALLBACK_URL VITE_PAGES_URL VITE_SENTRY_DSN; do
     if [ -z "${!name:-}" ]; then
       fail "$name is empty in $SETTINGS"
     fi
   done
 
-  # Every release tells readers what changed (frontend/src/features/news/notes.ts), once.
+  # Every release tells readers what changed (frontend/src/features/news/notes.ts), once. One they
+  # can't see (NO_NEWS=1) adds no note, and leaves the last one as it is for those yet to see it.
+  if [ "${NO_NEWS:-}" = 1 ]; then
+    echo "no What's new note: readers see nothing new"
+  else
+    checkNews
+  fi
+
+  if ! gh auth status > /dev/null 2>&1; then
+    fail "sign in to GitHub: gh auth login"
+  fi
+  if ! npx --yes wrangler@4 whoami 2>/dev/null | grep -q 'associated with'; then
+    fail "sign in to Cloudflare: npx wrangler@4 login"
+  fi
+}
+
+# A new note at the top of frontend/src/features/news/notes.ts since the live release.
+checkNews() {
   local live
   live=$(curl -fsS https://api.breader.site/health 2> /dev/null | node -pe 'JSON.parse(require("fs").readFileSync(0)).release' 2> /dev/null || true)
   if [ -n "$live" ] && git cat-file -e "$live^{commit}" 2> /dev/null; then
@@ -77,13 +95,6 @@ step_check() {
     fi
   else
     echo "can't tell which release is live; check frontend/src/features/news/notes.ts has this one's note"
-  fi
-
-  if ! gh auth status > /dev/null 2>&1; then
-    fail "sign in to GitHub: gh auth login"
-  fi
-  if ! npx --yes wrangler@4 whoami 2>/dev/null | grep -q 'associated with'; then
-    fail "sign in to Cloudflare: npx wrangler@4 login"
   fi
 }
 

@@ -162,9 +162,12 @@ function stoppedSharing(n: number, category: Category): string {
 const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
 
 /** A series read from a site only the laptop reaches, opened while it's away, is read from Weeb Central meanwhile (books/remote.ts readFrom). */
-function tellIfAway(rec: BookRecord) {
-  const w = rec.source === 'remote' ? remoteOf(rec.url) : null;
-  if (w && readFrom(w) !== w) sayAway('this series reads from Weeb Central');
+async function tellIfAway(rec: BookRecord) {
+  if (rec.source !== 'remote') return;
+  const w = remoteOf(rec.url);
+  if (!w) return;
+  const from = await readFrom(w);
+  if (from !== w) sayAway('this series reads from Weeb Central');
 }
 
 /*
@@ -642,7 +645,7 @@ export default function App() {
     if (!rec) return;
     // One taken out of My books comes back in once it's being read again.
     if (rec.sharedOnly) lib.setSharedOnly(rec.id, false);
-    tellIfAway(rec);
+    void tellIfAway(rec);
     setOpening({ id: rec.id, rect });
     void startLoad(rec.id, rec).then((b) => {
       if (!b) setOpening(null);
@@ -771,7 +774,7 @@ export default function App() {
       rec = { ...rec, url };
     }
     if (!rec) rec = await addSeries(about, url);
-    tellIfAway(rec);
+    void tellIfAway(rec);
     const id = rec.id;
     setStartAt(from ? { id, pos: from } : null);
     openAnimDone.current = false;

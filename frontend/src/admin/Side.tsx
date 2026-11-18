@@ -127,7 +127,7 @@ const JOBS: Record<string, { name: string; about: string }> = {
   'extensions': { name: 'Manga extensions', about: 'Once a day, updates the manga sites’ extensions to their newest versions.' },
   'manga-prefetch': { name: 'Manga prefetch', about: 'At 4 am, fetches Browse’s lists ahead, so they open at once.' },
   'ai-fill': { name: 'Gemini fills blanks', about: 'Every 30 minutes, Gemini fills in the genres, authors and series nobody gave a book or manga, once per book.' },
-  'manga-keep': { name: 'Manga on the SSD', about: 'Every 15 minutes, keeps each library’s manga on the ThinkPad’s SSD: the chapter each is read to and the next ten.' },
+  'manga-keep': { name: 'Manga on the SSD', about: 'Every 15 minutes, keeps each library’s manga on the ThinkPad’s SSD: the chapter each is read to and the next ten, 25 for its 2 latest, which go in R2 too.' },
   'yt-dlp': { name: 'yt-dlp update', about: 'Keeps the downloader the music finds its tracks with up to date.' },
 };
 

@@ -5,6 +5,9 @@
 - [ ] An UptimeRobot monitor on `sw.breader.site` (401 is up), so the next time it's down we hear.
 - [ ] Find why the app couldn't open library manga on 2026-11-16, 21:45 to 21:51 IST (ThinkPad logs).
 
+## Readers' next chapters in R2 (ADR 0003)
+- [ ] The admin page shows what R2 holds (`manga-keep` detail `cloud`: chapters, bytes, room, writes, capped).
+
 ## Demo
 - [ ] Check how all the demos look for new users.
 - [ ] Add demos for every single thing in the guide.
