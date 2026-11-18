@@ -411,6 +411,20 @@ tunnel of its own; panels aren't found there.
    ```
 5. Render › Environment: `SUWAYOMI_URL=https://breader:<the password>@sw.breader.example`, then
    Manual Deploy. A series from Weeb Central opens at `fb.breader.example`.
+6. An alarm that reboots the machine when it stops answering for 15 minutes (on the Mac, signed in
+   to the AWS account, with the instance's id):
+   ```sh
+   aws cloudwatch put-metric-alarm --region ap-south-1 --alarm-name breader-sw-reboot \
+     --namespace AWS/EC2 --metric-name StatusCheckFailed_Instance \
+     --dimensions Name=InstanceId,Value=<instance id> --statistic Maximum --period 60 \
+     --evaluation-periods 15 --datapoints-to-alarm 15 --threshold 1 \
+     --comparison-operator GreaterThanOrEqualToThreshold --treat-missing-data missing \
+     --alarm-actions arn:aws:automate:ap-south-1:ec2:reboot
+   ```
+
+Suwayomi may use 1.3 GB at most (`compose.yml`); past that only it restarts. On 2026-11-08 it
+filled memory and swap, the machine lost its network address, and Weeb Central and Asura stayed
+shut on the fallback for 10 days until a reboot. The cap and the alarm stop that.
 
 MangaFire turns AWS's addresses away (Cloudflare), so it's read through the laptop alone. While the
 laptop's away, the app reads a MangaFire series from its Weeb Central copy (the one after it in its
