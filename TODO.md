@@ -1,5 +1,10 @@
 # Breader: to do later
 
+## The AWS Suwayomi (down 2026-11-09 to 2026-11-18, nobody told)
+- [x] Capped at 1.3 GB, and its machine rebooted by a CloudWatch alarm (`infra/README.md`).
+- [ ] An UptimeRobot monitor on `sw.breader.site` (401 is up), so the next time it's down we hear.
+- [ ] Find why the app couldn't open library manga on 2026-11-16, 21:45 to 21:51 IST (ThinkPad logs).
+
 ## Demo
 - [ ] Check how all the demos look for new users.
 - [ ] Add demos for every single thing in the guide.
