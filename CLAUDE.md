@@ -15,7 +15,9 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 ## How it runs today
 
 - The ThinkPad runs everything behind a Cloudflare Tunnel (`api.breader.site`).
-- One Render free service (`fb.breader.site`) is the fallback.
+- One Render free service (`fb.breader.site`) is the fallback. It reads Suwayomi's sites through a
+  Suwayomi on AWS (`infra/aws/`, `sw.breader.site`): capped at 1.3 GB, its machine rebooted by a
+  CloudWatch alarm when it stops answering (`infra/README.md`, Suwayomi on AWS). MangaFire blocks AWS.
 - Supabase (Mumbai) is the only writer. The ThinkPad keeps a copy fed from `change_log`
   (`server/src/mirror/feed.ts`, fed tables in `FED_TABLES`, `server/src/db/schema.ts`).
 - The fallback has 512 MB and no Redis (`light` in `server/src/api.ts`): each kind of answer gets
