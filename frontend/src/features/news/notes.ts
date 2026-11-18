@@ -15,6 +15,14 @@ export interface Note {
 
 export const NOTES: Note[] = [
   {
+    id: '2026-11-18',
+    title: 'Replies to your feedback',
+    lines: [
+      'When we start on something you asked for, or finish it, Breader tells you once.',
+      'Words one person quotes inside another’s line are now read in their own voice.',
+    ],
+  },
+  {
     id: '2026-11-15',
     title: 'Neater manga panels',
     lines: [
