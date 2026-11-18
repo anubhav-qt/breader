@@ -22,6 +22,9 @@ export const SendFeedback = z.strictObject({
 });
 export type SendFeedback = z.infer<typeof SendFeedback>;
 
+/** The most a Done reply says: one short line. */
+export const FEEDBACK_REPLY_CHARS = 160;
+
 export interface FeedbackItem {
   id: number;
   at: number;
@@ -30,7 +33,31 @@ export interface FeedbackItem {
   /** The library it was sent from, if the reader had one open. */
   library: string | null;
   release: string | null;
+  /** Being worked on: the reader is told once, the next time they open Breader. */
+  working: boolean;
   done: boolean;
+  /** What the reader is told it became, once, when it's done. */
+  reply: string | null;
+  /** Whether the reader has been told yet: that it's being worked on, and that it's done. */
+  toldWorking: boolean;
+  toldDone: boolean;
 }
 
-export const FeedbackDone = z.strictObject({ done: z.boolean() });
+export const FeedbackWorking = z.strictObject({ working: z.boolean() });
+
+export const FeedbackDone = z.strictObject({
+  done: z.boolean(),
+  reply: z
+    .string()
+    .transform((s) => s.trim().replace(/\s+/g, ' '))
+    .pipe(z.string().max(FEEDBACK_REPLY_CHARS, `At most ${FEEDBACK_REPLY_CHARS} characters.`))
+    .optional(),
+});
+export type FeedbackDone = z.infer<typeof FeedbackDone>;
+
+/** What a reader is told about what they sent: being worked on, or done and what it became. */
+export type FeedbackReply = { id: number; kind: 'working' } | { id: number; kind: 'done'; reply: string };
+
+export interface FeedbackRepliesAnswer {
+  replies: FeedbackReply[];
+}

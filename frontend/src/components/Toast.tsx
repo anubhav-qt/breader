@@ -13,6 +13,10 @@ export interface ToastMessage {
   focus?: boolean;
   /** Stays until the reader picks the action or closes it. */
   stay?: boolean;
+  /** One thin strip, for a quiet word that needs no answer. */
+  thin?: boolean;
+  /** How long it shows, when that isn't the usual. */
+  ms?: number;
 }
 
 const SHOW_MS = 2600;
@@ -36,13 +40,16 @@ export function Toast({ toast, onDone, className }: { toast: ToastMessage | null
  */
 function ToastItem({ toast, onDone }: { toast: ToastMessage; onDone: (id: number) => void }) {
   const [held, setHeld] = useState(false);
-  const { id, action, stay } = toast;
+  const { id, action, stay, ms } = toast;
 
   useEffect(() => {
     if (held || stay) return;
-    const t = window.setTimeout(() => onDone(id), action ? ACTION_MS : SHOW_MS);
+    let wait = SHOW_MS;
+    if (action) wait = ACTION_MS;
+    if (ms) wait = ms;
+    const t = window.setTimeout(() => onDone(id), wait);
     return () => window.clearTimeout(t);
-  }, [held, stay, id, action, onDone]);
+  }, [held, stay, id, action, ms, onDone]);
 
   useEffect(() => {
     if (!action || stay) return;
@@ -87,7 +94,7 @@ function ToastItem({ toast, onDone }: { toast: ToastMessage; onDone: (id: number
 
   return (
     <motion.div
-      className={`toast${action ? ' has-action' : ''}${stay ? ' is-stay' : ''}`}
+      className={`toast${action ? ' has-action' : ''}${stay ? ' is-stay' : ''}${toast.thin ? ' is-thin' : ''}`}
       initial={{ opacity: 0, y: 12, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 6, transition: { duration: 0.15 } }}

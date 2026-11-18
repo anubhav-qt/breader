@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { ACCOUNT_KINDS, FEEDBACK_LIMIT, FeedbackDone, FirstAction, MarkerPatch, MusicImport, QueueAction, StagesAction, musicImportKey, musicImportProblems, queueKey, withStages, type FeedbackItem, type FeedbackKind } from '@breader/shared';
+import { ACCOUNT_KINDS, FEEDBACK_LIMIT, FeedbackDone, FeedbackWorking, FirstAction, MarkerPatch, MusicImport, QueueAction, StagesAction, musicImportKey, musicImportProblems, queueKey, withStages, type FeedbackItem, type FeedbackKind } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
 import { ADMIN_JOBS, addCommand, changeAdminState, runKind } from '../lib/admin.ts';
 import { adminHub, inUseOrder } from '../lib/admin-live.ts';
@@ -185,28 +185,41 @@ export function adminRoutes(deps: Deps) {
   // What readers asked for or told us (routes/feedback.ts), the newest first.
   r.get('/admin/feedback', control, async (c) => {
     checkToken(c);
-    const { rows } = await pool.query<{ id: string; at: Date; kind: FeedbackKind; body: string; library_id: string | null; release: string | null; done_at: Date | null }>(
-      'SELECT id, at, kind, body, library_id, release, done_at FROM feedback ORDER BY at DESC, id DESC LIMIT $1',
+    const { rows } = await pool.query<FeedbackRow>(
+      `SELECT id, at, kind, body, library_id, release, done_at, working_at, reply, told_working_at, told_done_at
+       FROM feedback ORDER BY at DESC, id DESC LIMIT $1`,
       [FEEDBACK_LIMIT],
     );
-    const items: FeedbackItem[] = rows.map((f) => ({
-      id: Number(f.id),
-      at: f.at.getTime(),
-      kind: f.kind,
-      body: f.body,
-      library: f.library_id,
-      release: f.release,
-      done: f.done_at !== null,
-    }));
+    const items: FeedbackItem[] = rows.map(feedbackItem);
     return c.json({ items });
   });
 
+  // Being worked on: the library that sent it is told once, the next time it opens Breader.
+  r.post('/admin/feedback/:id/working', control, async (c) => {
+    checkToken(c);
+    const id = parse(FeedbackId, c.req.param('id'));
+    const { working } = parse(FeedbackWorking, await readJson(c));
+    let set = 'working_at = NULL';
+    if (working) set = 'working_at = COALESCE(working_at, now())';
+    const { rowCount } = await pool.query(`UPDATE feedback SET ${set} WHERE id = $1`, [id]);
+    if (!rowCount) throw new ApiError(404, 'not_found', 'No such feedback.');
+    return c.json({ ok: true });
+  });
+
+  // Done, with a line on what it became: the library that sent it is told once, in a dialog.
   r.post('/admin/feedback/:id/done', control, async (c) => {
     checkToken(c);
     const id = parse(FeedbackId, c.req.param('id'));
-    const { done } = parse(FeedbackDone, await readJson(c));
-    const { rowCount } = await pool.query(`UPDATE feedback SET done_at = ${done ? 'COALESCE(done_at, now())' : 'NULL'} WHERE id = $1`, [id]);
-    if (!rowCount) throw new ApiError(404, 'not_found', 'No such feedback.');
+    const { done, reply } = parse(FeedbackDone, await readJson(c));
+    let result;
+    if (done) {
+      // An empty line keeps the one there was: Done again never wipes what the reader may be told.
+      const line = reply ? reply : null;
+      result = await pool.query('UPDATE feedback SET done_at = COALESCE(done_at, now()), reply = COALESCE($2, reply) WHERE id = $1', [id, line]);
+    } else {
+      result = await pool.query('UPDATE feedback SET done_at = NULL WHERE id = $1', [id]);
+    }
+    if (!result.rowCount) throw new ApiError(404, 'not_found', 'No such feedback.');
     return c.json({ ok: true });
   });
 
@@ -297,4 +310,34 @@ export function adminRoutes(deps: Deps) {
   });
 
   return r;
+}
+
+interface FeedbackRow {
+  id: string;
+  at: Date;
+  kind: FeedbackKind;
+  body: string;
+  library_id: string | null;
+  release: string | null;
+  done_at: Date | null;
+  working_at: Date | null;
+  reply: string | null;
+  told_working_at: Date | null;
+  told_done_at: Date | null;
+}
+
+function feedbackItem(f: FeedbackRow): FeedbackItem {
+  return {
+    id: Number(f.id),
+    at: f.at.getTime(),
+    kind: f.kind,
+    body: f.body,
+    library: f.library_id,
+    release: f.release,
+    working: f.working_at !== null,
+    done: f.done_at !== null,
+    reply: f.reply,
+    toldWorking: f.told_working_at !== null,
+    toldDone: f.told_done_at !== null,
+  };
 }

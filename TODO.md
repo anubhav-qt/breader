@@ -5,8 +5,8 @@
 - [ ] Add demos for every single thing in the guide.
 
 ## Feedback replies (admin page)
-- [ ] A **Working** button on each feedback: next time that account opens Breader, a subtle toast, once only: "Your feedback is being worked on, thanks for taking your time to help improve Breader!"
-- [ ] A **Done** button on each feedback, with a short one-liner of what was built: that account gets a modal once, like the release notes: "Your feedback has been implemented!" and the one-liner. Only the account that sent it.
+- [x] **Working** and **Done** (with a one-liner) on each feedback, told once to the library that sent it.
+- [ ] Feedback sent before a library is registered (no library) can't be told anything.
 
 ## AI marker: who says what (from a reader's report on Devils, 2026-11-18)
 - [x] Someone else's words quoted inside a line read in that person's voice (`ai/procedure.md` 5.2, `nest` in `ai/tools/marks.ts`).

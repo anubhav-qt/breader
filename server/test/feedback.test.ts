@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FEEDBACK_CHARS, type FeedbackItem } from '@breader/shared';
+import { FEEDBACK_CHARS, FEEDBACK_REPLY_CHARS, type FeedbackItem } from '@breader/shared';
 import { browser, env, registered } from './helpers.ts';
 
 const admin = { authorization: `Bearer ${env.ADMIN_TOKEN}` };
@@ -74,5 +74,77 @@ describe('feedback', () => {
     expect((await b.post('/admin/feedback/999999999/done', { done: true }, admin)).status).toBe(404);
     expect((await b.post('/admin/feedback/abc/done', { done: true }, admin)).status).toBe(400);
     expect((await b.post(`/admin/feedback/${id}/done`, { done: 'yes' }, admin)).status).toBe(400);
+  });
+
+  it('tells the library that sent it, once, that it’s being worked on', async () => {
+    const { b } = await registered();
+    const body = unique('Bigger pause button');
+    await b.post('/v1/feedback', { kind: 'feature', body });
+    const id = (await list()).find((f) => f.body === body)!.id;
+
+    expect((await b.post('/v1/feedback/replies')).body).toEqual({ replies: [] });
+    expect((await browser().post(`/admin/feedback/${id}/working`, { working: true }, admin)).status).toBe(200);
+    expect((await list()).find((f) => f.id === id)).toMatchObject({ working: true, toldWorking: false });
+
+    // Someone else, and no library at all, are told nothing.
+    const other = await registered();
+    expect((await other.b.post('/v1/feedback/replies')).body).toEqual({ replies: [] });
+    expect((await browser().post('/v1/feedback/replies')).body).toEqual({ replies: [] });
+
+    expect((await b.post('/v1/feedback/replies')).body).toEqual({ replies: [{ id, kind: 'working' }] });
+    expect((await b.post('/v1/feedback/replies')).body).toEqual({ replies: [] });
+    expect((await list()).find((f) => f.id === id)).toMatchObject({ working: true, toldWorking: true });
+
+    // Working off and on again doesn't tell them twice.
+    await browser().post(`/admin/feedback/${id}/working`, { working: false }, admin);
+    await browser().post(`/admin/feedback/${id}/working`, { working: true }, admin);
+    expect((await b.post('/v1/feedback/replies')).body).toEqual({ replies: [] });
+  });
+
+  it('tells it once that it’s done, with the admin’s line, and done says more than working', async () => {
+    const { b } = await registered();
+    const body = unique('Two voices for Devils');
+    await b.post('/v1/feedback', { kind: 'feedback', body });
+    const id = (await list()).find((f) => f.body === body)!.id;
+
+    await browser().post(`/admin/feedback/${id}/working`, { working: true }, admin);
+    const line = 'With two voices on, women’s words in Devils now read in a woman’s voice.';
+    expect((await browser().post(`/admin/feedback/${id}/done`, { done: true, reply: `  ${line}\n ` }, admin)).status).toBe(200);
+    expect((await list()).find((f) => f.id === id)).toMatchObject({ done: true, reply: line, toldDone: false });
+
+    expect((await b.post('/v1/feedback/replies')).body).toEqual({ replies: [{ id, kind: 'done', reply: line }] });
+    expect((await b.post('/v1/feedback/replies')).body).toEqual({ replies: [] });
+    expect((await list()).find((f) => f.id === id)).toMatchObject({ toldDone: true, toldWorking: false });
+  });
+
+  it('keeps the line when Done comes again with none, and tells nothing for done without one', async () => {
+    const { b } = await registered();
+    const kept = unique('Keep my line');
+    const bare = unique('Done, no line');
+    await b.post('/v1/feedback', { kind: 'feature', body: kept });
+    await b.post('/v1/feedback', { kind: 'feature', body: bare });
+    const items = await list();
+    const keptId = items.find((f) => f.body === kept)!.id;
+    const bareId = items.find((f) => f.body === bare)!.id;
+
+    await browser().post(`/admin/feedback/${keptId}/done`, { done: true, reply: 'It’s there now.' }, admin);
+    await browser().post(`/admin/feedback/${keptId}/done`, { done: false }, admin);
+    await browser().post(`/admin/feedback/${keptId}/done`, { done: true, reply: '   ' }, admin);
+    expect((await list()).find((f) => f.id === keptId)).toMatchObject({ done: true, reply: 'It’s there now.' });
+
+    await browser().post(`/admin/feedback/${bareId}/done`, { done: true }, admin);
+    expect((await b.post('/v1/feedback/replies')).body).toEqual({ replies: [{ id: keptId, kind: 'done', reply: 'It’s there now.' }] });
+  });
+
+  it('turns away a line too long, and working or a line without the admin token', async () => {
+    const body = unique('Too long a line');
+    await browser().post('/v1/feedback', { kind: 'feature', body });
+    const id = (await list()).find((f) => f.body === body)!.id;
+    const b = browser();
+    expect((await b.post(`/admin/feedback/${id}/working`, { working: true })).status).toBe(401);
+    expect((await b.post(`/admin/feedback/${id}/done`, { done: true, reply: 'x'.repeat(FEEDBACK_REPLY_CHARS + 1) }, admin)).status).toBe(400);
+    expect((await b.post(`/admin/feedback/${id}/done`, { done: true, reply: 'x'.repeat(FEEDBACK_REPLY_CHARS) }, admin)).status).toBe(200);
+    expect((await b.post(`/admin/feedback/${id}/working`, { working: 'yes' }, admin)).status).toBe(400);
+    expect((await b.post('/admin/feedback/999999999/working', { working: true }, admin)).status).toBe(404);
   });
 });

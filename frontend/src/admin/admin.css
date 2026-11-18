@@ -319,3 +319,7 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 .adm-fb-kind { color: var(--ink); }
 .adm-fb-kind.is-feature { color: var(--accent); }
 .adm-fb-body { margin: 0; font: 400 19px/1.2 var(--read); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.adm-fb-acts { grid-column: 2; grid-row: 2; display: flex; gap: 6px; }
+.adm-fb-reply { grid-column: 1 / -1; margin: 0; padding-left: 10px; border-left: 2px solid var(--line); font: 400 18px/1.15 var(--read); color: var(--ink-2); overflow-wrap: anywhere; }
+.adm-fb-ask { grid-column: 1 / -1; }
+.adm-fb-ask input { background: var(--canvas); }

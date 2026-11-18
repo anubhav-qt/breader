@@ -264,9 +264,9 @@ function accountsFor(scene: Scene): AiAccount[] {
 export function demoAdmin(scene: Scene): Admin {
   const now = Date.now();
   const feedback: FeedbackItem[] = scene === 'quiet' ? [] : [
-    { id: 3, at: now - 4 * 60_000, kind: 'feature', body: 'Could manga remember the zoom per series?', library: 'b7f2c9d1-1111-4a2b-9c3d-000000000001', release: '3e48c27abc', done: false },
-    { id: 2, at: now - 3 * 3_600_000, kind: 'feedback', body: 'The voices are lovely. The pause button is a bit small on my phone.', library: null, release: '3e48c27abc', done: false },
-    { id: 1, at: now - 2 * 86_400_000, kind: 'feature', body: 'Dark covers for night reading.', library: 'a1c3e5f7-2222-4b3c-8d4e-000000000002', release: null, done: true },
+    { id: 3, at: now - 4 * 60_000, kind: 'feature', body: 'Could manga remember the zoom per series?', library: 'b7f2c9d1-1111-4a2b-9c3d-000000000001', release: '3e48c27abc', working: true, done: false, reply: null, toldWorking: false, toldDone: false },
+    { id: 2, at: now - 3 * 3_600_000, kind: 'feedback', body: 'The voices are lovely. The pause button is a bit small on my phone.', library: null, release: '3e48c27abc', working: false, done: false, reply: null, toldWorking: false, toldDone: false },
+    { id: 1, at: now - 2 * 86_400_000, kind: 'feature', body: 'Dark covers for night reading.', library: 'a1c3e5f7-2222-4b3c-8d4e-000000000002', release: null, working: true, done: true, reply: 'Covers dim at night now, in dark mode.', toldWorking: true, toldDone: true },
   ];
   const status = statusFor(scene);
   const marker = markerFor(scene);
@@ -613,10 +613,17 @@ export function demoAdmin(scene: Scene): Admin {
     async feedback() {
       return feedback.map((f) => ({ ...f }));
     },
-    async feedbackDone(id, done) {
+    async feedbackDone(id, done, reply) {
       const f = feedback.find((x) => x.id === id);
       if (!f) throw new Error('No such feedback.');
       f.done = done;
+      const line = reply?.trim();
+      if (done && line) f.reply = line;
+    },
+    async feedbackWorking(id, working) {
+      const f = feedback.find((x) => x.id === id);
+      if (!f) throw new Error('No such feedback.');
+      f.working = working;
     },
   };
 }

@@ -284,8 +284,11 @@ export function liveAdmin(token: string): Admin {
     async feedback() {
       return (await send<{ items: FeedbackItem[] }>('GET', '/admin/feedback')).items;
     },
-    async feedbackDone(id, done) {
-      await send('POST', `/admin/feedback/${id}/done`, { done });
+    async feedbackDone(id, done, reply) {
+      await send('POST', `/admin/feedback/${id}/done`, reply === undefined ? { done } : { done, reply });
+    },
+    async feedbackWorking(id, working) {
+      await send('POST', `/admin/feedback/${id}/working`, { working });
     },
   };
 }

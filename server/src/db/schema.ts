@@ -628,7 +628,9 @@ export const adminCommands = pgTable(
 
 /**
  * What readers ask for or tell us (routes/feedback.ts), read on the admin page. The library is
- * the one they were signed into, if any, and goes when it does. Not fed: only the admin reads it.
+ * the one they were signed into, if any, and goes when it does. Not fed: only the admin reads it,
+ * and the library that sent it, told once that it's being worked on and once that it's done
+ * (`told_*`), with the admin's one line on what it became (`reply`).
  */
 export const feedback = pgTable(
   'feedback',
@@ -640,8 +642,12 @@ export const feedback = pgTable(
     libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
     release: text('release'),
     doneAt: at('done_at'),
+    workingAt: at('working_at'),
+    reply: text('reply'),
+    toldWorkingAt: at('told_working_at'),
+    toldDoneAt: at('told_done_at'),
   },
-  (t) => [index('feedback_at_idx').on(t.at)],
+  (t) => [index('feedback_at_idx').on(t.at), index('feedback_library_idx').on(t.libraryId)],
 );
 
 /**

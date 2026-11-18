@@ -282,5 +282,7 @@ export interface Admin {
   uploadMusic: (text: string) => Promise<string>;
   /** What readers asked for or told us, the newest first. */
   feedback: () => Promise<FeedbackItem[]>;
-  feedbackDone: (id: number, done: boolean) => Promise<void>;
+  /** Done, and the line the reader is told it became (when they sent it from a library). */
+  feedbackDone: (id: number, done: boolean, reply?: string) => Promise<void>;
+  feedbackWorking: (id: number, working: boolean) => Promise<void>;
 }

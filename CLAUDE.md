@@ -28,7 +28,11 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
   The server voice reads Piper's voices only; Kokoro (the heavy voices) runs on devices.
 - Readers send requests and feedback from the app (`frontend/src/features/feedback/`,
-  `server/src/routes/feedback.ts`); they show on the admin page (`frontend/src/admin/`).
+  `server/src/routes/feedback.ts`); they show on the admin page (`frontend/src/admin/`). Working and
+  Done (with the admin's one line) tell the library that sent it, once each: a thin toast, and the
+  What's new dialog (`features/feedback/replies.ts`).
+- The AI marker cuts someone else's words quoted inside a line into their voice (`nest`,
+  `ai/tools/marks.ts`) and rereads lines whose speech tag names someone else (`ai/tools/tags.ts`).
 - Audiobooks are made on readers' devices only. The server never makes them.
 - Reading aloud and finding panels run on the reader's device when it can
   (`frontend/src/features/reader/able.ts`, checked as a book opens, nothing sent). Only a device too

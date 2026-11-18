@@ -12,6 +12,8 @@ import { checkDevice } from './features/reader/able';
 import { WelcomeBooks, WelcomeManga, WelcomeShared } from './features/guide/Welcome';
 import type { Note } from './features/news/notes';
 import { firstOnServer, markShown, unseen } from './features/news/seen';
+import { anyWorking, askReplies, doneNote, WORKING, WORKING_MS } from './features/feedback/replies';
+import type { FeedbackReply } from '@breader/shared/feedback';
 import { PreviewBar, type AppTheme } from './components/PreviewBar';
 import { Toast, type ToastMessage } from './components/Toast';
 import { AudiobookHost, AudiobookNav } from './features/audiobook/Audiobook';
@@ -323,6 +325,11 @@ export default function App() {
   const [newsWaiting, setNewsWaiting] = useState<Note[] | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const newsAsked = useRef(false);
+  /** What this library is told about feedback it sent (features/feedback/replies.ts), asked once a visit. */
+  const repliesAsked = useRef(false);
+  const [repliesWaiting, setRepliesWaiting] = useState<FeedbackReply[] | null>(null);
+  /** Feedback this library sent that's done, in the What's new dialog. */
+  const [implemented, setImplemented] = useState<Note | null>(null);
   /** The shared libraries' list, under the arrow beside the switch between libraries; `key`: opened to type someone's key in. */
   const [librariesOpen, setLibrariesOpen] = useState<false | 'list' | 'key'>(false);
   const guideKept = useGuideKept();
@@ -1375,7 +1382,7 @@ export default function App() {
     });
   }
   const readerHints: HintSpec[] = mouse ? [{ id: 'reader-keys', text: 'Press ? to see the keys.', ms: 6000 }] : [];
-  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || feedbackOpen || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
+  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || implemented || feedbackOpen || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
   // What's new waits for the library and for nothing else to be open, then asks the server
   // whether this account or address has been shown it already, and shows it once.
   useEffect(() => {
@@ -1398,6 +1405,26 @@ export default function App() {
     setWhatsNew(newsWaiting);
     setNewsWaiting(null);
   }, [newsWaiting, busy, route.name]);
+  // Feedback replies come after What's new, when nothing else is open: asking marks them told.
+  useEffect(() => {
+    if (repliesAsked.current || busy || newsWaiting || !newsAsked.current || !lib.ready || route.name !== 'library') return;
+    repliesAsked.current = true;
+    void askReplies().then((replies) => {
+      if (replies.length) setRepliesWaiting(replies);
+    });
+  }, [busy, newsWaiting, lib.ready, route.name]);
+  // Done first, in the dialog; then, once it's closed, the toast for any being worked on.
+  useEffect(() => {
+    if (!repliesWaiting || busy || newsWaiting || route.name !== 'library') return;
+    const note = doneNote(repliesWaiting);
+    if (note) {
+      setImplemented(note);
+      setRepliesWaiting(repliesWaiting.filter((r) => r.kind === 'working'));
+      return;
+    }
+    if (anyWorking(repliesWaiting)) say(WORKING, { thin: true, ms: WORKING_MS });
+    setRepliesWaiting(null);
+  }, [repliesWaiting, busy, newsWaiting, route.name, say]);
 
   const flipCovers = () => {
     const next = !coversOnly;
@@ -1672,6 +1699,11 @@ export default function App() {
         {whatsNew && (
           <Suspense key="news" fallback={null}>
             <News notes={whatsNew} onClose={() => setWhatsNew(null)} onFeedback={() => { setWhatsNew(null); setFeedbackOpen(true); }} />
+          </Suspense>
+        )}
+        {implemented && (
+          <Suspense key="implemented" fallback={null}>
+            <News notes={[implemented]} onClose={() => setImplemented(null)} onFeedback={() => { setImplemented(null); setFeedbackOpen(true); }} />
           </Suspense>
         )}
         {feedbackOpen && (
