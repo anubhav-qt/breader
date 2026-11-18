@@ -8,6 +8,12 @@
 - [ ] A **Working** button on each feedback: next time that account opens Breader, a subtle toast, once only: "Your feedback is being worked on, thanks for taking your time to help improve Breader!"
 - [ ] A **Done** button on each feedback, with a short one-liner of what was built: that account gets a modal once, like the release notes: "Your feedback has been implemented!" and the one-liner. Only the account that sent it.
 
+## AI marker: who says what (from a reader's report on Devils, 2026-11-18)
+- [ ] Someone else's words quoted inside a line ("she says, 'I want you...'") read in that person's voice. Today `ai/procedure.md` gives them to the outer speaker. The marker cuts the line around the quote, so the app needs no change.
+- [ ] A check that a line's speech tag names its speaker: Devils 12.226 says "Marya Timofeyevna suddenly laughed" and was given to Shatov.
+- [ ] One person under one id: Devils' cast has her as `marya-lebyadkina`, `lebyadkina-marya` and `marya-timofeyevna`, and Stepan Trofimovich under three.
+- [ ] Devils (sha256 `e60217b3…`) was fixed by hand on 2026-11-18: 21 lines cut or retagged on the server. A full re-mark of it would lose that.
+
 ## Input mode setting
 - [ ] Add a setting for **mouse-first** (default) or **keyboard-first**.
   - Mouse-first is what the current design assumes: left nav, hover reveals, clicks.
