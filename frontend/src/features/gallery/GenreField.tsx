@@ -29,6 +29,7 @@ export function GenreField({ id, value, added, others, className = '', onPick, o
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const names = genreNames(value);
+  const shown = names ?? UNSET_GENRE;
   const close = () => {
     setOpen(false);
     button.current?.focus({ preventScroll: true });
@@ -40,11 +41,12 @@ export function GenreField({ id, value, added, others, className = '', onPick, o
         id={id}
         type="button"
         className={`genre-field ${className}${names ? '' : ' is-unset'}`}
+        aria-label={`Genres: ${shown}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
       >
-        <span>{names ?? UNSET_GENRE}</span>
+        <span>{shown}</span>
         <IconChevron aria-hidden="true" />
       </button>
       <AnimatePresence>

@@ -83,8 +83,10 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
     }
   };
 
-  // Out of the menu, into a dialog of its own.
+  // Out of the menu, into a dialog of its own. Focus steps back to Settings first, so the dialog
+  // hands it back there when it closes, not to an item the closed menu took away.
   const leaveFor = (go: () => void) => {
+    opener.current?.focus();
     setOpen(false);
     go();
   };

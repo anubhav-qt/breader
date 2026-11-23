@@ -236,6 +236,21 @@ function cardRect(id: string): DOMRect | null {
 }
 
 /** Where a series' cover is on its page, when it's on screen. */
+/**
+ * After a book closes, the focus lands on the card it was opened from, so Tab carries on from
+ * there; on the library's main part when the card isn't showing. Left alone if it is somewhere.
+ */
+function focusCard(id: string) {
+  const holder = document.activeElement;
+  if (holder && holder !== document.body) return;
+  const card = document.querySelector<HTMLElement>(`.gallery:not([hidden]) .tile-hit[data-id="${CSS.escape(id)}"]`);
+  if (card) {
+    card.focus({ preventScroll: true });
+    return;
+  }
+  document.querySelector<HTMLElement>('main[tabindex="-1"]')?.focus({ preventScroll: true });
+}
+
 function coverRect(): DOMRect | null {
   const r = document.querySelector('.mdp .mds-cover')?.getBoundingClientRect();
   if (!r || r.width < 8 || r.top >= window.innerHeight || r.bottom <= 0) return null;
@@ -865,6 +880,7 @@ export default function App() {
           if (!live) return;
           // Gone before its styles are undone, or it shows whole for a frame over the library.
           flushSync(() => setClosing(null));
+          if (!closing.series) focusCard(closing.id);
           if (!host?.isConnected) return;
           host.removeAttribute('style');
           host.querySelectorAll<HTMLElement>('.rd-body').forEach((el) => { el.style.opacity = ''; });
@@ -1525,7 +1541,7 @@ export default function App() {
             onSelect={startPicking}
             bulk={bulkBar}
           />
-          <main className="lib-main">
+          <main className="lib-main" tabIndex={-1}>
           {lib.ready && galleries.map(({ c, t }) => (
             <Gallery
               key={`${c}-${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}

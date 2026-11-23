@@ -60,6 +60,24 @@ describe('public pages', () => {
     expect(read(`../public/${key}.txt`).trim()).toBe(key);
   });
 
+  it.each([
+    ['home', home],
+    ['privacy', privacy],
+  ])('the %s page shares as a wide picture with its size', (_name, html) => {
+    expect(html).toContain('<meta property="og:image" content="https://breader.site/og.png" />');
+    expect(html).toContain('<meta property="og:image:width" content="1200" />');
+    expect(html).toContain('<meta property="og:image:height" content="630" />');
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />');
+  });
+
+  it('the shared picture is a PNG of the size the pages say', () => {
+    const png = readFileSync(new URL('../public/og.png', import.meta.url));
+    // A PNG's width and height sit at bytes 16 and 20 of its header.
+    expect(png.toString('latin1', 1, 4)).toBe('PNG');
+    expect(png.readUInt32BE(16)).toBe(1200);
+    expect(png.readUInt32BE(20)).toBe(630);
+  });
+
   it('an unknown address gets a page kept out of search', () => {
     expect(missing).toContain('<meta name="robots" content="noindex" />');
   });

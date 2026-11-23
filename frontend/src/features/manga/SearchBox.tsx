@@ -102,12 +102,12 @@ export function SearchBox({ text, most, adult, adultOnly, kinds, onText, onSearc
     <div className="mdx-find">
       <label className="mdx-search">
         <IconSearch />
-        <span className="sr-only">Search manga</span>
         <input
           ref={input}
           type="search"
           value={text}
           placeholder="Search manga"
+          aria-label="Search manga"
           enterKeyHint="search"
           maxLength={most}
           role="combobox"

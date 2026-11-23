@@ -7,6 +7,7 @@ import { filledIn, laidOut, listOf, madeBy, pickChapters, remoteOf, startOf, typ
 import type { BookRecord, Position } from '../../books/types';
 import { ApiError } from '../../lib/api';
 import { shortDate } from '../../lib/format';
+import { usePageTitle } from '../../lib/pageTitle';
 import { anilist, byLang, KIND_NAME, langName, mangadex, RATING_NAME, sources, STATUS_NAME, type MangaPrefs } from '../../lib/mangadex';
 import { springs } from '../../lib/springs';
 import { readLocal, writeLocal } from '../../lib/store';
@@ -136,6 +137,7 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, fro
   const coverRef = useRef<HTMLDivElement>(null);
   const hereRef = useRef<HTMLLIElement>(null);
   const { places, settled } = useCopies(main.card.title, start, prefs, lang);
+  usePageTitle(main.card.title);
 
   // The page has the keys while it's up, and gives them back to the card it was opened from.
   useEffect(() => {

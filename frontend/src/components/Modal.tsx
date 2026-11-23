@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { springs } from '../lib/springs';
 import { IconClose } from './icons';
+import { wrapTab } from './tabWrap';
 import './modal.css';
 
 interface Props {
@@ -10,6 +11,44 @@ interface Props {
   children: ReactNode;
   width?: number;
   className?: string;
+}
+
+/** True when no other dialog or popover is open over this one. */
+function isTopDialog(dialog: HTMLElement): boolean {
+  const dialogs = document.querySelectorAll('[role="dialog"]');
+  return dialogs[dialogs.length - 1] === dialog;
+}
+
+const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Tab and Shift+Tab go round the dialog's own buttons and fields, never out to the page behind. */
+function keepTabInside(dialog: HTMLElement, e: KeyboardEvent) {
+  const stops = [...dialog.querySelectorAll<HTMLElement>(TABBABLE)].filter((el) => el.getClientRects().length > 0);
+  if (stops.length === 0) {
+    e.preventDefault();
+    dialog.focus();
+    return;
+  }
+  const at = stops.indexOf(document.activeElement as HTMLElement);
+  const next = wrapTab(stops.length, at, e.shiftKey);
+  if (next === null) return;
+  e.preventDefault();
+  stops[next].focus();
+}
+
+/**
+ * Hands focus back as a dialog closes: to what had it before, or, when that is gone (the button
+ * the dialog replaced, an item of a closed menu), to the page's main part. Never away from another
+ * dialog that has opened meanwhile.
+ */
+function giveBack(prev: HTMLElement | null) {
+  const holder = document.activeElement;
+  if (holder instanceof HTMLElement && holder.closest('[role="dialog"]')) return;
+  if (prev?.isConnected) {
+    prev.focus({ preventScroll: true });
+    return;
+  }
+  document.querySelector<HTMLElement>('main[tabindex="-1"]')?.focus({ preventScroll: true });
 }
 
 /** Centred dialog. Render it inside <AnimatePresence> so it can animate out. */
@@ -33,15 +72,34 @@ export function Modal({ title, onClose, children, width = 460, className = '' }:
       dialog?.focus();
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      // A popover or dialog opened over this one closes first, on its own.
-      const dialogs = document.querySelectorAll('[role="dialog"]');
-      if (dialogs[dialogs.length - 1] === ref.current) closeRef.current();
+      // A popover or dialog opened over this one handles its keys first, on its own.
+      if (!dialog || !isTopDialog(dialog)) return;
+      if (e.key === 'Escape') {
+        closeRef.current();
+        return;
+      }
+      if (e.key === 'Tab') keepTabInside(dialog, e);
+    };
+    // A step that swaps what the dialog shows can take away the focused button, and focus falls to
+    // the page behind. The dialog takes it back, so a keyboard or screen reader stays inside.
+    let lost = 0;
+    const onFocusOut = (e: FocusEvent) => {
+      if (e.relatedTarget) return;
+      window.clearTimeout(lost);
+      lost = window.setTimeout(() => {
+        if (!dialog?.isConnected) return;
+        if (document.activeElement !== document.body) return;
+        if (!isTopDialog(dialog)) return;
+        dialog.focus({ preventScroll: true });
+      });
     };
     window.addEventListener('keydown', onKey);
+    dialog?.addEventListener('focusout', onFocusOut);
     return () => {
       window.removeEventListener('keydown', onKey);
-      prev?.focus?.({ preventScroll: true });
+      dialog?.removeEventListener('focusout', onFocusOut);
+      window.clearTimeout(lost);
+      giveBack(prev);
     };
   }, [prev]);
 

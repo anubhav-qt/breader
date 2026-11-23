@@ -7,11 +7,15 @@ import { CROSS } from './icons';
 
 const DIGITS = '0123456789'.split('');
 
-/** A number whose digits roll to their new value, like a mechanical counter. */
+/**
+ * A number whose digits roll to their new value, like a mechanical counter. Screen readers read
+ * the plain number from hidden text: a label on a span is never read.
+ */
 export function Digits({ value, width }: { value: number; width: number }) {
   const s = String(Math.max(0, Math.round(value))).padStart(width, '0');
   return (
-    <span className="dg" aria-label={String(Math.round(value))}>
+    <span className="dg">
+      <span className="sr-only">{String(Math.round(value))}</span>
       {s.split('').map((d, i) => (
         <span key={s.length - i} className="dg-slot" aria-hidden="true">
           <motion.span className="dg-strip" initial={false} animate={{ y: `${-Number(d) * 10}%` }} transition={springs.snappy}>

@@ -17,6 +17,7 @@ import type { Paragraph, Sentence } from '../narration';
 import type { Asleep } from '../sleep';
 import { CHECK, CROSS, GROW, MINUS, PLAY, PLUS, SEARCH, SHRINK, VOICES } from './icons';
 import { SpeakerChip } from './Cast';
+import { useGiveFocusBack, useTakeFocus } from './dropFocus';
 import { ChapterLabel, CloseDots, Digits, DotIcon, Typed } from './parts';
 import { RevisitMenu, RevisitWindow, type Scope } from './Revisit';
 import { SayAs } from './SayAs';
@@ -34,6 +35,20 @@ const DROP_OPEN = 'inset(-12% -24% -40% -24%)';
 const UP_CLOSED = 'inset(112% -24% -12% -24%)';
 const UP_OPEN = 'inset(-40% -24% -12% -24%)';
 
+// What a screen reader calls each drop.
+const DROP_NAMES: Record<PanelName, string> = {
+  toc: 'Contents',
+  look: 'Appearance',
+  voice: 'Voices and modes',
+  paras: 'Pick a paragraph',
+  sleep: 'Did you sleep?',
+  find: 'Search the book',
+  revisit: 'Revisit',
+  recap: 'Revisit',
+  keys: 'Keys',
+  ai: 'AI reading along',
+};
+
 /**
  * The reader's controls. Doto leads: the page's margins are readouts. The line above the text names the
  * chapter and turns into controls under the pointer; the line below is a dot-matrix of the whole
@@ -50,6 +65,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
     ? `${credit.label} · ${credit.groups.length ? credit.groups.map((g) => g.name).join(' & ') : 'No group credited'}`
     : chapters.length > 1 ? chapterName(chapters, current) : title || book.title;
   const toggle = (k: PanelName) => openPanel(panel === k ? null : k);
+  useGiveFocusBack(!!panel);
 
   // Play, the voices and Immersive are on the play row over the bottom line (PlayBar.tsx).
   const round = useRound();
@@ -226,10 +242,12 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
       {panel && <div className={`i3-scrim${panel === 'recap' ? ' is-dim' : ''}`} onClick={() => openPanel(null)} />}
       <AnimatePresence>
         {panel && panel !== 'recap' && (
-          <Drop
+          <FocusDrop
             key={panel}
             className={`i3-drop is-${panel}${up ? ' is-up' : ''}`}
             data-panel
+            role="dialog"
+            aria-label={DROP_NAMES[panel]}
             initial={{ clipPath: up ? UP_CLOSED : DROP_CLOSED, y: up ? 6 : -6 }}
             animate={{ clipPath: up ? UP_OPEN : DROP_OPEN, y: 0 }}
             exit={{ clipPath: up ? UP_CLOSED : DROP_CLOSED, y: up ? 6 : -6 }}
@@ -258,18 +276,18 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
               )}
             </div>
             <CloseDots onClick={() => openPanel(null)} />
-          </Drop>
+          </FocusDrop>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {panel === 'recap' && revisit && (
-          <motion.div
+          <FocusDrop
             key="recap"
             className="rv"
             data-panel
             role="dialog"
-            aria-label="Revisit"
+            aria-label={DROP_NAMES.recap}
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
@@ -277,7 +295,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
           >
             <RevisitWindow chapters={chapters} current={current} scope={scope} load={revisit.load} />
             <CloseDots onClick={() => openPanel(null)} />
-          </motion.div>
+          </FocusDrop>
         )}
       </AnimatePresence>
 
@@ -291,6 +309,13 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
 function Drop(props: HTMLMotionProps<'div'>) {
   const present = useIsPresent();
   return <motion.div {...props} style={present ? props.style : { ...props.style, pointerEvents: 'none' }} />;
+}
+
+/** A drop that takes the focus as it opens (dropFocus.ts). */
+function FocusDrop(props: HTMLMotionProps<'div'>) {
+  const ref = useRef<HTMLDivElement>(null);
+  useTakeFocus(ref);
+  return <Drop ref={ref} tabIndex={-1} {...props} />;
 }
 
 /** Did you sleep? The last touch and the checkpoints since, each a place to go back to (sleep.ts). */

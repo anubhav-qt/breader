@@ -5,6 +5,7 @@ import { markTracker, screenWords, type Place } from '../../books/mark';
 import { remoteOf } from '../../books/remote';
 import { Toast, type ToastMessage } from '../../components/Toast';
 import { paintBars } from '../../lib/bars';
+import { usePageTitle } from '../../lib/pageTitle';
 import { behindMark, chapterTitles, isAway, leave, markOrder, readingOrder, resume, type Visit } from './chapterBack';
 import { chapterAt, chapterName, chaptersOf } from './chapters';
 import { ChapterBack } from './chrome/ChapterBack';
@@ -111,6 +112,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   // How far the AI has got, asked again while the book's open; pretend, during the design round.
   const aiProgress = useAiProgress(record.id, ai);
   const round = useRound();
+  usePageTitle(title || book.title);
   const narration = useNarration(view, !closing, loc, () => openPanel('voice'), { title: title || book.title, author: book.author }, slept.watch, () => lightAt.current(), marks, record.id);
   saying.current = narration.current;
   const { asked, done: sleptDone } = slept;
@@ -850,6 +852,7 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
     <div className={`rd t-${settings.theme} st-${style}${hush ? ' is-focus' : ''}${narration.playing ? ' is-aloud' : ''}${listening ? ' is-listening' : ''}${immersive ? ' is-immersed' : ''}${pacing.running ? ' is-pacing' : ''}${bar.hidden ? ' is-barless' : ''}${awake || panel ? ' is-awake' : ''}${still && !panel ? ' is-still' : ''}${hasPlay ? ` has-play play-${round.play}` : ''}`} style={vars as CSSProperties}>
       <div className="rd-body" ref={body}>
         <main className="rd-stage" onTouchStart={onTouchStart} onTouchMove={onHandScroll} onTouchEnd={onTouchEnd} onWheel={onHandScroll} onClickCapture={onClickCapture} onPointerDown={onPointerDown} onClick={onClick} onContextMenu={(e) => { if (looking()) e.preventDefault(); }}>
+          <h1 className="sr-only">{title || book.title}</h1>
           {book.kind === 'flow' ? (
             <FlowView ref={view} book={book} style={settings.style} s={settings[settings.style]} start={start} turnStyle="wipe" onLocation={onLocation} onWidth={setPageW} numbered={choosing} head={!hush || awake || !!panel} />
           ) : book.kind === 'manga' ? (

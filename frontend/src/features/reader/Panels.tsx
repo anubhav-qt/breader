@@ -380,9 +380,15 @@ export function AppearancePanel({ settings, kind, update, two = false, manga, pd
           <div className="ctl">
             <div className="clbl">Size</div>
             <div className="stp">
-              <button type="button" aria-label="Smaller text" disabled={cur.size <= SIZE_MIN} onClick={() => set({ size: Math.max(SIZE_MIN, cur.size - 1) })}>A−</button>
+              <button type="button" disabled={cur.size <= SIZE_MIN} onClick={() => set({ size: Math.max(SIZE_MIN, cur.size - 1) })}>
+                <span aria-hidden="true">A−</span>
+                <span className="sr-only">Smaller text</span>
+              </button>
               <span className="stp-v" aria-live="polite">{cur.size}</span>
-              <button type="button" aria-label="Larger text" disabled={cur.size >= SIZE_MAX} onClick={() => set({ size: Math.min(SIZE_MAX, cur.size + 1) })}>A+</button>
+              <button type="button" disabled={cur.size >= SIZE_MAX} onClick={() => set({ size: Math.min(SIZE_MAX, cur.size + 1) })}>
+                <span aria-hidden="true">A+</span>
+                <span className="sr-only">Larger text</span>
+              </button>
             </div>
           </div>
           <Segmented label="Weight" value={cur.weight} onChange={(v) => set({ weight: v })} options={WEIGHTS} />
