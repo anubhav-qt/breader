@@ -27,6 +27,10 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
   The server voice reads Piper's voices only; Kokoro (the heavy voices) runs on devices.
+- Search and screen readers: `index.html` carries the empty library's words for crawlers that run
+  no script (kept equal to `features/guide/cards.ts` by `src/findable.test.ts`), plus the
+  description, canonical and link-preview tags. `public/404.html`, `robots.txt`, `sitemap.xml`:
+  `infra/README.md`, Cloudflare Pages.
 - Readers send requests and feedback from the app (`frontend/src/features/feedback/`,
   `server/src/routes/feedback.ts`); they show on the admin page (`frontend/src/admin/`). Working and
   Done (with the admin's one line) tell the library that sent it, once each: a thin toast, and the

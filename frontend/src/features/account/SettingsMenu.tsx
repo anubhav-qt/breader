@@ -39,6 +39,7 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const opener = useRef<HTMLButtonElement>(null);
   const sync = useSyncStatus();
   // The owner's accounts only: the thumbs on panels, and on pages whole, in the Panels layout.
   const rater = useRater();
@@ -47,7 +48,12 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    // Escape closes it and puts the keyboard back on the button, wherever in the menu it was.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      opener.current?.focus();
+    };
     window.addEventListener('pointerdown', away);
     window.addEventListener('keydown', esc);
     return () => {
@@ -85,7 +91,7 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
 
   // Logged out, the books are only in this browser: what logging in is for, under it.
   let ending = (
-    <button type="button" role="menuitem" className="acct-item acct-login" onClick={() => leaveFor(onLogin)}>
+    <button type="button" className="acct-item acct-login" onClick={() => leaveFor(onLogin)}>
       <span>Log in</span>
       <small>Keep your books on every device</small>
     </button>
@@ -106,15 +112,15 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
       </div>
     );
   } else if (user) {
-    ending = <button type="button" role="menuitem" className="acct-item" onClick={() => setConfirming(true)}>Log out</button>;
+    ending = <button type="button" className="acct-item" onClick={() => setConfirming(true)}>Log out</button>;
   }
 
   return (
     <div className="acct" ref={root}>
       <button
+        ref={opener}
         type="button"
         className="btn btn-ghost hdr-icon"
-        aria-haspopup="true"
         aria-expanded={open}
         aria-label={news ? 'Settings, with something new in the guide' : 'Settings'}
         title="Settings"
@@ -127,7 +133,6 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
         {open && (
           <motion.div
             className="acct-menu"
-            role="menu"
             initial={{ opacity: 0, y: -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
@@ -149,19 +154,19 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
             )}
             {message && <p className="acct-message" role="status">{message}</p>}
             {user && <div className="acct-sep" />}
-            <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onGuide)}>
+            <button type="button" className="acct-item" onClick={() => leaveFor(onGuide)}>
               <IconList /> Guide
               {news > 0 ? <span className="acct-new">{news} new</span> : <kbd className="acct-kbd" aria-hidden="true">?</kbd>}
             </button>
             {/* Stays open, so the covers can be seen changing behind it. */}
             {coversOnly !== undefined && (
-              <button type="button" role="menuitemcheckbox" aria-checked={coversOnly} className="acct-item acct-toggle" onClick={onCoversOnly}>
+              <button type="button" role="switch" aria-checked={coversOnly} className="acct-item acct-toggle" onClick={onCoversOnly}>
                 <IconEye /> Only covers
                 <span className="switch" aria-hidden="true" />
               </button>
             )}
             {rater && (
-              <button type="button" role="menuitemcheckbox" aria-checked={voting} className="acct-item acct-toggle" onClick={() => setVoting(!voting)}>
+              <button type="button" role="switch" aria-checked={voting} className="acct-item acct-toggle" onClick={() => setVoting(!voting)}>
                 <IconThumb /> Panel votes
                 <span className="switch" aria-hidden="true" />
               </button>
@@ -169,14 +174,14 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
             {naming ? (
               <LibraryNames />
             ) : (
-              <button type="button" role="menuitem" className="acct-item" onClick={() => setNaming(true)}>
+              <button type="button" className="acct-item" onClick={() => setNaming(true)}>
                 <IconPencil /> Rename libraries
               </button>
             )}
-            <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onKey)}>
+            <button type="button" className="acct-item" onClick={() => leaveFor(onKey)}>
               <IconKey /> Library key
             </button>
-            <button type="button" role="menuitem" className="acct-item" onClick={() => leaveFor(onFeedback)}>
+            <button type="button" className="acct-item" onClick={() => leaveFor(onFeedback)}>
               <IconChat /> Request a feature / Feedback
             </button>
             {ending}

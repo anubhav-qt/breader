@@ -1525,6 +1525,7 @@ export default function App() {
             onSelect={startPicking}
             bulk={bulkBar}
           />
+          <main className="lib-main">
           {lib.ready && galleries.map(({ c, t }) => (
             <Gallery
               key={`${c}-${t}-${preview}${t === 'shelf' ? `-${showing}` : ''}`}
@@ -1570,6 +1571,7 @@ export default function App() {
               />
             </Suspense>
           )}
+          </main>
         </div>
       )}
 

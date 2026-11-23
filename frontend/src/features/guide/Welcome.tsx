@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { IconChevron, IconPaste, IconPlus, IconSearch } from '../../components/icons';
 import type { DemoId } from './Demo';
+import { BOOKS, MANGA, type Card } from './cards';
 import './guide.css';
 
 const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
@@ -12,21 +13,7 @@ const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
  * Each card shows how it's done (Demo.tsx), with the button that starts it.
  */
 
-interface Card { id: DemoId; name: string; what: string }
 type Act = { label: string; run: () => void } | null;
-
-const BOOKS: Card[] = [
-  { id: 'read', name: 'Read', what: 'EPUB, PDF, TXT, Markdown and CBZ, in the look you like.' },
-  { id: 'listen', name: 'Listen', what: 'Sixty voices read aloud, or the words light up as you read.' },
-  { id: 'audiobook', name: 'Audiobooks', what: 'Any book made into MP3, to play with the screen off.' },
-  { id: 'share', name: 'Share', what: 'Your key lets the people you trust read what you share.' },
-];
-
-const MANGA: Card[] = [
-  { id: 'find', name: 'Find', what: 'MangaDex and other sites, searched at once.' },
-  { id: 'panels', name: 'Panel by panel', what: 'Or page by page, or scrolling, left to right or right to left.' },
-  { id: 'offline', name: 'Offline', what: 'Download a series to read without a connection.' },
-];
 
 const hasMouse = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
@@ -74,7 +61,7 @@ export function WelcomeBooks({ onAdd, onPaste, onGuide }: { onAdd: () => void; o
   const mouse = useMemo(hasMouse, []);
   return (
     <div className="wl">
-      <p className="wl-h">Start with a book</p>
+      <h1 className="wl-h">Start with a book</h1>
       <div className="wl-acts">
         <button type="button" className="btn btn-primary wl-main" onClick={onAdd}><IconPlus /> Add a book</button>
         <button type="button" className="btn btn-quiet wl-second" onClick={onPaste}><IconPaste /> Paste text</button>
@@ -90,7 +77,7 @@ export function WelcomeBooks({ onAdd, onPaste, onGuide }: { onAdd: () => void; o
 export function WelcomeManga({ onBrowse, onAdd, onGuide }: { onBrowse: (() => void) | null; onAdd: () => void; onGuide: () => void }) {
   return (
     <div className="wl">
-      <p className="wl-h">Start with a manga</p>
+      <h1 className="wl-h">Start with a manga</h1>
       <div className="wl-acts">
         {onBrowse && <button type="button" className="btn btn-primary wl-main" onClick={onBrowse}><IconSearch /> Find manga</button>}
         <button type="button" className={`btn ${onBrowse ? 'btn-quiet wl-second' : 'btn-primary wl-main'}`} onClick={onAdd}><IconPlus /> Add CBZ files</button>
@@ -106,7 +93,7 @@ export function WelcomeManga({ onBrowse, onAdd, onGuide }: { onBrowse: (() => vo
 export function WelcomeShared({ manga, onShare, onOpen, onGuide }: { manga: boolean; onShare: () => void; onOpen: () => void; onGuide: () => void }) {
   return (
     <div className="wl">
-      <p className="wl-h">Share with people you trust</p>
+      <h1 className="wl-h">Share with people you trust</h1>
       <p className="wl-p">
         {manga ? 'Manga' : 'Books'} you share show here. Anyone with your key can read them and keep a copy. Share one you have from its ⋯.
       </p>

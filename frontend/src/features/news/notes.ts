@@ -15,6 +15,14 @@ export interface Note {
 
 export const NOTES: Note[] = [
   {
+    id: '2026-11-23',
+    title: 'Easier to find, easier to use',
+    lines: [
+      'The settings menu works better with a keyboard and a screen reader.',
+      'Search engines and AI search can now read what Breader is.',
+    ],
+  },
+  {
     id: '2026-11-18',
     title: 'Replies to your feedback',
     lines: [

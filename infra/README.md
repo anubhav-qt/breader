@@ -429,6 +429,13 @@ deployments. Put `VITE_API_URL=https://api.breader.example`,
 `VITE_API_FALLBACK_URL=https://fb.breader.example` and `VITE_SENTRY_DSN=<the DSN>` in
 `infra/.env.ship`, and sign in once with `npx wrangler@4 login`.
 
+`frontend/public/404.html` makes Pages answer unknown addresses with a 404 instead of the app, so
+the app's own places live on `/` (`#/read/…`, `?verify=…`), never on paths. `robots.txt` lets every
+crawler in, AI ones too (the owner's choice, 2026-11-23), and `sitemap.xml` lists `/` and `/privacy`.
+The `google-site-verification` tag in `index.html` keeps the Search Console property
+(`https://breader.site/`, URL prefix), and `public/843f0dfa3440c7c76b9d86d0aff7f6e0.txt` is the
+IndexNow key for Bing and others; both stay for good (`src/findable.test.ts` checks them).
+
 ### Edge cache for pages and covers
 
 Pages, a source chapter's page count and covers are the same for every reader

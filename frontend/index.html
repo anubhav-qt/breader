@@ -14,6 +14,22 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Breader" />
     <title>Breader</title>
+    <!-- What search engines and link previews show; written from what the empty library says. -->
+    <meta name="description" content="A free e-reader in the browser. Read EPUB, PDF, TXT, Markdown and CBZ in the look you like, hear sixty voices read aloud, make any book into an MP3 audiobook, and share with people you trust." />
+    <link rel="canonical" href="https://breader.site/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Breader" />
+    <meta property="og:url" content="https://breader.site/" />
+    <meta property="og:title" content="Breader" />
+    <meta property="og:description" content="A free e-reader in the browser. Read EPUB, PDF, TXT, Markdown and CBZ in the look you like, hear sixty voices read aloud, make any book into an MP3 audiobook, and share with people you trust." />
+    <meta property="og:image" content="https://breader.site/icon-512.png" />
+    <meta property="og:image:alt" content="Breader" />
+    <meta name="twitter:card" content="summary" />
+    <!-- Proves to Google Search Console that breader.site is ours. Keep it: Google checks it again. -->
+    <meta name="google-site-verification" content="zKlPGbwGdknb6y-z_4KmPNR6XWhsMWmAchUxQaouB00" />
+    <script type="application/ld+json">
+      { "@context": "https://schema.org", "@type": "WebSite", "name": "Breader", "url": "https://breader.site/" }
+    </script>
     <!-- Light or dark as last picked with the sun-or-moon button (App.tsx), before anything is drawn. -->
     <script>
       try {
@@ -33,7 +49,24 @@
     <link rel="preload" as="font" type="font/woff2" href="/src/styles/fonts/Dongle-700.woff2" crossorigin />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- The empty library's words (features/guide/Welcome.tsx), so crawlers that run no script read
+         what Breader is. The app draws over it as it starts. -->
+    <div id="root">
+      <div class="lib">
+        <main class="gallery is-empty">
+          <div class="wl">
+            <h1 class="wl-h">Start with a book</h1>
+            <ul class="wl-cards">
+              <li><div class="wl-card"><b>Read</b><span>EPUB, PDF, TXT, Markdown and CBZ, in the look you like.</span></div></li>
+              <li><div class="wl-card"><b>Listen</b><span>Sixty voices read aloud, or the words light up as you read.</span></div></li>
+              <li><div class="wl-card"><b>Audiobooks</b><span>Any book made into MP3, to play with the screen off.</span></div></li>
+              <li><div class="wl-card"><b>Share</b><span>Your key lets the people you trust read what you share.</span></div></li>
+            </ul>
+            <a class="wl-guide" href="/privacy">Privacy</a>
+          </div>
+        </main>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,4 +1,6 @@
 .lib { height: 100dvh; display: flex; flex-direction: column; }
+/* The library's shelves, under the header: the page's main part, for screen readers. */
+.lib-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .rd-host { position: fixed; inset: 0; z-index: 40; }
 .rd-host.is-leaving { pointer-events: none; }
