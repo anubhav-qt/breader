@@ -26,10 +26,10 @@ const note = (id: string): Note => ({ id, title: `Title ${id}`, lines: [`Line ${
 const post = vi.fn();
 vi.mock('../../lib/api', () => ({ api: { post: (...args: unknown[]) => post(...args) } }));
 
-async function load(start: Record<string, string> = {}, notes?: Note[]) {
+async function load(start: Record<string, string> = {}, notes?: Note[], quiet = '') {
   vi.resetModules();
   vi.doUnmock('./notes');
-  if (notes) vi.doMock('./notes', () => ({ NOTES: notes }));
+  if (notes) vi.doMock('./notes', () => ({ NOTES: notes, QUIET_THROUGH: quiet }));
   const ls = fakeStorage(start);
   vi.stubGlobal('localStorage', ls);
   vi.stubGlobal('indexedDB', undefined);
@@ -64,6 +64,16 @@ describe('what’s new on a device', () => {
     const notes = ['2026-12-01', '2026-11-20', '2026-11-12-2', '2026-11-12', '2026-11-09'].map(note);
     const { unseen } = await load({ [KEY]: JSON.stringify({ seen: '2026-11-09' }) }, notes);
     expect(unseen().map((n) => n.id)).toEqual(['2026-12-01', '2026-11-20', '2026-11-12-2']);
+  });
+
+  it('shows no note from the quiet days, only the ones after', async () => {
+    const before = { [KEY]: JSON.stringify({ seen: '2026-11-09' }) };
+    const notes = ['2026-11-23', '2026-11-18', '2026-11-15'].map(note);
+    const quiet = await load(before, notes, '2026-11-23');
+    expect(quiet.unseen()).toEqual([]);
+
+    const later = await load(before, [note('2026-11-23-2'), ...notes], '2026-11-23');
+    expect(later.unseen().map((n) => n.id)).toEqual(['2026-11-23-2']);
   });
 
   it('counts a second release on the same day as new', async () => {

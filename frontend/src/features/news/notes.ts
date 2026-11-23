@@ -1,8 +1,7 @@
 /*
- * What changed, for readers: one note for each release to breader.site, newest first. Each shows
- * once, in a dialog (News.tsx), to readers who had Breader before it came. A title and one or two
- * lines, each short and plain enough for a child. infra/ship.sh won't ship a release whose notes
- * are the same as the live one's, so every release says what it changed.
+ * What changed, for readers, newest first. Every line is asked of the owner before it goes in;
+ * never add one without that. Each shows once, in a dialog (News.tsx), to readers who had Breader
+ * before it came. A title and one or two lines, each short and plain enough for a child.
  *
  * `id` is the day it ships, with -2, -3 for a second or third release that day.
  */
@@ -13,15 +12,10 @@ export interface Note {
   lines: string[];
 }
 
+/** No note up to this day is shown to anyone. Only notes after it, each line approved by the owner. */
+export const QUIET_THROUGH = '2026-11-23';
+
 export const NOTES: Note[] = [
-  {
-    id: '2026-11-23',
-    title: 'Easier to find, easier to use',
-    lines: [
-      'The settings menu works better with a keyboard and a screen reader.',
-      'Search engines and AI search can now read what Breader is.',
-    ],
-  },
   {
     id: '2026-11-18',
     title: 'Replies to your feedback',

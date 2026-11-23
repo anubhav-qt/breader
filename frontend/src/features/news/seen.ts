@@ -2,7 +2,7 @@ import type { NewsSeenAnswer } from '@breader/shared/news';
 import { api } from '../../lib/api';
 import { usedBefore } from '../../lib/first-visit';
 import { readLocal, writeLocal } from '../../lib/store';
-import { NOTES, type Note } from './notes';
+import { NOTES, QUIET_THROUGH, type Note } from './notes';
 
 /*
  * The newest note of what's new this device has been shown. Someone new has nothing to catch up on:
@@ -27,9 +27,10 @@ function load(): string {
 
 let seen = load();
 
-/** The notes this device hasn't been shown, newest first. */
+/** The notes this device hasn't been shown, newest first. None from the quiet days. */
 export function unseen(): Note[] {
-  return NOTES.filter((n) => n.id > seen).slice(0, MOST);
+  const fresh = NOTES.filter((n) => n.id > seen && n.id > QUIET_THROUGH);
+  return fresh.slice(0, MOST);
 }
 
 export function markShown() {

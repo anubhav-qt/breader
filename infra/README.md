@@ -493,9 +493,8 @@ It lives in Supabase's `feedback` table, which the ThinkPad's copy doesn't keep.
 the local stand-ins, pushes, publishes a new panel model round, builds and pushes the server image,
 migrates Supabase, redeploys Render, builds and uploads the app, then waits until all three are on
 the new commit. `infra/ship.sh app live` runs only the steps named. There is no CI on GitHub.
-Before anything, check makes sure this release has a note for readers at the top of
-`frontend/src/features/news/notes.ts`, different from the live release's: readers from before see
-it once, in a dialog over the library, and only once for an account, an address and a device (the
+A What's new note at the top of `frontend/src/features/news/notes.ts` goes in only after the owner
+approves each line (ship.sh doesn't demand one): readers from before see it once, in a dialog over the library, and only once for an account, an address and a device (the
 app asks `POST /v1/news/seen` first, `server/src/routes/news.ts`; an address is kept only as an
 HMAC of it). A tab left open from before a release asks for files the
 release took away (Pages answers those with the app's page): it reloads onto the new build, once
