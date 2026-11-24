@@ -8,6 +8,8 @@ import type { Store } from './lib/cache.ts';
 import type { Storage } from './lib/storage.ts';
 import type { Manga } from './manga/index.ts';
 import type { Uploads } from './manga/uploads.ts';
+import type { Pool as StoragePool } from './manga/pool.ts';
+import type { Egress } from './lib/egress.ts';
 import type { Engine } from './engine/index.ts';
 import type { Panels } from './panels/index.ts';
 import type { Speech } from './speech/index.ts';
@@ -25,6 +27,12 @@ export interface Deps {
   speech: Speech | null;
   /** Manga: MangaDex, and Suwayomi when set up (manga/); null where it's off, as on the fallback. */
   manga: Manga | null;
+  /** The storage pool (manga/pool.ts): where a chapter is, for JSON_ONLY's redirects; null or missing where it's off. */
+  storagePool?: Pick<StoragePool, 'where'> | null;
+  /** This month's egress (lib/egress.ts), on GCP; /health says when it's near the limit. Null or missing elsewhere. */
+  egress?: Pick<Egress, 'usedMb' | 'near' | 'limitMb'> | null;
+  /** Whether this server is busy just now (lib/busy.ts); null or missing where the owner set no threshold. */
+  busy?: (() => boolean) | null;
   /** Chapters its readers fetched, put in the storage pool (manga/uploads.ts); null or missing where it's off. */
   uploads?: Uploads | null;
   /** Manga panels found with the panel model (panels/); null or missing where it's off, as on the fallback. */

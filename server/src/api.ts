@@ -12,6 +12,8 @@ import { asJob, runKind, takeCommands } from './lib/admin.ts';
 import { Archive } from './lib/archive.ts';
 import { r2Answers } from './lib/answers.ts';
 import { archiveTo, connectRedis, memoryRoom, near, type Redis, type Store } from './lib/cache.ts';
+import { makeBusy } from './lib/busy.ts';
+import { makeEgress, type Egress } from './lib/egress.ts';
 import { makeGemini } from './lib/gemini.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
@@ -105,7 +107,21 @@ if (manga && storagePool && env.POOL_UPLOADS) uploads = makeUploads({ pool: stor
 // free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
 let panels: ReturnType<typeof makePanels> | null = null;
 if (manga && engine) panels = makePanels(env, engine);
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, uploads, panels, engine, redis, reads };
+// On GCP, this month's egress, counted each minute (lib/egress.ts): near the owner's limit, /health
+// says so and the app stops choosing this server.
+let egress: Egress | null = null;
+let egressAt: NodeJS.Timeout | undefined;
+if (env.GCP_EGRESS_LIMIT_MB) {
+  const counting = makeEgress({ file: env.EGRESS_FILE, card: env.EGRESS_CARD, limitMb: env.GCP_EGRESS_LIMIT_MB });
+  const tick = () => void counting.tick().catch((err) => log.warn({ err }, 'couldn’t count this month’s egress'));
+  tick();
+  egressAt = setInterval(tick, 60_000);
+  egress = counting;
+}
+// The busy sign, where the owner set its threshold (lib/busy.ts).
+let busy: (() => boolean) | null = null;
+if (env.BUSY_LAG_MS) busy = makeBusy(env.BUSY_LAG_MS).busy;
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, uploads, storagePool, egress, busy, panels, engine, redis, reads };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 // Panels from an earlier round of the model go to the archive before any reader is served, so
@@ -245,6 +261,7 @@ if (Object.keys(runNow).length) {
 const stop = () => {
   log.info('shutting down');
   clearInterval(chores);
+  clearInterval(egressAt);
   clearInterval(warming);
   clearTimeout(prefetchAt);
   clearTimeout(keepAt);

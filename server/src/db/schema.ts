@@ -721,6 +721,16 @@ export const workerLease = pgTable('worker_lease', {
 });
 
 /**
+ * When each machine's worker last said it's up, every 30 s whether it holds the lease or not. A
+ * standby (mirror/standby.ts) stands in only while the machine it stands in for is quiet, and
+ * hands the lease back as soon as it's heard from again.
+ */
+export const workerSeen = pgTable('worker_seen', {
+  machine: text('machine').primaryKey(),
+  at: at('at').notNull().defaultNow(),
+});
+
+/**
  * The storage pool's chapters (manga/pool.ts, ADR 0004): which bucket holds each, by its key (the
  * first 32 hex characters of SHA-256 of the chapter's id, as in ADR 0003). A row is made before its
  * pages are put, so two servers never put one chapter, and the room is counted from here. `done`

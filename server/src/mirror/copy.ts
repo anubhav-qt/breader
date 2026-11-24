@@ -37,13 +37,22 @@ export function copyName(url: string): string {
   return `${user}@${u.hostname}/${db}`;
 }
 
+/** A read copy at `url`, named in feed_copies by `name` or by its address. */
+export function connectCopyAt(url: string, ssl: boolean, max: number, name?: string): Copy {
+  const pool = makePool(url, { max, name: 'copy', ssl, replay: true });
+  return { pool, db: drizzle(pool, { schema }), name: name ?? copyName(url), url, ssl };
+}
+
 /** This server's read copy, or null where it has none (COPY_URL unset). */
 export function connectCopy(env: Env, max = 4): Copy | null {
   if (!env.COPY_URL) return null;
+  return connectCopyAt(env.COPY_URL, env.COPY_SSL === 'require', max, env.COPY_NAME);
+}
+
+/** Every read copy a feeder of all of them keeps current (COPY_URLS): the ThinkPad's worker, or a standby. */
+export function connectCopies(env: Env): Copy[] {
   const ssl = env.COPY_SSL === 'require';
-  const pool = makePool(env.COPY_URL, { max, name: 'copy', ssl, replay: true });
-  const name = env.COPY_NAME ?? copyName(env.COPY_URL);
-  return { pool, db: drizzle(pool, { schema }), name, url: env.COPY_URL, ssl };
+  return env.COPY_URLS.map((url) => connectCopyAt(url, ssl, 2));
 }
 
 /**

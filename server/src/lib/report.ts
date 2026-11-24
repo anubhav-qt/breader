@@ -7,7 +7,7 @@ let reporter: Reporter | null = null;
  * Sends errors to Sentry when SENTRY_DSN is set. Call once, first thing: it reads process.env
  * itself, so a start that fails on its settings is sent too.
  */
-export function startReporting(component: 'api' | 'worker' | 'migrate') {
+export function startReporting(component: 'api' | 'worker' | 'standby' | 'migrate') {
   const { SENTRY_DSN, RELEASE, ROLE, NODE_ENV } = process.env;
   if (!SENTRY_DSN) return;
   reporter = makeReporter({

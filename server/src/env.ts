@@ -38,6 +38,14 @@ const Env = z.object({
   COPY_NAME: z.string().min(1).max(100).optional(),
   /** require (the default) for a database reached over the internet; off for a local one. */
   COPY_SSL: z.enum(['off', 'require']).default('require'),
+  /**
+   * Every read copy, for a feeder of them all (mirror/standby.ts): the ThinkPad's worker feeds each
+   * while it holds the lease, and a standby (GCP) while the ThinkPad is quiet. Comma separated; a
+   * copy's own server feeds it too, one feeder at a time (its feed lock). COPY_SSL applies to each.
+   */
+  COPY_URLS: list.default([]),
+  /** The machine a standby stands in for (mirror/standby.ts): the ThinkPad's MACHINE. */
+  STANDBY_FOR: z.string().min(1).default('laptop'),
 
   /** Secret mixed into the key HMAC. Changing it makes every stored key hash unusable. */
   KEY_PEPPER: z.string().min(32),
@@ -164,6 +172,27 @@ const Env = z.object({
    * servers; manga/uploads.ts). The ThinkPad's keeper puts them there anyway.
    */
   POOL_UPLOADS: bool.optional(),
+  /**
+   * Sends no pictures or sound (lib/media.ts): pages and covers go on to the storage pool or to
+   * MEDIA_ELSEWHERE. For a server whose sending is costly (GCP).
+   */
+  JSON_ONLY: bool.optional(),
+  /** A server that sends pictures, for JSON_ONLY's pages and covers the pool hasn't: an Azure one. */
+  MEDIA_ELSEWHERE: z.string().url().optional(),
+  /**
+   * This month's egress, counted (lib/egress.ts): near this many MB, /health says so and the app
+   * stops choosing this server. Off when unset. The owner's: 800 on GCP.
+   */
+  GCP_EGRESS_LIMIT_MB: z.coerce.number().positive().optional(),
+  /** Where the month's egress count is kept, across starts. */
+  EGRESS_FILE: z.string().min(1).default('/data/egress/egress.json'),
+  /** The network card whose sent bytes are counted (/proc/net/dev). */
+  EGRESS_CARD: z.string().min(1).default('ens4'),
+  /**
+   * /health says busy when the event loop's delay passes this many ms (lib/busy.ts), and the app
+   * prefers another server. Off when unset: the owner sets it from load-test numbers.
+   */
+  BUSY_LAG_MS: z.coerce.number().positive().optional(),
   /**
    * Redis (redis://redis:6379), where MangaDex's answers are kept so they outlast a restart.
    * Without it they're kept in memory. Redis not answering never stops a reader.

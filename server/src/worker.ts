@@ -1,4 +1,5 @@
 import { connectMirror, connectPrimary } from './db/client.ts';
+import { migrationsBeside } from './db/migrations.ts';
 import { loadEnv } from './env.ts';
 import { backupIfDue } from './jobs/backup.ts';
 import { pruneReadFeed } from './jobs/chores.ts';
@@ -15,7 +16,9 @@ import { asJob, runKind, takeCommands, WORKER_JOBS } from './lib/admin.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
+import { connectCopies } from './mirror/copy.ts';
 import { makeFeed } from './mirror/feed.ts';
+import { feedEvery, sayUp } from './mirror/standby.ts';
 import { makeFileMirror } from './mirror/files.ts';
 
 /*
@@ -35,6 +38,11 @@ const primary = connectPrimary(env, 2);
 const mirror = connectMirror(env, 3);
 if (!mirror) throw new Error('The worker needs MIRROR_URL (the laptop’s copy).');
 const storage = makeStorage(env);
+
+// Every read copy (COPY_URLS), fed from here while this machine holds the lease; a standby on GCP
+// feeds them while this one is quiet (mirror/standby.ts).
+const copies = connectCopies(env);
+const folder = migrationsBeside(import.meta.url);
 
 const files = makeFileMirror(storage, env.FILES_DIR);
 const stop = new AbortController();
@@ -56,11 +64,14 @@ function lead(now: boolean) {
   leadingStop = new AbortController();
   const proxy = startCliproxy({ filesDir: env.FILES_DIR, adminToken: env.ADMIN_TOKEN, signal: leadingStop.signal });
   startMarker({ filesDir: env.FILES_DIR, signal: leadingStop.signal, env: proxy ?? undefined });
+  if (copies.length) void feedEvery(primary.pool, copies, folder, leadingStop.signal);
 }
 
 async function checkLease() {
   let mine = false;
   try {
+    // Heard from first, so a standby standing in hands the lease back (mirror/standby.ts).
+    await sayUp(primary.pool, env.MACHINE);
     mine = await holdLease(primary.pool, env.MACHINE);
   } catch (err) {
     // Not knowing means not holding: the other machine may take it meanwhile.

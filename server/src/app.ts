@@ -7,6 +7,7 @@ import type { AppEnv, Deps } from './context.ts';
 import { noteWrite, onlyPrimary } from './db/reads.ts';
 import { ApiError, neverKept, onError } from './lib/errors.ts';
 import { clientIp, sameOriginWrites } from './lib/http.ts';
+import { jsonOnly } from './lib/media.ts';
 import { log } from './log.ts';
 import { accountRoutes } from './routes/account.ts';
 import { adminRoutes } from './routes/admin.ts';
@@ -70,6 +71,8 @@ export function makeApp(deps: Deps) {
     // A preflight's answer is cors()'s own, so it's handed back.
     return withCors(c, next);
   });
+  // A server whose sending is costly sends pages and covers on, and no pictures or sound itself (lib/media.ts).
+  if (deps.env.JSON_ONLY) app.use('/v1/*', jsonOnly({ elsewhere: deps.env.MEDIA_ELSEWHERE, pool: deps.storagePool }));
   app.use('/v1/*', sameOriginWrites(allowed));
   // Reads that may come from a read copy go there, unless it's behind or hasn't this reader's last
   // write yet; each write leaves the cookie that says when it was made (db/reads.ts).
