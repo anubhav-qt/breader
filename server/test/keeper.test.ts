@@ -127,10 +127,10 @@ describe('keeping libraries’ manga on disk', () => {
   });
 });
 
-describe('putting each library’s latest series in R2', () => {
+describe('putting each library’s latest series in the storage pool', () => {
   const DAY = 24 * 3600_000;
   const ago = (days: number) => new Date(Date.now() - days * DAY);
-  /** R2 as the keeper sees it: what it was asked to hold, each turn. */
+  /** The pool as the keeper sees it: what it was asked to hold, each turn. */
   function fakeCloud() {
     const asked: CloudSeries[][] = [];
     const cloud = {
@@ -145,7 +145,7 @@ describe('putting each library’s latest series in R2', () => {
     query: async () => ({ rows }),
   }) as never;
 
-  it('gives R2 each library’s 2 series read most lately in 30 days, 25 chapters ahead, the latest first', async () => {
+  it('gives the pool each library’s 2 series read most lately in 30 days, 25 chapters ahead, the latest first', async () => {
     const [s1, s2, s3, s4] = [1, 2, 3, 4].map(series);
     const lists: Record<string, MangaChapter[]> = {};
     for (const s of [s1, s2, s3, s4]) lists[s] = Array.from({ length: 40 }, (_, i) => chapter(s, i + 1));
@@ -162,7 +162,7 @@ describe('putting each library’s latest series in R2', () => {
     const [wanted] = c.asked;
     expect(wanted.map((w) => w.id)).toEqual([`mangadex:${s1}`, `mangadex:${s4}`, `mangadex:${s2}`]);
     expect(wanted[0].chapters.map((x) => x.id)).toEqual(Array.from({ length: 26 }, (_, i) => `${s1}/${i + 3}`));
-    // a's third series keeps the usual 10 ahead on the disk, and stays out of R2.
+    // a's third series keeps the usual 10 ahead on the disk, and stays out of the pool.
     expect(f.chapters().filter((x) => x.startsWith(`${s3}/`))).toHaveLength(11);
     expect(f.chapters().filter((x) => x.startsWith(`${s1}/`))).toHaveLength(26);
   });
@@ -181,7 +181,7 @@ describe('putting each library’s latest series in R2', () => {
     expect(wanted[1]).toMatchObject({ id: `mangadex:${s}`, list: null });
   });
 
-  it('says what R2 holds after the turn, and keeps going when R2 fails', async () => {
+  it('says what the pool holds after the turn, and keeps going when it fails', async () => {
     const s = series(1);
     const f = fakeManga({ [s]: [chapter(s, 1)] });
     const c = fakeCloud();

@@ -16,7 +16,7 @@ import { Memo, near, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover, Covers, CoverWidth } from './covers.ts';
-import { pictureType, type Disk, type Picture } from './disk.ts';
+import { pictureType, type Disk, type Picture, type Pooled } from './disk.ts';
 import { WARM, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
@@ -139,6 +139,8 @@ export interface MangaDex {
   chapters(id: string, lang: string): Promise<MangaChapters>;
   /** Page n of a chapter (from 0), or its data-saver copy. quiet: not counted as read (disk.ts). */
   page(chapterId: string, n: number, saver: boolean, quiet?: boolean): Promise<Picture>;
+  /** How many full size pages a chapter has. */
+  pages(chapterId: string): Promise<number>;
   /** A series' cover at a width; early: the prefetch's (covers.ts). */
   cover(mangaId: string, file: string, size: '256' | '512', early?: number): Promise<Cover>;
   /** Checks Popular's and Updated's first screens ahead of readers. */
@@ -154,6 +156,11 @@ export interface MangaDexOptions {
   pace?: { api: [number, number]; home: [number, number] };
   /** Where its answers are kept: Redis, when the server has one. Without, in memory. */
   store?: Store | null;
+  /**
+   * A chapter's page from the storage pool (manga/pool.ts), asked before the site; null when the
+   * pool hasn't it. Full size pages only.
+   */
+  pooled?: Pooled | null;
 }
 
 const notFound = () => new ApiError(404, 'manga_not_found', 'MangaDex doesn’t have that, or it’s been taken down.');
@@ -712,9 +719,19 @@ export function makeMangaDex(opts: MangaDexOptions): MangaDex {
       return feed(id, lang);
     },
 
+    async pages(chapterId) {
+      await allowChapter(chapterId);
+      const home = await atHome(chapterId, false);
+      return home.chapter.data.length;
+    },
+
     async page(chapterId, n, saver, quiet = false) {
       await allowChapter(chapterId);
       return disk.keep(`page:${chapterId}:${saver ? 's' : 'd'}:${n}`, async () => {
+        if (!saver && opts.pooled) {
+          const kept = await opts.pooled(chapterId, n);
+          if (kept) return kept;
+        }
         const from = async (fresh: boolean) => {
           const home = await atHome(chapterId, fresh);
           const files = saver ? home.chapter.dataSaver : home.chapter.data;

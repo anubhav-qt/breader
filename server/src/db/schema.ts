@@ -721,6 +721,40 @@ export const workerLease = pgTable('worker_lease', {
 });
 
 /**
+ * The storage pool's chapters (manga/pool.ts, ADR 0004): which bucket holds each, by its key (the
+ * first 32 hex characters of SHA-256 of the chapter's id, as in ADR 0003). A row is made before its
+ * pages are put, so two servers never put one chapter, and the room is counted from here. `done`
+ * once the pages and then the index are in. `wanted_at`: when a reader or the keeper last wanted
+ * it; the least lately wanted leave first when room is needed. Not fed: only servers read it.
+ */
+export const poolChapters = pgTable(
+  'pool_chapters',
+  {
+    key: text('key').primaryKey(),
+    chapter: text('chapter').notNull(),
+    bucket: text('bucket').notNull(),
+    pages: integer('pages').notNull().default(0),
+    bytes: big('bytes').notNull(),
+    done: boolean('done').notNull().default(false),
+    at: at('at').notNull().defaultNow(),
+    wantedAt: at('wanted_at').notNull().defaultNow(),
+  },
+  (t) => [index('pool_chapters_bucket_idx').on(t.bucket), index('pool_chapters_wanted_idx').on(t.wantedAt)],
+);
+
+/**
+ * Each pool bucket's account: what its other buckets hold, measured once a day (every bucket on the
+ * account counts against its free room), and this month's writes. Not fed.
+ */
+export const poolBuckets = pgTable('pool_buckets', {
+  name: text('name').primaryKey(),
+  others: big('others').notNull().default(0),
+  measuredAt: at('measured_at'),
+  month: text('month').notNull().default(''),
+  writes: integer('writes').notNull().default(0),
+});
+
+/**
  * Read copies only (the laptop's, and each Render's): the copy's read position in the feed. `fed`:
  * the fed tables it was last loaded with, so a table newly fed makes it load afresh. `caught_up_at`:
  * Supabase's time when the feed last found nothing left to copy, so the copy has every write made

@@ -32,6 +32,9 @@ export interface Picture {
 }
 
 /** What kind of picture these bytes are, from how they start; null when they aren't one. */
+/** A chapter's page from the storage pool (manga/pool.ts), or null when it hasn't it. */
+export type Pooled = (chapterId: string, n: number) => Promise<Picture | null>;
+
 export function pictureType(b: Uint8Array): string | null {
   if (b.length < 12) return null;
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';

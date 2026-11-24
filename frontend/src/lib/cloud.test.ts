@@ -16,7 +16,8 @@ async function loadCloud(url: string | undefined = R2) {
   vi.stubGlobal('window', { setTimeout, clearTimeout });
   vi.stubGlobal('fetch', async (u: string, init: RequestInit = {}) => {
     asked.push({ url: u, credentials: init.credentials });
-    const o = objects[u.slice(R2.length + 1)];
+    let o = objects[u.slice(R2.length + 1)];
+    if (!u.startsWith(`${R2}/`)) o = objects[u];
     if (!o) return new Response('missing', { status: 404 });
     if (typeof o === 'function') return o();
     return o;
@@ -75,6 +76,26 @@ describe('a chapter in R2', () => {
     const before = asked.length;
     expect(await cloudPage('ch1', 2)).toBeNull();
     expect(asked.length).toBe(before);
+  });
+
+  it('reads its pages from the bucket its index names, the index from the home', async () => {
+    const B2 = 'https://b2.cdn.test';
+    objects[`c/${key('far')}/index.json`] = jsonOf({ pages: 1, base: `${B2}/` });
+    objects[`${B2}/c/${key('far')}/0`] = new Response(new Uint8Array([7, 7]), { status: 200 });
+    const { cloudPage } = await loadCloud();
+    expect((await cloudPage('far', 0))?.size).toBe(2);
+    expect(asked.map((a) => a.url)).toEqual([`${R2}/c/${key('far')}/index.json`, `${B2}/c/${key('far')}/0`]);
+    expect(asked.every((a) => a.credentials === 'omit')).toBe(true);
+  });
+
+  it('takes no bucket address that isn’t http or https', async () => {
+    objects[`c/${key('odd-base')}/index.json`] = jsonOf({ pages: 1, base: 'javascript:alert(1)' });
+    objects[`c/${key('num-base')}/index.json`] = jsonOf({ pages: 1, base: 7 });
+    objects[`c/${key('bad-base')}/index.json`] = jsonOf({ pages: 1, base: 'not a url' });
+    const { cloudPages, cloudPage } = await loadCloud();
+    expect(await cloudPages('odd-base')).toBeNull();
+    expect(await cloudPages('num-base')).toBeNull();
+    expect(await cloudPage('bad-base', 0)).toBeNull();
   });
 
   it('asks nothing when R2 is off', async () => {

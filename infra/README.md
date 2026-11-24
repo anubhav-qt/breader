@@ -513,29 +513,44 @@ Done on breader.site 2026-11-07: the rule is `public pages and covers`, Tiered C
 `fb.` is not cached this way: it is DNS only, behind Render's own Cloudflare, and Render's edge
 cache is for paid services only.
 
-### Readers' next chapters in R2
+### The storage pool: readers' chapters in free buckets
 
-Each library's 2 comics read most lately (in 30 days), the chapter read to and the 25 after it,
-are put in a public R2 bucket by the ThinkPad's keeper, and the app reads them from there first
-(ADR 0003, `server/src/manga/cloud.ts`, `frontend/src/lib/cloud.ts`). The ThinkPad sends each
-page once, and those chapters open with the ThinkPad and Render both away. R2 stays free: pages
-take only what's left under 9 GB across every bucket, and writes stop at 900,000 a month. The
-keeper's line in `/admin/status` says how much is there (`manga-keep`, `detail.cloud`).
+Readers' chapters go in several free buckets, each on its own account, and the app reads them
+from the buckets' CDNs first (ADR 0003, ADR 0004, `server/src/manga/pool.ts`,
+`frontend/src/lib/cloud.ts`). The ThinkPad's keeper puts each library's 2 comics read most lately
+(in 30 days), the chapter read to and the 25 after it; a regional server with `POOL_UPLOADS=true`
+puts each chapter its readers fetched, where there's room. Any server asks the pool for a page
+before asking the site, so the ThinkPad takes chapters others put there whenever it's up.
+
+- The home bucket is first in `POOL_MEMBERS`: R2 `breader-pages` at `pages.breader.example`. Every
+  chapter's index goes there, and a Suwayomi series' list.
+- The others (Backblaze B2, Tigris, Fastly Object Storage) are each read through a CloudFront
+  distribution in front of the bucket.
+- Each bucket keeps under the owner's size, `POOL_<NAME>_MB`, which counts every other bucket on
+  the same account too (measured once a day). `POOL_<NAME>_WRITES` caps a month's writes, only
+  where set. When the pool is full, the keeper lets the chapters wanted least lately go; the
+  ThinkPad still has them on its disk.
+- `pool_chapters` in Supabase says which bucket holds each chapter. The keeper's line in
+  `/admin/status` (`manga-keep`, `detail.cloud`) shows each bucket's room left.
 
 1. R2 › Create bucket `breader-pages`. Its Settings › Custom Domains › connect
    `pages.breader.example`. CORS policy:
    ```json
    [{ "AllowedOrigins": ["https://breader.example"], "AllowedMethods": ["GET", "HEAD"], "MaxAgeSeconds": 86400 }]
    ```
-2. R2 › Manage API tokens › `breader-laptop`: Object Read & Write on `breader-pages` too.
-3. Caching › Cache Rules › Create rule `readers' next chapters`: `(http.host eq
+   R2 › Manage API tokens › a token with Object Read & Write on `breader-pages` only.
+2. Caching › Cache Rules › Create rule `readers' next chapters`: `(http.host eq
    "pages.breader.example")`, **Eligible for cache**, Edge TTL **Use cache-control header if
    present**. Its pages have no file ending, so without it Cloudflare asks R2 every time.
-4. `PAGES_BUCKET=breader-pages` in the ThinkPad's `infra/.env`, then
-   `docker compose -f infra/compose.yml up -d api`. Render doesn't take it.
+3. Each other bucket: a bucket that anyone may read, a key that may read and write it only, and
+   a CloudFront distribution with the bucket as its origin, the managed `CachingOptimized` policy
+   and a response headers policy that allows `https://breader.example` (CORS, GET and HEAD).
+4. The pool's settings on every server that has it (`POOL_MEMBERS=r2,b2,tigris,fastly` and each
+   one's `POOL_<NAME>_*`, `infra/.env.example`), then start the API again.
 5. `VITE_PAGES_URL=https://pages.breader.example` in `infra/.env.ship`, then ship the app.
 6. Check: after the keeper's next turn (15 minutes), `/admin/status`'s `manga-keep` shows
-   `detail.cloud.chapters` above 0, and a page from a chapter in it opens from `pages.` in the browser.
+   `detail.cloud.chapters` above 0, and a page from a chapter in it opens from the pool in the
+   browser.
 
 ### 10. Monitoring
 

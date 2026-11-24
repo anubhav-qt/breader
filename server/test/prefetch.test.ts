@@ -113,6 +113,8 @@ describe('the daily prefetch', () => {
       page: say('page'),
       sourcePages: vi.fn(async (id: string) => { asked.push(`pages ${id}`); return 3; }),
       sourcePage: say('page'),
+      chapterPages: async () => 0,
+      chapterPage: say('page'),
       warm: async () => {},
       anilist: {} as never,
     aniFound: async () => [],

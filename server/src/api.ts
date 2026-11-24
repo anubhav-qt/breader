@@ -20,6 +20,8 @@ import { connectCopy, runCopy } from './mirror/copy.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
 import { makeCurate, pgChecks } from './manga/curate.ts';
 import { makeCloud, type Cloud } from './manga/cloud.ts';
+import { makePool as makeStoragePool, poolMembers, type Pool } from './manga/pool.ts';
+import { makeUploads, type Uploads } from './manga/uploads.ts';
 import { makeKeeper } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makeSame, pgGroups } from './manga/same.ts';
@@ -78,6 +80,15 @@ if (archiveMb > 0) {
   mangaOptions.archive = archive;
 }
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
+// The storage pool (manga/pool.ts, ADR 0004): readers' chapters in several free buckets. Any
+// server asks it for a page before asking the site.
+let storagePool: Pool | null = null;
+const poolOf = poolMembers(process.env);
+if (env.POOL_MEMBERS && poolOf.length) {
+  storagePool = makeStoragePool({ db: primary.pool, members: poolOf });
+  const pages = storagePool;
+  mangaOptions.pooled = (chapterId, n) => pages.page(chapterId, n);
+}
 // Gemini, through the worker's proxy for the AI accounts, on the laptop only (lib/gemini.ts). Both
 // servers go by what it has said, kept in Supabase: which series found are one (manga/same.ts) and
 // which cards don't belong in Browse's tabs (manga/curate.ts).
@@ -87,11 +98,14 @@ if (mangaOn) {
   mangaOptions.curate = makeCurate({ checks: pgChecks(primary.pool), gemini });
 }
 const manga = mangaOn ? makeManga(mangaOptions) : null;
+// A regional server puts the chapters its readers fetch in the pool, where there's room (manga/uploads.ts).
+let uploads: Uploads | null = null;
+if (manga && storagePool && env.POOL_UPLOADS) uploads = makeUploads({ pool: storagePool, manga });
 // Manga panels from the panel model, for any reader with a seat, on the laptop only: the fallback's
 // free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
 let panels: ReturnType<typeof makePanels> | null = null;
 if (manga && engine) panels = makePanels(env, engine);
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, panels, engine, redis, reads };
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, uploads, panels, engine, redis, reads };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 // Panels from an earlier round of the model go to the archive before any reader is served, so
@@ -162,13 +176,9 @@ if (manga && !light) {
 // Supabase.
 let keepAt: NodeJS.Timeout | undefined;
 if (manga && (env.MANGA_KEEP ?? onThinkPad(env))) {
-  // Readers' next chapters in R2 (ADR 0003), when its bucket is set.
+  // Readers' next chapters in the storage pool (ADR 0003, ADR 0004), when it's set.
   let cloud: Cloud | undefined;
-  if (env.PAGES_BUCKET) {
-    const others = [env.S3_BUCKET];
-    if (env.S3_BACKUP_BUCKET) others.push(env.S3_BACKUP_BUCKET);
-    cloud = makeCloud({ storage, bucket: env.PAGES_BUCKET, others, manga });
-  }
+  if (storagePool) cloud = makeCloud({ pool: storagePool, manga });
   const keeper = makeKeeper(manga, mirror?.pool ?? primary.pool, undefined, cloud);
   let keeping = false;
   const turn = async (now = false) => {

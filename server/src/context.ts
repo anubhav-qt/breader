@@ -7,6 +7,7 @@ import type { Env } from './env.ts';
 import type { Store } from './lib/cache.ts';
 import type { Storage } from './lib/storage.ts';
 import type { Manga } from './manga/index.ts';
+import type { Uploads } from './manga/uploads.ts';
 import type { Engine } from './engine/index.ts';
 import type { Panels } from './panels/index.ts';
 import type { Speech } from './speech/index.ts';
@@ -24,6 +25,8 @@ export interface Deps {
   speech: Speech | null;
   /** Manga: MangaDex, and Suwayomi when set up (manga/); null where it's off, as on the fallback. */
   manga: Manga | null;
+  /** Chapters its readers fetched, put in the storage pool (manga/uploads.ts); null or missing where it's off. */
+  uploads?: Uploads | null;
   /** Manga panels found with the panel model (panels/); null or missing where it's off, as on the fallback. */
   panels?: Panels | null;
   /** The laptop's engine for voices and panels (engine/); null or missing where it's off, as on the fallback. */

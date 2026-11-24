@@ -5,7 +5,7 @@ import { freshly, Memo, MemoryStore, near, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover, Covers, CoverWidth } from './covers.ts';
-import { pictureType, type Disk, type Picture } from './disk.ts';
+import { pictureType, type Disk, type Picture, type Pooled } from './disk.ts';
 import { wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { adultGenre, kindGenre, neverGenre, sideGenre, sideTitle, web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
@@ -174,6 +174,11 @@ export interface SuwayomiOptions {
   store?: Store | null;
   /** How long a lot it hasn't seen may take a source for it to be browsed (BROWSE_WITHIN). Tests go faster. */
   browseWithin?: number;
+  /**
+   * A chapter's page from the storage pool (manga/pool.ts), asked before the site; null when the
+   * pool hasn't it. Full size pages only.
+   */
+  pooled?: Pooled | null;
 }
 
 const notFound = () => new ApiError(404, 'manga_not_found', 'That series isn’t there any more.');
@@ -960,6 +965,10 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     async page(chapterId, n, quiet = false) {
       const { chapter, source } = await chapterOfId(chapterId);
       return opts.disk.keep(`sw-page:${chapterId}:${n}`, async () => {
+        if (opts.pooled) {
+          const kept = await opts.pooled(chapterId, n);
+          if (kept) return kept;
+        }
         const paths = await pageList(chapter, source);
         try {
           if (n >= paths.length) throw noPage();

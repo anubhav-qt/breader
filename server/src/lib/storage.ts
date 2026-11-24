@@ -126,17 +126,6 @@ export function makeStorage(env: Env) {
       await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     },
 
-    /** An object anyone may read, kept by browsers and Cloudflare for a month (manga/cloud.ts). */
-    async putPublic(key: string, body: Uint8Array, type: string, bucket: string) {
-      await s3.send(new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: body,
-        ContentLength: body.length,
-        ContentType: type,
-        CacheControl: 'public, max-age=2592000, immutable',
-      }));
-    },
 
     /** Local stand-ins only: make the buckets and let the app's origins upload from the browser. */
     async ensureBuckets(origins: string[]) {

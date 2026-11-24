@@ -18,15 +18,15 @@ import type { Manga } from './index.ts';
  * looks unread (for the HDD in TODO.md).
  *
  * Each library's 2 series read most lately in the last 30 days are kept further ahead (CLOUD_AHEAD),
- * and then put in R2 (cloud.ts, ADR 0003), most lately read first, for the app to read from there.
+ * and then put in the storage pool (cloud.ts, ADR 0003 and 0004), most lately read first, for the app to read from there.
  */
 
 /** Chapters kept after the one a series is read to. */
 const AHEAD = 10;
-/** A library's series read most lately that go in R2, with the chapters after the one read to. */
+/** A library's series read most lately that go in the storage pool, with the chapters after the one read to. */
 const CLOUD_SERIES = 2;
 const CLOUD_AHEAD = 25;
-/** Read within this long, for a series to go in R2. */
+/** Read within this long, for a series to go in the storage pool. */
 const CLOUD_WITHIN = 30 * 24 * 3600_000;
 /** Between chapters, so readers never wait long behind these, and MangaDex opens 15 a minute at most for them. */
 const BREATHER = 4_000;
@@ -38,7 +38,7 @@ export interface Keeping {
   pages: number;
   failed: number;
   minutes: number;
-  /** What R2 holds after the turn, when there is one. */
+  /** What the storage pool holds after the turn, when there is one. */
   cloud?: CloudTurn;
 }
 
@@ -85,13 +85,13 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener('abort', () => { clearTimeout(t); done(); }, { once: true });
   });
 
-/** The series a library puts in R2: its CLOUD_SERIES read most lately, if within CLOUD_WITHIN. */
+/** The series a library puts in the storage pool: its CLOUD_SERIES read most lately, if within CLOUD_WITHIN. */
 function inCloud(series: Held[], now: number): Set<Held> {
   const recent = series.filter((s) => now - new Date(s.at).getTime() <= CLOUD_WITHIN);
   return new Set(recent.slice(0, CLOUD_SERIES));
 }
 
-/** breather: the pause between chapters; tests go faster. cloud: R2, on the ThinkPad when it's set. */
+/** breather: the pause between chapters; tests go faster. cloud: the storage pool, on the ThinkPad when it's set. */
 export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather = BREATHER, cloud?: Cloud) {
   /** Chapters kept while the server's run. After a start, a chapter on the disk already is read from there. */
   const kept = new Set<string>();
@@ -161,7 +161,7 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
     return pages;
   }
 
-  /** The R2 series, most lately read first, each with its own copy's list when it's a Suwayomi one. */
+  /** The pool's series, most lately read first, each with its own copy's list when it's a Suwayomi one. */
   async function cloudSeries(picked: Queued[], windows: Map<Queued, MangaChapter[]>): Promise<CloudSeries[]> {
     const sorted = [...picked].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
     const out: CloudSeries[] = [];
@@ -203,7 +203,7 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
         byLibrary.get(r.library_id)!.push(r);
       }
 
-      // With R2, each library's latest series are kept further ahead, then put there.
+      // With the storage pool, each library's latest series are kept further ahead, then put there.
       const picked: Queued[] = [];
       const libraries = [...byLibrary.values()].map((series) => {
         const forCloud = cloud ? inCloud(series, started) : new Set<Held>();
@@ -256,7 +256,7 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
         try {
           done.cloud = await cloud.turn(await cloudSeries(picked, windows), signal);
         } catch (err) {
-          log.warn({ err }, 'readers’ next chapters couldn’t be put in R2');
+          log.warn({ err }, 'readers’ next chapters couldn’t be put in the storage pool');
         }
       }
       done.minutes = Math.round((Date.now() - started) / 60_000);

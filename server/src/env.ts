@@ -152,10 +152,18 @@ const Env = z.object({
    */
   MANGA_KEEP: bool.optional(),
   /**
-   * The public R2 bucket readers' next chapters go in (manga/cloud.ts, ADR 0003), served at
-   * pages.breader.site. Kept by the ThinkPad's keeper alone; off without it.
+   * The storage pool (manga/pool.ts, ADR 0004): readers' chapters in several free buckets, the home
+   * first (R2), comma separated. Each bucket's settings are POOL_<NAME>_ENDPOINT, _REGION, _BUCKET,
+   * _KEY_ID, _SECRET, _PUBLIC_URL, _MB (its room, every other bucket on its account included),
+   * _WRITES (a month's writes, only where set) and _PATH_STYLE. Off without it. No bucket is kept
+   * cold: chapters the pool lets go stay on the ThinkPad's disk.
    */
-  PAGES_BUCKET: z.string().min(1).optional(),
+  POOL_MEMBERS: z.string().min(1).optional(),
+  /**
+   * Chapters this server fetches for its readers go in the pool too, where there's room (regional
+   * servers; manga/uploads.ts). The ThinkPad's keeper puts them there anyway.
+   */
+  POOL_UPLOADS: bool.optional(),
   /**
    * Redis (redis://redis:6379), where MangaDex's answers are kept so they outlast a restart.
    * Without it they're kept in memory. Redis not answering never stops a reader.

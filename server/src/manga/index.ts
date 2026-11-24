@@ -5,7 +5,7 @@ import { log } from '../log.ts';
 import { copiesOf, measure } from './copies.ts';
 import { Covers, type Cover, type CoverWidth } from './covers.ts';
 import type { Archive } from '../lib/archive.ts';
-import { Disk, pictureType, type Picture } from './disk.ts';
+import { Disk, pictureType, type Picture, type Pooled } from './disk.ts';
 import { DEADLINE, find, GRACE, type Place, type Wanted } from './find.ts';
 import { copiesOfCard, isCardsSeries } from './anifound.ts';
 import { makeAniList, type AniList, type AniListAsk } from './anilist.ts';
@@ -41,6 +41,10 @@ export interface Manga {
   /** How many pages a chapter of a source has. */
   sourcePages(chapterId: string): Promise<number>;
   sourcePage(chapterId: string, n: number, quiet?: boolean): Promise<Picture>;
+  /** How many full size pages any chapter has, MangaDex's or a source's. */
+  chapterPages(chapterId: string): Promise<number>;
+  /** Any chapter's full size page, MangaDex's or a source's; quiet: not counted as read (disk.ts). */
+  chapterPage(chapterId: string, n: number, quiet?: boolean): Promise<Picture>;
   /** A series' copies in its place (copies.ts), their pages measured: MangaDex's in a language, a source's (sw:…) in its own. */
   copies(id: string, lang: string): Promise<MangaCopies>;
   /** AniList: Browse's lists, and what a series' page says is related to it and like it (anilist.ts). */
@@ -74,6 +78,11 @@ export interface MangaOptions {
   archive?: Archive | null;
   /** A server short of memory (the fallback): only Browse's first screens of AniList's lists are warmed. */
   light?: boolean;
+  /**
+   * A chapter's page from the storage pool (manga/pool.ts), asked before the site; null when the
+   * pool hasn't it. Full size pages only.
+   */
+  pooled?: Pooled | null;
 }
 
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
@@ -105,10 +114,10 @@ export function makeManga(opts: MangaOptions): Manga {
   const store = opts.store ?? null;
   const covers = new Covers(disk, near(store, 20_000));
   const pace = opts.pace?.api;
-  const dex = makeMangaDex({ disk, covers, fetch: opts.fetch, pace: opts.pace, store });
+  const dex = makeMangaDex({ disk, covers, fetch: opts.fetch, pace: opts.pace, store, pooled: opts.pooled });
   const anilist = makeAniList({ covers, fetch: opts.fetch, store, pace });
   let suwayomi: Suwayomi | null = null;
-  if (opts.suwayomi) suwayomi = makeSuwayomi({ url: opts.suwayomi, disk, covers, fetch: opts.fetch, pace, store, browseWithin: opts.browseWithin });
+  if (opts.suwayomi) suwayomi = makeSuwayomi({ url: opts.suwayomi, disk, covers, fetch: opts.fetch, pace, store, browseWithin: opts.browseWithin, pooled: opts.pooled });
 
   /** Suwayomi, when this server has one. */
   function onSuwayomi(): Suwayomi {
@@ -334,6 +343,14 @@ export function makeManga(opts: MangaOptions): Manga {
     sourceCover: (id, size, early) => onSuwayomi().cover(id, Number(size) as CoverWidth, early),
     sourcePages: (chapterId) => onSuwayomi().pages(chapterId),
     sourcePage: (chapterId, page, quiet) => onSuwayomi().page(chapterId, page, quiet),
+    chapterPages: (chapterId) => {
+      if (chapterId.startsWith('sw:')) return onSuwayomi().pages(chapterId);
+      return dex.pages(chapterId);
+    },
+    chapterPage: (chapterId, n, quiet) => {
+      if (chapterId.startsWith('sw:')) return onSuwayomi().page(chapterId, n, quiet);
+      return dex.page(chapterId, n, false, quiet);
+    },
 
     copies: (id, lang) => copyMemo.get(`${id}:${lang}`, () => measureCopies(id, lang)),
   };
