@@ -462,9 +462,9 @@ using it, and its standby stops. The standby feeds every copy in its `COPY_URLS`
 ThinkPad's worker is quiet (90 s unheard and its lease lapsed), and hands back when it's heard.
 
 **Modal.** `pip install modal && modal setup`, then
-`modal secret create breader-engine ENGINE_TOKEN=<the APIs' token>` and
-`modal deploy infra/modal/engine.py`. Its address goes in `ENGINE_FALLBACK_URLS` on Azure and GCP
-(and on the ThinkPad, behind its own engine). It's woken only for a job no other engine can take.
+`modal secret create breader-engine ENGINE_TOKEN=<a new token, also in that API's ENGINE_TOKEN>` and
+`modal deploy infra/modal/engine.py`. Its address goes in `ENGINE_FALLBACK_URLS` on Azure (and GCP),
+never on the ThinkPad, so Modal works only while the ThinkPad is away. It's woken only for a job no other engine can take.
 
 ### Suwayomi on AWS for Render
 

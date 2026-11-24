@@ -62,8 +62,11 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   Settings turns them off and on, on that device. Panel votes only check a round, by their own
   corners; page votes are to learn from (`ai/panels/README.md`, The owner's votes).
 
-- ADR 0004 (`docs/adr/0004-multi-cloud.md`, branch `feat/multi-cloud`, not deployed): Azure (one
-  region, Southeast Asia, `infra/azure/`), a GCP e2-micro (IPv6 only, `JSON_ONLY`, egress count,
+- ADR 0004 (`docs/adr/0004-multi-cloud.md`), live since 2026-11-24 in part: the Azure API
+  (`az1.breader.site`, Southeast Asia, `infra/azure/`) and its own Suwayomi are standby, asleep
+  until the AWS machine's `watch.sh` sees the ThinkPad miss 10 minutes; the app asks
+  `VITE_API_STANDBY` only while home is away. Modal is the engine on call for Azure alone. Not set
+  up yet: GCP and the pool. Planned: a GCP e2-micro (IPv6 only, `JSON_ONLY`, egress count,
   a standby feeder, `infra/gcp/`), Modal as an engine on call (`ENGINE_FALLBACK_URLS`,
   `infra/modal/`), and a storage pool over R2, B2, Tigris and Fastly (`POOL_MEMBERS`,
   `server/src/manga/pool.ts`). The app skips a server whose `/health` says `busy`, never uses one
