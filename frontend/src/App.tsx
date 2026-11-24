@@ -21,7 +21,7 @@ import { AddWhat } from './features/add/AddWhat';
 import { CATEGORIES, categoryOf, countOf, type Category } from './books/category';
 import { coverOf, detectFormat, forget, loadRecord, parseSource, titleFromName } from './books/load';
 import { recordFromBook } from './books/record';
-import { placeChapter, remoteCover, remoteOf, withAlso } from './books/remote';
+import { placeChapter, readFrom, remoteCover, remoteOf, withAlso } from './books/remote';
 import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './books/types';
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
@@ -41,7 +41,7 @@ import { fillGaps, genreFor } from './features/gallery/fill';
 import { urlOf } from './features/manga/copies';
 import type { About, Picked } from './features/manga/MangaPage';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
-import { api } from './lib/api';
+import { api, sayAway } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
 import { genreOf, mangadex, readMangaPrefs, sources, type MangaPrefs } from './lib/mangadex';
 import { springs } from './lib/springs';
@@ -160,6 +160,15 @@ function stoppedSharing(n: number, category: Category): string {
 
 /** Links that bring the reader back to the app: from Google, and from Breader's emails. */
 const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
+
+/** A series read from a site only the laptop reaches, opened while it's away, is read from Weeb Central meanwhile (books/remote.ts readFrom). */
+async function tellIfAway(rec: BookRecord) {
+  if (rec.source !== 'remote') return;
+  const w = remoteOf(rec.url);
+  if (!w) return;
+  const from = await readFrom(w);
+  if (from !== w) sayAway('this series reads from Weeb Central');
+}
 
 /*
  * The reader, Browse, a series' page and Add book come in pieces of their own, so the library
@@ -571,6 +580,12 @@ export default function App() {
     swept.current = true;
     void import('./books/kept').then((m) => m.sweepKept(haveSeries));
   }, [lib.ready, haveSeries]);
+  // Something just asked for waits for the laptop while it's away (lib/api.ts sayAway): said for a moment.
+  useEffect(() => {
+    const onAway = (e: Event) => say((e as CustomEvent<string>).detail);
+    window.addEventListener('breader:away', onAway);
+    return () => window.removeEventListener('breader:away', onAway);
+  }, [say]);
   const guessGenre = useCallback((b: Parameters<typeof genreFor>[1]) => genreFor([...everything.mine, ...everything.shelf], b), [everything]);
 
   /* Opening a book: the reader grows out of the card, then takes over. */
@@ -645,6 +660,7 @@ export default function App() {
     if (!rec) return;
     // One taken out of My books comes back in once it's being read again.
     if (rec.sharedOnly) lib.setSharedOnly(rec.id, false);
+    void tellIfAway(rec);
     setOpening({ id: rec.id, rect });
     void startLoad(rec.id, rec).then((b) => {
       if (!b) setOpening(null);
@@ -773,6 +789,7 @@ export default function App() {
       rec = { ...rec, url };
     }
     if (!rec) rec = await addSeries(about, url);
+    void tellIfAway(rec);
     const id = rec.id;
     setStartAt(from ? { id, pos: from } : null);
     openAnimDone.current = false;

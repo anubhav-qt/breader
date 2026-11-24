@@ -279,6 +279,14 @@ async function manga(path: string, body: unknown, timeout: number): Promise<Resp
   throw await failure(res, 'Breader’s computer can’t be reached.');
 }
 
+/**
+ * Tells the reader, for a moment, that what they've just asked for waits for Breader's home computer
+ * (the laptop), which is away. Only for something they asked for: App.tsx shows it.
+ */
+export function sayAway(what: string) {
+  window.dispatchEvent(new CustomEvent('breader:away', { detail: `Breader’s home computer is down, so ${what} until it’s back.` }));
+}
+
 /** An address for a manga picture to load straight from, on the copy of the server the app is on. */
 export const mangaUrl = (path: string) => active + path;
 
