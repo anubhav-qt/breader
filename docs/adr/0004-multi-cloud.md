@@ -7,8 +7,9 @@
 ## Decided (owner)
 
 1. Supabase Mumbai stays the only writer. No Xata, no second primary.
-2. The servers the app picks from (ADR 0001): the ThinkPad (home), Render, two Azure Container
-   Apps regions, and a GCP e2-micro. GCP and Modal are each easy to leave out (below).
+2. The servers the app picks from (ADR 0001): the ThinkPad (home), Render, one Azure Container
+   App (Southeast Asia; the free plan allows one environment a subscription), and a GCP
+   e2-micro. GCP and Modal are each easy to leave out (below).
 3. Pages live in a storage pool of free buckets: R2, Backblaze B2, Tigris and Fastly. No cold tier:
    Breader's backups stay in R2 `breader-backups`, and cold manga stays on the ThinkPad's disk.
    (Storj was dropped: it has no free tier today. Paribelle's backups move to MEGA, outside Breader.)
@@ -82,5 +83,5 @@
 - The Supabase direct host over IPv6 from GCP; the GCP memory fitting 1 GB.
 - Free limits for Tigris and Fastly writes and requests; CloudFront in front of B2, Tigris, Fastly.
 - Modal: the image with `add_python`, its `node` user and the voices volume; request time limits.
-- Azure: the free grant against two regions; cold starts against the app's timing; the reader's
+- Azure: the free grant against one region; cold starts against the app's timing; the reader's
   address behind Cloudflare (`cf-connecting-ip`).

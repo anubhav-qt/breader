@@ -10,7 +10,7 @@ is the one cost. `breader.example` stands in for the real domain below.
 | `breader.example` | Cloudflare Pages | the app |
 | `api.breader.example` | Cloudflare Tunnel → the laptop | `api` (ROLE=laptop), plus `worker`, `mirror`, `tunnel` |
 | `fb.breader.example` | Render, Singapore | the same image as ROLE=fallback |
-| `az1.`, `az2.breader.example` | Azure Container Apps, two regions | the same, asleep when unused (ADR 0004) |
+| `az1.breader.example` | Azure Container Apps, Southeast Asia | the same, asleep when unused (ADR 0004) |
 | `gcp.breader.example` | Cloudflare Tunnel → a GCP e2-micro | the same, JSON only, plus a standby feeder (ADR 0004) |
 | `<workspace>--breader-engine-engine.modal.run` | Modal | an engine on call for the voices and panels (ADR 0004) |
 | — | Supabase, Mumbai | Postgres, the source of truth |
@@ -438,10 +438,11 @@ Each is optional. Leave one out by not creating it and not listing it in `VITE_A
 separated, `COPY_SSL` for each) while it leads, so a copy stays current while its own server
 sleeps. Each URL's user, host and database must match that server's `COPY_URL`.
 
-**Azure.** Two Container Apps, one a region, asleep (no replica) when unused, two at most. Per
-region, `infra/azure/.env.<name>` from `infra/azure/.env.example`, then
-`sh infra/azure/deploy.sh <name> <location>`; run it again to update. Put its address behind
-Cloudflare as `az1.` (proxied), add it to the Google OAuth client and to `VITE_API_SERVERS`.
+**Azure.** One Container App in Southeast Asia (the free plan allows one environment a
+subscription), asleep (no replica) when unused, two at most. `infra/azure/.env.sg` from
+`infra/azure/.env.example`, then `sh infra/azure/deploy.sh sg southeastasia`; run it again to
+update. Put its address behind Cloudflare as `az1.` (proxied), add it to the Google OAuth client
+and to `VITE_API_SERVERS`.
 
 **GCP.** An e2-micro, Debian, IPv6 only (no public IPv4). Make a tunnel in Cloudflare
 (`gcp.breader.example` → `http://localhost:8787`), then on the VM:

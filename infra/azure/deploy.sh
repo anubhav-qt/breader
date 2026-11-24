@@ -1,8 +1,8 @@
 #!/bin/sh
 # Puts one Breader server on Azure Container Apps (ADR 0004), in one region, from its settings in
 # infra/azure/.env.<name> (copy .env.example). Run it again to update that server: a new image, new
-# settings. One region a run; Breader has two:
-#   sh infra/azure/deploy.sh <name> <location>        e.g.  sh infra/azure/deploy.sh in centralindia
+# settings. One region a run; Breader has one (the free plan allows one environment a subscription):
+#   sh infra/azure/deploy.sh <name> <location>        e.g.  sh infra/azure/deploy.sh sg southeastasia
 # Needs the Azure CLI, logged in (`az login`), with its containerapp extension.
 #
 # It sleeps when nobody asks it anything (no replica at all), so it costs nothing then, and wakes
@@ -12,7 +12,7 @@ set -eu
 set -f
 
 NAME=${1:?give the server a name, as in .env.NAME}
-LOCATION=${2:?an Azure location, such as centralindia}
+LOCATION=${2:?an Azure location, such as southeastasia}
 FILE="$(dirname "$0")/.env.$NAME"
 if [ ! -f "$FILE" ]; then
   echo "no settings at $FILE: copy .env.example there first" >&2
