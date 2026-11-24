@@ -81,9 +81,9 @@ describe('picking among servers', () => {
   let noMedia: Set<string>;
   let clock: number;
 
-  async function loadMany(standby = '') {
+  async function loadMany(standby = '', servers = `${HOME},${EU},${US}`) {
     vi.resetModules();
-    vi.stubEnv('VITE_API_SERVERS', `${HOME},${EU},${US}`);
+    vi.stubEnv('VITE_API_SERVERS', servers);
     vi.stubEnv('VITE_API_STANDBY', standby);
     vi.stubGlobal('location', { protocol: 'https:', hostname: 'app.example' });
     vi.stubGlobal('navigator', { onLine: true });
@@ -285,6 +285,40 @@ describe('picking among servers', () => {
     startPicking();
     await settle();
     expect(asked.map((a) => a.url)).toEqual([`${HOME}/health`, `${EU}/health`, `${US}/health`]);
+  });
+
+  it('with home alone and a standby, asks only home while it answers', async () => {
+    const { api, startPicking } = await loadMany(AZ, HOME);
+    startPicking();
+    await settle();
+    await api.get('/v1/me');
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/health`, `${HOME}/v1/me`]);
+    expect(api.via).toBe(HOME);
+  });
+
+  it('with home alone and a standby, moves to the standby the moment home misses', async () => {
+    const { api } = await loadMany(AZ, HOME);
+    down.add(HOME);
+    await api.get('/v1/me');
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/v1/me`, `${AZ}/v1/me`]);
+    expect(api.via).toBe(AZ);
+    expect(api.away).toBe(true);
+  });
+
+  it('with home alone and a standby, goes home once it answers and stops asking the standby', async () => {
+    const { api, startPicking } = await loadMany(AZ, HOME);
+    down.add(HOME);
+    await api.get('/v1/me');
+    expect(api.via).toBe(AZ);
+    down.delete(HOME);
+    startPicking();
+    await settle();
+    expect(api.via).toBe(HOME);
+    asked = [];
+    startPicking();
+    await settle();
+    await api.get('/v1/me');
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/health`, `${HOME}/v1/me`]);
   });
 
   it('loads manga pictures from the server in use', async () => {

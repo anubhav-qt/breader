@@ -520,8 +520,8 @@ the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull` and th
 Workers & Pages › Create › Pages › a project named `breader`, production branch `dev`, custom domain
 `breader.example`. `npm run ship` builds the app on your machine and uploads it, so Pages builds
 nothing itself: Settings › Builds › Branch control, turn off automatic production and preview
-deployments. Put `VITE_API_SERVERS=https://api.breader.example,https://fb.breader.example` (the
-laptop first) and `VITE_SENTRY_DSN=<the DSN>` in `infra/.env.ship`, and sign in once with
+deployments. Put `VITE_API_SERVERS=https://api.breader.example` (the laptop),
+`VITE_API_STANDBY=https://az1.breader.example` (the fallback, asked only while home is away) and `VITE_SENTRY_DSN=<the DSN>` in `infra/.env.ship`, and sign in once with
 `npx wrangler@4 login`.
 
 `frontend/public/404.html` makes Pages answer unknown addresses with a 404 instead of the app, so
