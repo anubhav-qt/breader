@@ -67,7 +67,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && python3 -m venv /opt/yt-dlp \
   && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]" \
-  && mkdir -p /data/files /data/backups /data/voices /data/manga && chown -R node:node /data /opt/yt-dlp
+  && mkdir -p /data/files /data/backups /data/voices /data/manga /data/egress && chown -R node:node /data /opt/yt-dlp
 ENV YT_DLP=/opt/yt-dlp/bin/yt-dlp
 # Native ONNX Runtime would send telemetry over HTTPS.
 ENV ORT_DISABLE_TELEMETRY=1
