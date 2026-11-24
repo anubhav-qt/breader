@@ -13,12 +13,15 @@ is the one cost. `breader.example` stands in for the real domain below.
 | — | Supabase, Mumbai | Postgres, the source of truth |
 | — | Cloudflare R2 | book files (`breader-files`) and backups (`breader-backups`) |
 
-The app calls `api.` and switches to `fb.` when `api.` fails: a network error, a 4-second timeout,
-or a 502/503/504/530. Every write carries an id and applies once, so the retry is safe. While on
-`fb.`, it checks `api.` every minute and moves back when it answers.
+The app knows every server (`VITE_API_SERVERS`, the laptop first). It times each one's `/health`
+as it starts and every few minutes, and uses the laptop unless it's down or much slower than the
+quickest other (`frontend/src/lib/servers.ts`). A network error, a 4-second timeout or a
+502/503/504/530 moves to the next one. Every write carries an id and applies once, so the retry is
+safe.
 
-Planned, not built: four servers (the laptop and three Renders) and regional read copies of the
-database. Live: edge-cached manga pages and covers (Edge cache for pages and covers, below). See `docs/adr/0001-four-servers.md`. This file changes as each piece lands.
+Any number of servers and read copies can be added, on any host and any Postgres, in any region:
+More servers and read copies, below. Live: edge-cached manga pages and covers (Edge cache for pages
+and covers, below). See `docs/adr/0001-four-servers.md`.
 
 ## Local development
 
@@ -53,7 +56,7 @@ Buy the domain at Cloudflare Registrar, so its DNS is already on Cloudflare.
    has row-level security with no policies.
 3. **Connect** shows the connection strings. Put in the password:
    - Transaction pooler (port 6543) → `PRIMARY_URL`
-   - Session pooler (port 5432) → `PRIMARY_SESSION_URL`, and `SUPABASE_SESSION_URL` in `infra/.env.ship`
+   - Session pooler (port 5432) → `PRIMARY_SESSION_URL`, and `PRIMARY_MIGRATE_URL` in `infra/.env.ship`
 
 Both poolers work over IPv4. The direct connection is IPv6-only on the free plan. Free projects
 pause after 7 days without activity; the worker and the monitor on `fb.` keep it active.
@@ -383,7 +386,40 @@ curl -s -H "authorization: Bearer $ADMIN_TOKEN" -H 'x-forwarded-for: 6.6.6.6' \
 `headers` lists what arrived.
 
 Settings › Custom Domains: add `fb.breader.example`, then in Cloudflare DNS add the CNAME it shows,
-**DNS only** (grey cloud). Settings › Deploy Hook → `RENDER_DEPLOY_HOOK` in `infra/.env.ship`.
+**DNS only** (grey cloud). Settings › Deploy Hook → `DEPLOY_HOOKS` in `infra/.env.ship`.
+
+### More servers and read copies
+
+Any machine or service that runs the server image can be another server, and any Postgres can be a
+read copy. Per region: a server, a copy, both, or neither. The primary (`PRIMARY_URL`) stays the
+only writer.
+
+A server: the env of the Render one above, with its own `PUBLIC_URL`. Add its address to
+`VITE_API_SERVERS` and its deploy hook, if it has one, to `DEPLOY_HOOKS` (both in
+`infra/.env.ship`), then ship the app. Give it a monitor on `/ready`.
+
+A read copy: an empty database, reached through a session connection (not a transaction pooler).
+On each server that reads from it set:
+
+```
+COPY_URL=<its address>   COPY_SSL=require (off for a local one)   COPY_NAME=<a name, e.g. its region>
+```
+
+That server migrates the copy as it starts, loads it, and keeps it current from the primary's
+`change_log` (`server/src/mirror/copy.ts`). It needs no superuser: replayed rows skip the triggers
+through `breader.replay` (`server/drizzle/0031_copies.sql`). Several servers may share one copy;
+one feeds it at a time (an advisory lock), and another takes over within 30 s if it stops. A laptop
+with no `COPY_URL` reads from its own copy, which its worker feeds.
+
+What reads from a copy (`server/src/db/reads.ts`): the session's library, file links, kept panels
+and AI notes. Lookups that find nothing there ask the primary. Everything else, and every write,
+goes to the primary. A reader who just wrote reads from the primary until the copy has caught up
+past their write (cookie `brdr_wrote`, 5 minutes at most). A copy that hasn't caught up for 90 s
+is skipped.
+
+`change_log` is kept until the slowest copy has read it, for 14 days at most; a copy away longer
+is dropped and loads afresh when back. To retire a copy, unset `COPY_URL` and, so the log isn't
+kept for it meanwhile, `DELETE FROM feed_copies WHERE name = '<its COPY_NAME>'` on the primary.
 
 ### Suwayomi on AWS for Render
 
@@ -425,9 +461,9 @@ the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull` and th
 Workers & Pages › Create › Pages › a project named `breader`, production branch `dev`, custom domain
 `breader.example`. `npm run ship` builds the app on your machine and uploads it, so Pages builds
 nothing itself: Settings › Builds › Branch control, turn off automatic production and preview
-deployments. Put `VITE_API_URL=https://api.breader.example`,
-`VITE_API_FALLBACK_URL=https://fb.breader.example` and `VITE_SENTRY_DSN=<the DSN>` in
-`infra/.env.ship`, and sign in once with `npx wrangler@4 login`.
+deployments. Put `VITE_API_SERVERS=https://api.breader.example,https://fb.breader.example` (the
+laptop first) and `VITE_SENTRY_DSN=<the DSN>` in `infra/.env.ship`, and sign in once with
+`npx wrangler@4 login`.
 
 `frontend/public/404.html` makes Pages answer unknown addresses with a 404 instead of the app, so
 the app's own places live on `/` (`#/read/…`, `?verify=…`), never on paths. `robots.txt` lets every
@@ -491,8 +527,8 @@ It lives in Supabase's `feedback` table, which the ThinkPad's copy doesn't keep.
 **Shipping.** On `dev`, with everything committed and Docker running: `npm run ship`
 (`infra/ship.sh`). It checks this machine is ready, runs type checks, lint and every test against
 the local stand-ins, pushes, publishes a new panel model round, builds and pushes the server image,
-migrates Supabase, redeploys Render, builds and uploads the app, then waits until all three are on
-the new commit. `infra/ship.sh app live` runs only the steps named. There is no CI on GitHub.
+migrates the primary, calls each deploy hook, builds and uploads the app, then waits until every
+server and the app are on the new commit. `infra/ship.sh app live` runs only the steps named. There is no CI on GitHub.
 A What's new note at the top of `frontend/src/features/news/notes.ts` goes in only after the owner
 approves each line (ship.sh doesn't demand one): readers from before see it once, in a dialog over the library, and only once for an account, an address and a device (the
 app asks `POST /v1/news/seen` first, `server/src/routes/news.ts`; an address is kept only as an

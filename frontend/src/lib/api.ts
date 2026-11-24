@@ -1,44 +1,54 @@
 import { isPublicPath } from '@breader/shared/public';
+import { pickServer, serverList, tryOrder, type Timings } from './servers';
 
 /*
- * The API lives in two places (backend design §3): the laptop behind a Cloudflare Tunnel, and the
- * same server on Render's free tier. Requests go to whichever answered last. A timeout, a network
- * error or a gateway error (502–504, or Cloudflare's 530 when the tunnel is down) switches to the
- * other and retries once; every write is safe to repeat. While on the fallback, the laptop is
- * asked every minute whether it's back, and takes over again as soon as it answers.
+ * The API runs on any number of servers (ADR 0001, lib/servers.ts): the home server, with the
+ * voices and the panel model, and others anywhere, each the same API. Once started (startPicking),
+ * the app times each one's /health now and every few minutes, and picks: home, unless it's away or
+ * much slower than the quickest other. A timeout, a network error or a gateway error (502–504, or
+ * Cloudflare's 530 when a tunnel is down) moves to the next server and retries once; every write is
+ * safe to repeat.
  *
- * Development: the laptop role is on :8787 and the fallback on :8788 of the page's own host, so
- * the session cookie stays same-site whether the app is opened as localhost or 127.0.0.1.
+ * Development: :8787 and :8788 of the page's own host, so the session cookie stays same-site
+ * whether the app is opened as localhost or 127.0.0.1.
  */
 const here = `${location.protocol}//${location.hostname}`;
-const BASES = {
-  primary: import.meta.env.VITE_API_URL || `${here}:8787`,
-  fallback: import.meta.env.VITE_API_FALLBACK_URL || `${here}:8788`,
-};
-export type ApiBase = keyof typeof BASES;
-/** Where each copy of the server is, for the admin page, which talks to them itself (admin/live.ts). */
-export const baseUrl = (base: ApiBase) => BASES[base];
+const SERVERS = serverList(import.meta.env, here);
+/** The home server: the voices and panels are there alone. */
+export const HOME = SERVERS[0];
+/** A server's address. */
+export type ApiBase = string;
+/** Every server, home first, for the admin page, which talks to them itself (admin/live.ts). */
+export const servers = (): readonly ApiBase[] => SERVERS;
+/** Whether `base` is the home server. */
+export const isHome = (base: ApiBase) => base === HOME;
 
 const TIMEOUT = 4000;
-const PROBE_EVERY = 60_000;
+/** How often the servers are timed: often while away from home, so the app goes back soon. */
+const PICK_AT_HOME = 5 * 60_000;
+const PICK_AWAY = 60_000;
 const GATEWAY = new Set([502, 503, 504, 530]);
 /*
- * Render's free tier sleeps after 15 minutes with no request and takes up to a minute to wake, so
- * the fallback, unheard from for a while, is given that long to answer.
+ * A free server may sleep after some minutes with no request and take up to a minute to wake, so
+ * one other than home, unheard from for a while, is given that long to answer.
  */
 const ASLEEP_AFTER = 10 * 60_000;
 const WAKE_TIMEOUT = 60_000;
-/** When each copy of the server last answered. */
-const heard: Record<ApiBase, number> = { primary: 0, fallback: 0 };
-/** The laptop gave no answer the last time it was asked: a gateway's, or none at all. */
-let laptopMissed = false;
+/** When each server last answered. */
+const heard = new Map<ApiBase, number>();
+/** How long each took to answer /health when last timed (lib/servers.ts). */
+const timings: Timings = new Map();
+/** Home gave no answer the last time it was asked: a gateway's, or none at all. */
+let homeMissed = false;
 const answered = (base: ApiBase, yes: boolean) => {
-  if (yes) heard[base] = Date.now();
-  if (base === 'primary') laptopMissed = !yes;
+  if (yes) heard.set(base, Date.now());
+  if (base === HOME) homeMissed = !yes;
 };
 
 function timeoutFor(base: ApiBase, timeout: number): number {
-  if (base === 'fallback' && Date.now() - heard.fallback > ASLEEP_AFTER) return Math.max(timeout, WAKE_TIMEOUT);
+  if (base === HOME) return timeout;
+  const last = heard.get(base) ?? 0;
+  if (Date.now() - last > ASLEEP_AFTER) return Math.max(timeout, WAKE_TIMEOUT);
   return timeout;
 }
 
@@ -58,16 +68,16 @@ export class OfflineError extends Error {
   }
 }
 
-let active: ApiBase = 'primary';
-let probe = 0;
+let active: ApiBase = HOME;
+let picking = 0;
 const listeners = new Set<(b: ApiBase) => void>();
 
-/** One try against one base. null means "try the other one". */
+/** One try against one server. null means "try the next one". */
 async function attempt(base: ApiBase, path: string, init: RequestInit, timeout: number): Promise<Response | null> {
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutFor(base, timeout));
   try {
-    const res = await fetch(BASES[base] + path, { ...init, credentials: 'include', signal: ctrl.signal });
+    const res = await fetch(base + path, { ...init, credentials: 'include', signal: ctrl.signal });
     if (GATEWAY.has(res.status)) {
       answered(base, false);
       return null;
@@ -86,12 +96,50 @@ function switchTo(base: ApiBase) {
   if (active === base) return;
   active = base;
   listeners.forEach((l) => l(base));
-  window.clearInterval(probe);
-  if (base === 'fallback') {
-    probe = window.setInterval(async () => {
-      if ((await attempt('primary', '/health', {}, TIMEOUT))?.ok) switchTo('primary');
-    }, PROBE_EVERY);
+}
+
+/** How long one server takes to answer /health well, in ms; null when it doesn't. */
+async function time(base: ApiBase): Promise<number | null> {
+  const ctrl = new AbortController();
+  const t = window.setTimeout(() => ctrl.abort(), TIMEOUT);
+  const started = performance.now();
+  try {
+    const res = await fetch(base + '/health', { credentials: 'include', cache: 'no-store', signal: ctrl.signal });
+    answered(base, res.ok);
+    if (!res.ok) return null;
+    return performance.now() - started;
+  } catch {
+    answered(base, false);
+    return null;
+  } finally {
+    window.clearTimeout(t);
   }
+}
+
+/** Times every server at once and moves to the one to use (lib/servers.ts pickServer). */
+async function pickNow() {
+  const ms = await Promise.all(SERVERS.map(time));
+  SERVERS.forEach((s, i) => timings.set(s, ms[i]));
+  switchTo(pickServer(SERVERS, timings));
+}
+
+function pickLater() {
+  window.clearTimeout(picking);
+  let wait = PICK_AWAY;
+  if (active === HOME) wait = PICK_AT_HOME;
+  picking = window.setTimeout(() => void pickNow().finally(pickLater), wait);
+}
+
+/** Starts picking the server: now, then every few minutes. Once, as the app starts (main.tsx). */
+export function startPicking() {
+  if (SERVERS.length < 2) return;
+  void pickNow().finally(pickLater);
+}
+
+/** The server to try after `first`, when it can't be reached: the quickest of the rest. */
+function nextAfter(first: ApiBase): ApiBase | null {
+  const order = tryOrder(SERVERS, first, timings);
+  return order[1] ?? null;
 }
 
 async function request<T>(method: string, path: string, body?: unknown, timeout = TIMEOUT): Promise<T> {
@@ -102,9 +150,9 @@ async function request<T>(method: string, path: string, body?: unknown, timeout 
     body: body !== undefined ? JSON.stringify(body) : undefined,
   };
   const first = active;
-  const other: ApiBase = first === 'primary' ? 'fallback' : 'primary';
   let res = await attempt(first, path, init, timeout);
-  if (!res) {
+  const other = nextAfter(first);
+  if (!res && other) {
     res = await attempt(other, path, init, timeout);
     if (res) switchTo(other);
   }
@@ -116,8 +164,8 @@ async function request<T>(method: string, path: string, body?: unknown, timeout 
 }
 
 /*
- * The server voice speaks from the laptop alone (the fallback is too small to), so what it's asked
- * goes there and nowhere else, and a slow answer doesn't move the app to the fallback. A gateway
+ * The server voice speaks from the home server alone (the others are too small to), so what it's
+ * asked goes there and nowhere else, and a slow answer doesn't move the app elsewhere. A gateway
  * error here is the laptop being off; the server's own errors say what they are.
  */
 const LAPTOP_GATEWAY = new Set([502, 504, 530]);
@@ -137,7 +185,7 @@ async function fetchFrom(base: ApiBase, path: string, body: unknown, timeout: nu
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutFor(base, timeout));
   try {
-    const res = await fetch(BASES[base] + path, {
+    const res = await fetch(base + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -172,26 +220,22 @@ const VOICE_OFF = 'Breader’s computer can’t be reached just now.';
 
 async function laptop(path: string, body: unknown, timeout: number): Promise<Response> {
   if (navigator.onLine === false) throw new OfflineError();
-  const res = await fetchFrom('primary', path, body, timeout);
+  const res = await fetchFrom(HOME, path, body, timeout);
   if (res.ok) return res;
   throw await failure(res, VOICE_OFF);
 }
 
 /*
- * Manga: the laptop has MangaDex and Suwayomi's sites, the fallback MangaDex alone. The copy the
- * app is on is asked first, so a laptop that's down doesn't hold every page up, and the other one
- * when that one is away.
+ * Manga: home has MangaDex and Suwayomi's sites, the others MangaDex (and Suwayomi's, when set).
+ * The server the app is on is asked first, so a home that's down doesn't hold every page up, and
+ * the next one when that one is away.
  */
 async function manga(path: string, body: unknown, timeout: number): Promise<Response> {
   if (navigator.onLine === false) throw new OfflineError();
-  let first: ApiBase = 'primary';
-  let second: ApiBase = 'fallback';
-  if (active === 'fallback') {
-    first = 'fallback';
-    second = 'primary';
-  }
+  const first = active;
   let res = await fetchFrom(first, path, body, timeout);
-  if (await away(res)) res = await fetchFrom(second, path, body, timeout);
+  const second = nextAfter(first);
+  if (second && (await away(res))) res = await fetchFrom(second, path, body, timeout);
   if (res.ok) return res;
   throw await failure(res, 'Breader’s computer can’t be reached.');
 }
@@ -205,16 +249,16 @@ export function sayAway(what: string) {
 }
 
 /** An address for a manga picture to load straight from, on the copy of the server the app is on. */
-export const mangaUrl = (path: string) => BASES[active] + path;
+export const mangaUrl = (path: string) => active + path;
 
 export const api = {
-  /** The laptop alone, for the server voice: JSON, or the response itself for its sound. */
+  /** The home server alone, for the server voice: JSON, or the response itself for its sound. */
   laptop: {
     get: async <T>(path: string, timeout = TIMEOUT) => (await laptop(path, undefined, timeout)).json() as Promise<T>,
     post: async <T>(path: string, body: unknown, timeout = TIMEOUT) => (await laptop(path, body, timeout)).json() as Promise<T>,
     raw: (path: string, body: unknown, timeout = TIMEOUT) => laptop(path, body, timeout),
   },
-  /** Manga, from the laptop or the fallback, whichever answers: JSON, or the response itself for a picture. */
+  /** Manga, from the server the app is on, or the next when that one's away: JSON, or the response itself for a picture. */
   manga: {
     get: async <T>(path: string, timeout = TIMEOUT) => (await manga(path, undefined, timeout)).json() as Promise<T>,
     post: async <T>(path: string, body: unknown, timeout = TIMEOUT) => (await manga(path, body, timeout)).json() as Promise<T>,
@@ -225,8 +269,8 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
   /** Which copy of the server is answering. */
   get via(): ApiBase { return active; },
-  /** The laptop is away: the app's on the fallback, or the laptop didn't answer when last asked. */
-  get away(): boolean { return active === 'fallback' || laptopMissed; },
+  /** Home is away: the app's on another server, or home didn't answer when last asked. */
+  get away(): boolean { return active !== HOME || homeMissed; },
   onVia(fn: (b: ApiBase) => void) {
     listeners.add(fn);
     return () => { listeners.delete(fn); };

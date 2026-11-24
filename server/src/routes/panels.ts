@@ -116,14 +116,14 @@ export function panelRoutes(deps: Deps) {
     const chapter = chapterOf(c.req.param('id'));
     // It grows as readers read: asked once a chapter by the app, which keeps it while it's open.
     c.header('Cache-Control', 'private, no-store');
-    return c.json({ pages: await kept.chapter(chapter) } satisfies ChapterPanels);
+    return c.json({ pages: await kept.chapter(chapter, c.var.read.pool) } satisfies ChapterPanels);
   });
 
   // As many as the pages fetched: a chapter or a few at once, when they're kept to read offline.
   r.get('/panels/:id/:n{[0-9]{1,4}}', async (c) => {
     const lib = library(c);
     const page = pageOf(c);
-    const had = await kept.get(page.chapter, page.n);
+    const had = await kept.get(page.chapter, page.n, c.var.read.pool);
     // Kept from an earlier round, it's found again for a reader with a seat.
     const p = panels && manga && panels.on ? panels : null;
     if (had && !(p && had.round < p.round && p.seats.has(lib))) return keep(c, had);

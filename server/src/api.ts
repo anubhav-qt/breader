@@ -2,6 +2,8 @@ import { serve } from '@hono/node-server';
 import { makeApp } from './app.ts';
 import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
+import { migrationsBeside } from './db/migrations.ts';
+import { makeReads } from './db/reads.ts';
 import { loadEnv, mangaArchiveMb, mangaCacheMb, onThinkPad } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
 import { fillBlanks } from './jobs/fill.ts';
@@ -14,6 +16,7 @@ import { makeGemini } from './lib/gemini.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
+import { connectCopy, runCopy } from './mirror/copy.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
 import { makeCurate, pgChecks } from './manga/curate.ts';
 import { makeKeeper } from './manga/keeper.ts';
@@ -38,6 +41,13 @@ for (const gone of ['SPEECH_THREADS', 'PANEL_WORKERS', 'PANEL_THREADS']) {
 if (process.env.ENGINE_BOOKS) log.warn('ENGINE_BOOKS is gone: audiobooks are made on readers’ devices only');
 const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
+// This server's read copy, any Postgres in any region (COPY_URL, mirror/copy.ts): migrated and kept
+// current in the background, and read from once it has caught up (db/reads.ts). Without one, a
+// laptop reads from its own copy, which its worker feeds. Neither: reads go to the primary.
+const copy = connectCopy(env);
+const copying = new AbortController();
+if (copy) void runCopy(primary.pool, copy, migrationsBeside(import.meta.url), copying.signal);
+const reads = makeReads(primary, copy ?? mirror);
 // Answers worth keeping (manga's, AI notes) go to Redis when there's one, so they outlast a restart.
 let redis: Redis | null = null;
 if (env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
@@ -80,7 +90,7 @@ const manga = mangaOn ? makeManga(mangaOptions) : null;
 // free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
 let panels: ReturnType<typeof makePanels> | null = null;
 if (manga && engine) panels = makePanels(env, engine);
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, panels, engine, redis };
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, panels, engine, redis, reads };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 // Panels from an earlier round of the model go to the archive before any reader is served, so
@@ -223,12 +233,13 @@ const stop = () => {
   clearTimeout(fillAt);
   clearInterval(commands);
   prefetching.abort();
+  copying.abort();
   void speech?.close();
   void panels?.close();
   void engine?.close();
   void redis?.close();
   server.close(() => {
-    void Promise.all([primary.pool.end(), mirror?.pool.end()]).finally(() => process.exit(0));
+    void Promise.all([primary.pool.end(), mirror?.pool.end(), copy?.pool.end()]).finally(() => process.exit(0));
   });
   setTimeout(() => process.exit(0), 10_000).unref();
 };

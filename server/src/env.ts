@@ -26,6 +26,18 @@ const Env = z.object({
   PRIMARY_SSL: z.enum(['off', 'require']).default('off'),
   /** The laptop's copy. Unset on the fallback. */
   MIRROR_URL: z.string().optional(),
+  /**
+   * This server's read copy (ADR 0001, point 5): any Postgres, in any region, near this server or
+   * not, through a session connection (not a transaction pooler). The server migrates it, reads from
+   * it what may come from a copy (db/reads.ts), and keeps it current from PRIMARY_URL's feed unless
+   * another server reading the same copy already does (mirror/copy.ts). Unset: every read goes to
+   * PRIMARY_URL. Any number of servers may share one copy; each copy needs only one.
+   */
+  COPY_URL: z.string().optional(),
+  /** The copy's name in feed_copies, where its place in the feed is kept. Defaults to user@host/database from COPY_URL. */
+  COPY_NAME: z.string().min(1).max(100).optional(),
+  /** require (the default) for a database reached over the internet; off for a local one. */
+  COPY_SSL: z.enum(['off', 'require']).default('require'),
 
   /** Secret mixed into the key HMAC. Changing it makes every stored key hash unusable. */
   KEY_PEPPER: z.string().min(32),

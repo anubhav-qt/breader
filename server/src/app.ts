@@ -4,6 +4,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { isPublicPath } from '@breader/shared';
 import type { AppEnv, Deps } from './context.ts';
+import { noteWrite, onlyPrimary } from './db/reads.ts';
 import { ApiError, neverKept, onError } from './lib/errors.ts';
 import { clientIp, sameOriginWrites } from './lib/http.ts';
 import { log } from './log.ts';
@@ -22,6 +23,12 @@ import { speechRoutes } from './routes/speech.ts';
 import { audiobookRoutes } from './routes/audiobooks.ts';
 import { syncRoutes } from './routes/sync.ts';
 import { voiceRoutes } from './routes/voices.ts';
+
+/** A request that may change something: everything but GET, HEAD and a preflight. */
+function isWrite(c: Context<AppEnv>): boolean {
+  const method = c.req.method;
+  return method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+}
 
 /** A read of an answer that's the same for everyone. */
 function isPublicRead(c: Context<AppEnv>): boolean {
@@ -64,6 +71,16 @@ export function makeApp(deps: Deps) {
     return withCors(c, next);
   });
   app.use('/v1/*', sameOriginWrites(allowed));
+  // Reads that may come from a read copy go there, unless it's behind or hasn't this reader's last
+  // write yet; each write leaves the cookie that says when it was made (db/reads.ts).
+  const reads = deps.reads ?? onlyPrimary({ db: deps.db, pool: deps.pool });
+  const primary = { db: deps.db, pool: deps.pool };
+  app.use('/v1/*', async (c, next) => {
+    if (isWrite(c)) c.set('read', primary);
+    else c.set('read', await reads.pick(c));
+    await next();
+    if (isWrite(c) && c.res.status < 400) noteWrite(c, deps.env);
+  });
   app.use(
     '/v1/*',
     bodyLimit({

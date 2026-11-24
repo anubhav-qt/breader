@@ -1,5 +1,5 @@
 import { filledIn, numberOf, pickChapters, PLACE_PER, placeChapter, placeKey, type Fill, type MangaChapter, type MangaKind, type MangaSeries, type SourceSeries } from '@breader/shared/manga';
-import { api, ApiError, OfflineError } from '../lib/api';
+import { api, ApiError, isHome, OfflineError } from '../lib/api';
 import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
 import { WORDS_PER_MANGA_PAGE } from '../lib/format';
@@ -85,7 +85,7 @@ export function readOnLaptop(url: string | undefined): boolean {
 
 /** The copy a series is read from just now: its own, or its Weeb Central copy while the laptop's away. */
 export function readFrom(where: Remote): Remote {
-  if (api.via !== 'fallback') return where;
+  if (isHome(api.via)) return where;
   if (!laptopOnly(where)) return where;
   const weeb = where.also.find((w) => w.kind === 'source' && w.id.startsWith(WEEB_CENTRAL));
   if (!weeb) return where;

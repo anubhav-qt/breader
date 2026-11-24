@@ -1,7 +1,8 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { AiFirst, TRACK_ID, trackKey, type AiCastResponse, type AiEntry, type AiFile, type AiMusicResponse, type AiStatus, type AiVoicesResponse, type MusicLink, type RevisitResponse } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
+import { lookUp, type Source } from '../db/reads.ts';
 import { castFor, cutAt, musicFor, revisitFor, voicesFor } from '../lib/ai.ts';
 import { Memo, MemoryStore } from '../lib/cache.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
@@ -35,6 +36,7 @@ type Music = NonNullable<AiFile['music']>;
 
 export function aiRoutes(deps: Deps) {
   const { db, storage } = deps;
+  const primary = { db, pool: deps.pool };
   const r = new Hono<AppEnv>();
   r.use('/books/:bookId/*', requireLibrary(deps));
   r.use('/ai/first', requireLibrary(deps));
@@ -44,10 +46,17 @@ export function aiRoutes(deps: Deps) {
   /**
    * The book's notes, if this library may have them: its own copy, still on its shelf, with the
    * switch on, here or for the file anywhere (ai_books), should the switch not have reached here yet.
+   * Looked up where the request reads (a read copy, db/reads.ts), then in Mumbai if not there.
    */
-  async function held(libraryId: string, bookId: string): Promise<Held | undefined> {
+  async function held(c: Context<AppEnv>): Promise<Held | undefined> {
+    const libraryId = c.var.library.id;
+    const bookId = c.req.param('bookId')!;
     if (bookId.length > 200) return undefined;
-    const { rows: [row] } = await db.execute<Held>(sql`
+    return lookUp(c.var.read, primary, (from) => heldIn(from, libraryId, bookId));
+  }
+
+  async function heldIn(from: Source, libraryId: string, bookId: string): Promise<Held | undefined> {
+    const { rows: [row] } = await from.db.execute<Held>(sql`
       SELECT n.sha256, n.version, n.made, rs.mark
         FROM library_items li
         JOIN blobs b ON b.id = li.file_id AND b.status = 'ready'
@@ -59,7 +68,10 @@ export function aiRoutes(deps: Deps) {
     return row;
   }
 
-  /** One part of the notes, as of the version the reader was told of: kept, or fetched and kept. */
+  /**
+   * One part of the notes, as of the version the reader was told of: kept, or fetched and kept.
+   * Read from Mumbai: a copy may not have that version yet, and this is asked once a version.
+   */
   function part<T>(h: Held, name: string, pick: SQL): Promise<T> {
     return parts.get(`${h.sha256}:${h.version}:${name}`, async () => {
       const { rows: [row] } = await db.execute<{ v: T }>(sql`SELECT ${pick} AS v FROM ai_notes n WHERE n.sha256 = ${h.sha256}`);
@@ -74,7 +86,7 @@ export function aiRoutes(deps: Deps) {
   const musicPart = (h: Held) => part<Music | null>(h, 'music', sql`n.data->'music'`);
 
   r.get('/books/:bookId/ai', async (c) => {
-    const h = await held(c.var.library.id, c.req.param('bookId'));
+    const h = await held(c);
     c.header('Cache-Control', 'private, no-store');
     let status: AiStatus = { made: null, revisit: false, voices: false, music: false };
     if (h) {
@@ -88,7 +100,7 @@ export function aiRoutes(deps: Deps) {
   });
 
   r.get('/books/:bookId/revisit', async (c) => {
-    const h = await held(c.var.library.id, c.req.param('bookId'));
+    const h = await held(c);
     if (!h) throw none();
     const revisit = await revisitPart(h);
     c.header('Cache-Control', 'private, no-store');
@@ -96,7 +108,7 @@ export function aiRoutes(deps: Deps) {
   });
 
   r.get('/books/:bookId/voices', async (c) => {
-    const h = await held(c.var.library.id, c.req.param('bookId'));
+    const h = await held(c);
     if (!h) throw none();
     const [sections, voices] = await Promise.all([sectionsPart(h), voicesPart(h)]);
     c.header('Cache-Control', 'private, no-store');
@@ -104,7 +116,7 @@ export function aiRoutes(deps: Deps) {
   });
 
   r.get('/books/:bookId/cast', async (c) => {
-    const h = await held(c.var.library.id, c.req.param('bookId'));
+    const h = await held(c);
     if (!h) throw none();
     const [voices, people] = await Promise.all([voicesPart(h), part<AiEntry[]>(h, 'people', sql`n.data->'revisit'->'people'`)]);
     c.header('Cache-Control', 'private, no-store');
@@ -112,7 +124,7 @@ export function aiRoutes(deps: Deps) {
   });
 
   r.get('/books/:bookId/music', async (c) => {
-    const h = await held(c.var.library.id, c.req.param('bookId'));
+    const h = await held(c);
     const music = h && (await musicPart(h));
     if (!h || !music) throw noMusic();
     const sections = await sectionsPart(h);
@@ -124,7 +136,7 @@ export function aiRoutes(deps: Deps) {
   r.get('/books/:bookId/music/:n', async (c) => {
     const n = Number(c.req.param('n'));
     if (!Number.isInteger(n) || n < 0 || n > 1000) throw noMusic();
-    const h = await held(c.var.library.id, c.req.param('bookId'));
+    const h = await held(c);
     const id = h && (await musicPart(h))?.tracks[n]?.id;
     if (!id || !TRACK_ID.test(id)) throw noMusic();
     c.header('Cache-Control', 'private, no-store');

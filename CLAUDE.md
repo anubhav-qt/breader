@@ -17,12 +17,16 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - The ThinkPad runs everything behind a Cloudflare Tunnel (`api.breader.site`).
 - One Render free service (`fb.breader.site`) is the fallback.
 - Supabase (Mumbai) is the only writer. The ThinkPad keeps a copy fed from `change_log`
-  (`server/src/mirror/feed.ts`, fed tables in `FED_TABLES`, `server/src/db/schema.ts`).
+  (`server/src/mirror/feed.ts`, fed tables in `FED_TABLES`, `server/src/db/schema.ts`). Each copy
+  keeps its place in `feed_copies`; `change_log` is pruned to the slowest (`server/src/jobs/chores.ts`).
+- Any server may have a read copy, any Postgres anywhere (`COPY_URL`, `server/src/mirror/copy.ts`):
+  it migrates and feeds it (one feeder per copy, an advisory lock). Reads that may come from a copy
+  use `c.var.read` (`server/src/db/reads.ts`); writes and a reader's own fresh writes go to the primary.
 - The fallback has 512 MB and no Redis (`light` in `server/src/api.ts`): each kind of answer gets
   2 MB of memory (`memoryRoom`, `server/src/lib/cache.ts`), no daily prefetch, a small warm-up, and
   manga's answers kept in R2 under `answers/` so a restart reads them back (`server/src/lib/answers.ts`).
-- The app talks to `primary`, and switches to `fallback` on timeouts and gateway errors
-  (`frontend/src/lib/api.ts`).
+- The app knows every server (`VITE_API_SERVERS`, home first), times their `/health` and picks
+  (`frontend/src/lib/servers.ts`, `frontend/src/lib/api.ts`); timeouts and gateway errors move to the next.
 - The ThinkPad's voices and panel model run in the `engine` service (ADR 0002,
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
@@ -57,7 +61,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - ADR 0001 (`docs/adr/0001-four-servers.md`): 4 servers, regional read copies, edge-cached
   pages, the app picks the server (no Worker). Point 1 built: pages and covers are public
   (`shared/src/public.ts`), skip CORS, sent with no cookie; errors are `no-store`. Live since 2026-11-07, kept by a
-  Cloudflare Cache Rule (`infra/README.md`). The rest: not built.
+  Cloudflare Cache Rule (`infra/README.md`). Built, not shipped: points 5 to 7 and the app picking,
+  for any servers and databases. Not built: points 3 and 4, and the busy sign.
 - Load tests: `infra/load/` (run inside Docker's network): `readers.mjs` for the API,
   `voices.mjs` for the engine. How-to and numbers in `docs/load-tests.md`.
 

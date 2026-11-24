@@ -6,8 +6,11 @@ import './styles/global.css';
 import App from './App.tsx';
 import './lib/report';
 import { reloadOnStaleBuild } from './lib/stale-build';
+import { startPicking } from './lib/api';
 
 reloadOnStaleBuild();
+// The server nearest this reader, timed now and every few minutes (lib/servers.ts).
+startPicking();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
