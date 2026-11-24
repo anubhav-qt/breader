@@ -135,6 +135,11 @@ const Env = z.object({
    * (engine/serve.ts).
    */
   ENGINE_URLS: list.default([]),
+  /**
+   * Engines on call (ADR 0004: Modal, infra/modal), with the same ENGINE_TOKEN: a job goes to them
+   * only when every engine at ENGINE_URLS is down or busy, or with none there (Azure, GCP).
+   */
+  ENGINE_FALLBACK_URLS: list.default([]),
   ENGINE_TOKEN: z.string().min(16).optional(),
 
   /**

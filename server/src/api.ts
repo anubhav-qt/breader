@@ -65,11 +65,12 @@ const storage = makeStorage(env);
 // plan sleeps and restarts often) reads it back instead of asking again (lib/answers.ts).
 let answers: Store | null = redis;
 if (!answers && light) answers = r2Answers(storage);
-// The server voice runs on the laptop only: Render's free plan hasn't the processor for it. It reads
-// live for signed-in readers on slow devices. Audiobooks are made on readers' own devices, never here.
-// The engines run it and the panel model, a service of their own, shared out by the scheduler here
-// (engine/, ADR 0002). None set, as on the fallback: the voice and panels are off.
-const engine = env.ROLE === 'laptop' ? makeEngine(env) : null;
+// The server voice reads live for signed-in readers on slow devices. Audiobooks are made on readers'
+// own devices, never here. The engines run it and the panel model, a service of their own, shared out
+// by the scheduler here (engine/, ADR 0002): the laptop's at ENGINE_URLS, and Modal's on call behind
+// them at ENGINE_FALLBACK_URLS (ADR 0004), Azure's and GCP's only engine. None set, as on Render: the
+// voice and panels are off.
+const engine = makeEngine(env);
 const speech = engine ? makeSpeech(env, engine) : null;
 // Manga on both: the fallback reads Suwayomi's sources through the one on AWS (SUWAYOMI_URL), or MangaDex alone without it.
 const mangaOn = env.MANGADEX;
@@ -103,8 +104,8 @@ const manga = mangaOn ? makeManga(mangaOptions) : null;
 // A regional server puts the chapters its readers fetch in the pool, where there's room (manga/uploads.ts).
 let uploads: Uploads | null = null;
 if (manga && storagePool && env.POOL_UPLOADS) uploads = makeUploads({ pool: storagePool, manga });
-// Manga panels from the panel model, for any reader with a seat, on the laptop only: the fallback's
-// free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
+// Manga panels from the panel model, for any reader with a seat, wherever there's an engine. Without
+// one, as on Render, readers' devices find them, and panels kept serve all.
 let panels: ReturnType<typeof makePanels> | null = null;
 if (manga && engine) panels = makePanels(env, engine);
 // On GCP, this month's egress, counted each minute (lib/egress.ts): near the owner's limit, /health
