@@ -62,6 +62,13 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   Settings turns them off and on, on that device. Panel votes only check a round, by their own
   corners; page votes are to learn from (`ai/panels/README.md`, The owner's votes).
 
+- ADR 0004 (`docs/adr/0004-multi-cloud.md`, branch `feat/multi-cloud`, not deployed): Azure (two
+  regions, `infra/azure/`), a GCP e2-micro (IPv6 only, `JSON_ONLY`, egress count, a standby feeder,
+  `infra/gcp/`), Modal as an engine on call (`ENGINE_FALLBACK_URLS`, `infra/modal/`), and a storage
+  pool over R2, B2, Tigris and Fastly (`POOL_MEMBERS`, `server/src/manga/pool.ts`). The app skips a
+  server whose `/health` says `busy`, never uses one near its egress limit, and asks the next server
+  for the voice and panels when home is away.
+
 ## In progress
 
 - ADR 0001 (`docs/adr/0001-four-servers.md`): 4 servers, regional read copies, edge-cached

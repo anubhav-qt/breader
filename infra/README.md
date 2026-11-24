@@ -10,12 +10,16 @@ is the one cost. `breader.example` stands in for the real domain below.
 | `breader.example` | Cloudflare Pages | the app |
 | `api.breader.example` | Cloudflare Tunnel → the laptop | `api` (ROLE=laptop), plus `worker`, `mirror`, `tunnel` |
 | `fb.breader.example` | Render, Singapore | the same image as ROLE=fallback |
+| `az1.`, `az2.breader.example` | Azure Container Apps, two regions | the same, asleep when unused (ADR 0004) |
+| `gcp.breader.example` | Cloudflare Tunnel → a GCP e2-micro | the same, JSON only, plus a standby feeder (ADR 0004) |
+| `<workspace>--breader-engine-engine.modal.run` | Modal | an engine on call for the voices and panels (ADR 0004) |
 | — | Supabase, Mumbai | Postgres, the source of truth |
 | — | Cloudflare R2 | book files (`breader-files`) and backups (`breader-backups`) |
 
 The app knows every server (`VITE_API_SERVERS`, the laptop first). It times each one's `/health`
 as it starts and every few minutes, and uses the laptop unless it's down or much slower than the
-quickest other (`frontend/src/lib/servers.ts`). A network error, a 4-second timeout or a
+quickest other (`frontend/src/lib/servers.ts`). It doesn't pick one whose `/health` says `busy`,
+and never uses one that says `egress.near` (ADR 0004). A network error, a 4-second timeout or a
 502/503/504/530 moves to the next one. Every write carries an id and applies once, so the retry is
 safe.
 
@@ -405,6 +409,10 @@ On each server that reads from it set:
 COPY_URL=<its address>   COPY_SSL=require (off for a local one)   COPY_NAME=<a name, e.g. its region>
 ```
 
+Leave `COPY_NAME` unset on a copy that is also in the ThinkPad's `COPY_URLS` (below): both
+feeders must call it the same, `user@host/database` from its URL, or the log is kept for a name
+nothing reads, up to 14 days.
+
 That server migrates the copy as it starts, loads it, and keeps it current from the primary's
 `change_log` (`server/src/mirror/copy.ts`). It needs no superuser: replayed rows skip the triggers
 through `breader.replay` (`server/drizzle/0031_copies.sql`). Several servers may share one copy;
@@ -420,6 +428,39 @@ is skipped.
 `change_log` is kept until the slowest copy has read it, for 14 days at most; a copy away longer
 is dropped and loads afresh when back. To retire a copy, unset `COPY_URL` and, so the log isn't
 kept for it meanwhile, `DELETE FROM feed_copies WHERE name = '<its COPY_NAME>'` on the primary.
+
+### Azure, GCP and Modal (ADR 0004)
+
+Each is optional. Leave one out by not creating it and not listing it in `VITE_API_SERVERS`
+(Modal: not setting `ENGINE_FALLBACK_URLS`).
+
+**Copies fed from the centre.** The ThinkPad's worker feeds every copy in its `COPY_URLS` (comma
+separated, `COPY_SSL` for each) while it leads, so a copy stays current while its own server
+sleeps. Each URL's user, host and database must match that server's `COPY_URL`.
+
+**Azure.** Two Container Apps, one a region, asleep (no replica) when unused, two at most. Per
+region, `infra/azure/.env.<name>` from `infra/azure/.env.example`, then
+`sh infra/azure/deploy.sh <name> <location>`; run it again to update. Put its address behind
+Cloudflare as `az1.` (proxied), add it to the Google OAuth client and to `VITE_API_SERVERS`.
+
+**GCP.** An e2-micro, Debian, IPv6 only (no public IPv4). Make a tunnel in Cloudflare
+(`gcp.breader.example` → `http://localhost:8787`), then on the VM:
+
+```sh
+TUNNEL_TOKEN=<the tunnel's token> sh setup.sh    # WARP, cloudflared, swap, Docker, infra/
+cp infra/gcp/.env.example infra/gcp/.env          # and fill it in
+docker compose -f infra/gcp/compose.yml up -d
+```
+
+It sends no pictures (`JSON_ONLY`): the pool's CDNs and `MEDIA_ELSEWHERE` (an Azure server) do.
+It counts its egress; at `GCP_EGRESS_LIMIT_MB` its `/health` says `egress.near`, the app stops
+using it, and its standby stops. The standby feeds every copy in its `COPY_URLS` while the
+ThinkPad's worker is quiet (90 s unheard and its lease lapsed), and hands back when it's heard.
+
+**Modal.** `pip install modal && modal setup`, then
+`modal secret create breader-engine ENGINE_TOKEN=<the APIs' token>` and
+`modal deploy infra/modal/engine.py`. Its address goes in `ENGINE_FALLBACK_URLS` on Azure and GCP
+(and on the ThinkPad, behind its own engine). It's woken only for a job no other engine can take.
 
 ### Suwayomi on AWS for Render
 
