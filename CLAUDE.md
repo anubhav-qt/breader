@@ -15,7 +15,9 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 ## How it runs today
 
 - The ThinkPad runs everything behind a Cloudflare Tunnel (`api.breader.site`).
-- One Render free service (`fb.breader.site`) is the fallback.
+- One Render free service (`fb.breader.site`) is the fallback. It reads Suwayomi's sites through a
+  Suwayomi on AWS (`infra/aws/`, `sw.breader.site`): capped at 1.3 GB, its machine rebooted by a
+  CloudWatch alarm when it stops answering (`infra/README.md`, Suwayomi on AWS). MangaFire blocks AWS.
 - Supabase (Mumbai) is the only writer. The ThinkPad keeps a copy fed from `change_log`
   (`server/src/mirror/feed.ts`, fed tables in `FED_TABLES`, `server/src/db/schema.ts`). Each copy
   keeps its place in `feed_copies`; `change_log` is pruned to the slowest (`server/src/jobs/chores.ts`).
@@ -27,6 +29,10 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   manga's answers kept in R2 under `answers/` so a restart reads them back (`server/src/lib/answers.ts`).
 - The app knows every server (`VITE_API_SERVERS`, home first), times their `/health` and picks
   (`frontend/src/lib/servers.ts`, `frontend/src/lib/api.ts`); timeouts and gateway errors move to the next.
+- Each library's 2 comics read most lately go in the public R2 bucket `breader-pages`, the chapter
+  read to and 25 after it, put by the ThinkPad's keeper (`server/src/manga/cloud.ts`, ADR 0003,
+  `docs/adr/0003-pages-in-r2.md`). The app reads pages there first (`frontend/src/lib/cloud.ts`),
+  and a MangaFire series' list too while only Render is up. Free only: under 9 GB, 900,000 writes a month.
 - The ThinkPad's voices and panel model run in the `engine` service (ADR 0002,
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.

@@ -152,6 +152,11 @@ const Env = z.object({
    */
   MANGA_KEEP: bool.optional(),
   /**
+   * The public R2 bucket readers' next chapters go in (manga/cloud.ts, ADR 0003), served at
+   * pages.breader.site. Kept by the ThinkPad's keeper alone; off without it.
+   */
+  PAGES_BUCKET: z.string().min(1).optional(),
+  /**
    * Redis (redis://redis:6379), where MangaDex's answers are kept so they outlast a restart.
    * Without it they're kept in memory. Redis not answering never stops a reader.
    */

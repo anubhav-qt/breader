@@ -19,6 +19,7 @@ import { log } from './log.ts';
 import { connectCopy, runCopy } from './mirror/copy.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
 import { makeCurate, pgChecks } from './manga/curate.ts';
+import { makeCloud, type Cloud } from './manga/cloud.ts';
 import { makeKeeper } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makeSame, pgGroups } from './manga/same.ts';
@@ -161,7 +162,14 @@ if (manga && !light) {
 // Supabase.
 let keepAt: NodeJS.Timeout | undefined;
 if (manga && (env.MANGA_KEEP ?? onThinkPad(env))) {
-  const keeper = makeKeeper(manga, mirror?.pool ?? primary.pool);
+  // Readers' next chapters in R2 (ADR 0003), when its bucket is set.
+  let cloud: Cloud | undefined;
+  if (env.PAGES_BUCKET) {
+    const others = [env.S3_BUCKET];
+    if (env.S3_BACKUP_BUCKET) others.push(env.S3_BACKUP_BUCKET);
+    cloud = makeCloud({ storage, bucket: env.PAGES_BUCKET, others, manga });
+  }
+  const keeper = makeKeeper(manga, mirror?.pool ?? primary.pool, undefined, cloud);
   let keeping = false;
   const turn = async (now = false) => {
     if (keeping) return;

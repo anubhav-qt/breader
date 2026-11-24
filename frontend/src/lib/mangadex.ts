@@ -1,5 +1,6 @@
 import { MANGA_KINDS, type AniListAbout, type AniListKept, type AniListPage, type AniListSort, type MangaChapters, type MangaCopies, type MangaFound, type MangaKind, type MangaSearchEvent, type MangaSearchResult, type MangaSeries, type MangaSort, type MangaState, type SourceSeries } from '@breader/shared/manga';
-import { api, ApiError, mangaUrl } from './api';
+import { api, ApiError, mangaUrl, OfflineError } from './api';
+import { cloudChapters, cloudPage, cloudPages } from './cloud';
 import { readLocal, writeLocal } from './store';
 
 /*
@@ -9,6 +10,12 @@ import { readLocal, writeLocal } from './store';
  */
 
 const OFF = 'Breader’s computer can’t be reached right now. Offline chapters still open.';
+
+/** The server couldn't be reached, or couldn't reach the site, rather than saying no. */
+function away(e: unknown): boolean {
+  if (e instanceof OfflineError) return true;
+  return e instanceof ApiError && e.status >= 500;
+}
 
 async function ask<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -91,9 +98,16 @@ export const mangadex = {
   chapters: (id: string, lang: string) => ask(() => api.manga.get<MangaChapters>(`/v1/manga/series/${id}/chapters?lang=${lang}`, 60_000)),
   /** Its copies in a language, each group's pages measured: a few pages fetched the first time. */
   copies: (id: string, lang: string) => ask(() => api.manga.get<MangaCopies>(`/v1/manga/series/${id}/copies?lang=${lang}`, 90_000)),
-  /** A page's picture; the data saver's copy is smaller. */
-  page: async (chapterId: string, n: number, saver: boolean) =>
-    (await ask(() => api.manga.raw(`/v1/manga/chapter/${chapterId}/${n}${saver ? '?saver=1' : ''}`, undefined, 45_000))).blob(),
+  /** A page's picture, from R2 when it's there (lib/cloud.ts); the data saver's copy is smaller, and the server's alone. */
+  async page(chapterId: string, n: number, saver: boolean): Promise<Blob> {
+    if (!saver) {
+      const kept = await cloudPage(chapterId, n);
+      if (kept) return kept;
+    }
+    let path = `/v1/manga/chapter/${chapterId}/${n}`;
+    if (saver) path += '?saver=1';
+    return (await ask(() => api.manga.raw(path, undefined, 45_000))).blob();
+  },
   coverUrl: (id: string, file: string, size: 256 | 512) => mangaUrl(`/v1/manga/cover/${id}/${encodeURIComponent(file)}?size=${size}`),
   async cover(id: string, file: string, size: 256 | 512): Promise<Blob | undefined> {
     try {
@@ -132,17 +146,33 @@ export const anilist = {
  */
 export const sources = {
   series: (id: string, adult: boolean) => ask(() => api.manga.get<SourceSeries>(`/v1/manga/source/${id}${adult ? '?adult=1' : ''}`, 20_000)),
-  /** Every chapter. Suwayomi asks its source for them, so it can take a while. */
-  chapters: (id: string) => ask(() => api.manga.get<MangaChapters>(`/v1/manga/source/${id}/chapters`, 60_000)),
+  /**
+   * Every chapter. Suwayomi asks its source for them, so it can take a while. When the server can't
+   * reach the site (MangaFire, while only Render is up), R2's copy of the list, if it has one.
+   */
+  async chapters(id: string): Promise<MangaChapters> {
+    try {
+      return await ask(() => api.manga.get<MangaChapters>(`/v1/manga/source/${id}/chapters`, 60_000));
+    } catch (e) {
+      if (!away(e)) throw e;
+      const kept = await cloudChapters(id);
+      if (kept) return kept;
+      throw e;
+    }
+  },
   /** Its copies, each group's pages measured: a few pages fetched the first time. */
   copies: (id: string) => ask(() => api.manga.get<MangaCopies>(`/v1/manga/source/${id}/copies`, 90_000)),
-  /** How many pages a chapter has. Suwayomi learns it from its source, a chapter at a time. */
+  /** How many pages a chapter has: R2's count when it holds it, or Suwayomi learns it from its source. */
   async pages(chapterId: string): Promise<number> {
+    const kept = await cloudPages(chapterId);
+    if (kept !== null) return kept;
     const r = await ask(() => api.manga.get<{ pages: number }>(`/v1/manga/source/chapter/${chapterId}`, 45_000));
     return r.pages;
   },
-  /** Page n of a chapter (from 0), as a picture. */
+  /** Page n of a chapter (from 0), as a picture, from R2 when it's there. */
   async page(chapterId: string, n: number): Promise<Blob> {
+    const kept = await cloudPage(chapterId, n);
+    if (kept) return kept;
     const res = await ask(() => api.manga.raw(`/v1/manga/source/chapter/${chapterId}/${n}`, undefined, 45_000));
     return res.blob();
   },

@@ -447,6 +447,20 @@ tunnel of its own; panels aren't found there.
    ```
 5. Render › Environment: `SUWAYOMI_URL=https://breader:<the password>@sw.breader.example`, then
    Manual Deploy. A series from Weeb Central opens at `fb.breader.example`.
+6. An alarm that reboots the machine when it stops answering for 15 minutes (on the Mac, signed in
+   to the AWS account, with the instance's id):
+   ```sh
+   aws cloudwatch put-metric-alarm --region ap-south-1 --alarm-name breader-sw-reboot \
+     --namespace AWS/EC2 --metric-name StatusCheckFailed_Instance \
+     --dimensions Name=InstanceId,Value=<instance id> --statistic Maximum --period 60 \
+     --evaluation-periods 15 --datapoints-to-alarm 15 --threshold 1 \
+     --comparison-operator GreaterThanOrEqualToThreshold --treat-missing-data missing \
+     --alarm-actions arn:aws:automate:ap-south-1:ec2:reboot
+   ```
+
+Suwayomi may use 1.3 GB at most (`compose.yml`); past that only it restarts. On 2026-11-08 it
+filled memory and swap, the machine lost its network address, and Weeb Central and Asura stayed
+shut on the fallback for 10 days until a reboot. The cap and the alarm stop that.
 
 MangaFire turns AWS's addresses away (Cloudflare), so it's read through the laptop alone. While the
 laptop's away, the app reads a MangaFire series from its Weeb Central copy (the one after it in its
@@ -498,6 +512,30 @@ Done on breader.site 2026-11-07: the rule is `public pages and covers`, Tiered C
 
 `fb.` is not cached this way: it is DNS only, behind Render's own Cloudflare, and Render's edge
 cache is for paid services only.
+
+### Readers' next chapters in R2
+
+Each library's 2 comics read most lately (in 30 days), the chapter read to and the 25 after it,
+are put in a public R2 bucket by the ThinkPad's keeper, and the app reads them from there first
+(ADR 0003, `server/src/manga/cloud.ts`, `frontend/src/lib/cloud.ts`). The ThinkPad sends each
+page once, and those chapters open with the ThinkPad and Render both away. R2 stays free: pages
+take only what's left under 9 GB across every bucket, and writes stop at 900,000 a month. The
+keeper's line in `/admin/status` says how much is there (`manga-keep`, `detail.cloud`).
+
+1. R2 › Create bucket `breader-pages`. Its Settings › Custom Domains › connect
+   `pages.breader.example`. CORS policy:
+   ```json
+   [{ "AllowedOrigins": ["https://breader.example"], "AllowedMethods": ["GET", "HEAD"], "MaxAgeSeconds": 86400 }]
+   ```
+2. R2 › Manage API tokens › `breader-laptop`: Object Read & Write on `breader-pages` too.
+3. Caching › Cache Rules › Create rule `readers' next chapters`: `(http.host eq
+   "pages.breader.example")`, **Eligible for cache**, Edge TTL **Use cache-control header if
+   present**. Its pages have no file ending, so without it Cloudflare asks R2 every time.
+4. `PAGES_BUCKET=breader-pages` in the ThinkPad's `infra/.env`, then
+   `docker compose -f infra/compose.yml up -d api`. Render doesn't take it.
+5. `VITE_PAGES_URL=https://pages.breader.example` in `infra/.env.ship`, then ship the app.
+6. Check: after the keeper's next turn (15 minutes), `/admin/status`'s `manga-keep` shows
+   `detail.cloud.chapters` above 0, and a page from a chapter in it opens from `pages.` in the browser.
 
 ### 10. Monitoring
 

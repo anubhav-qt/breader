@@ -1,5 +1,16 @@
 # Breader: to do later
 
+## The AWS Suwayomi (down 2026-11-09 to 2026-11-18, nobody told)
+- [x] Capped at 1.3 GB, and its machine rebooted by a CloudWatch alarm (`infra/README.md`).
+- [ ] An UptimeRobot monitor on `sw.breader.site` (401 is up), so the next time it's down we hear.
+- [ ] Find why the app couldn't open library manga on 2026-11-16, 21:45 to 21:51 IST (ThinkPad logs).
+
+## Readers' next chapters in R2 (ADR 0003)
+- [ ] Move paribelle's buckets off Breader's Cloudflare account (paribelle-backups is 17.2 GB, so R2's
+      free 10 GB is used up already, 2026-11-18). Until then R2 pages can't be free; don't ship them.
+- [ ] Then count every bucket in the account for the room (the keeper's token sees Breader's two only).
+- [ ] The admin page shows what R2 holds (`manga-keep` detail `cloud`: chapters, bytes, room, writes, capped).
+
 ## Demo
 - [ ] Check how all the demos look for new users.
 - [ ] Add demos for every single thing in the guide.

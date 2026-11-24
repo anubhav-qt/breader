@@ -1,5 +1,6 @@
 import { filledIn, numberOf, pickChapters, PLACE_PER, placeChapter, placeKey, type Fill, type MangaChapter, type MangaKind, type MangaSeries, type SourceSeries } from '@breader/shared/manga';
 import { api, ApiError, isHome, OfflineError } from '../lib/api';
+import { cloudChapters } from '../lib/cloud';
 import { mangadex, sources } from '../lib/mangadex';
 import { store } from '../lib/store';
 import { WORDS_PER_MANGA_PAGE } from '../lib/format';
@@ -64,8 +65,9 @@ export function remoteOf(url: string | undefined): Remote | null {
 
 /*
  * MangaFire, in English and in French, turns away the fallback's Suwayomi on AWS (Cloudflare), so
- * it's read through the laptop alone. While the laptop's away, a series read there is read from
- * its Weeb Central copy instead, when it has one, and from MangaFire again once the laptop's back.
+ * it's read through the laptop alone. While the laptop's away, a series read there whose list is
+ * in R2 (ADR 0003) is still read from MangaFire, its next chapters from R2. Any other is read
+ * from its Weeb Central copy instead, when it has one, and from MangaFire again once the laptop's back.
  */
 const LAPTOP_ONLY = ['sw:6084907896154116083:', 'sw:6228021941803932286:'];
 const WEEB_CENTRAL = 'sw:2131019126180322627:';
@@ -84,9 +86,10 @@ export function readOnLaptop(url: string | undefined): boolean {
 }
 
 /** The copy a series is read from just now: its own, or its Weeb Central copy while the laptop's away. */
-export function readFrom(where: Remote): Remote {
+export async function readFrom(where: Remote): Promise<Remote> {
   if (isHome(api.via)) return where;
   if (!laptopOnly(where)) return where;
+  if (where.kind === 'source' && (await cloudChapters(where.id))) return where;
   const weeb = where.also.find((w) => w.kind === 'source' && w.id.startsWith(WEEB_CENTRAL));
   if (!weeb) return where;
   const rest = where.also.filter((w) => w !== weeb && !laptopOnly(w));
@@ -440,7 +443,7 @@ export async function openRemote(rec: BookRecord, at?: Position): Promise<MangaB
   const where = remoteOf(rec.url);
   if (!where) throw new Error('This manga’s address isn’t one Breader knows.');
   // Read from another copy while the laptop's away, its chapters kept offline still go with the series.
-  const from = readFrom(where);
+  const from = await readFrom(where);
   // The chapters its copy hasn't got, from the next best copies elsewhere, and where it's from, asked alongside.
   const [list, fills, about] = await Promise.all([listOf(from), fillsOf(from.also), from.kind === 'mangadex' ? aboutMangaDex(from.series) : aboutSource(from.id)]);
   let picked = filledIn(pickChapters(list, from.group), fills);

@@ -1,5 +1,6 @@
 import type { MangaChapter } from '@breader/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Cloud, CloudSeries } from '../src/manga/cloud.ts';
 import type { Manga } from '../src/manga/index.ts';
 import { makeKeeper } from '../src/manga/keeper.ts';
 
@@ -123,5 +124,72 @@ describe('keeping libraries’ manga on disk', () => {
       { library_id: 'a', url: `mangadex:${s}`, position: null },
     ]), 0));
     expect(r).toMatchObject({ series: 1, chapters: 1, failed: 1 });
+  });
+});
+
+describe('putting each library’s latest series in R2', () => {
+  const DAY = 24 * 3600_000;
+  const ago = (days: number) => new Date(Date.now() - days * DAY);
+  /** R2 as the keeper sees it: what it was asked to hold, each turn. */
+  function fakeCloud() {
+    const asked: CloudSeries[][] = [];
+    const cloud = {
+      turn: async (wanted: CloudSeries[]) => {
+        asked.push(wanted);
+        return { chapters: 0, bytes: 0, put: 0, removed: 0, room: 0, full: false, writes: 0, capped: false };
+      },
+    };
+    return { cloud: cloud as unknown as Cloud, asked };
+  }
+  const rowsOf = (rows: { library_id: string; url: string; position: { block: number } | null; at: Date }[]) => ({
+    query: async () => ({ rows }),
+  }) as never;
+
+  it('gives R2 each library’s 2 series read most lately in 30 days, 25 chapters ahead, the latest first', async () => {
+    const [s1, s2, s3, s4] = [1, 2, 3, 4].map(series);
+    const lists: Record<string, MangaChapter[]> = {};
+    for (const s of [s1, s2, s3, s4]) lists[s] = Array.from({ length: 40 }, (_, i) => chapter(s, i + 1));
+    const f = fakeManga(lists);
+    const c = fakeCloud();
+    // The pool answers read most lately first, as its query asks.
+    await run(makeKeeper(f.manga, rowsOf([
+      { library_id: 'a', url: `mangadex:${s1}`, position: at(3), at: ago(1) },
+      { library_id: 'b', url: `mangadex:${s4}`, position: null, at: ago(2) },
+      { library_id: 'a', url: `mangadex:${s2}`, position: null, at: ago(5) },
+      { library_id: 'a', url: `mangadex:${s3}`, position: null, at: ago(6) },
+      { library_id: 'b', url: `mangadex:${s2}`, position: null, at: ago(40) },
+    ]), 0, c.cloud));
+    const [wanted] = c.asked;
+    expect(wanted.map((w) => w.id)).toEqual([`mangadex:${s1}`, `mangadex:${s4}`, `mangadex:${s2}`]);
+    expect(wanted[0].chapters.map((x) => x.id)).toEqual(Array.from({ length: 26 }, (_, i) => `${s1}/${i + 3}`));
+    // a's third series keeps the usual 10 ahead on the disk, and stays out of R2.
+    expect(f.chapters().filter((x) => x.startsWith(`${s3}/`))).toHaveLength(11);
+    expect(f.chapters().filter((x) => x.startsWith(`${s1}/`))).toHaveLength(26);
+  });
+
+  it('sends a Suwayomi series’ own list with it, and none for MangaDex', async () => {
+    const s = series(1);
+    const sw = 'sw:1:x';
+    const f = fakeManga({ [s]: [chapter(s, 1)], [sw]: [chapter(sw, 1), chapter(sw, 2)] });
+    const c = fakeCloud();
+    await run(makeKeeper(f.manga, rowsOf([
+      { library_id: 'a', url: `${sw}#g|mangadex:${s}`, position: null, at: ago(1) },
+      { library_id: 'a', url: `mangadex:${s}`, position: null, at: ago(2) },
+    ]), 0, c.cloud));
+    const [wanted] = c.asked;
+    expect(wanted[0]).toMatchObject({ id: sw, list: { chapters: [{ id: `${sw}/1` }, { id: `${sw}/2` }] } });
+    expect(wanted[1]).toMatchObject({ id: `mangadex:${s}`, list: null });
+  });
+
+  it('says what R2 holds after the turn, and keeps going when R2 fails', async () => {
+    const s = series(1);
+    const f = fakeManga({ [s]: [chapter(s, 1)] });
+    const c = fakeCloud();
+    const rows = rowsOf([{ library_id: 'a', url: `mangadex:${s}`, position: null, at: ago(1) }]);
+    expect(await run(makeKeeper(f.manga, rows, 0, c.cloud))).toMatchObject({ chapters: 1, cloud: { capped: false } });
+    const failing = { turn: async () => { throw new Error('R2 down'); } } as unknown as Cloud;
+    const r = await run(makeKeeper(f.manga, rows, 0, failing));
+    expect(r).toMatchObject({ chapters: 1 });
+    expect(r.cloud).toBeUndefined();
   });
 });
