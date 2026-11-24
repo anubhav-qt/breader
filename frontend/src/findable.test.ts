@@ -51,6 +51,12 @@ describe('public pages', () => {
     }
   });
 
+  it('hides those words from readers whose browser runs scripts, so no empty library flashes', () => {
+    expect(home).toContain('<div class="lib crawlers-only">');
+    expect(home).toContain("<script>document.documentElement.classList.add('scripted');</script>");
+    expect(home).toContain('<style>.scripted .crawlers-only { display: none; }</style>');
+  });
+
   it('keeps the tag that proves to Google Search Console the site is ours', () => {
     expect(home).toContain('<meta name="google-site-verification" content="zKlPGbwGdknb6y-z_4KmPNR6XWhsMWmAchUxQaouB00" />');
   });

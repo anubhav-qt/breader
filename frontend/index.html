@@ -42,6 +42,10 @@
         }
       } catch (e) { /* storage blocked: the device's */ }
     </script>
+    <!-- The words in #root are for crawlers that run no script. A browser that runs scripts hides
+         them, so a reader never sees an empty library before the app draws theirs. -->
+    <script>document.documentElement.classList.add('scripted');</script>
+    <style>.scripted .crawlers-only { display: none; }</style>
     <!-- The typefaces, declared in src/styles/fonts.css: most from Google Fonts, and the card faces
          from our own files, preloaded so the library is laid out once, in them. -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -52,9 +56,9 @@
   </head>
   <body>
     <!-- The empty library's words (features/guide/Welcome.tsx), so crawlers that run no script read
-         what Breader is. The app draws over it as it starts. -->
+         what Breader is. Hidden where scripts run; the app draws over it as it starts. -->
     <div id="root">
-      <div class="lib">
+      <div class="lib crawlers-only">
         <main class="gallery is-empty">
           <div class="wl">
             <h1 class="wl-h">Start with a book</h1>

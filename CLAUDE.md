@@ -39,7 +39,7 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
   The server voice reads Piper's voices only; Kokoro (the heavy voices) runs on devices.
 - Search and screen readers: `index.html` carries the empty library's words for crawlers that run
-  no script (kept equal to `features/guide/cards.ts` by `src/findable.test.ts`), plus the
+  no script, hidden where scripts run so readers never see them flash (kept equal to `features/guide/cards.ts` by `src/findable.test.ts`), plus the
   description, canonical and link-preview tags (the wide `public/og.png`, 1200x630). `public/404.html`, `robots.txt`, `sitemap.xml`:
   `infra/README.md`, Cloudflare Pages.
 - Readers send requests and feedback from the app (`frontend/src/features/feedback/`,
