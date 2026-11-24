@@ -1,6 +1,7 @@
 import type { AiAccount } from '@breader/shared/accounts';
 import type { FeedbackItem } from '@breader/shared/feedback';
 import { modelName } from './format';
+import type { Infra } from '@breader/shared/infra';
 import { STEPS, type Admin, type Job, type Marker, type MarkerSettings, type ModelLine, type Models, type PartState, type ReaderLine, type Snapshot, type Stage, type StagePick, type Status, type Task, type Waiting, type Working } from './types';
 
 /*
@@ -182,6 +183,50 @@ function statusFor(scene: Scene): Status {
   };
 }
 
+/** The servers and stores: all well; or the ThinkPad away, Azure awake, GCP near its limit, a copy behind. */
+function infraFor(scene: Scene): Infra {
+  const release = '670cd304c31fdc45016f18f8246a1b136df884f4';
+  const r2 = { bytes: 3.1 * 1024 ** 3, limitBytes: 9 * 1024 ** 3, writes: 212_400, writeLimit: 900_000 };
+  if (scene === 'trouble') {
+    return {
+      at: at(0),
+      servers: {
+        home: { state: 'down', release, heardAt: at(-14 * 60) },
+        gcp: { state: 'busy', release, heardAt: at(-20), startedAt: at(-2 * 86400), egress: { usedMb: 742, limitMb: 800 } },
+        azure: { state: 'up', release, heardAt: at(-15), startedAt: at(-4 * 60) },
+      },
+      copies: [
+        { name: 'laptop', where: 'home', behind: 14 * 60 },
+        { name: 'breader@[2600:1900::5]/breader', where: 'gcp', behind: 214 },
+      ],
+      r2,
+      watcher: { lastAsked: at(-40), missed: 14 },
+      modal: { up: true, done: 6 },
+    };
+  }
+  return {
+    at: at(0),
+    servers: {
+      home: {
+        state: 'up',
+        release,
+        heardAt: at(-12),
+        startedAt: at(-3 * 86400),
+        engine: { up: 1, workers: 4, busy: scene === 'quiet' ? 0 : 2, waiting: scene === 'quiet' ? 0 : 3 },
+      },
+      gcp: { state: 'up', release, heardAt: at(-18), startedAt: at(-2 * 86400), egress: { usedMb: 10.5, limitMb: 800 } },
+      azure: { state: 'asleep', release, heardAt: at(-3 * 86400) },
+    },
+    copies: [
+      { name: 'laptop', where: 'home', behind: 0 },
+      { name: 'breader@[2600:1900::5]/breader', where: 'gcp', behind: 9 },
+    ],
+    r2,
+    watcher: { lastAsked: at(-35), missed: 0 },
+    modal: { up: false, done: 0 },
+  };
+}
+
 function markerFor(scene: Scene): Marker | null {
   const settings = structuredClone(SETTINGS);
   if (scene === 'quiet') {
@@ -278,7 +323,8 @@ export function demoAdmin(scene: Scene): Admin {
   const watchers = new Set<(s: Snapshot) => void>();
   let timer = 0;
 
-  const snapshot = (): Snapshot => structuredClone({ status, marker, accounts });
+  const infra = infraFor(scene);
+  const snapshot = (): Snapshot => structuredClone({ status, marker, accounts, infra });
   const push = () => {
     const s = snapshot();
     watchers.forEach((on) => on(s));

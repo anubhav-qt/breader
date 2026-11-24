@@ -1,6 +1,7 @@
 import type { AiAccount } from '@breader/shared/accounts';
 import type { FeedbackItem } from '@breader/shared/feedback';
 import type { Stage, StagePick } from '@breader/shared/admin';
+import type { Infra } from '@breader/shared/infra';
 
 export type { Stage, StagePick };
 
@@ -246,6 +247,8 @@ export interface Snapshot {
   status: Status;
   marker: Marker | null;
   accounts: AiAccount[] | null;
+  /** The servers, copies and stores, for the infra map (Infra.tsx); missing from an older server. */
+  infra?: Infra | null;
 }
 
 /** How the page is hearing from the server: live, getting there, or turned away for its token. */

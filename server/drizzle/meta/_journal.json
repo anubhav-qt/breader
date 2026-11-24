@@ -239,6 +239,13 @@
       "when": 1795495855006,
       "tag": "0033_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795516609920,
+      "tag": "0034_server_seen",
+      "breakpoints": true
     }
   ]
 }

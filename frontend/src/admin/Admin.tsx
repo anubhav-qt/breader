@@ -9,6 +9,8 @@ import { ago, mb, span, until, useClock } from './format';
 import { Label, Percent, Seg } from './parts';
 import { Accounts, Music, Workers } from './Side';
 import { FeedbackCard } from './Feedback';
+import { InfraPane } from './Infra';
+import { infraNeeds } from './infraView';
 import { TASK_NAMES, type Admin, type Link, type Snapshot } from './types';
 import '../components/header.css';
 import '../components/preview-bar.css';
@@ -98,12 +100,19 @@ function Gate({ said, onToken }: { said: string | null; onToken: (token: string)
   );
 }
 
-function Header({ link }: { link: Link | null }) {
+type View = 'work' | 'infra';
+const VIEWS: Array<{ v: View; label: string }> = [
+  { v: 'work', label: 'Work' },
+  { v: 'infra', label: 'Infra' },
+];
+
+function Header({ link, view }: { link: Link | null; view?: { value: View; onChange: (v: View) => void } }) {
   return (
     <header className="hdr adm-hdr">
       <div className="hdr-start">
         <Logo />
         <span className="adm-title">Admin</span>
+        {view && <Seg value={view.value} onChange={view.onChange} label="Show" options={VIEWS} />}
       </div>
       {link && (
         <div className="hdr-actions">
@@ -133,6 +142,8 @@ function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => v
   }, [error]);
   useClock();
   const [pane, setPane] = useState<Pane>('marker');
+  const [view, setView] = useState<View>(() => readParam('view', ['work', 'infra'] as const, 'work'));
+  useEffect(() => writeParam('view', view, 'work'), [view]);
   // To a card in another pane: that pane first (on a narrow screen it's the only one shown), then the card.
   const go = (to: Pane, id: string) => {
     setPane(to);
@@ -141,11 +152,13 @@ function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => v
 
   return (
     <div className="adm">
-      <Header link={link} />
+      <Header link={link} view={{ value: view, onChange: setView }} />
       {error && <p className="adm-bad adm-err" role="alert">{error.text}</p>}
       {snap && (
         <main className="adm-main">
           <Needs snap={snap} admin={admin} go={go} />
+          {view === 'infra' && (snap.infra ? <InfraPane infra={snap.infra} status={snap.status} /> : <p className="adm-none">This server doesn’t report the infra yet.</p>)}
+          {view === 'work' && <>
           {/* A narrow screen shows one pane at a time; a wide one shows them all side by side. */}
           <div className="adm-tabs">
             <Seg value={pane} onChange={setPane} label="Show" options={PANES} />
@@ -167,6 +180,7 @@ function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => v
               <FeedbackCard admin={admin} />
             </div>
           </div>
+          </>}
         </main>
       )}
       {children}
@@ -254,6 +268,7 @@ function needsOf(s: Snapshot, admin: Admin, go: Go): Need[] {
   if (st.feed && (st.feed.ack === null || st.feed.ack > 600)) out.push({ key: 'feed', text: `ThinkPad stopped reading changes ${st.feed.ack === null ? 'ever ago' : `${span(st.feed.ack)} ago`} · ${st.feed.unread} waiting` });
   if (st.copy && !st.copy.down && st.copy.lag !== null && st.copy.lag > 60) out.push({ key: 'lag', text: `ThinkPad copy ${span(st.copy.lag)} behind` });
   if (!st.server.sentry) out.push({ key: 'sentry', text: 'Sentry off: SENTRY_DSN not set' });
+  if (s.infra) out.push(...infraNeeds(s.infra));
   return out;
 }
 

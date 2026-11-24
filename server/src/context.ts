@@ -13,6 +13,7 @@ import type { Egress } from './lib/egress.ts';
 import type { Engine } from './engine/index.ts';
 import type { Panels } from './panels/index.ts';
 import type { Speech } from './speech/index.ts';
+import type { Seen } from './lib/seen.ts';
 
 export interface Deps {
   env: Env;
@@ -43,6 +44,8 @@ export interface Deps {
   redis?: Store | null;
   /** Where reads that may come from a read copy go (db/reads.ts); missing: Mumbai, always. */
   reads?: Reads;
+  /** How this server says how it is (lib/seen.ts): /health notes the AWS watcher's asks there. Missing in tests. */
+  seen?: Pick<Seen, 'heardWatcher'> | null;
 }
 
 export type LibraryRow = typeof libraries.$inferSelect;

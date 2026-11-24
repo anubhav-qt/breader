@@ -323,3 +323,109 @@ h2.adm-bad { font: 700 32px/0.9 var(--read); }
 .adm-fb-reply { grid-column: 1 / -1; margin: 0; padding-left: 10px; border-left: 2px solid var(--line); font: 400 18px/1.15 var(--read); color: var(--ink-2); overflow-wrap: anywhere; }
 .adm-fb-ask { grid-column: 1 / -1; }
 .adm-fb-ask input { background: var(--canvas); }
+
+/* Infra (Infra.tsx): the map of every box Breader runs on, with its card beside it once picked. */
+.adm-view { display: flex; }
+.adm-infra { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--adm-gap); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.adm-infra.has-card { grid-template-columns: minmax(0, 1fr) 340px; }
+.adm-infra.has-card .adm-map { column-gap: clamp(48px, 4.5vw, 96px); }
+.adm-map-card { align-self: start; padding: 22px 26px 30px; }
+.adm-node-card { align-self: start; position: sticky; top: 0; }
+.adm-node-card-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.adm-node-card-h > div { display: grid; gap: 8px; min-width: 0; }
+
+.adm-map {
+  --adm-map-lines: draw;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  column-gap: clamp(56px, 7vw, 120px);
+  row-gap: 34px;
+  align-items: stretch;
+}
+.adm-map-col { grid-row: 1; margin-bottom: -14px; }
+.adm-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 112px;
+  padding: 14px 16px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--tile-border);
+  background: var(--canvas);
+  color: var(--ink);
+  text-align: left;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.adm-node:hover { border-color: var(--tile-border-hover); }
+.adm-node:active { transform: scale(0.98); }
+.adm-node.is-open { border-color: var(--ink); }
+.adm-node.is-asleep { border-style: dashed; }
+.adm-node.is-bad { border-color: var(--danger); }
+.adm-node-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.adm-node-h { align-items: flex-start; }
+.adm-node-h b { min-width: 0; font: 700 28px/0.85 var(--read); overflow-wrap: break-word; }
+.adm-node-h .adm-state { margin-top: 4px; }
+.adm-node-what { font: var(--ui-w) 11px/1.35 var(--ui); color: var(--ink-2); }
+.adm-node-now { margin-top: 4px; font: var(--ui-w) 12px/1.35 var(--ui); }
+.adm-node.is-bad .adm-node-now { color: var(--danger); }
+.adm-node .adm-dots { gap: 2px; margin-top: 2px; }
+.adm-node .adm-dots i { width: 5px; height: 5px; }
+
+/* A box's state: filled when up, beating when busy, hollow when asleep, red when down. */
+.adm-state { flex: none; width: 9px; height: 9px; background: var(--ink); }
+.is-busy > .adm-node-h .adm-state { animation: adm-beat 1.6s steps(2, jump-none) infinite; }
+.is-asleep > .adm-node-h .adm-state { background: none; box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+.is-down > .adm-node-h .adm-state { background: var(--danger); }
+
+/* The lines: faint while unused, moving while in use, red to a box that's down. */
+.adm-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.adm-lines marker path { fill: var(--ink-2); }
+.adm-line { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 5; stroke-linejoin: round; }
+.adm-line.is-live { stroke: var(--ink); stroke-opacity: 0.6; stroke-dasharray: 6 6; animation: adm-flow 1.2s linear infinite; }
+.adm-line.is-down { stroke: var(--danger); opacity: 0.55; animation: none; }
+@keyframes adm-flow { to { stroke-dashoffset: -12; } }
+.adm-flow-label {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  padding: 4px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--tile-border);
+  background: var(--paper);
+  font: var(--ui-w) 10.5px/1 var(--ui);
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.adm-flow-label.is-live { color: var(--ink); }
+
+@media (max-width: 1299px) {
+  .adm-infra.has-card { grid-template-columns: minmax(0, 1fr); }
+  .adm-node-card { position: static; }
+  .adm-map { column-gap: 52px; }
+  .adm-node-h b { font-size: 24px; }
+}
+@media (max-width: 1099px) {
+  .adm-map-card { padding: 18px 18px 26px; }
+  .adm-map, .adm-infra.has-card .adm-map { column-gap: 40px; }
+  .adm-node { min-height: 0; padding: 12px; }
+  .adm-node-h b { font-size: 21px; }
+}
+/* A phone: the boxes as a list under their column's name, no lines. */
+@media (max-width: 720px) {
+  .adm-map { --adm-map-lines: none; grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .adm-map-col, .adm-node { grid-column: 1 !important; grid-row: auto !important; }
+  .adm-map-col { margin: 14px 0 2px; }
+  .adm-lines, .adm-flow-label { display: none; }
+  .adm-map-card { padding: 16px; }
+  .adm-node { min-height: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adm-line.is-live, .is-busy > .adm-node-h .adm-state { animation: none; }
+}

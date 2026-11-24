@@ -2,6 +2,8 @@
 # Keeps Azure asleep while the ThinkPad answers, and awake while it doesn't (ADR 0004).
 # A timer runs it each minute (setup.sh). It asks the ThinkPad's /health; after MISSES misses in a
 # row it also asks each of WAKE_URLS, every minute, until the ThinkPad answers again.
+# Each ask says its misses in a row so far (x-breader-watch), which the server that hears it shows
+# on the admin page's infra map (server/src/lib/seen.ts).
 #
 # Settings, in .env next to this file:
 #   WAKE_URLS   the standby servers to keep awake, space separated (Azure's API and Suwayomi)
@@ -23,7 +25,7 @@ if [ -f "$STATE" ]; then
   before=$(cat "$STATE")
 fi
 
-if curl -fs -o /dev/null --max-time 20 "$HOME_HEALTH"; then
+if curl -fs -o /dev/null --max-time 20 -H "x-breader-watch: $before" "$HOME_HEALTH"; then
   if [ "$before" -ge "$MISSES" ]; then
     echo "the ThinkPad is back after $before minutes; letting Azure sleep"
   fi
@@ -41,7 +43,7 @@ if [ "$now" -eq "$MISSES" ]; then
 fi
 
 for url in $WAKE_URLS; do
-  code=$(curl -s -o /dev/null --max-time 90 -w '%{http_code}' "$url")
+  code=$(curl -s -o /dev/null --max-time 90 -w '%{http_code}' -H "x-breader-watch: $now" "$url")
   if [ "$code" = "000" ]; then
     echo "no answer from $url"
   fi

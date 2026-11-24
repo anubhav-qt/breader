@@ -470,6 +470,12 @@ ThinkPad's worker is quiet (90 s unheard and its lease lapsed), and hands back w
 `modal deploy infra/modal/engine.py`. Its address goes in `ENGINE_FALLBACK_URLS` on Azure alone,
 never on the ThinkPad, so Modal works only while the ThinkPad is away. It's woken only for a job no other engine can take.
 
+**The infra map.** The status page's Infra tab draws every server, copy and store, and how each
+is doing. Each API server writes how it is to `server_seen` in Supabase every 30 s, so any server
+can draw the map and nobody wakes Azure to ask. The AWS watcher's asks carry its count of misses
+(`x-breader-watch`), and the server that hears them notes it. After a change to `watch.sh`, pull it
+on the AWS machine: `git -C ~/breader pull --ff-only`. R2 shows only where `POOL_MEMBERS` names it first.
+
 ### Suwayomi on AWS for Render
 
 Render has no room for Suwayomi, so a second one runs on AWS for it, and series from its sources
@@ -517,7 +523,7 @@ url) and tells readers who have one, and goes back to MangaFire once the laptop 
 (`frontend/src/books/remote.ts` readFrom).
 
 Its web page: `ssh -L 4567:localhost:4567 ubuntu@<its address>`, then http://localhost:4567 with
-the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull` and the `up -d` again.
+the login. After a new Suwayomi in `compose.yml`: `git -C ~/breader pull --ff-only` and the `up -d` again.
 
 ### 9. Cloudflare Pages
 

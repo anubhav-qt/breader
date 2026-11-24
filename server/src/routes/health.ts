@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import type { AppEnv, Deps } from '../context.ts';
+import { watchHeader } from '../lib/seen.ts';
 
 const within = <T>(p: Promise<T>, ms: number) =>
   Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
 
 export function healthRoutes(deps: Deps) {
-  const { env, pool, mirror, engine, egress, busy } = deps;
+  const { env, pool, mirror, engine, egress, busy, seen } = deps;
   const r = new Hono<AppEnv>();
 
   /**
@@ -13,8 +14,12 @@ export function healthRoutes(deps: Deps) {
    * laptop, how busy its engines are (ADR 0002): engines up, workers busy of all, jobs waiting, short of memory.
    * Where set, the busy sign (lib/busy.ts) and this month's egress (lib/egress.ts): the app chooses
    * another server while either says so. And whether it sends JSON alone (JSON_ONLY).
+   * The AWS watcher (infra/aws/watch.sh) asks with x-breader-watch, its misses in a row; this
+   * server notes when, for the admin page's infra map (lib/seen.ts).
    */
   r.get('/health', (c) => {
+    const missed = watchHeader(c.req.header('x-breader-watch'));
+    if (missed !== null) seen?.heardWatcher(missed);
     const s = engine?.stats();
     const up = s?.engines.filter((e) => e.up) ?? [];
     const engineBusy = s && {

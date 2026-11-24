@@ -42,6 +42,10 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   no script, hidden where scripts run so readers never see them flash (kept equal to `features/guide/cards.ts` by `src/findable.test.ts`), plus the
   description, canonical and link-preview tags (the wide `public/og.png`, 1200x630). `public/404.html`, `robots.txt`, `sitemap.xml`:
   `infra/README.md`, Cloudflare Pages.
+- The admin page's Infra tab (`frontend/src/admin/Infra.tsx`, `infraView.ts`) maps every server,
+  copy and store. Each API server says how it is every 30 s in `server_seen` (`server/src/lib/seen.ts`);
+  any server reads it back with `feed_copies` and the pool's tables (`server/src/lib/infra.ts`), so
+  Azure is never woken to ask. The AWS watcher sends its misses in `x-breader-watch` on each ask.
 - Readers send requests and feedback from the app (`frontend/src/features/feedback/`,
   `server/src/routes/feedback.ts`); they show on the admin page (`frontend/src/admin/`). Working and
   Done (with the admin's one line) tell the library that sent it, once each: a thin toast, and the

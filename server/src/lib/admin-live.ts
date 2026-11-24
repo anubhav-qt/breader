@@ -4,6 +4,9 @@ import type { Deps } from '../context.ts';
 import { log } from '../log.ts';
 import { addCommand, readAdminState } from './admin.ts';
 import { cliproxyFor, listAccounts } from './cliproxy.ts';
+import { readInfra, type HomeBucket } from './infra.ts';
+import { poolMembers } from '../manga/pool.ts';
+import type { Infra } from '@breader/shared/infra';
 
 /*
  * The admin page's live view, pushed as it changes (routes/admin.ts, /admin/stream). One hub per
@@ -12,7 +15,7 @@ import { cliproxyFor, listAccounts } from './cliproxy.ts';
  * - Postgres tells it the moment job_runs, admin_state or admin_commands change (migration 0019,
  *   breader_admin), and it reads the jobs, the marker and the settings again. The marker writes
  *   what it's doing as it changes, so the page follows it step by step.
- * - The rest (the databases, the files, the libraries) moves slowly: read every SLOW_MS.
+ * - The rest (the databases, the files, the libraries, the infra map) moves slowly: read every SLOW_MS.
  * - The AI accounts ask every provider for their limits: every ACCOUNTS_MS, and after any change.
  * - The marker is told a page is open every WATCHING_MS, and says what it's doing every second
  *   while it is (ai/tools/control.ts).
@@ -180,6 +183,15 @@ export interface Snapshot {
   status: SlowStatus & { jobs: ReturnType<typeof jobsOf> };
   marker: ReturnType<typeof markerOf>;
   accounts: AiAccount[] | null;
+  /** The servers, copies and R2, for the infra map (lib/infra.ts); null when it couldn't be read. */
+  infra: Infra | null;
+}
+
+/** The pool's home bucket (R2), first in POOL_MEMBERS; null with no pool. */
+function homeBucket(): HomeBucket | null {
+  const first = poolMembers(process.env)[0];
+  if (!first) return null;
+  return { name: first.name, budget: first.budget, writes: first.writes };
 }
 
 /** The accounts in the order the proxy uses them: each kind's highest priority first. */
@@ -201,6 +213,8 @@ export function adminHub(deps: Pick<Deps, 'env' | 'pool' | 'mirror'>) {
   let slow: SlowStatus | null = null;
   let fast: { jobs: ReturnType<typeof jobsOf>; marker: ReturnType<typeof markerOf> } | null = null;
   let accounts: AiAccount[] | null = null;
+  let infra: Infra | null = null;
+  const bucket = homeBucket();
   let last = '';
   let up = false;
   let listener: pg.Client | null = null;
@@ -211,7 +225,7 @@ export function adminHub(deps: Pick<Deps, 'env' | 'pool' | 'mirror'>) {
 
   const snapshot = (): Snapshot | null => {
     if (!slow || !fast) return null;
-    return { status: { ...slow, jobs: fast.jobs }, marker: fast.marker, accounts };
+    return { status: { ...slow, jobs: fast.jobs }, marker: fast.marker, accounts, infra };
   };
 
   const send = () => {
@@ -228,8 +242,18 @@ export function adminHub(deps: Pick<Deps, 'env' | 'pool' | 'mirror'>) {
     fast = { jobs: jobsOf(rows, state), marker: markerOf(rows, state) };
     send();
   };
+  const readInfraNow = async (): Promise<Infra | null> => {
+    try {
+      return await readInfra(pool, env.STANDBY_FOR, bucket);
+    } catch (err) {
+      log.warn({ err }, 'the admin page could not read the infra');
+      return null;
+    }
+  };
   const readSlow = async () => {
-    slow = await slowStatus(deps, startedAt);
+    const [s, i] = await Promise.all([slowStatus(deps, startedAt), readInfraNow()]);
+    slow = s;
+    infra = i;
     send();
   };
   const readAccounts = async () => {
@@ -308,6 +332,7 @@ export function adminHub(deps: Pick<Deps, 'env' | 'pool' | 'mirror'>) {
     listener = null;
     l?.end().catch(() => {});
     slow = null;
+    infra = null;
     fast = null;
     last = '';
   };
@@ -335,9 +360,9 @@ export function adminHub(deps: Pick<Deps, 'env' | 'pool' | 'mirror'>) {
     },
     /** Everything, read now: for /admin/status. */
     async read(): Promise<Snapshot> {
-      const [s, rows, state] = await Promise.all([slowStatus(deps, startedAt), jobRows(pool), readAdminState(pool).catch(() => null)]);
+      const [s, rows, state, i] = await Promise.all([slowStatus(deps, startedAt), jobRows(pool), readAdminState(pool).catch(() => null), readInfraNow()]);
       const st = state ?? ADMIN_DEFAULTS;
-      return { status: { ...s, jobs: jobsOf(rows, st) }, marker: markerOf(rows, st), accounts };
+      return { status: { ...s, jobs: jobsOf(rows, st) }, marker: markerOf(rows, st), accounts, infra: i };
     },
     close: stop,
   };

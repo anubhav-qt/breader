@@ -14,6 +14,7 @@ import { r2Answers } from './lib/answers.ts';
 import { archiveTo, connectRedis, memoryRoom, near, type Redis, type Store } from './lib/cache.ts';
 import { makeBusy } from './lib/busy.ts';
 import { makeEgress, type Egress } from './lib/egress.ts';
+import { makeSeen } from './lib/seen.ts';
 import { makeGemini } from './lib/gemini.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
@@ -122,7 +123,9 @@ if (env.GCP_EGRESS_LIMIT_MB) {
 // The busy sign, where the owner set its threshold (lib/busy.ts).
 let busy: (() => boolean) | null = null;
 if (env.BUSY_LAG_MS) busy = makeBusy(env.BUSY_LAG_MS).busy;
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, uploads, storagePool, egress, busy, panels, engine, redis, reads };
+// This server says how it is every 30 s, for the admin page's infra map (lib/seen.ts).
+const seen = makeSeen({ env, pool: primary.pool, mirror, engine, egress, busy });
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, uploads, storagePool, egress, busy, panels, engine, redis, reads, seen };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 // Panels from an earlier round of the model go to the archive before any reader is served, so
@@ -134,6 +137,7 @@ try {
   log.warn({ err }, 'couldn’t archive pages’ panels from earlier rounds');
 }
 
+seen.start();
 const server = serve({ fetch: makeApp(deps).fetch, port: env.PORT, hostname: '0.0.0.0' }, (info) =>
   log.info({ port: info.port, role: env.ROLE, release: env.RELEASE }, 'api listening'),
 );
@@ -268,6 +272,7 @@ const stop = () => {
   clearTimeout(keepAt);
   clearTimeout(fillAt);
   clearInterval(commands);
+  seen.stop();
   prefetching.abort();
   copying.abort();
   void speech?.close();

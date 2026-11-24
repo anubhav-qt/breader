@@ -11,6 +11,7 @@
     "./ai": "./src/ai.ts",
     "./feedback": "./src/feedback.ts",
     "./genres": "./src/genres.ts",
+    "./infra": "./src/infra.ts",
     "./key": "./src/key.ts",
     "./limits": "./src/limits.ts",
     "./manga": "./src/manga.ts",

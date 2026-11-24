@@ -731,6 +731,20 @@ export const workerSeen = pgTable('worker_seen', {
 });
 
 /**
+ * When each API server last said how it is, every 30 s (lib/seen.ts), for the admin page's infra
+ * map: its release, when it started, and in `detail` its engines, egress, read copy and the AWS
+ * watcher's last ask. A standby asleep says nothing, so nobody wakes it by asking. Not fed.
+ */
+export const serverSeen = pgTable('server_seen', {
+  machine: text('machine').primaryKey(),
+  role: text('role').notNull(),
+  release: text('release').notNull(),
+  startedAt: at('started_at').notNull(),
+  at: at('at').notNull().defaultNow(),
+  detail: jsonb('detail').notNull().default({}),
+});
+
+/**
  * The storage pool's chapters (manga/pool.ts, ADR 0004): which bucket holds each, by its key (the
  * first 32 hex characters of SHA-256 of the chapter's id, as in ADR 0003). A row is made before its
  * pages are put, so two servers never put one chapter, and the room is counted from here. `done`
