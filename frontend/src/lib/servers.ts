@@ -42,6 +42,24 @@ export function serverList(env: ServerEnv, here: string): string[] {
 /** How long a server took to answer /health, in ms; null when it didn't answer well. */
 export type Timings = Map<string, number | null>;
 
+/** What a server's /health says of itself that the picking heeds (ADR 0004). */
+export interface Signs {
+  /** Its month's egress is near its limit (GCP): it's never used, even when others are down. */
+  near: boolean;
+  /** It's busy just now: not picked, but tried when nothing else answers. */
+  busy: boolean;
+}
+
+/** The signs in a /health answer; none in one that isn't an object. */
+export function signsOf(health: unknown): Signs {
+  const signs: Signs = { near: false, busy: false };
+  if (typeof health !== 'object' || health === null) return signs;
+  const h = health as { busy?: unknown; egress?: { near?: unknown } };
+  if (h.busy === true) signs.busy = true;
+  if (h.egress?.near === true) signs.near = true;
+  return signs;
+}
+
 /** The quickest server that answered, other than home; null when none did. */
 function quickestOther(servers: string[], timings: Timings): string | null {
   let best: string | null = null;
@@ -74,10 +92,15 @@ export function pickServer(servers: string[], timings: Timings): string {
 
 /**
  * The order to try the servers in when `first` can't be reached: `first`, then those that
- * answered quickest, then the ones not heard from.
+ * answered quickest, then the ones not heard from (or busy). None that are `near`.
  */
-export function tryOrder(servers: string[], first: string, timings: Timings): string[] {
-  const rest = servers.filter((s) => s !== first);
+export function tryOrder(servers: string[], first: string, timings: Timings, near: ReadonlySet<string> = new Set()): string[] {
+  const rest: string[] = [];
+  for (const s of servers) {
+    if (s === first) continue;
+    if (near.has(s)) continue;
+    rest.push(s);
+  }
   const ms = (s: string) => {
     const t = timings.get(s);
     if (t === null || t === undefined) return Infinity;

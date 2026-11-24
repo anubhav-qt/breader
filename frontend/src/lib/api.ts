@@ -1,13 +1,14 @@
 import { isPublicPath } from '@breader/shared/public';
-import { pickServer, serverList, tryOrder, type Timings } from './servers';
+import { pickServer, serverList, signsOf, tryOrder, type Timings } from './servers';
 
 /*
  * The API runs on any number of servers (ADR 0001, lib/servers.ts): the home server, with the
  * voices and the panel model, and others anywhere, each the same API. Once started (startPicking),
  * the app times each one's /health now and every few minutes, and picks: home, unless it's away or
- * much slower than the quickest other. A timeout, a network error or a gateway error (502–504, or
- * Cloudflare's 530 when a tunnel is down) moves to the next server and retries once; every write is
- * safe to repeat.
+ * much slower than the quickest other. A server whose /health says it's busy isn't picked; one near
+ * its month's egress limit (GCP, ADR 0004) isn't used at all. A timeout, a network error or a gateway
+ * error (502–504, or Cloudflare's 530 when a tunnel is down) moves to the next server and retries
+ * once; every write is safe to repeat.
  *
  * Development: :8787 and :8788 of the page's own host, so the session cookie stays same-site
  * whether the app is opened as localhost or 127.0.0.1.
@@ -38,6 +39,8 @@ const WAKE_TIMEOUT = 60_000;
 const heard = new Map<ApiBase, number>();
 /** How long each took to answer /health when last timed (lib/servers.ts). */
 const timings: Timings = new Map();
+/** Servers whose month's egress is near its limit (GCP, ADR 0004), as their /health said when last timed. */
+const near = new Set<ApiBase>();
 /** Home gave no answer the last time it was asked: a gateway's, or none at all. */
 let homeMissed = false;
 const answered = (base: ApiBase, yes: boolean) => {
@@ -98,7 +101,10 @@ function switchTo(base: ApiBase) {
   listeners.forEach((l) => l(base));
 }
 
-/** How long one server takes to answer /health well, in ms; null when it doesn't. */
+/**
+ * How long one server takes to answer /health well, in ms; null when it doesn't, or says it's busy
+ * or near its egress limit, so it isn't picked (lib/servers.ts signsOf).
+ */
 async function time(base: ApiBase): Promise<number | null> {
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), TIMEOUT);
@@ -107,7 +113,15 @@ async function time(base: ApiBase): Promise<number | null> {
     const res = await fetch(base + '/health', { credentials: 'include', cache: 'no-store', signal: ctrl.signal });
     answered(base, res.ok);
     if (!res.ok) return null;
-    return performance.now() - started;
+    const ms = performance.now() - started;
+    const signs = signsOf(await res.json().catch(() => null));
+    if (signs.near) {
+      near.add(base);
+      return null;
+    }
+    near.delete(base);
+    if (signs.busy) return null;
+    return ms;
   } catch {
     answered(base, false);
     return null;
@@ -138,7 +152,7 @@ export function startPicking() {
 
 /** The server to try after `first`, when it can't be reached: the quickest of the rest. */
 function nextAfter(first: ApiBase): ApiBase | null {
-  const order = tryOrder(SERVERS, first, timings);
+  const order = tryOrder(SERVERS, first, timings, near);
   return order[1] ?? null;
 }
 
@@ -164,9 +178,9 @@ async function request<T>(method: string, path: string, body?: unknown, timeout 
 }
 
 /*
- * The server voice speaks from the home server alone (the others are too small to), so what it's
- * asked goes there and nowhere else, and a slow answer doesn't move the app elsewhere. A gateway
- * error here is the laptop being off; the server's own errors say what they are.
+ * The server voice and panels: from the home server, and a slow answer doesn't move the app
+ * elsewhere. When home is away (a gateway error, or no answer), the next server is asked: Azure and
+ * GCP reach Modal's engine (ADR 0004), and one with no engine says so (speech_off, panels_off).
  */
 const LAPTOP_GATEWAY = new Set([502, 504, 530]);
 
@@ -209,6 +223,19 @@ async function away(res: Response): Promise<boolean> {
   return !data?.code;
 }
 
+/** A server that sends no pictures and had nowhere to send the app instead (server lib/media.ts). */
+async function sendsNoMedia(res: Response): Promise<boolean> {
+  if (res.status !== 503) return false;
+  const data = await res.clone().json().catch(() => null);
+  return data?.code === 'media_elsewhere';
+}
+
+/** Ask the next server: this one is away, or sends no pictures. */
+async function movesOn(res: Response): Promise<boolean> {
+  if (await away(res)) return true;
+  return sendsNoMedia(res);
+}
+
 /** The error a failed answer stands for, with `off` said when the server is away. */
 async function failure(res: Response, off: string): Promise<ApiError> {
   if (await away(res)) return new ApiError(503, 'laptop_off', off);
@@ -220,7 +247,9 @@ const VOICE_OFF = 'Breader’s computer can’t be reached just now.';
 
 async function laptop(path: string, body: unknown, timeout: number): Promise<Response> {
   if (navigator.onLine === false) throw new OfflineError();
-  const res = await fetchFrom(HOME, path, body, timeout);
+  let res = await fetchFrom(HOME, path, body, timeout);
+  const other = nextAfter(HOME);
+  if (other && (await away(res))) res = await fetchFrom(other, path, body, timeout);
   if (res.ok) return res;
   throw await failure(res, VOICE_OFF);
 }
@@ -235,7 +264,7 @@ async function manga(path: string, body: unknown, timeout: number): Promise<Resp
   const first = active;
   let res = await fetchFrom(first, path, body, timeout);
   const second = nextAfter(first);
-  if (second && (await away(res))) res = await fetchFrom(second, path, body, timeout);
+  if (second && (await movesOn(res))) res = await fetchFrom(second, path, body, timeout);
   if (res.ok) return res;
   throw await failure(res, 'Breader’s computer can’t be reached.');
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MUCH_SLOWER, pickServer, serverList, tryOrder, type Timings } from './servers';
+import { MUCH_SLOWER, pickServer, serverList, signsOf, tryOrder, type Timings } from './servers';
 
 const HOME = 'https://home.example';
 const EU = 'https://eu.example';
@@ -66,5 +66,23 @@ describe('tryOrder', () => {
 
   it('keeps list order among the unheard', () => {
     expect(tryOrder(ALL, US, new Map())).toEqual([US, HOME, EU]);
+  });
+
+  it('leaves out the servers near their egress limit', () => {
+    expect(tryOrder(ALL, EU, times([[HOME, 90], [US, 50]]), new Set([US]))).toEqual([EU, HOME]);
+  });
+});
+
+describe('signsOf', () => {
+  it('reads busy and near from a health answer', () => {
+    expect(signsOf({ ok: true })).toEqual({ near: false, busy: false });
+    expect(signsOf({ ok: true, busy: true })).toEqual({ near: false, busy: true });
+    expect(signsOf({ ok: true, egress: { usedMb: 900, limitMb: 800, near: true } })).toEqual({ near: true, busy: false });
+  });
+
+  it('takes nothing from an answer that isn’t one', () => {
+    expect(signsOf(null)).toEqual({ near: false, busy: false });
+    expect(signsOf('busy')).toEqual({ near: false, busy: false });
+    expect(signsOf({ busy: 'yes', egress: { near: 1 } })).toEqual({ near: false, busy: false });
   });
 });

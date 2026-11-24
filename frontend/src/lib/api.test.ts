@@ -74,6 +74,10 @@ describe('picking among servers', () => {
   const US = 'https://us.example';
   let down: Set<string>;
   let slow: Map<string, number>;
+  /** What a server's /health says, beyond being up. */
+  let health: Map<string, unknown>;
+  /** Servers that send no pictures and have nowhere to send the app instead. */
+  let noMedia: Set<string>;
   let clock: number;
 
   async function loadMany() {
@@ -88,7 +92,10 @@ describe('picking among servers', () => {
       const base = new URL(url).origin;
       if (url.endsWith('/health')) clock += slow.get(base) ?? 0;
       if (down.has(base)) return new Response(null, { status: 530 });
-      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      const json = { 'content-type': 'application/json' };
+      if (url.endsWith('/health') && health.has(base)) return new Response(JSON.stringify(health.get(base)), { status: 200, headers: json });
+      if (url.includes('/v1/manga/') && noMedia.has(base)) return new Response(JSON.stringify({ code: 'media_elsewhere' }), { status: 503, headers: json });
+      return new Response('{}', { status: 200, headers: json });
     });
     return import('./api.ts');
   }
@@ -96,6 +103,8 @@ describe('picking among servers', () => {
   beforeEach(() => {
     down = new Set();
     slow = new Map();
+    health = new Map();
+    noMedia = new Set();
     clock = 0;
   });
 
@@ -161,13 +170,65 @@ describe('picking among servers', () => {
     await expect(api.get('/v1/me')).rejects.toBeInstanceOf(OfflineError);
   });
 
-  it('still sends the server voice home alone', async () => {
+  it('sends the server voice home, and to the next server only when home is away', async () => {
+    const { api } = await loadMany();
+    await api.laptop.get('/v1/speech/voices');
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/v1/speech/voices`]);
+    asked = [];
+    down.add(HOME);
+    await api.laptop.get('/v1/speech/voices');
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/v1/speech/voices`, `${EU}/v1/speech/voices`]);
+  });
+
+  it('says home is off when it and the next server are both away from the voice', async () => {
     const { api } = await loadMany();
     down.add(HOME);
-    await api.get('/v1/me');
-    asked = [];
+    down.add(EU);
     await expect(api.laptop.get('/v1/speech/voices')).rejects.toMatchObject({ code: 'laptop_off' });
-    expect(asked.map((a) => a.url)).toEqual([`${HOME}/v1/speech/voices`]);
+  });
+
+  it('never picks or tries a server near its egress limit', async () => {
+    const { api, startPicking } = await loadMany();
+    slow.set(HOME, 2000);
+    slow.set(EU, 400);
+    slow.set(US, 10);
+    health.set(US, { ok: true, egress: { usedMb: 800, limitMb: 800, near: true } });
+    startPicking();
+    await settle();
+    expect(api.via).toBe(EU);
+  });
+
+  it('never tries a server near its egress limit when the one in use is down', async () => {
+    const { api, startPicking } = await loadMany();
+    health.set(EU, { ok: true, egress: { usedMb: 800, limitMb: 800, near: true } });
+    down.add(US);
+    startPicking();
+    await settle();
+    expect(api.via).toBe(HOME);
+    down.add(HOME);
+    asked = [];
+    await expect(api.get('/v1/me')).rejects.toThrow();
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/v1/me`, `${US}/v1/me`]);
+  });
+
+  it('doesn’t pick a busy server, but tries it when the one in use is down', async () => {
+    const { api, startPicking } = await loadMany();
+    health.set(HOME, { ok: true, busy: true });
+    down.add(US);
+    startPicking();
+    await settle();
+    expect(api.via).toBe(EU);
+    down.add(EU);
+    await api.get('/v1/me');
+    expect(api.via).toBe(HOME);
+  });
+
+  it('asks the next server for a picture when one sends none', async () => {
+    const { api } = await loadMany();
+    noMedia.add(HOME);
+    const res = await api.manga.raw('/v1/manga/chapter/x/0', undefined);
+    expect(res.ok).toBe(true);
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/v1/manga/chapter/x/0`, `${EU}/v1/manga/chapter/x/0`]);
   });
 
   it('loads manga pictures from the server in use', async () => {
