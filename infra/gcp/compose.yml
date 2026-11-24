@@ -1,0 +1,84 @@
+# The GCP server (ADR 0004): an e2-micro (1 GB) with IPv6 only, set up once by setup.sh. It runs
+# the API as a JSON-only regional server, its own read copy, and the standby that feeds every read
+# copy while the ThinkPad is quiet. Settings come from infra/gcp/.env (copy .env.example).
+#   docker compose -f infra/gcp/compose.yml up -d
+#
+# Every service uses the machine's own network: Docker's bridge has no IPv6, and the machine
+# reaches Supabase over IPv6 alone (its direct host; the poolers have no IPv6), and everything
+# IPv4-only through WARP. cloudflared (a system service, setup.sh) brings readers in to
+# http://localhost:8787. Nothing listens on the internet.
+#
+# Memory, of about 1 GB less what WARP and cloudflared take: the copy 200 MB, the API 450 MB, the
+# standby 160 MB. setup.sh adds 2 GB of swap for busy moments.
+name: breader-gcp
+
+x-server: &server
+  image: ${IMAGE:?set IMAGE in infra/gcp/.env}
+  env_file: .env
+  network_mode: host
+  restart: unless-stopped
+  depends_on:
+    copy: { condition: service_healthy }
+
+services:
+  # This server's read copy of Supabase, on this machine alone (127.0.0.1). The API migrates it
+  # and feeds it (COPY_URL); readers' reads come from it.
+  copy:
+    image: pgvector/pgvector:pg17
+    network_mode: host
+    command:
+      - postgres
+      - -c
+      - listen_addresses=127.0.0.1
+      - -c
+      - shared_buffers=32MB
+      - -c
+      - max_connections=20
+      - -c
+      - work_mem=2MB
+    environment:
+      POSTGRES_USER: breader
+      POSTGRES_PASSWORD: "${COPY_PASSWORD:?set COPY_PASSWORD in infra/gcp/.env}"
+      POSTGRES_DB: breader
+    volumes: ["copy:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "breader", "-d", "breader"], interval: 5s, retries: 30 }
+    mem_limit: 200m
+    restart: unless-stopped
+
+  api:
+    <<: *server
+    environment:
+      ROLE: fallback
+      MACHINE: gcp
+      # Pictures and sound go elsewhere (MEDIA_ELSEWHERE, the pool's CDNs): egress costs money here.
+      JSON_ONLY: "true"
+      GCP_EGRESS_LIMIT_MB: "${GCP_EGRESS_LIMIT_MB:-800}"
+      EGRESS_FILE: /data/egress/egress.json
+      COPY_URL: "postgres://breader:${COPY_PASSWORD}@127.0.0.1:5432/breader"
+      COPY_SSL: "off"
+      CLIENT_IP_HEADER: cf-connecting-ip
+      NODE_OPTIONS: --max-old-space-size=256
+      MALLOC_ARENA_MAX: "2"
+    volumes: ["egress:/data/egress", "manga:/data/manga"]
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
+    mem_limit: 450m
+
+  # Feeds every read copy (COPY_URLS) while the ThinkPad is quiet, and hands back when it's heard
+  # from (server/src/mirror/standby.ts). Stops while egress is near its limit: it reads the API's count.
+  standby:
+    <<: *server
+    command: ["node", "--enable-source-maps", "dist/standby.js"]
+    environment:
+      ROLE: fallback
+      MACHINE: gcp
+      GCP_EGRESS_LIMIT_MB: "${GCP_EGRESS_LIMIT_MB:-800}"
+      EGRESS_FILE: /data/egress/egress.json
+      NODE_OPTIONS: --max-old-space-size=96
+      MALLOC_ARENA_MAX: "2"
+    volumes: ["egress:/data/egress:ro"]
+    mem_limit: 160m
+
+volumes:
+  copy: {}
+  egress: {}
+  manga: {}

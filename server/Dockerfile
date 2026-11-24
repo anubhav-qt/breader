@@ -1,6 +1,7 @@
-# One image, five commands (build context: the repository root):
+# One image, six commands (build context: the repository root):
 #   node dist/api.js          the API (default), as ROLE=laptop or ROLE=fallback
 #   node dist/worker.js       the laptop's feed, file copy and backups
+#   node dist/standby.js      a standby that feeds every read copy while the laptop is quiet (GCP, ADR 0004)
 #   node dist/migrate.js      schema migrations for Supabase and the copy
 #   node dist/engine/main.js  an engine: the voices and the panel model (src/engine/, ADR 0002)
 #   node ai/dist/marker.js    voice marks, music and Revisit notes for books with AI on (ai/tools/marker.ts)
@@ -66,7 +67,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && python3 -m venv /opt/yt-dlp \
   && /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp[default]" \
-  && mkdir -p /data/files /data/backups /data/voices /data/manga && chown -R node:node /data /opt/yt-dlp
+  && mkdir -p /data/files /data/backups /data/voices /data/manga /data/egress && chown -R node:node /data /opt/yt-dlp
 ENV YT_DLP=/opt/yt-dlp/bin/yt-dlp
 # Native ONNX Runtime would send telemetry over HTTPS.
 ENV ORT_DISABLE_TELEMETRY=1

@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, or, sql } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { UploadRequest, type UploadResponse } from '@breader/shared';
 import type { AppEnv, Deps, LibraryRow } from '../context.ts';
 import { blobs, libraries } from '../db/schema.ts';
 import type { Db } from '../db/client.ts';
+import { lookUp, type Source } from '../db/reads.ts';
 import { ApiError, parse, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { keeps, sharedSomewhere, usedBy } from '../lib/shelf.ts';
@@ -48,6 +49,7 @@ async function markReady(db: Db, blob: BlobRow) {
  */
 export function fileRoutes(deps: Deps) {
   const { db, storage } = deps;
+  const primary = { db, pool: deps.pool };
   const r = new Hono<AppEnv>();
   r.use('/uploads', requireLibrary(deps));
   r.use('/uploads/*', requireLibrary(deps));
@@ -125,29 +127,33 @@ export function fileRoutes(deps: Deps) {
    * This library's own files, public ones, those of shared books it keeps, those its copies of
    * shared books point at while someone still shares them, and those of voices it may use.
    */
-  const visible = async (id: string, lib: LibraryRow) => {
-    const [blob] = await db
-      .select()
-      .from(blobs)
-      .where(and(
-        eq(blobs.id, id),
-        eq(blobs.status, 'ready'),
-        or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true), keeps(lib.id, blobs.id), and(usedBy(lib.id, blobs.id), sharedSomewhere(blobs.id)), voiceFile(lib.id, blobs.id)),
-      ));
+  const visible = async (c: Context<AppEnv>, id: string, lib: LibraryRow) => {
+    const find = async (from: Source) => {
+      const [found] = await from.db
+        .select()
+        .from(blobs)
+        .where(and(
+          eq(blobs.id, id),
+          eq(blobs.status, 'ready'),
+          or(eq(blobs.ownerLibraryId, lib.id), eq(blobs.isPublic, true), keeps(lib.id, blobs.id), and(usedBy(lib.id, blobs.id), sharedSomewhere(blobs.id)), voiceFile(lib.id, blobs.id)),
+        ));
+      return found;
+    };
+    const blob = await lookUp(c.var.read, primary, find);
     if (!blob) throw new ApiError(404, 'not_found', 'That file isn’t available.');
     return blob;
   };
 
   /** A signed download link, for fetch(). */
   r.get('/files/:id/link', async (c) => {
-    const blob = await visible(c.req.param('id'), c.var.library);
+    const blob = await visible(c, c.req.param('id'), c.var.library);
     c.header('Cache-Control', 'private, no-store');
     return c.json(await storage.downloadLink(blob.r2Key));
   });
 
   /** A redirect to the signed link, for <img src> and plain links. */
   r.get('/files/:id', async (c) => {
-    const blob = await visible(c.req.param('id'), c.var.library);
+    const blob = await visible(c, c.req.param('id'), c.var.library);
     c.header('Cache-Control', 'private, max-age=300');
     return c.redirect((await storage.downloadLink(blob.r2Key)).url, 302);
   });

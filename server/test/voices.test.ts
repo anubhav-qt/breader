@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { KOKORO_PACK_BYTES } from '@breader/shared';
+import { makeApp } from '../src/app.ts';
 import { cleanFiles, purgeTombstones } from '../src/jobs/cleanup.ts';
-import { browser, deps, primary, push, registered } from './helpers.ts';
+import { browser, deps, mirror, primary, push, registered } from './helpers.ts';
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 const q = (sql: string, params: unknown[] = []) => primary.pool.query(sql, params);
@@ -41,6 +42,17 @@ const use = (b: Reader, voiceId: string, words: number) => b.post('/v1/sync/push
 const fileLink = (b: Reader, fileId: string) => b.get(`/v1/voices/files/${fileId}/link`);
 
 describe('voices', () => {
+  it('lists voices from the read copy, and finds a file link the copy hasn’t got on the primary', async () => {
+    const { voice } = await owner(true);
+    // The laptop's copy, unfed in this file, hasn't this voice yet.
+    const fromCopy = makeApp({ ...deps, reads: { pick: async () => mirror } });
+    const far = browser(undefined, fromCopy);
+    const near = browser();
+    expect(await ids(near)).toContain(voice.id);
+    expect(await ids(far)).not.toContain(voice.id);
+    expect((await fileLink(far, voice.fileId)).status).toBe(200);
+  });
+
   it('takes a Piper voice with its settings and sample, and a Kokoro pack', async () => {
     const { b } = await registered();
     const piper = {

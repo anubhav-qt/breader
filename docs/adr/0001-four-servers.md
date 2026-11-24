@@ -89,6 +89,30 @@ Checked 2026-11-07 (Cloudflare and Render docs, and live headers):
   `fb.` pages are not edge-cached. The 3 Renders of point 2 would be the same unless proxied
   through breader.site's zone: not checked yet.
 
+### Points 5 to 7 and the app picking, as built (2026-11-23, not shipped)
+
+The owner asked that nothing be tied to Render or Supabase: any server and any Postgres, or both,
+in any region. So "Render" and "regional Supabase" below read as "a server" and "a read copy".
+
+- Point 5: a server's read copy is `COPY_URL` (any Postgres, session connection), `COPY_NAME` and
+  `COPY_SSL` (`server/src/mirror/copy.ts`). The server migrates it as it starts and feeds it. Servers
+  may share a copy: one feeds at a time (advisory lock), another takes over within 30 s. A laptop
+  with no `COPY_URL` reads its own copy. No superuser needed: replayed rows set `breader.replay`
+  and the triggers stand aside (`0031_copies.sql`).
+- Which reads (`server/src/db/reads.ts`): the session's library, file links, kept panels, AI notes;
+  a lookup the copy misses asks the primary. Sync, shelf, voices and manga lists still read the
+  primary. Read-your-writes: a write leaves `brdr_wrote` (5 minutes), and that reader reads the
+  primary until the copy has caught up past it, not a flat 30 s. A copy not caught up for 90 s is
+  skipped.
+- Point 6: `feed_copies`, one row per copy with its own cursor and `lost_txid`; pruning keeps
+  what the slowest copy hasn't read; a copy away 14 days is dropped and reloads (`jobs/chores.ts`).
+- Point 7: `page_panels` has `version` and its feed triggers, and is in `FED_TABLES`.
+- The app picks: `VITE_API_SERVERS` (home first), timed at start and every 5 minutes (every minute
+  while away from home); home unless down or more than 300 ms slower than the quickest other
+  (`frontend/src/lib/servers.ts`). The busy sign isn't built: it waits for load-test numbers.
+- `infra/ship.sh` takes `PRIMARY_MIGRATE_URL`, `DEPLOY_HOOKS` and `VITE_API_SERVERS`; the older
+  names still work.
+
 ## To propose (each needs the owner's yes before building)
 
 9. Edge-cache answers that are the same for every reader: Browse's AniList lists, AniList search,

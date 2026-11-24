@@ -96,7 +96,7 @@ async function start(o: { workers?: number; token?: string; panel?: boolean; rou
 }
 
 async function connect(urls: string[], token?: string) {
-  const e = makeEngine({ ENGINE_URLS: urls, ENGINE_TOKEN: token })!;
+  const e = makeEngine({ ENGINE_URLS: urls, ENGINE_FALLBACK_URLS: [], ENGINE_TOKEN: token })!;
   engines.push(e);
   for (let i = 0; i < 100 && !e.stats().engines.some((x) => x.up); i++) await new Promise((r) => setTimeout(r, 20));
   return e;

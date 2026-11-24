@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { VOICE_LIST_LIMIT, type VoiceEngine, type VoicesResponse } from '@breader/shared';
 import type { AppEnv, Deps } from '../context.ts';
+import { lookUp, type Source } from '../db/reads.ts';
 import { ApiError } from '../lib/errors.ts';
 import { sessionLibrary } from '../lib/library.ts';
 import { keptBy, listed, voiceFile } from '../lib/voices.ts';
@@ -27,9 +28,14 @@ type Row = {
  * Voices readers uploaded (schema.ts `voices`). Anyone, with or without a key, sees the public
  * ones; a library also sees its own and those it keeps (lib/voices.ts). The five built-in voices
  * of each kind ship with the app and aren't listed here.
+ *
+ * Both reads come from a read copy when there is one (db/reads.ts): voices, voice_uses, blobs and
+ * libraries are all fed. A reader who just uploaded or changed a voice reads from the primary until
+ * the copy has it, and a file link the copy hasn't got is looked up there too.
  */
 export function voiceRoutes(deps: Deps) {
-  const { db, storage } = deps;
+  const { storage } = deps;
+  const primary: Source = { db: deps.db, pool: deps.pool };
   const r = new Hono<AppEnv>();
 
   r.get('/voices', async (c) => {
@@ -38,7 +44,7 @@ export function voiceRoutes(deps: Deps) {
     // Every public voice, newest first, then this library's own and kept ones on top.
     const words = id ? sql`coalesce((SELECT u.words FROM voice_uses u WHERE u.library_id = ${id} AND u.voice_id = v.id), 0)` : sql`0`;
     const mine = id ? sql`coalesce(v.library_id = ${id}, false)` : sql`false`;
-    const { rows } = await db.execute<Row>(sql`
+    const { rows } = await (c.var.read ?? primary).db.execute<Row>(sql`
       SELECT v.id, v.name, v.engine, v.lang, v.file_id, v.config_id, v.sample_id, v.is_public, v.gender, v.created_at,
              ${mine} AS mine, ${words}::int AS words, v.removed_at IS NOT NULL AS removed,
              (SELECT b.size FROM blobs b WHERE b.id = v.file_id) AS file_size
@@ -70,9 +76,14 @@ export function voiceRoutes(deps: Deps) {
   /** A signed download link for a voice's file, for anyone the voice is open to. */
   r.get('/voices/files/:id/link', async (c) => {
     const lib = await sessionLibrary(c, deps);
-    const { rows: [blob] } = await db.execute<{ r2_key: string }>(sql`
-      SELECT b.r2_key FROM blobs b WHERE b.id = ${c.req.param('id')} AND b.status = 'ready' AND ${voiceFile(lib?.id ?? null, sql.raw('b.id'))}
-    `);
+    const id = c.req.param('id');
+    const find = async (from: Source) => {
+      const { rows: [found] } = await from.db.execute<{ r2_key: string }>(sql`
+        SELECT b.r2_key FROM blobs b WHERE b.id = ${id} AND b.status = 'ready' AND ${voiceFile(lib?.id ?? null, sql.raw('b.id'))}
+      `);
+      return found;
+    };
+    const blob = await lookUp(c.var.read ?? primary, primary, find);
     if (!blob) throw new ApiError(404, 'not_found', 'That voice isn’t available any more.');
     c.header('Cache-Control', 'private, no-store');
     return c.json(await storage.downloadLink(blob.r2_key));

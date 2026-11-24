@@ -507,8 +507,8 @@ export const jobRuns = pgTable('job_runs', {
  * laptop, sent by the owner's device, or sent alike by two libraries' devices. `chapter` is
  * `md:<MangaDex chapter>` or a source's chapter id (sw:<source>:<address>:<its address>), and `n`
  * the page, whichever size of it was read; `data` is {w, h, panels, sure} (shared PagePanels) in the pixels of the one found. `by` says
- * who: server, owner or agreed. A later round replaces an earlier one. Not fed: any page's are found
- * again.
+ * who: server, owner or agreed. A later round replaces an earlier one. Fed, so every read copy has
+ * them (ADR 0001, point 7).
  */
 export const pagePanels = pgTable(
   'page_panels',
@@ -519,6 +519,7 @@ export const pagePanels = pgTable(
     data: jsonb('data').notNull(),
     by: text('by').notNull(),
     at: at('at').notNull().defaultNow(),
+    version: version(),
   },
   (t) => [primaryKey({ columns: [t.chapter, t.n] })],
 );
@@ -696,6 +697,20 @@ export const feedState = pgTable('feed_state', {
 });
 
 /**
+ * How far each read copy has read the feed (ADR 0001, point 6): the laptop's (`laptop`) and each
+ * Render's (named by mirror/copy.ts). The feed is pruned only up to the slowest. `lost_txid`: the
+ * newest txid pruned before this copy read it, so it reloads. A copy unheard of for as long as the
+ * feed is kept loses its row, and reloads if it ever comes back.
+ */
+export const feedCopies = pgTable('feed_copies', {
+  name: text('name').primaryKey(),
+  ackTxid: big('ack_txid').notNull().default(0),
+  ackId: big('ack_id').notNull().default(0),
+  ackAt: at('ack_at'),
+  lostTxid: big('lost_txid').notNull().default(0),
+});
+
+/**
  * Which machine's worker does the jobs that must happen once (backups, clean-up, the AI marker),
  * when the laptop and the backup both run the stack, and till when unless it renews (jobs/lease.ts).
  */
@@ -705,16 +720,67 @@ export const workerLease = pgTable('worker_lease', {
   until: at('until').notNull(),
 });
 
-/** Laptop copy only: its read position in the feed. */
+/**
+ * When each machine's worker last said it's up, every 30 s whether it holds the lease or not. A
+ * standby (mirror/standby.ts) stands in only while the machine it stands in for is quiet, and
+ * hands the lease back as soon as it's heard from again.
+ */
+export const workerSeen = pgTable('worker_seen', {
+  machine: text('machine').primaryKey(),
+  at: at('at').notNull().defaultNow(),
+});
+
+/**
+ * The storage pool's chapters (manga/pool.ts, ADR 0004): which bucket holds each, by its key (the
+ * first 32 hex characters of SHA-256 of the chapter's id, as in ADR 0003). A row is made before its
+ * pages are put, so two servers never put one chapter, and the room is counted from here. `done`
+ * once the pages and then the index are in. `wanted_at`: when a reader or the keeper last wanted
+ * it; the least lately wanted leave first when room is needed. Not fed: only servers read it.
+ */
+export const poolChapters = pgTable(
+  'pool_chapters',
+  {
+    key: text('key').primaryKey(),
+    chapter: text('chapter').notNull(),
+    bucket: text('bucket').notNull(),
+    pages: integer('pages').notNull().default(0),
+    bytes: big('bytes').notNull(),
+    done: boolean('done').notNull().default(false),
+    at: at('at').notNull().defaultNow(),
+    wantedAt: at('wanted_at').notNull().defaultNow(),
+  },
+  (t) => [index('pool_chapters_bucket_idx').on(t.bucket), index('pool_chapters_wanted_idx').on(t.wantedAt)],
+);
+
+/**
+ * Each pool bucket's account: what its other buckets hold, measured once a day (every bucket on the
+ * account counts against its free room), and this month's writes. Not fed.
+ */
+export const poolBuckets = pgTable('pool_buckets', {
+  name: text('name').primaryKey(),
+  others: big('others').notNull().default(0),
+  measuredAt: at('measured_at'),
+  month: text('month').notNull().default(''),
+  writes: integer('writes').notNull().default(0),
+});
+
+/**
+ * Read copies only (the laptop's, and each Render's): the copy's read position in the feed. `fed`:
+ * the fed tables it was last loaded with, so a table newly fed makes it load afresh. `caught_up_at`:
+ * Supabase's time when the feed last found nothing left to copy, so the copy has every write made
+ * before it (db/reads.ts).
+ */
 export const mirrorState = pgTable('mirror_state', {
   id: integer('id').primaryKey().default(1),
   cursorTxid: big('cursor_txid').notNull().default(0),
   cursorId: big('cursor_id').notNull().default(0),
   loadedAt: at('loaded_at'),
   updatedAt: at('updated_at').notNull().defaultNow(),
+  fed: text('fed'),
+  caughtUpAt: at('caught_up_at'),
 });
 
-/** Laptop copy only: deletes it has applied, so an older write that arrives late can't undo them. */
+/** Read copies only: deletes they have applied, so an older write that arrives late can't undo them. */
 export const mirrorTombstones = pgTable(
   'mirror_tombstones',
   {
@@ -726,7 +792,10 @@ export const mirrorTombstones = pgTable(
   (t) => [primaryKey({ columns: [t.tbl, t.pk] })],
 );
 
-/** Fed tables and their primary keys, in the order a full reload copies them. */
+/**
+ * Fed tables and their primary keys, in the order a full reload copies them: a table after every
+ * fed table its foreign keys point to (test/copy-keys.test.ts checks it).
+ */
 export const FED_TABLES = {
   users: ['id'],
   accounts: ['id'],
@@ -742,5 +811,6 @@ export const FED_TABLES = {
   ai_books: ['sha256'],
   commenters: ['library_id'],
   comments: ['id'],
+  page_panels: ['chapter', 'n'],
 } as const;
 export type FedTable = keyof typeof FED_TABLES;

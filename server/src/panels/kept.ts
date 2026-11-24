@@ -19,10 +19,13 @@ export type By = 'server' | 'owner' | 'agreed';
 type Data = Omit<PagePanels, 'round'>;
 
 export interface Kept {
-  /** Page n of a chapter's panels, kept by anyone; null where nobody's are yet. */
-  get(chapter: string, n: number): Promise<PagePanels | null>;
-  /** A chapter's kept pages' panels, by page. */
-  chapter(chapter: string): Promise<Record<number, PagePanels>>;
+  /**
+   * Page n of a chapter's panels, kept by anyone; null where nobody's are yet. `from`: where to
+   * read them, a read copy (db/reads.ts); Mumbai by default.
+   */
+  get(chapter: string, n: number, from?: pg.Pool): Promise<PagePanels | null>;
+  /** A chapter's kept pages' panels, by page, read from `from` as get(). */
+  chapter(chapter: string, from?: pg.Pool): Promise<Record<number, PagePanels>>;
   /**
    * The page's panels: kept already from `round` or later, or else found by `find` and kept, once
    * however many readers ask at once.
@@ -106,7 +109,7 @@ export function makeKept(pool: pg.Pool): Kept {
     return p;
   }
 
-  function get(chapter: string, n: number): Promise<PagePanels | null> {
+  function get(chapter: string, n: number, from: pg.Pool = pool): Promise<PagePanels | null> {
     const key = keyOf(chapter, n);
     const had = memo.get(key);
     if (had) {
@@ -114,7 +117,7 @@ export function makeKept(pool: pg.Pool): Kept {
       return Promise.resolve(had);
     }
     return once(looking, key, async () => {
-      const { rows } = await pool.query<{ round: number; data: Data }>('SELECT round, data FROM page_panels WHERE chapter = $1 AND n = $2', [chapter, n]);
+      const { rows } = await from.query<{ round: number; data: Data }>('SELECT round, data FROM page_panels WHERE chapter = $1 AND n = $2', [chapter, n]);
       if (!rows[0]) return null;
       const p = { round: rows[0].round, ...rows[0].data };
       remember(key, p);
@@ -135,8 +138,8 @@ export function makeKept(pool: pg.Pool): Kept {
 
   return {
     get,
-    async chapter(chapter) {
-      const { rows } = await pool.query<{ n: number; round: number; data: Data }>('SELECT n, round, data FROM page_panels WHERE chapter = $1', [chapter]);
+    async chapter(chapter, from = pool) {
+      const { rows } = await from.query<{ n: number; round: number; data: Data }>('SELECT n, round, data FROM page_panels WHERE chapter = $1', [chapter]);
       return Object.fromEntries(rows.map((r) => [r.n, { round: r.round, ...r.data }]));
     },
     find(chapter, n, round, find) {

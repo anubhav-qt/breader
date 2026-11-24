@@ -9,7 +9,20 @@ export type Db = NodePgDatabase<typeof schema>;
 // Postgres bigint and numeric come back as strings by default; every bigint here fits a JS number.
 pg.types.setTypeParser(pg.types.builtins.INT8, (v) => Number(v));
 
-export function makePool(url: string, opts: { ssl?: boolean; max?: number; name: string; replica?: boolean }) {
+export interface PoolOptions {
+  ssl?: boolean;
+  max?: number;
+  name: string;
+  /** The laptop's copy: no change-log triggers and no FK checks, as a superuser can ask. */
+  replica?: boolean;
+  /**
+   * Any read copy: rows go in as the primary wrote them, the triggers standing aside (breader.replay,
+   * 0031_copies.sql). For a copy whose user can't ask for replica, as on most hosted Postgres.
+   */
+  replay?: boolean;
+}
+
+export function makePool(url: string, opts: PoolOptions) {
   const pool = new pg.Pool({
     connectionString: url,
     max: opts.max ?? 5,
@@ -22,6 +35,12 @@ export function makePool(url: string, opts: { ssl?: boolean; max?: number; name:
     options: opts.replica ? '-c session_replication_role=replica' : undefined,
   });
   pool.on('error', (err) => log.warn({ err, pool: opts.name }, 'idle database connection failed'));
+  if (opts.replay) {
+    // Queued on the connection before anything asked of it.
+    pool.on('connect', (client) => {
+      client.query("SET breader.replay = 'on'").catch((err) => log.warn({ err, pool: opts.name }, 'couldn’t mark a copy’s connection as replaying'));
+    });
+  }
   return pool;
 }
 
@@ -32,6 +51,6 @@ export function connectPrimary(env: Env, max = 5) {
 
 export function connectMirror(env: Env, max = 3) {
   if (!env.MIRROR_URL) return null;
-  const pool = makePool(env.MIRROR_URL, { max, name: 'mirror', replica: true });
+  const pool = makePool(env.MIRROR_URL, { max, name: 'mirror', replica: true, replay: true });
   return { pool, db: drizzle(pool, { schema }) };
 }

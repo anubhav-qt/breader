@@ -1,6 +1,7 @@
 import type pg from 'pg';
 import { filledIn, numberOf, pickChapters, placeChapter, type MangaChapter } from '@breader/shared';
 import { log } from '../log.ts';
+import type { Cloud, CloudSeries, CloudTurn } from './cloud.ts';
 import type { Manga } from './index.ts';
 
 /*
@@ -15,10 +16,18 @@ import type { Manga } from './index.ts';
  * which keeps them for good on the ThinkPad; a chapter kept isn't looked at again while the server
  * runs. Its reads are quiet: they don't count as a reader's, so a series only it touches still
  * looks unread (for the HDD in TODO.md).
+ *
+ * Each library's 2 series read most lately in the last 30 days are kept further ahead (CLOUD_AHEAD),
+ * and then put in the storage pool (cloud.ts, ADR 0003 and 0004), most lately read first, for the app to read from there.
  */
 
 /** Chapters kept after the one a series is read to. */
 const AHEAD = 10;
+/** A library's series read most lately that go in the storage pool, with the chapters after the one read to. */
+const CLOUD_SERIES = 2;
+const CLOUD_AHEAD = 25;
+/** Read within this long, for a series to go in the storage pool. */
+const CLOUD_WITHIN = 30 * 24 * 3600_000;
 /** Between chapters, so readers never wait long behind these, and MangaDex opens 15 a minute at most for them. */
 const BREATHER = 4_000;
 
@@ -29,6 +38,8 @@ export interface Keeping {
   pages: number;
   failed: number;
   minutes: number;
+  /** What the storage pool holds after the turn, when there is one. */
+  cloud?: CloudTurn;
 }
 
 /** A series in a library, where it's read from, and the place its reader is at. */
@@ -36,6 +47,13 @@ interface Held {
   library_id: string;
   url: string;
   position: { block: number } | null;
+  /** When it was last read, or opened. */
+  at: Date;
+}
+
+/** A series in a library's queue, and how many chapters after the one read to it keeps. */
+interface Queued extends Held {
+  ahead: number;
 }
 
 /** One copy of a series: a MangaDex series in a language, or a series on a Suwayomi source; its group, if it's read in one. */
@@ -67,8 +85,14 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener('abort', () => { clearTimeout(t); done(); }, { once: true });
   });
 
-/** breather: the pause between chapters; tests go faster. */
-export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather = BREATHER) {
+/** The series a library puts in the storage pool: its CLOUD_SERIES read most lately, if within CLOUD_WITHIN. */
+function inCloud(series: Held[], now: number): Set<Held> {
+  const recent = series.filter((s) => now - new Date(s.at).getTime() <= CLOUD_WITHIN);
+  return new Set(recent.slice(0, CLOUD_SERIES));
+}
+
+/** breather: the pause between chapters; tests go faster. cloud: the storage pool, on the ThinkPad when it's set. */
+export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather = BREATHER, cloud?: Cloud) {
   /** Chapters kept while the server's run. After a start, a chapter on the disk already is read from there. */
   const kept = new Set<string>();
 
@@ -97,19 +121,19 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
     return filledIn(await listOf(own), fills).filter((c) => c.pages > 0 || onSource(c.id));
   }
 
-  /** The chapter a reader is at (or the first, before they've started), and the AHEAD after it. */
-  function windowOf(chapters: MangaChapter[], position: Held['position']): MangaChapter[] {
+  /** The chapter a reader is at (or the first, before they've started), and the `ahead` after it. */
+  function windowOf(chapters: MangaChapter[], position: Held['position'], ahead: number): MangaChapter[] {
     const at = placeChapter(position);
     let from = 0;
     if (at !== null) {
       const i = chapters.findIndex((c) => (numberOf(c) ?? -1) >= at);
       from = i < 0 ? chapters.length - 1 : i;
     }
-    return chapters.slice(Math.max(0, from), from + 1 + AHEAD).filter((c) => !c.external);
+    return chapters.slice(Math.max(0, from), from + 1 + ahead).filter((c) => !c.external);
   }
 
-  /** A library's queue: each of its series' chapters to keep in turn. */
-  async function* queueOf(series: Held[], counts: { series: number; failed: number }): AsyncGenerator<MangaChapter> {
+  /** A library's queue: each of its series' chapters to keep in turn, each series' noted in `windows`. */
+  async function* queueOf(series: Queued[], counts: { series: number; failed: number }, windows: Map<Queued, MangaChapter[]>): AsyncGenerator<MangaChapter> {
     for (const s of series) {
       let chapters: MangaChapter[];
       try {
@@ -120,7 +144,9 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
         continue;
       }
       counts.series += 1;
-      yield* windowOf(chapters, s.position);
+      const window = windowOf(chapters, s.position, s.ahead);
+      windows.set(s, window);
+      yield* window;
     }
   }
 
@@ -135,12 +161,37 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
     return pages;
   }
 
+  /** The pool's series, most lately read first, each with its own copy's list when it's a Suwayomi one. */
+  async function cloudSeries(picked: Queued[], windows: Map<Queued, MangaChapter[]>): Promise<CloudSeries[]> {
+    const sorted = [...picked].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    const out: CloudSeries[] = [];
+    for (const s of sorted) {
+      const chapters = windows.get(s);
+      const own = copyOf(s.url.split('|')[0]);
+      if (!chapters || !own) continue;
+      let id: string;
+      let list = null;
+      if (own.kind === 'source') {
+        id = own.id;
+        try {
+          list = await manga.sourceChapters(own.id);
+        } catch {
+          // Its pages still go; without a list it opens on Render only from a reader's own copy.
+        }
+      } else {
+        id = `mangadex:${own.series}`;
+      }
+      out.push({ id, chapters, list });
+    }
+    return out;
+  }
+
   return {
     /** One turn through every library's queue. */
     async run(signal: AbortSignal): Promise<Keeping> {
       const started = Date.now();
       const { rows } = await pool.query<Held>(`
-        SELECT li.library_id, li.url, rs.position
+        SELECT li.library_id, li.url, rs.position, coalesce(rs.read_at, li.last_opened) AS at
           FROM library_items li
           JOIN libraries l ON l.id = li.library_id AND l.retired_at IS NULL
           LEFT JOIN reading_states rs ON rs.library_id = li.library_id AND rs.book_id = li.book_id
@@ -152,8 +203,22 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
         byLibrary.get(r.library_id)!.push(r);
       }
 
+      // With the storage pool, each library's latest series are kept further ahead, then put there.
+      const picked: Queued[] = [];
+      const libraries = [...byLibrary.values()].map((series) => {
+        const forCloud = cloud ? inCloud(series, started) : new Set<Held>();
+        return series.map((s): Queued => {
+          const q = { ...s, ahead: AHEAD };
+          if (forCloud.has(s)) {
+            q.ahead = CLOUD_AHEAD;
+            picked.push(q);
+          }
+          return q;
+        });
+      });
+      const windows = new Map<Queued, MangaChapter[]>();
       const counts = { series: 0, failed: 0 };
-      let queues = [...byLibrary.values()].map((series) => queueOf(series, counts));
+      let queues = libraries.map((series) => queueOf(series, counts, windows));
       const seen = new Set<string>();
       let chapters = 0;
       let pages = 0;
@@ -186,7 +251,16 @@ export function makeKeeper(manga: Manga, pool: Pick<pg.Pool, 'query'>, breather 
         }
         queues = left;
       }
-      return { libraries: byLibrary.size, series: counts.series, chapters, pages, failed: counts.failed, minutes: Math.round((Date.now() - started) / 60_000) };
+      const done: Keeping = { libraries: byLibrary.size, series: counts.series, chapters, pages, failed: counts.failed, minutes: 0 };
+      if (cloud && !signal.aborted) {
+        try {
+          done.cloud = await cloud.turn(await cloudSeries(picked, windows), signal);
+        } catch (err) {
+          log.warn({ err }, 'readers’ next chapters couldn’t be put in the storage pool');
+        }
+      }
+      done.minutes = Math.round((Date.now() - started) / 60_000);
+      return done;
     },
   };
 }

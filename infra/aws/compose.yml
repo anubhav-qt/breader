@@ -16,11 +16,16 @@ services:
       AUTH_MODE: basic_auth
       AUTH_USERNAME: breader
       AUTH_PASSWORD: "${SUWAYOMI_PASSWORD:?set SUWAYOMI_PASSWORD in infra/aws/.env}"
-      # Half of the machine's 2 GB, the rest left to the system and the tunnel.
-      JAVA_TOOL_OPTIONS: "-Xmx1g"
+      # Java's heap. Java takes about 500 MB more than this outside it, so it fits the cap below.
+      JAVA_TOOL_OPTIONS: "-Xmx768m"
     # Its web page answers on this machine only, for extensions.sh and an SSH tunnel.
     ports: ["127.0.0.1:4567:4567"]
     volumes: ["suwayomi:/home/suwayomi/.local/share/Tachidesk"]
+    # Most of the machine's 1.8 GB, and no swap. Past this, only Suwayomi is stopped and started
+    # again. On 2026-11-08 it grew past the machine's memory and its swap, the machine could no
+    # longer renew its network address, and it was cut off for 10 days.
+    mem_limit: 1300m
+    memswap_limit: 1300m
     restart: unless-stopped
 
   # sw.breader.example → http://suwayomi:4567, set on the tunnel's Public Hostname page in Cloudflare.

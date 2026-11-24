@@ -4,9 +4,10 @@
 #   infra/ship.sh            every step, in order
 #   infra/ship.sh app        only the steps named (check always runs first)
 #
-# Steps: check, test, push, model, image, migrate, render, app, live.
+# Steps: check, test, push, model, image, migrate, deploy, app, live.
 # Settings come from infra/.env.ship (copy infra/.env.ship.example). The laptop picks the new
-# image up by itself within 5 minutes (infra/update.sh); `live` waits until it has.
+# image up by itself within 5 minutes (infra/update.sh); other servers are told by their deploy
+# hooks (DEPLOY_HOOKS); `live` waits until every server in VITE_API_SERVERS is on it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,7 +17,7 @@ PROJECT=breader
 export CLOUDFLARE_ACCOUNT_ID=84647e95d51947e4149cbfc398afc4e1
 SETTINGS=infra/.env.ship
 SHA=$(git rev-parse HEAD)
-STEPS=(check test push model image migrate render app live)
+STEPS=(check test push model image migrate deploy app live)
 
 say() {
   printf '\n== %s\n' "$*"
@@ -61,8 +62,15 @@ step_check() {
   # shellcheck source=/dev/null
   . "$SETTINGS"
   set +a
+  # The older names, from before any number of servers.
+  PRIMARY_MIGRATE_URL=${PRIMARY_MIGRATE_URL:-${SUPABASE_SESSION_URL:-}}
+  DEPLOY_HOOKS=${DEPLOY_HOOKS:-${RENDER_DEPLOY_HOOK:-}}
+  if [ -z "${VITE_API_SERVERS:-}" ] && [ -n "${VITE_API_URL:-}" ]; then
+    VITE_API_SERVERS="$VITE_API_URL${VITE_API_FALLBACK_URL:+,$VITE_API_FALLBACK_URL}"
+  fi
+  export VITE_API_SERVERS
   local name
-  for name in SUPABASE_SESSION_URL RENDER_DEPLOY_HOOK VITE_API_URL VITE_API_FALLBACK_URL VITE_SENTRY_DSN; do
+  for name in PRIMARY_MIGRATE_URL VITE_API_SERVERS VITE_SENTRY_DSN; do
     if [ -z "${!name:-}" ]; then
       fail "$name is empty in $SETTINGS"
     fi
@@ -150,15 +158,32 @@ step_image() {
 # Migrations only ever add, so the running servers keep working while this runs.
 step_migrate() {
   say "migrate"
-  docker run --rm -e PRIMARY_URL="$SUPABASE_SESSION_URL" -e PRIMARY_SSL=require \
+  docker run --rm -e PRIMARY_URL="$PRIMARY_MIGRATE_URL" -e PRIMARY_SSL="${PRIMARY_MIGRATE_SSL:-require}" \
     "$IMAGE:$SHA" node dist/migrate.js
 }
 
-# Render pulls :latest, which now points at this commit.
-step_render() {
-  say "render"
-  curl -fsS -X POST "$RENDER_DEPLOY_HOOK" > /dev/null
-  echo "Render is deploying"
+# Servers that pull :latest when told to, which now points at this commit. Each migrates its own
+# read copy as it starts (server/src/mirror/copy.ts).
+step_deploy() {
+  say "deploy"
+  local hook
+  local hooks=()
+  local told=0
+  IFS=',' read -ra hooks <<< "${DEPLOY_HOOKS:-}"
+  # macOS's bash counts an empty array as unset.
+  if [ ${#hooks[@]} -eq 0 ]; then
+    echo "no deploy hooks"
+    return
+  fi
+  for hook in "${hooks[@]}"; do
+    hook=$(echo "$hook" | xargs)
+    if [ -z "$hook" ]; then
+      continue
+    fi
+    curl -fsS -X POST "$hook" > /dev/null
+    told=$((told + 1))
+  done
+  echo "told $told server(s) to deploy"
 }
 
 # The app, built here as Pages would build it, then uploaded.
@@ -170,11 +195,18 @@ step_app() {
     --commit-hash "$SHA" --commit-message "$(git log -1 --format=%s)" --commit-dirty=false
 }
 
-# Waits until both servers report this commit and breader.site serves this build.
+# Waits until every server reports this commit and breader.site serves this build.
 step_live() {
   say "live"
   local server
-  for server in https://api.breader.site https://fb.breader.site; do
+  local servers
+  IFS=',' read -ra servers <<< "$VITE_API_SERVERS"
+  for server in "${servers[@]}"; do
+    server=$(echo "$server" | xargs)
+    server=${server%/}
+    if [ -z "$server" ]; then
+      continue
+    fi
     waitFor "$server" "curl -fsS $server/health | grep -q $SHA"
   done
   local page

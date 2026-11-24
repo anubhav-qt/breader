@@ -1,9 +1,4 @@
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { makePool } from './db/client.ts';
-import { repairVersions } from './db/restored.ts';
+import { migrateDb, migrationsBeside } from './db/migrations.ts';
 import { loadEnv } from './env.ts';
 import { startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
@@ -14,35 +9,16 @@ import { log } from './log.ts';
  * schema. Needs only the database URLs, so infra/ship.sh can run it with nothing else. Migrations only ever
  * expand (new tables, nullable columns); removals ship later as their own step, once no running
  * server reads the old shape. Runs from src/ in development and dist/ in the image. A failure
- * goes to Sentry too, as the new API never starts after one.
+ * goes to Sentry too, as the new API never starts after one. A server's read copy (COPY_URL) is
+ * migrated by that server's API as it starts (mirror/copy.ts).
  */
 startReporting('migrate');
 
-const migrationsFolder = process.env.MIGRATIONS_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../drizzle');
-
-const LOCK = "hashtext('breader:migrate')";
-
-async function run(url: string, name: string, opts: { ssl?: boolean; replica?: boolean } = {}) {
-  const pool = makePool(url, { max: 2, name: `migrate-${name}`, ...opts });
-  // After a release, CI and the laptop both migrate Supabase. The second waits here, then finds
-  // nothing left to do. (Session locks need a session: use the session pooler, not port 6543.)
-  const lock = await pool.connect();
-  try {
-    await lock.query(`SELECT pg_advisory_lock(${LOCK})`);
-    await migrate(drizzle(pool), { migrationsFolder });
-    if (!opts.replica) await repairVersions(pool);
-    await lock.query(`SELECT pg_advisory_unlock(${LOCK})`);
-  } finally {
-    lock.release();
-    await pool.end();
-  }
-  log.info(`${name} migrated`);
-}
-
+const folder = migrationsBeside(import.meta.url);
 const { PRIMARY_URL, PRIMARY_SSL, MIRROR_URL, S3_CREATE_BUCKETS } = process.env;
 if (!PRIMARY_URL) throw new Error('PRIMARY_URL is required');
-await run(PRIMARY_URL, 'primary', { ssl: PRIMARY_SSL === 'require' });
-if (MIRROR_URL) await run(MIRROR_URL, 'mirror', { replica: true });
+await migrateDb(PRIMARY_URL, 'primary', { ssl: PRIMARY_SSL === 'require', folder });
+if (MIRROR_URL) await migrateDb(MIRROR_URL, 'mirror', { copy: true, folder });
 
 if (S3_CREATE_BUCKETS === 'true') {
   const env = loadEnv();

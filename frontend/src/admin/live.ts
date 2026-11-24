@@ -1,13 +1,13 @@
-import { baseUrl, type ApiBase } from '../lib/api';
+import { HOME, servers, type ApiBase } from '../lib/api';
+import { tryOrder } from '../lib/servers';
 import type { FeedbackItem } from '@breader/shared/feedback';
 import { STEPS, UPLOAD_STEPS, type Admin, type Marker, type Snapshot, type Working } from './types';
 
 /*
  * The admin page's server: /admin/stream pushes everything the page shows the moment it changes
  * (server/src/routes/admin.ts), read with fetch so it can carry the admin token, and each button
- * posts to /admin. It talks to the laptop, and to the fallback while the laptop doesn't answer,
- * asking the laptop again every minute, as the app does (lib/api.ts). The AI accounts are the
- * laptop's only.
+ * posts to /admin. It talks to the home server, and to the next server while home doesn't answer,
+ * asking home again every minute (lib/api.ts, lib/servers.ts). The AI accounts are home's only.
  *
  * The token is kept for the tab (sessionStorage), never anywhere else.
  */
@@ -90,7 +90,9 @@ function* events(text: string): Generator<{ event: string; data: string }> {
 }
 
 export function liveAdmin(token: string): Admin {
-  let via: ApiBase = 'primary';
+  let via: ApiBase = HOME;
+  /** The server after `first` to try: the next in the list (the admin page doesn't time them). */
+  const nextAfter = (first: ApiBase): ApiBase | null => tryOrder([...servers()], first, new Map())[1] ?? null;
 
   const headers = (json: boolean): HeadersInit => {
     const h: Record<string, string> = { authorization: `Bearer ${token}` };
@@ -101,7 +103,7 @@ export function liveAdmin(token: string): Admin {
   /** One try at one copy of the server: null when it can't be reached. */
   async function attempt(base: ApiBase, path: string, init: RequestInit): Promise<Response | null> {
     try {
-      const res = await fetch(baseUrl(base) + path, { ...init, cache: 'no-store' });
+      const res = await fetch(base + path, { ...init, cache: 'no-store' });
       if (GATEWAY.has(res.status)) return null;
       return res;
     } catch {
@@ -114,9 +116,9 @@ export function liveAdmin(token: string): Admin {
     const init: RequestInit = { method, headers: headers(body !== undefined || raw !== undefined) };
     if (raw !== undefined) init.body = raw;
     else if (body !== undefined) init.body = JSON.stringify(body);
-    const other: ApiBase = via === 'primary' ? 'fallback' : 'primary';
+    const other = nextAfter(via);
     let res = await attempt(via, path, init);
-    if (!res) res = await attempt(other, path, init);
+    if (!res && other) res = await attempt(other, path, init);
     if (!res) throw new Error('Neither server answered.');
     const data = await res.json().catch(() => null);
     if (res.status === 401) throw new NotAdmin(data?.message ?? 'That isn’t the admin token.');
@@ -124,12 +126,12 @@ export function liveAdmin(token: string): Admin {
     return data as T;
   }
 
-  /** The laptop alone: the AI accounts are only there. */
+  /** The home server alone: the AI accounts are only there. */
   async function laptop<T>(method: string, path: string, body?: unknown): Promise<T> {
     const init: RequestInit = { method, headers: headers(body !== undefined) };
     if (body !== undefined) init.body = JSON.stringify(body);
-    const res = await attempt('primary', path, init);
-    if (!res) throw new Error('The ThinkPad isn’t answering.');
+    const res = await attempt(HOME, path, init);
+    if (!res) throw new Error('The home server isn’t answering.');
     const data = await res.json().catch(() => null);
     if (res.status === 401) throw new NotAdmin(data?.message ?? 'That isn’t the admin token.');
     if (!res.ok) throw new Error(data?.message ?? `The server answered ${res.status}.`);
@@ -157,7 +159,7 @@ export function liveAdmin(token: string): Admin {
         const opening = window.setTimeout(() => mine.abort(), OPEN_MS);
         let res: Response;
         try {
-          res = await fetch(`${baseUrl(base)}/admin/stream`, { headers: headers(false), cache: 'no-store', signal: mine.signal });
+          res = await fetch(`${base}/admin/stream`, { headers: headers(false), cache: 'no-store', signal: mine.signal });
         } catch {
           return 'unreachable';
         } finally {
@@ -197,14 +199,14 @@ export function liveAdmin(token: string): Admin {
         }
       };
 
-      /** While on the fallback, the laptop is asked every minute whether it's back, and taken back to. */
+      /** While on another server, home is asked every minute whether it's back, and taken back to. */
       const watchLaptop = () => {
         window.clearInterval(probe);
-        if (via !== 'fallback') return;
+        if (via === HOME) return;
         probe = window.setInterval(async () => {
-          const res = await attempt('primary', '/health', {});
+          const res = await attempt(HOME, '/health', {});
           if (res?.ok) {
-            via = 'primary';
+            via = HOME;
             window.clearInterval(probe);
             ctrl?.abort();
           }
@@ -216,10 +218,10 @@ export function liveAdmin(token: string): Admin {
         while (!stopped) {
           link?.('connecting');
           const first = via;
-          const other: ApiBase = first === 'primary' ? 'fallback' : 'primary';
+          const other = nextAfter(first);
           try {
             let how = await read(first);
-            if (how === 'unreachable' && !stopped) how = await read(other);
+            if (how === 'unreachable' && !stopped && other) how = await read(other);
             if (how === 'ended') tries = 0;
           } catch (e) {
             if (e instanceof NotAdmin) {

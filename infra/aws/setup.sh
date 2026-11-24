@@ -1,6 +1,7 @@
 #!/bin/sh
-# Runs once on the new AWS machine (Ubuntu 24.04, arm64): swap, Docker, the repository's infra/
-# folder only, and the daily timer for extensions.sh. README.md › Suwayomi on AWS for Render.
+# Runs on the AWS machine (Ubuntu 24.04, arm64), once and again after a change: swap, Docker, the
+# repository's infra/ folder only, the daily timer for extensions.sh and the minute timer for
+# watch.sh. README.md › Suwayomi on AWS for Render.
 set -eu
 
 # 2 GB more room on disk, so a busy moment slows Suwayomi down instead of stopping it.
@@ -48,6 +49,29 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+sudo tee /etc/systemd/system/breader-watch.service > /dev/null <<EOF
+[Unit]
+Description=Keep Azure awake while the ThinkPad is away (watch.sh)
+
+[Service]
+Type=oneshot
+User=$USER
+ExecStart=$HOME/breader/infra/aws/watch.sh
+EOF
+
+sudo tee /etc/systemd/system/breader-watch.timer > /dev/null <<EOF
+[Unit]
+Description=Ask the ThinkPad each minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+EOF
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now breader-extensions.timer
+sudo systemctl enable --now breader-watch.timer
 echo "setup done"

@@ -5,16 +5,35 @@ import type { AppEnv, Deps, LibraryRow } from '../context.ts';
 import { libraries } from '../db/schema.ts';
 import { log } from '../log.ts';
 import { signedOut } from './errors.ts';
-import { endSession, readSession } from './session.ts';
+import { endSession, readSession, type Session } from './session.ts';
 
 const DAY = 86_400_000;
 
-/** The library the session cookie names, if it's still open to it; a stale cookie is cleared. */
+/** Whether the session may use this library: it's there, open, and the key is the one it was opened with. */
+function opens(lib: LibraryRow | undefined, s: Session): lib is LibraryRow {
+  if (!lib) return false;
+  if (lib.retiredAt) return false;
+  if (!lib.keyEnabled) return false;
+  return lib.keyEpoch === s.epoch;
+}
+
+/**
+ * The library the session cookie names, if it's still open to it; a stale cookie is cleared. A read
+ * looks it up in a read copy when it may (db/reads.ts), a write always in Mumbai. So a key switched
+ * off ends its sessions' reads within the copy's few seconds behind, and their writes at once. A
+ * copy that says no is asked again of Mumbai before the cookie goes: it may not have the library,
+ * or the new key, yet.
+ */
 export async function sessionLibrary(c: Context<AppEnv>, deps: Deps): Promise<LibraryRow | null> {
   const s = readSession(c, deps.env);
   if (!s) return null;
-  const [lib] = await deps.db.select().from(libraries).where(eq(libraries.id, s.libraryId));
-  if (!lib || lib.retiredAt || !lib.keyEnabled || lib.keyEpoch !== s.epoch) {
+  const read = c.var.read?.db ?? deps.db;
+  let [lib] = await read.select().from(libraries).where(eq(libraries.id, s.libraryId));
+  const fromCopy = read !== deps.db;
+  if (!opens(lib, s) && fromCopy) {
+    [lib] = await deps.db.select().from(libraries).where(eq(libraries.id, s.libraryId));
+  }
+  if (!opens(lib, s)) {
     endSession(c, deps.env);
     return null;
   }

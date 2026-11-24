@@ -7,9 +7,11 @@ import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app.ts';
 import type { Store } from '../src/lib/cache.ts';
 import { find, namedLike, rank, wantedName, type Found, type Place } from '../src/manga/find.ts';
-import { makeManga } from '../src/manga/index.ts';
+import { makeManga, type MangaOptions } from '../src/manga/index.ts';
 import { chapterId, chapterTitle, seriesId, suwayomiAddress, tidy } from '../src/manga/suwayomi.ts';
+import type { Uploads } from '../src/manga/uploads.ts';
 import { browser, deps } from './helpers.ts';
+import { jpeg } from './pool-fakes.ts';
 
 /*
  * One search across MangaDex and Breader's Suwayomi sources, each a server of our own answering
@@ -262,7 +264,7 @@ function fakeSuwayomi() {
   return { state, calls, answer };
 }
 
-async function setup(dexTitles: string[] = [], store?: Store, originals: Record<string, string> = {}, browseWithin?: number) {
+async function setup(dexTitles: string[] = [], store?: Store, originals: Record<string, string> = {}, browseWithin?: number, more: Partial<MangaOptions> = {}, uploads: Uploads | null = null) {
   const sw = fakeSuwayomi();
   const dex = fakeDex(dexTitles, originals);
   const dexCalls: URL[] = [];
@@ -284,8 +286,9 @@ async function setup(dexTitles: string[] = [], store?: Store, originals: Record<
     store,
     suwayomi: 'http://suwayomi.test/',
     browseWithin,
+    ...more,
   });
-  const app = makeApp({ ...deps, manga });
+  const app = makeApp({ ...deps, manga, uploads });
   const b = browser(undefined, app);
   const r = await b.post('/v1/libraries', { libraryId: crypto.randomUUID(), key: newLibraryKey() });
   expect(r.status).toBe(201);
@@ -980,5 +983,30 @@ describe('a search by name', () => {
     expect(namedLike('one piece', keys('ONE PIECE (Official Colored)'))).toBe(true);
     expect(namedLike('no', keys('Kimetsu no Yaiba'))).toBe(true);
     expect(namedLike('葬送のフリーレン', keys('Sousou no Frieren', '葬送のフリーレン'))).toBe(true);
+  });
+});
+
+describe('the storage pool before a source', () => {
+  it('reads a page from the pool, asking Suwayomi for no picture, and tells the uploads it served it', async () => {
+    const asked: string[] = [];
+    const pooled = async (chapterId: string, n: number) => {
+      asked.push(`${chapterId}:${n}`);
+      if (n === 0) return { data: jpeg(20), type: 'image/jpeg' };
+      return null;
+    };
+    const saw: string[] = [];
+    const uploads = { saw: async (chapterId: string, n: number) => { saw.push(`${chapterId}:${n}`); } } as unknown as Uploads;
+    const { b, sw } = await setup([], undefined, {}, undefined, { pooled }, uploads);
+    sw.state.series = [{ id: 7, source: '11', title: 'Read me', chapters: [1, 2] }];
+    await b.get(`/v1/manga/source/${sid(7)}/chapters`);
+    const chapter = `/v1/manga/source/chapter/${cid(7, 7001)}`;
+    const r = await b.get(`${chapter}/0`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('image/jpeg');
+    expect(sw.calls.filter((c) => c.op === 'picture')).toHaveLength(0);
+    expect((await b.get(`${chapter}/1`)).status).toBe(200);
+    expect(sw.calls.filter((c) => c.op === 'picture')).toHaveLength(1);
+    expect(asked).toEqual([`${cid(7, 7001)}:0`, `${cid(7, 7001)}:1`]);
+    expect(saw).toEqual([`${cid(7, 7001)}:0`, `${cid(7, 7001)}:1`]);
   });
 });

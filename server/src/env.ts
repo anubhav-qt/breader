@@ -26,6 +26,26 @@ const Env = z.object({
   PRIMARY_SSL: z.enum(['off', 'require']).default('off'),
   /** The laptop's copy. Unset on the fallback. */
   MIRROR_URL: z.string().optional(),
+  /**
+   * This server's read copy (ADR 0001, point 5): any Postgres, in any region, near this server or
+   * not, through a session connection (not a transaction pooler). The server migrates it, reads from
+   * it what may come from a copy (db/reads.ts), and keeps it current from PRIMARY_URL's feed unless
+   * another server reading the same copy already does (mirror/copy.ts). Unset: every read goes to
+   * PRIMARY_URL. Any number of servers may share one copy; each copy needs only one.
+   */
+  COPY_URL: z.string().optional(),
+  /** The copy's name in feed_copies, where its place in the feed is kept. Defaults to user@host/database from COPY_URL. */
+  COPY_NAME: z.string().min(1).max(100).optional(),
+  /** require (the default) for a database reached over the internet; off for a local one. */
+  COPY_SSL: z.enum(['off', 'require']).default('require'),
+  /**
+   * Every read copy, for a feeder of them all (mirror/standby.ts): the ThinkPad's worker feeds each
+   * while it holds the lease, and a standby (GCP) while the ThinkPad is quiet. Comma separated; a
+   * copy's own server feeds it too, one feeder at a time (its feed lock). COPY_SSL applies to each.
+   */
+  COPY_URLS: list.default([]),
+  /** The machine a standby stands in for (mirror/standby.ts): the ThinkPad's MACHINE. */
+  STANDBY_FOR: z.string().min(1).default('laptop'),
 
   /** Secret mixed into the key HMAC. Changing it makes every stored key hash unusable. */
   KEY_PEPPER: z.string().min(32),
@@ -115,6 +135,11 @@ const Env = z.object({
    * (engine/serve.ts).
    */
   ENGINE_URLS: list.default([]),
+  /**
+   * Engines on call (ADR 0004: Modal, infra/modal), with the same ENGINE_TOKEN: a job goes to them
+   * only when every engine at ENGINE_URLS is down or busy, or with none there (Azure, GCP).
+   */
+  ENGINE_FALLBACK_URLS: list.default([]),
   ENGINE_TOKEN: z.string().min(16).optional(),
 
   /**
@@ -139,6 +164,40 @@ const Env = z.object({
    * each series is read to and the next ones. On by default on the ThinkPad only.
    */
   MANGA_KEEP: bool.optional(),
+  /**
+   * The storage pool (manga/pool.ts, ADR 0004): readers' chapters in several free buckets, the home
+   * first (R2), comma separated. Each bucket's settings are POOL_<NAME>_ENDPOINT, _REGION, _BUCKET,
+   * _KEY_ID, _SECRET, _PUBLIC_URL, _MB (its room, every other bucket on its account included),
+   * _WRITES (a month's writes, only where set) and _PATH_STYLE. Off without it. No bucket is kept
+   * cold: chapters the pool lets go stay on the ThinkPad's disk.
+   */
+  POOL_MEMBERS: z.string().min(1).optional(),
+  /**
+   * Chapters this server fetches for its readers go in the pool too, where there's room (regional
+   * servers; manga/uploads.ts). The ThinkPad's keeper puts them there anyway.
+   */
+  POOL_UPLOADS: bool.optional(),
+  /**
+   * Sends no pictures or sound (lib/media.ts): pages and covers go on to the storage pool or to
+   * MEDIA_ELSEWHERE. For a server whose sending is costly (GCP).
+   */
+  JSON_ONLY: bool.optional(),
+  /** A server that sends pictures, for JSON_ONLY's pages and covers the pool hasn't: an Azure one. */
+  MEDIA_ELSEWHERE: z.string().url().optional(),
+  /**
+   * This month's egress, counted (lib/egress.ts): near this many MB, /health says so and the app
+   * stops choosing this server. Off when unset. The owner's: 800 on GCP.
+   */
+  GCP_EGRESS_LIMIT_MB: z.coerce.number().positive().optional(),
+  /** Where the month's egress count is kept, across starts. */
+  EGRESS_FILE: z.string().min(1).default('/data/egress/egress.json'),
+  /** The network card whose sent bytes are counted (/proc/net/dev). */
+  EGRESS_CARD: z.string().min(1).default('ens4'),
+  /**
+   * /health says busy when the event loop's delay passes this many ms (lib/busy.ts), and the app
+   * prefers another server. Off when unset: the owner sets it from load-test numbers.
+   */
+  BUSY_LAG_MS: z.coerce.number().positive().optional(),
   /**
    * Redis (redis://redis:6379), where MangaDex's answers are kept so they outlast a restart.
    * Without it they're kept in memory. Redis not answering never stops a reader.

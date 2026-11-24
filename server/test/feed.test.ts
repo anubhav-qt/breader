@@ -16,7 +16,7 @@ async function snapshot(pool: typeof primary.pool) {
   const out: Record<string, unknown[]> = {};
   for (const [t, pk] of Object.entries(FED_TABLES)) {
     // Byte order: the two servers' default collations sort mixed-case ids (accounts) differently.
-    const order = pk.map((c) => `${c} COLLATE "C"`).join(', ');
+    const order = pk.map((c) => `${c}::text COLLATE "C"`).join(', ');
     out[t] = (await pool.query(`SELECT to_jsonb(x) AS r FROM ${t} x ORDER BY ${order}`)).rows.map((r) => r.r);
   }
   return out;
@@ -71,9 +71,9 @@ describe('change feed', () => {
     await drain();
     // Records the laptop never read are pruned while it's away…
     await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book() }));
-    await primary.pool.query(`UPDATE change_log SET at = now() - interval '15 days' WHERE (txid, id) > (SELECT ack_txid, ack_id FROM feed_state)`);
+    await primary.pool.query(`UPDATE change_log SET at = now() - interval '15 days' WHERE (txid, id) > (SELECT ack_txid, ack_id FROM feed_copies WHERE name = 'laptop')`);
     await pruneStaleFeed(primary.pool);
-    expect((await primary.pool.query('SELECT lost_txid FROM feed_state')).rows[0].lost_txid).toBeGreaterThan(0);
+    expect((await primary.pool.query('SELECT lost_txid FROM feed_copies WHERE name = \'laptop\'')).rows[0].lost_txid).toBeGreaterThan(0);
     // …so on return it copies the tables afresh instead of trusting the gap.
     await drain();
     expect(await snapshot(mirror.pool)).toEqual(await snapshot(primary.pool));
@@ -97,7 +97,7 @@ describe('change feed', () => {
     await primary.pool.query(`UPDATE change_log SET at = now() - interval '2 hours'`);
     await b.post('/v1/sync/push', push('c', { type: 'book.put', book: book() })); // not yet read
     await pruneReadFeed(primary.pool);
-    const { rows } = await primary.pool.query(`SELECT count(*)::int AS n FROM change_log WHERE (txid, id) <= (SELECT ack_txid, ack_id FROM feed_state)`);
+    const { rows } = await primary.pool.query(`SELECT count(*)::int AS n FROM change_log WHERE (txid, id) <= (SELECT ack_txid, ack_id FROM feed_copies WHERE name = 'laptop')`);
     expect(rows[0].n).toBe(0);
     expect((await primary.pool.query('SELECT count(*)::int AS n FROM change_log')).rows[0].n).toBeGreaterThan(0);
   });

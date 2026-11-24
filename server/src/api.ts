@@ -2,6 +2,8 @@ import { serve } from '@hono/node-server';
 import { makeApp } from './app.ts';
 import { makeAuth } from './auth.ts';
 import { connectMirror, connectPrimary } from './db/client.ts';
+import { migrationsBeside } from './db/migrations.ts';
+import { makeReads } from './db/reads.ts';
 import { loadEnv, mangaArchiveMb, mangaCacheMb, onThinkPad } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
 import { fillBlanks } from './jobs/fill.ts';
@@ -10,12 +12,18 @@ import { asJob, runKind, takeCommands } from './lib/admin.ts';
 import { Archive } from './lib/archive.ts';
 import { r2Answers } from './lib/answers.ts';
 import { archiveTo, connectRedis, memoryRoom, near, type Redis, type Store } from './lib/cache.ts';
+import { makeBusy } from './lib/busy.ts';
+import { makeEgress, type Egress } from './lib/egress.ts';
 import { makeGemini } from './lib/gemini.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
+import { connectCopy, runCopy } from './mirror/copy.ts';
 import { makeManga, type MangaOptions } from './manga/index.ts';
 import { makeCurate, pgChecks } from './manga/curate.ts';
+import { makeCloud, type Cloud } from './manga/cloud.ts';
+import { makePool as makeStoragePool, poolMembers, type Pool } from './manga/pool.ts';
+import { makeUploads, type Uploads } from './manga/uploads.ts';
 import { makeKeeper } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
 import { makeSame, pgGroups } from './manga/same.ts';
@@ -38,6 +46,13 @@ for (const gone of ['SPEECH_THREADS', 'PANEL_WORKERS', 'PANEL_THREADS']) {
 if (process.env.ENGINE_BOOKS) log.warn('ENGINE_BOOKS is gone: audiobooks are made on readers’ devices only');
 const primary = connectPrimary(env);
 const mirror = env.ROLE === 'laptop' ? connectMirror(env) : null;
+// This server's read copy, any Postgres in any region (COPY_URL, mirror/copy.ts): migrated and kept
+// current in the background, and read from once it has caught up (db/reads.ts). Without one, a
+// laptop reads from its own copy, which its worker feeds. Neither: reads go to the primary.
+const copy = connectCopy(env);
+const copying = new AbortController();
+if (copy) void runCopy(primary.pool, copy, migrationsBeside(import.meta.url), copying.signal);
+const reads = makeReads(primary, copy ?? mirror);
 // Answers worth keeping (manga's, AI notes) go to Redis when there's one, so they outlast a restart.
 let redis: Redis | null = null;
 if (env.REDIS_URL) redis = connectRedis(env.REDIS_URL);
@@ -50,11 +65,12 @@ const storage = makeStorage(env);
 // plan sleeps and restarts often) reads it back instead of asking again (lib/answers.ts).
 let answers: Store | null = redis;
 if (!answers && light) answers = r2Answers(storage);
-// The server voice runs on the laptop only: Render's free plan hasn't the processor for it. It reads
-// live for signed-in readers on slow devices. Audiobooks are made on readers' own devices, never here.
-// The engines run it and the panel model, a service of their own, shared out by the scheduler here
-// (engine/, ADR 0002). None set, as on the fallback: the voice and panels are off.
-const engine = env.ROLE === 'laptop' ? makeEngine(env) : null;
+// The server voice reads live for signed-in readers on slow devices. Audiobooks are made on readers'
+// own devices, never here. The engines run it and the panel model, a service of their own, shared out
+// by the scheduler here (engine/, ADR 0002): the laptop's at ENGINE_URLS, and Modal's on call behind
+// them at ENGINE_FALLBACK_URLS (ADR 0004), Azure's and GCP's only engine. None set, as on Render: the
+// voice and panels are off.
+const engine = makeEngine(env);
 const speech = engine ? makeSpeech(env, engine) : null;
 // Manga on both: the fallback reads Suwayomi's sources through the one on AWS (SUWAYOMI_URL), or MangaDex alone without it.
 const mangaOn = env.MANGADEX;
@@ -67,6 +83,15 @@ if (archiveMb > 0) {
   mangaOptions.archive = archive;
 }
 if (env.SUWAYOMI_URL) mangaOptions.suwayomi = env.SUWAYOMI_URL;
+// The storage pool (manga/pool.ts, ADR 0004): readers' chapters in several free buckets. Any
+// server asks it for a page before asking the site.
+let storagePool: Pool | null = null;
+const poolOf = poolMembers(process.env);
+if (env.POOL_MEMBERS && poolOf.length) {
+  storagePool = makeStoragePool({ db: primary.pool, members: poolOf });
+  const pages = storagePool;
+  mangaOptions.pooled = (chapterId, n) => pages.page(chapterId, n);
+}
 // Gemini, through the worker's proxy for the AI accounts, on the laptop only (lib/gemini.ts). Both
 // servers go by what it has said, kept in Supabase: which series found are one (manga/same.ts) and
 // which cards don't belong in Browse's tabs (manga/curate.ts).
@@ -76,11 +101,28 @@ if (mangaOn) {
   mangaOptions.curate = makeCurate({ checks: pgChecks(primary.pool), gemini });
 }
 const manga = mangaOn ? makeManga(mangaOptions) : null;
-// Manga panels from the panel model, for any reader with a seat, on the laptop only: the fallback's
-// free plan hasn't the processor, so there readers' devices find them, and panels kept serve all.
+// A regional server puts the chapters its readers fetch in the pool, where there's room (manga/uploads.ts).
+let uploads: Uploads | null = null;
+if (manga && storagePool && env.POOL_UPLOADS) uploads = makeUploads({ pool: storagePool, manga });
+// Manga panels from the panel model, for any reader with a seat, wherever there's an engine. Without
+// one, as on Render, readers' devices find them, and panels kept serve all.
 let panels: ReturnType<typeof makePanels> | null = null;
 if (manga && engine) panels = makePanels(env, engine);
-const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, panels, engine, redis };
+// On GCP, this month's egress, counted each minute (lib/egress.ts): near the owner's limit, /health
+// says so and the app stops choosing this server.
+let egress: Egress | null = null;
+let egressAt: NodeJS.Timeout | undefined;
+if (env.GCP_EGRESS_LIMIT_MB) {
+  const counting = makeEgress({ file: env.EGRESS_FILE, card: env.EGRESS_CARD, limitMb: env.GCP_EGRESS_LIMIT_MB });
+  const tick = () => void counting.tick().catch((err) => log.warn({ err }, 'couldn’t count this month’s egress'));
+  tick();
+  egressAt = setInterval(tick, 60_000);
+  egress = counting;
+}
+// The busy sign, where the owner set its threshold (lib/busy.ts).
+let busy: (() => boolean) | null = null;
+if (env.BUSY_LAG_MS) busy = makeBusy(env.BUSY_LAG_MS).busy;
+const deps = { env, db: primary.db, pool: primary.pool, mirror, storage, auth: makeAuth(env, primary.db), speech, manga, uploads, storagePool, egress, busy, panels, engine, redis, reads };
 if (env.NODE_ENV === 'production' && !env.PUBLIC_URL) log.warn('PUBLIC_URL is not set, so logging in with Google can’t send readers back here');
 
 // Panels from an earlier round of the model go to the archive before any reader is served, so
@@ -151,7 +193,10 @@ if (manga && !light) {
 // Supabase.
 let keepAt: NodeJS.Timeout | undefined;
 if (manga && (env.MANGA_KEEP ?? onThinkPad(env))) {
-  const keeper = makeKeeper(manga, mirror?.pool ?? primary.pool);
+  // Readers' next chapters in the storage pool (ADR 0003, ADR 0004), when it's set.
+  let cloud: Cloud | undefined;
+  if (storagePool) cloud = makeCloud({ pool: storagePool, manga });
+  const keeper = makeKeeper(manga, mirror?.pool ?? primary.pool, undefined, cloud);
   let keeping = false;
   const turn = async (now = false) => {
     if (keeping) return;
@@ -217,18 +262,20 @@ if (Object.keys(runNow).length) {
 const stop = () => {
   log.info('shutting down');
   clearInterval(chores);
+  clearInterval(egressAt);
   clearInterval(warming);
   clearTimeout(prefetchAt);
   clearTimeout(keepAt);
   clearTimeout(fillAt);
   clearInterval(commands);
   prefetching.abort();
+  copying.abort();
   void speech?.close();
   void panels?.close();
   void engine?.close();
   void redis?.close();
   server.close(() => {
-    void Promise.all([primary.pool.end(), mirror?.pool.end()]).finally(() => process.exit(0));
+    void Promise.all([primary.pool.end(), mirror?.pool.end(), copy?.pool.end()]).finally(() => process.exit(0));
   });
   setTimeout(() => process.exit(0), 10_000).unref();
 };

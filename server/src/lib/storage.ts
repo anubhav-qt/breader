@@ -86,9 +86,9 @@ export function makeStorage(env: Env) {
     },
 
     /** A small object whole (a kept answer, lib/answers.ts), or null when it isn't there. */
-    async read(key: string, signal?: AbortSignal): Promise<Buffer | null> {
+    async read(key: string, signal?: AbortSignal, bucket = Bucket): Promise<Buffer | null> {
       try {
-        const r = await s3.send(new GetObjectCommand({ Bucket, Key: key }), { abortSignal: signal });
+        const r = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: signal });
         if (!r.Body) return null;
         return Buffer.from(await r.Body.transformToByteArray());
       } catch (e) {
@@ -109,19 +109,23 @@ export function makeStorage(env: Env) {
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentLength: size, ...checksum }));
     },
 
-    /** Every object under a prefix, with its size, a page (1,000) per request. */
-    async *list(prefix: string): AsyncGenerator<{ key: string; size: number }> {
+    /** Every object under a prefix, with its size and ETag, a page (1,000) per request. */
+    async *list(prefix: string, bucket = Bucket): AsyncGenerator<{ key: string; size: number; etag: string }> {
       let token: string | undefined;
       do {
-        const r = await s3.send(new ListObjectsV2Command({ Bucket, Prefix: prefix, ContinuationToken: token }));
-        for (const o of r.Contents ?? []) if (o.Key) yield { key: o.Key, size: o.Size ?? 0 };
+        const r = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+        for (const o of r.Contents ?? []) {
+          if (!o.Key) continue;
+          yield { key: o.Key, size: o.Size ?? 0, etag: (o.ETag ?? '').replaceAll('"', '') };
+        }
         token = r.IsTruncated ? r.NextContinuationToken : undefined;
       } while (token);
     },
 
-    async remove(key: string) {
-      await s3.send(new DeleteObjectCommand({ Bucket, Key: key }));
+    async remove(key: string, bucket = Bucket) {
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     },
+
 
     /** Local stand-ins only: make the buckets and let the app's origins upload from the browser. */
     async ensureBuckets(origins: string[]) {

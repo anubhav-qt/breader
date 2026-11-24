@@ -7,10 +7,12 @@ import { makeApp } from '../src/app.ts';
 import { connectRedis, type Store } from '../src/lib/cache.ts';
 import { log } from '../src/log.ts';
 import { Disk } from '../src/manga/disk.ts';
-import { makeManga } from '../src/manga/index.ts';
+import { makeManga, type MangaOptions } from '../src/manga/index.ts';
 import { ANTHOLOGY_ID, DOUJINSHI_ID, plain, USER_AGENT } from '../src/manga/mangadex.ts';
 import { Gate, Pace } from '../src/manga/pace.ts';
+import type { Uploads } from '../src/manga/uploads.ts';
 import { app as plainApp, browser, deps, ORIGIN } from './helpers.ts';
+import { jpeg as poolJpeg } from './pool-fakes.ts';
 
 /*
  * A MangaDex of our own, answering the calls Breader makes as MangaDex does, so the rules it keeps
@@ -213,11 +215,11 @@ function fakeRedis() {
   return { store, keys };
 }
 
-async function setup(store?: Store) {
+async function setup(store?: Store, more: Partial<MangaOptions> = {}, uploads: Uploads | null = null) {
   const dex = fakeDex();
   const dir = await mkdtemp(join(tmpdir(), 'breader-manga-'));
-  const manga = makeManga({ dir, cacheBytes: 64 * 1024 * 1024, fetch: dex.fetch, pace: { api: [1000, 1000], home: [1000, 1000] }, store });
-  const app = makeApp({ ...deps, manga });
+  const manga = makeManga({ dir, cacheBytes: 64 * 1024 * 1024, fetch: dex.fetch, pace: { api: [1000, 1000], home: [1000, 1000] }, store, ...more });
+  const app = makeApp({ ...deps, manga, uploads });
   const b = browser(undefined, app);
   const r = await b.post('/v1/libraries', { libraryId: crypto.randomUUID(), key: newLibraryKey() });
   expect(r.status).toBe(201);
@@ -564,6 +566,36 @@ describe('MangaDex through the laptop', () => {
     const r = await b.get('/v1/manga/search?q=busy');
     expect(r.status).toBe(503);
     expect(r.body.code).toBe('manga_busy');
+  });
+});
+
+describe('the storage pool before MangaDex', () => {
+  it('reads a full size page from the pool, asking MangaDex@Home nothing, and the saver copy from MangaDex', async () => {
+    const asked: string[] = [];
+    const pooled = async (chapterId: string, n: number) => {
+      asked.push(`${chapterId}:${n}`);
+      if (n === 1) return { data: poolJpeg(20), type: 'image/jpeg' };
+      return null;
+    };
+    const { b, dex } = await setup(undefined, { pooled });
+    const r = await b.get(`/v1/manga/chapter/${ch(7)}/1`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('image/jpeg');
+    expect(dex.asked('node1.mangadex.network', /./)).toHaveLength(0);
+    // Not in the pool: from MangaDex.
+    expect((await b.get(`/v1/manga/chapter/${ch(7)}/0`)).status).toBe(200);
+    expect(dex.asked('node1.mangadex.network', /./)).toHaveLength(1);
+    expect((await b.get(`/v1/manga/chapter/${ch(7)}/2?saver=1`)).status).toBe(200);
+    expect(asked).toEqual([`${ch(7)}:1`, `${ch(7)}:0`]);
+  });
+
+  it('tells the uploads each full size page it served, not the saver copy', async () => {
+    const saw: string[] = [];
+    const uploads = { saw: async (chapterId: string, n: number) => { saw.push(`${chapterId}:${n}`); } } as unknown as Uploads;
+    const { b } = await setup(undefined, {}, uploads);
+    await b.get(`/v1/manga/chapter/${ch(7)}/1`);
+    await b.get(`/v1/manga/chapter/${ch(7)}/0?saver=1`);
+    expect(saw).toEqual([`${ch(7)}:1`]);
   });
 });
 

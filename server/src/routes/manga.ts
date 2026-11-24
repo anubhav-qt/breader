@@ -93,7 +93,10 @@ export function mangaRoutes(deps: Deps) {
   // A page each second or two, and a chapter or a few at once when they're kept to read offline.
   r.get('/manga/chapter/:id/:n{[0-9]{1,4}}', async (c) => {
     const { saver } = parse(MangaPageQuery, c.req.query());
-    return picture(c, await manga!.page(id(c), Number(c.req.param('n')), !!saver));
+    const n = Number(c.req.param('n'));
+    const page = await manga!.page(id(c), n, !!saver);
+    if (deps.uploads && !saver) void deps.uploads.saw(id(c), n);
+    return picture(c, page);
   });
 
   r.get('/manga/cover/:id/:file{[\\w-]{1,80}\\.(?:jpe?g|png|webp|gif)}', async (c) => {
@@ -167,7 +170,10 @@ export function mangaRoutes(deps: Deps) {
   });
 
   r.get('/manga/source/chapter/:id/:n{[0-9]{1,4}}', async (c) => {
-    return picture(c, await manga!.sourcePage(sourceId(c), Number(c.req.param('n'))));
+    const n = Number(c.req.param('n'));
+    const page = await manga!.sourcePage(sourceId(c), n);
+    if (deps.uploads) void deps.uploads.saw(sourceId(c), n);
+    return picture(c, page);
   });
 
   r.get('/manga/source/:id', async (c) => {
