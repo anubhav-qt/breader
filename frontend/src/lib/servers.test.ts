@@ -87,14 +87,19 @@ describe('tryOrder', () => {
 
 describe('signsOf', () => {
   it('reads busy and near from a health answer', () => {
-    expect(signsOf({ ok: true })).toEqual({ near: false, busy: false });
-    expect(signsOf({ ok: true, busy: true })).toEqual({ near: false, busy: true });
-    expect(signsOf({ ok: true, egress: { usedMb: 900, limitMb: 800, near: true } })).toEqual({ near: true, busy: false });
+    expect(signsOf({ ok: true })).toEqual({ near: false, busy: false, jsonOnly: false });
+    expect(signsOf({ ok: true, busy: true })).toEqual({ near: false, busy: true, jsonOnly: false });
+    expect(signsOf({ ok: true, egress: { usedMb: 900, limitMb: 800, near: true } })).toEqual({ near: true, busy: false, jsonOnly: false });
+  });
+
+  it('reads that a server sends JSON alone, and only from a true', () => {
+    expect(signsOf({ ok: true, jsonOnly: true })).toEqual({ near: false, busy: false, jsonOnly: true });
+    expect(signsOf({ ok: true, jsonOnly: 'yes' })).toEqual({ near: false, busy: false, jsonOnly: false });
   });
 
   it('takes nothing from an answer that isn’t one', () => {
-    expect(signsOf(null)).toEqual({ near: false, busy: false });
-    expect(signsOf('busy')).toEqual({ near: false, busy: false });
-    expect(signsOf({ busy: 'yes', egress: { near: 1 } })).toEqual({ near: false, busy: false });
+    expect(signsOf(null)).toEqual({ near: false, busy: false, jsonOnly: false });
+    expect(signsOf('busy')).toEqual({ near: false, busy: false, jsonOnly: false });
+    expect(signsOf({ busy: 'yes', egress: { near: 1 } })).toEqual({ near: false, busy: false, jsonOnly: false });
   });
 });

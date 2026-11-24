@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { IconCheck } from '../../components/icons';
 import { useSyncStatus, type SyncStatus } from '../../data/sync';
-import { isHome } from '../../lib/api';
+import { isStandby } from '../../lib/api';
 import { normalizeKey } from '../../lib/key';
 import { FreshKey } from './FreshKey';
 import './add.css';
@@ -25,7 +25,7 @@ function syncLine(s: SyncStatus): string | null {
   const waiting = s.pending === 1 ? '1 change waiting to sync' : `${s.pending} changes waiting to sync`;
   switch (s.state) {
     case 'syncing': return 'Syncing…';
-    case 'synced': return s.pending ? waiting : `Synced${isHome(s.via) ? '' : ' through the backup server'}.`;
+    case 'synced': return s.pending ? waiting : `Synced${isStandby(s.via) ? ' through the backup server' : ''}.`;
     case 'offline': return `Offline.${s.pending ? ` ${waiting}.` : ''} Your books are safe in this browser.`;
     case 'error': return s.message ?? 'Sync stopped. Breader will try again.';
     default: return null;

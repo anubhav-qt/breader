@@ -4,13 +4,14 @@
 #   - Cloudflare WARP carries every outgoing IPv4 connection (MangaDex, ghcr.io, GitHub), and
 #   - cloudflared (a Cloudflare Tunnel) brings readers in, as on the ThinkPad.
 # Both are system services that start again after a reboot. Then swap, Docker, and the repository's
-# infra/ folder. README.md › GCP. Run it as the machine's own user:
-#   TUNNEL_TOKEN=... sh setup.sh
-# (the tunnel's token, from its page in Cloudflare; it is kept by cloudflared's service, not here).
+# infra/ folder. README.md › GCP. Run it as the machine's own user, with the tunnel's token in
+# ~/tunnel.token (`cloudflared tunnel token <name> | ssh <machine> 'umask 077; cat > ~/tunnel.token'`,
+# so it never shows): sh setup.sh. cloudflared's service keeps the token; the file is deleted.
 set -eu
 
-if [ -z "${TUNNEL_TOKEN:-}" ]; then
-  echo "set TUNNEL_TOKEN to the tunnel's token" >&2
+TOKEN_FILE="$HOME/tunnel.token"
+if ! systemctl is-enabled cloudflared > /dev/null 2>&1 && [ ! -s "$TOKEN_FILE" ]; then
+  echo "put the tunnel's token in $TOKEN_FILE first" >&2
   exit 1
 fi
 
@@ -25,7 +26,8 @@ curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg \
 echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $VERSION_CODENAME main" \
   | sudo tee /etc/apt/sources.list.d/cloudflare-client.list > /dev/null
 sudo apt-get update -y
-sudo apt-get install -y cloudflare-warp
+# Without its recommends: they are a desktop's (sound, pictures), hundreds of packages.
+sudo apt-get install -y --no-install-recommends cloudflare-warp
 sudo systemctl enable --now warp-svc
 # warp-svc waits a moment for its socket before it takes commands.
 for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -36,6 +38,12 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 if ! warp-cli --accept-tos registration show > /dev/null 2>&1; then
   warp-cli --accept-tos registration new
+fi
+# IPv4 alone goes through WARP. IPv6 stays the machine's own (Supabase, the tunnel, SSH), and DNS
+# stays Google's.
+warp-cli --accept-tos mode tunnel_only
+if ! warp-cli --accept-tos tunnel ip list | grep -q '::/0'; then
+  warp-cli --accept-tos tunnel ip add-range ::/0
 fi
 warp-cli --accept-tos connect
 
@@ -66,8 +74,9 @@ echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudf
 sudo apt-get update -y
 sudo apt-get install -y cloudflared
 if ! systemctl is-enabled cloudflared > /dev/null 2>&1; then
-  sudo cloudflared service install "$TUNNEL_TOKEN"
+  sudo cloudflared service install "$(cat "$TOKEN_FILE")"
 fi
+rm -f "$TOKEN_FILE"
 
 # 1 GB of memory is little: 2 GB of swap on disk, so a busy moment slows things down instead of
 # stopping them.
@@ -85,7 +94,7 @@ curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --yes --dearm
 echo "deb [signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $VERSION_CODENAME stable" \
   | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 sudo apt-get update -y
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin git
+sudo apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-compose-plugin git
 sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER"
 

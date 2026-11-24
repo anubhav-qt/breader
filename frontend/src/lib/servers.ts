@@ -65,14 +65,17 @@ export interface Signs {
   near: boolean;
   /** It's busy just now: not picked, but tried when nothing else answers. */
   busy: boolean;
+  /** It sends JSON alone (GCP): never asked for manga, the voice or panels. */
+  jsonOnly: boolean;
 }
 
 /** The signs in a /health answer; none in one that isn't an object. */
 export function signsOf(health: unknown): Signs {
-  const signs: Signs = { near: false, busy: false };
+  const signs: Signs = { near: false, busy: false, jsonOnly: false };
   if (typeof health !== 'object' || health === null) return signs;
-  const h = health as { busy?: unknown; egress?: { near?: unknown } };
+  const h = health as { busy?: unknown; jsonOnly?: unknown; egress?: { near?: unknown } };
   if (h.busy === true) signs.busy = true;
+  if (h.jsonOnly === true) signs.jsonOnly = true;
   if (h.egress?.near === true) signs.near = true;
   return signs;
 }

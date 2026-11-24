@@ -321,6 +321,73 @@ describe('picking among servers', () => {
     expect(asked.map((a) => a.url)).toEqual([`${HOME}/health`, `${HOME}/v1/me`]);
   });
 
+  /** US is quickest and sends JSON alone (GCP); home is slower but well; EU is busy. */
+  async function onJsonOnly(standby = '') {
+    const loaded = await loadMany(standby);
+    slow.set(HOME, 2000);
+    health.set(EU, { ok: true, busy: true });
+    health.set(US, { ok: true, jsonOnly: true });
+    loaded.startPicking();
+    await settle();
+    asked = [];
+    return loaded;
+  }
+
+  it('uses a server that sends JSON alone for everything but manga, the voice and panels', async () => {
+    const { api, mangaUrl } = await onJsonOnly();
+    expect(api.via).toBe(US);
+    await api.get('/v1/me');
+    await api.manga.get('/v1/manga/search?q=frieren');
+    await api.manga.raw('/v1/manga/chapter/x/0', undefined);
+    await api.laptop.get('/v1/speech/voices');
+    expect(asked.map((a) => a.url)).toEqual([
+      `${US}/v1/me`,
+      `${HOME}/v1/manga/search?q=frieren`,
+      `${HOME}/v1/manga/chapter/x/0`,
+      `${HOME}/v1/speech/voices`,
+    ]);
+    expect(mangaUrl('/v1/manga/anilist/cover/1')).toBe(`${HOME}/v1/manga/anilist/cover/1`);
+  });
+
+  it('asks the next server that sends more than JSON when home is away, never the JSON one', async () => {
+    const { api } = await onJsonOnly(AZ);
+    down.add(HOME);
+    await api.manga.get('/v1/manga/search?q=frieren');
+    await api.laptop.get('/v1/speech/voices');
+    const bases = asked.map((a) => new URL(a.url).origin);
+    expect(bases).not.toContain(US);
+    expect(bases).toEqual([HOME, EU, HOME, EU]);
+  });
+
+  it('asks the standby server for manga while home is away and the JSON one is in use', async () => {
+    const { api, mangaUrl, startPicking } = await loadMany(AZ, `${HOME},${US}`);
+    health.set(US, { ok: true, jsonOnly: true });
+    down.add(HOME);
+    await api.get('/v1/me');
+    startPicking();
+    await settle();
+    expect(api.via).toBe(US);
+    asked = [];
+    await api.manga.get('/v1/manga/search?q=frieren');
+    await api.laptop.get('/v1/speech/voices');
+    expect(asked.map((a) => a.url)).toEqual([
+      `${AZ}/v1/manga/search?q=frieren`,
+      `${HOME}/v1/speech/voices`,
+      `${AZ}/v1/speech/voices`,
+    ]);
+    expect(mangaUrl('/v1/manga/anilist/cover/1')).toBe(`${AZ}/v1/manga/anilist/cover/1`);
+  });
+
+  it('asks a server for manga again once it no longer says it sends JSON alone', async () => {
+    const { api, startPicking } = await onJsonOnly();
+    health.delete(US);
+    startPicking();
+    await settle();
+    asked = [];
+    await api.manga.get('/v1/manga/search?q=frieren');
+    expect(asked.map((a) => a.url)).toEqual([`${US}/v1/manga/search?q=frieren`]);
+  });
+
   it('loads manga pictures from the server in use', async () => {
     const { api, mangaUrl } = await loadMany();
     down.add(HOME);

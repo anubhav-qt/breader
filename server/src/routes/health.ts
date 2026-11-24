@@ -12,7 +12,7 @@ export function healthRoutes(deps: Deps) {
    * Liveness, with no database call: the app probes this to decide whether to fail back. On the
    * laptop, how busy its engines are (ADR 0002): engines up, workers busy of all, jobs waiting, short of memory.
    * Where set, the busy sign (lib/busy.ts) and this month's egress (lib/egress.ts): the app chooses
-   * another server while either says so.
+   * another server while either says so. And whether it sends JSON alone (JSON_ONLY).
    */
   r.get('/health', (c) => {
     const s = engine?.stats();
@@ -27,6 +27,8 @@ export function healthRoutes(deps: Deps) {
     const out: Record<string, unknown> = { ok: true, role: env.ROLE, release: env.RELEASE };
     if (engineBusy) out.engine = engineBusy;
     if (busy?.()) out.busy = true;
+    // JSON alone (GCP, lib/media.ts): the app asks it for no manga, voice or panels.
+    if (env.JSON_ONLY) out.jsonOnly = true;
     if (egress) out.egress = { usedMb: egress.usedMb(), limitMb: egress.limitMb, near: egress.near() };
     return c.json(out);
   });

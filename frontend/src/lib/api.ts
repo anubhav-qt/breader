@@ -6,7 +6,8 @@ import { pickServer, serverList, signsOf, standbyList, tryOrder, type Timings } 
  * voices and the panel model, and others anywhere, each the same API. Once started (startPicking),
  * the app times each one's /health now and every few minutes, and picks: home, unless it's away or
  * much slower than the quickest other. A server whose /health says it's busy isn't picked; one near
- * its month's egress limit (GCP, ADR 0004) isn't used at all. Standby servers (VITE_API_STANDBY,
+ * its month's egress limit (GCP, ADR 0004) isn't used at all, and one that sends JSON alone (GCP)
+ * is never asked for manga, the voice or panels. Standby servers (VITE_API_STANDBY,
  * Azure) are timed and asked only while home is away, so they sleep. A timeout, a network error or a gateway
  * error (502–504, or Cloudflare's 530 when a tunnel is down) moves to the next server and retries
  * once; every write is safe to repeat.
@@ -26,6 +27,8 @@ export type ApiBase = string;
 export const servers = (): readonly ApiBase[] => SERVERS;
 /** Whether `base` is the home server. */
 export const isHome = (base: ApiBase) => base === HOME;
+/** Whether `base` is a standby server, asked only while home is away (Azure). */
+export const isStandby = (base: ApiBase) => STANDBY.includes(base);
 
 const TIMEOUT = 4000;
 /** How often the servers are timed: often while away from home, so the app goes back soon. */
@@ -44,6 +47,8 @@ const heard = new Map<ApiBase, number>();
 const timings: Timings = new Map();
 /** Servers whose month's egress is near its limit (GCP, ADR 0004), as their /health said when last timed. */
 const near = new Set<ApiBase>();
+/** Servers that send JSON alone (GCP, ADR 0004), as their /health said when last timed. */
+const jsonOnly = new Set<ApiBase>();
 /** Home gave no answer the last time it was asked: a gateway's, or none at all. */
 let homeMissed = false;
 const answered = (base: ApiBase, yes: boolean) => {
@@ -118,6 +123,11 @@ async function time(base: ApiBase): Promise<number | null> {
     if (!res.ok) return null;
     const ms = performance.now() - started;
     const signs = signsOf(await res.json().catch(() => null));
+    if (signs.jsonOnly) {
+      jsonOnly.add(base);
+    } else {
+      jsonOnly.delete(base);
+    }
     if (signs.near) {
       near.add(base);
       return null;
@@ -166,6 +176,24 @@ function nextAfter(first: ApiBase): ApiBase | null {
   return order[1] ?? null;
 }
 
+/** The servers of `order` that send more than JSON: manga, the voice and panels. */
+function withMedia(order: ApiBase[]): ApiBase[] {
+  return order.filter((s) => !jsonOnly.has(s));
+}
+
+/** The server for manga: the one in use, unless it sends JSON alone (GCP); then the next that sends more. */
+function mangaServer(): ApiBase {
+  const order = withMedia(tryOrder(inUse(), active, timings, near));
+  return order[0] ?? HOME;
+}
+
+/** Like nextAfter, of the servers that send more than JSON. */
+function nextWithMedia(first: ApiBase): ApiBase | null {
+  const order = withMedia(tryOrder(inUse(), first, timings, near));
+  const rest = order.filter((s) => s !== first);
+  return rest[0] ?? null;
+}
+
 async function request<T>(method: string, path: string, body?: unknown, timeout = TIMEOUT): Promise<T> {
   if (navigator.onLine === false) throw new OfflineError();
   const init: RequestInit = {
@@ -189,8 +217,9 @@ async function request<T>(method: string, path: string, body?: unknown, timeout 
 
 /*
  * The server voice and panels: from the home server, and a slow answer doesn't move the app
- * elsewhere. When home is away (a gateway error, or no answer), the next server is asked: Azure and
- * GCP reach Modal's engine (ADR 0004), and one with no engine says so (speech_off, panels_off).
+ * elsewhere. When home is away (a gateway error, or no answer), the next server that sends more than
+ * JSON is asked: Azure reaches Modal's engine (ADR 0004), and one with no engine says so (speech_off,
+ * panels_off).
  */
 const LAPTOP_GATEWAY = new Set([502, 504, 530]);
 
@@ -258,7 +287,7 @@ const VOICE_OFF = 'Breader’s computer can’t be reached just now.';
 async function laptop(path: string, body: unknown, timeout: number): Promise<Response> {
   if (navigator.onLine === false) throw new OfflineError();
   let res = await fetchFrom(HOME, path, body, timeout);
-  const other = nextAfter(HOME);
+  const other = nextWithMedia(HOME);
   if (other && (await away(res))) res = await fetchFrom(other, path, body, timeout);
   if (res.ok) return res;
   throw await failure(res, VOICE_OFF);
@@ -267,20 +296,20 @@ async function laptop(path: string, body: unknown, timeout: number): Promise<Res
 /*
  * Manga: home has MangaDex and Suwayomi's sites, the others MangaDex (and Suwayomi's, when set).
  * The server the app is on is asked first, so a home that's down doesn't hold every page up, and
- * the next one when that one is away.
+ * the next one when that one is away. One that sends JSON alone (GCP) is never asked.
  */
 async function manga(path: string, body: unknown, timeout: number): Promise<Response> {
   if (navigator.onLine === false) throw new OfflineError();
-  const first = active;
+  const first = mangaServer();
   let res = await fetchFrom(first, path, body, timeout);
-  const second = nextAfter(first);
+  const second = nextWithMedia(first);
   if (second && (await movesOn(res))) res = await fetchFrom(second, path, body, timeout);
   if (res.ok) return res;
   throw await failure(res, 'Breader’s computer can’t be reached.');
 }
 
-/** An address for a manga picture to load straight from, on the copy of the server the app is on. */
-export const mangaUrl = (path: string) => active + path;
+/** An address for a manga picture to load straight from: the server manga is asked of (mangaServer). */
+export const mangaUrl = (path: string) => mangaServer() + path;
 
 export const api = {
   /** The home server alone, for the server voice: JSON, or the response itself for its sound. */

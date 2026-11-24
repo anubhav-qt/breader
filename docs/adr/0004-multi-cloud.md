@@ -43,10 +43,13 @@
 - The VM has IPv6 only (a public IPv4 costs money). Readers come in through a Cloudflare Tunnel.
   Outgoing IPv4 (MangaDex, ghcr.io, GitHub) goes through Cloudflare WARP. Supabase's poolers have no
   IPv6, so GCP uses the direct host `db.<ref>.supabase.co`. `infra/gcp/setup.sh` and `compose.yml`.
-- MangaDex sees a shared Cloudflare WARP address there. Whether it rate-limits that: not checked yet.
-- `JSON_ONLY`: it sends no pictures or sound. A page the pool holds is a 302 to the pool's CDN;
-  anything else a 302 to `MEDIA_ELSEWHERE` (an Azure server), or a 503 `media_elsewhere`, and the
-  app asks the next server (`server/src/lib/media.ts`).
+- Live since 2026-11-24 in Oregon (`us-west1-b`), in `VITE_API_SERVERS` for readers in the
+  Americas. It takes each new image itself (`infra/gcp/update.sh`, a link to `infra/update.sh`).
+- API calls alone (owner's choice): no manga (`MANGADEX` off, no Suwayomi), no voices, no panels.
+  `JSON_ONLY` sends no pictures or sound, and its `/health` says `jsonOnly`, so the app asks it
+  nothing of those and asks home, or Azure while home is away (`frontend/src/lib/api.ts`). A
+  picture asked of it anyway is a 302 to the pool's CDN, or a 503 `media_elsewhere`
+  (`server/src/lib/media.ts`).
 - Egress: the network card's sent bytes, counted for the month (`server/src/lib/egress.ts`). At
   `GCP_EGRESS_LIMIT_MB` (owner: 800 of the free 1 GB), `/health` says `egress.near`, the app stops
   using it, and the standby stops feeding.
@@ -60,7 +63,7 @@
 - The same image, protocol (`/v1/info`, `/v1/run`) and `ENGINE_TOKEN` as the ThinkPad's engine.
   One container at most, gone after two quiet minutes.
 - `ENGINE_FALLBACK_URLS`: a job goes there only when every engine in `ENGINE_URLS` is down or
-  turns it away as busy. Azure and GCP list Modal alone. The API asks it nothing until a job comes,
+  turns it away as busy. Azure lists Modal alone; GCP has no engine. The API asks it nothing until a job comes,
   and nothing again after two quiet minutes, so it can stop.
 - The app never calls Modal itself: it asks home for the voice and panels, and the next server
   when home is away (`frontend/src/lib/api.ts`).
@@ -74,13 +77,12 @@
 
 - GCP: don't create the VM and leave it out of `VITE_API_SERVERS`. The ThinkPad's worker feeds the
   copies as before; with it off, they wait.
-- Modal: don't set `ENGINE_FALLBACK_URLS`. Azure and GCP then have no voices or panels (devices do
-  their own), as on Render.
+- Modal: don't set `ENGINE_FALLBACK_URLS`. Azure then has no voices or panels (devices do
+  their own).
 
 ## Not checked yet
 
-- cloudflared and WARP side by side on one VM; WARP on Debian trixie; the card name `ens4`.
-- The Supabase direct host over IPv6 from GCP; the GCP memory fitting 1 GB.
+- The GCP memory under load: at rest it uses 740 MB of its 964 and some swap.
 - Free limits for Tigris and Fastly writes and requests; CloudFront in front of B2, Tigris, Fastly.
 - Modal: the image with `add_python`, its `node` user and the voices volume; request time limits.
 - Azure: the free grant against one region; cold starts against the app's timing; the reader's

@@ -105,10 +105,15 @@ describe('the signs in /health', () => {
     expect((await bodyOf(await app.request('/health'))).busy).toBe(true);
   });
 
-  it('says neither where they’re off', async () => {
+  it('says it sends JSON alone, so the app asks it for no manga, voice or panels', async () => {
+    expect((await bodyOf(await appWith().request('/health'))).jsonOnly).toBe(true);
+  });
+
+  it('says none of them where they’re off', async () => {
     const body = await bodyOf(await makeApp(deps).request('/health'));
     expect(body.busy).toBeUndefined();
     expect(body.egress).toBeUndefined();
+    expect(body.jsonOnly).toBeUndefined();
   });
 
   it('is busy past the threshold only', () => {

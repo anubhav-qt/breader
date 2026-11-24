@@ -1,6 +1,7 @@
-# The GCP server (ADR 0004): an e2-micro (1 GB) with IPv6 only, set up once by setup.sh. It runs
-# the API as a JSON-only regional server, its own read copy, and the standby that feeds every read
-# copy while the ThinkPad is quiet. Settings come from infra/gcp/.env (copy .env.example).
+# The GCP server (ADR 0004): an e2-micro (1 GB) in Oregon with IPv6 only, set up once by setup.sh.
+# It runs the API as a JSON-only regional server for readers in the Americas (no manga, voice or
+# panels: the app asks home, or Azure while home is away), its own read copy, and the standby that
+# feeds every read copy while the ThinkPad is quiet. Settings come from infra/gcp/.env (copy .env.example).
 #   docker compose -f infra/gcp/compose.yml up -d
 #
 # Every service uses the machine's own network: Docker's bridge has no IPv6, and the machine
@@ -50,8 +51,10 @@ services:
     environment:
       ROLE: fallback
       MACHINE: gcp
-      # Pictures and sound go elsewhere (MEDIA_ELSEWHERE, the pool's CDNs): egress costs money here.
+      # API calls alone: no pictures or sound (egress costs money here), and no manga at all, so it
+      # needs no Suwayomi. Its /health says jsonOnly, and the app asks home or Azure for those.
       JSON_ONLY: "true"
+      MANGADEX: "false"
       GCP_EGRESS_LIMIT_MB: "${GCP_EGRESS_LIMIT_MB:-800}"
       EGRESS_FILE: /data/egress/egress.json
       COPY_URL: "postgres://breader:${COPY_PASSWORD}@127.0.0.1:5432/breader"
@@ -59,7 +62,7 @@ services:
       CLIENT_IP_HEADER: cf-connecting-ip
       NODE_OPTIONS: --max-old-space-size=256
       MALLOC_ARENA_MAX: "2"
-    volumes: ["egress:/data/egress", "manga:/data/manga"]
+    volumes: ["egress:/data/egress"]
     healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"], interval: 10s }
     mem_limit: 450m
 
@@ -81,4 +84,3 @@ services:
 volumes:
   copy: {}
   egress: {}
-  manga: {}

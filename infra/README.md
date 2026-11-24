@@ -11,7 +11,7 @@ is the one cost. `breader.example` stands in for the real domain below.
 | `api.breader.example` | Cloudflare Tunnel → the laptop | `api` (ROLE=laptop), plus `worker`, `mirror`, `tunnel` |
 | `fb.breader.example` | Render, Singapore | the same image as ROLE=fallback |
 | `az1.breader.example` | Azure Container Apps, Southeast Asia | the same, asleep when unused (ADR 0004) |
-| `gcp.breader.example` | Cloudflare Tunnel → a GCP e2-micro | the same, JSON only, plus a standby feeder (ADR 0004) |
+| `gcp.breader.example` | Cloudflare Tunnel → a GCP e2-micro | the same, API calls alone (JSON only, no manga), plus a standby feeder (ADR 0004) |
 | `<workspace>--breader-engine-engine.modal.run` | Modal | an engine on call for the voices and panels (ADR 0004) |
 | — | Supabase, Mumbai | Postgres, the source of truth |
 | — | Cloudflare R2 | book files (`breader-files`) and backups (`breader-backups`) |
@@ -448,22 +448,26 @@ renews only so), then `az containerapp hostname add` and `bind --validation-meth
 `infra/.env.ship`: the app asks it only while home is away, so it sleeps otherwise.
 
 **GCP.** An e2-micro, Debian, IPv6 only (no public IPv4). Make a tunnel in Cloudflare
-(`gcp.breader.example` → `http://localhost:8787`), then on the VM:
+(`gcp.breader.example` → `http://localhost:8787`). Put its token on the VM without showing it
+(`cloudflared tunnel token <name> | gcloud compute ssh <vm> --command='umask 077; cat > ~/tunnel.token'`;
+`scp` fails over IPv6, so send files with `--command='cat > f' < f`), then on the VM:
 
 ```sh
-TUNNEL_TOKEN=<the tunnel's token> sh setup.sh    # WARP, cloudflared, swap, Docker, infra/
+sh setup.sh                                        # WARP, cloudflared, swap, Docker, infra/
 cp infra/gcp/.env.example infra/gcp/.env          # and fill it in
 docker compose -f infra/gcp/compose.yml up -d
+sh infra/gcp/update.sh --install                   # takes each new image, as on the ThinkPad
 ```
 
-It sends no pictures (`JSON_ONLY`): the pool's CDNs and `MEDIA_ELSEWHERE` (an Azure server) do.
-It counts its egress; at `GCP_EGRESS_LIMIT_MB` its `/health` says `egress.near`, the app stops
+It answers API calls alone: no manga, voices or panels, and no pictures (`JSON_ONLY`); its
+`/health` says `jsonOnly`, so the app asks home or Azure for those. Add it to the Google OAuth
+client and to `VITE_API_SERVERS` in `infra/.env.ship`. It counts its egress; at `GCP_EGRESS_LIMIT_MB` its `/health` says `egress.near`, the app stops
 using it, and its standby stops. The standby feeds every copy in its `COPY_URLS` while the
 ThinkPad's worker is quiet (90 s unheard and its lease lapsed), and hands back when it's heard.
 
 **Modal.** `pip install modal && modal setup`, then
 `modal secret create breader-engine ENGINE_TOKEN=<a new token, also in that API's ENGINE_TOKEN>` and
-`modal deploy infra/modal/engine.py`. Its address goes in `ENGINE_FALLBACK_URLS` on Azure (and GCP),
+`modal deploy infra/modal/engine.py`. Its address goes in `ENGINE_FALLBACK_URLS` on Azure alone,
 never on the ThinkPad, so Modal works only while the ThinkPad is away. It's woken only for a job no other engine can take.
 
 ### Suwayomi on AWS for Render
