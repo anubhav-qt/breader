@@ -441,8 +441,11 @@ sleeps. Each URL's user, host and database must match that server's `COPY_URL`.
 **Azure.** One Container App in Southeast Asia (the free plan allows one environment a
 subscription), asleep (no replica) when unused, two at most. `infra/azure/.env.sg` from
 `infra/azure/.env.example`, then `sh infra/azure/deploy.sh sg southeastasia`; run it again to
-update. Put its address behind Cloudflare as `az1.` (proxied), add it to the Google OAuth client
-and to `VITE_API_SERVERS`.
+update. Its address is `az1.`: in Cloudflare DNS a TXT `asuid.az1` with the app's
+`customDomainVerificationId` and a CNAME `az1` to its address, **DNS only** (Azure's free certificate
+renews only so), then `az containerapp hostname add` and `bind --validation-method CNAME`. Set
+`CLIENT_IP_HEADER=x-forwarded-for`. Add it to the Google OAuth client and to `VITE_API_STANDBY` in
+`infra/.env.ship`: the app asks it only while home is away, so it sleeps otherwise.
 
 **GCP.** An e2-micro, Debian, IPv6 only (no public IPv4). Make a tunnel in Cloudflare
 (`gcp.breader.example` → `http://localhost:8787`), then on the VM:
