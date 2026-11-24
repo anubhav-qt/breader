@@ -1,12 +1,13 @@
 import { isPublicPath } from '@breader/shared/public';
-import { pickServer, serverList, signsOf, tryOrder, type Timings } from './servers';
+import { pickServer, serverList, signsOf, standbyList, tryOrder, type Timings } from './servers';
 
 /*
  * The API runs on any number of servers (ADR 0001, lib/servers.ts): the home server, with the
  * voices and the panel model, and others anywhere, each the same API. Once started (startPicking),
  * the app times each one's /health now and every few minutes, and picks: home, unless it's away or
  * much slower than the quickest other. A server whose /health says it's busy isn't picked; one near
- * its month's egress limit (GCP, ADR 0004) isn't used at all. A timeout, a network error or a gateway
+ * its month's egress limit (GCP, ADR 0004) isn't used at all. Standby servers (VITE_API_STANDBY,
+ * Azure) are timed and asked only while home is away, so they sleep. A timeout, a network error or a gateway
  * error (502–504, or Cloudflare's 530 when a tunnel is down) moves to the next server and retries
  * once; every write is safe to repeat.
  *
@@ -15,6 +16,8 @@ import { pickServer, serverList, signsOf, tryOrder, type Timings } from './serve
  */
 const here = `${location.protocol}//${location.hostname}`;
 const SERVERS = serverList(import.meta.env, here);
+/** Servers asked only while home is away, so they can sleep the rest of the time (lib/servers.ts). */
+const STANDBY = standbyList(import.meta.env, SERVERS);
 /** The home server: the voices and panels are there alone. */
 export const HOME = SERVERS[0];
 /** A server's address. */
@@ -130,11 +133,18 @@ async function time(base: ApiBase): Promise<number | null> {
   }
 }
 
-/** Times every server at once and moves to the one to use (lib/servers.ts pickServer). */
+/** The servers to time and try just now: the standby ones too, only while home is away. */
+function inUse(): ApiBase[] {
+  if (homeMissed) return [...SERVERS, ...STANDBY];
+  return SERVERS;
+}
+
+/** Times every server in use at once and moves to the one to use (lib/servers.ts pickServer). */
 async function pickNow() {
-  const ms = await Promise.all(SERVERS.map(time));
-  SERVERS.forEach((s, i) => timings.set(s, ms[i]));
-  switchTo(pickServer(SERVERS, timings));
+  const list = inUse();
+  const ms = await Promise.all(list.map(time));
+  list.forEach((s, i) => timings.set(s, ms[i]));
+  switchTo(pickServer(list, timings));
 }
 
 function pickLater() {
@@ -146,13 +156,13 @@ function pickLater() {
 
 /** Starts picking the server: now, then every few minutes. Once, as the app starts (main.tsx). */
 export function startPicking() {
-  if (SERVERS.length < 2) return;
+  if (SERVERS.length + STANDBY.length < 2) return;
   void pickNow().finally(pickLater);
 }
 
 /** The server to try after `first`, when it can't be reached: the quickest of the rest. */
 function nextAfter(first: ApiBase): ApiBase | null {
-  const order = tryOrder(SERVERS, first, timings, near);
+  const order = tryOrder(inUse(), first, timings, near);
   return order[1] ?? null;
 }
 

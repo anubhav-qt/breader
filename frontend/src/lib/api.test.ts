@@ -72,6 +72,7 @@ describe('picking among servers', () => {
   const HOME = 'https://home.example';
   const EU = 'https://eu.example';
   const US = 'https://us.example';
+  const AZ = 'https://az.example';
   let down: Set<string>;
   let slow: Map<string, number>;
   /** What a server's /health says, beyond being up. */
@@ -80,9 +81,10 @@ describe('picking among servers', () => {
   let noMedia: Set<string>;
   let clock: number;
 
-  async function loadMany() {
+  async function loadMany(standby = '') {
     vi.resetModules();
     vi.stubEnv('VITE_API_SERVERS', `${HOME},${EU},${US}`);
+    vi.stubEnv('VITE_API_STANDBY', standby);
     vi.stubGlobal('location', { protocol: 'https:', hostname: 'app.example' });
     vi.stubGlobal('navigator', { onLine: true });
     vi.stubGlobal('performance', { now: () => clock });
@@ -229,6 +231,60 @@ describe('picking among servers', () => {
     const res = await api.manga.raw('/v1/manga/chapter/x/0', undefined);
     expect(res.ok).toBe(true);
     expect(asked.map((a) => a.url)).toEqual([`${HOME}/v1/manga/chapter/x/0`, `${EU}/v1/manga/chapter/x/0`]);
+  });
+
+  it('never times or asks a standby server while home answers', async () => {
+    const { api, startPicking } = await loadMany(AZ);
+    startPicking();
+    await settle();
+    await api.get('/v1/me');
+    const bases = asked.map((a) => new URL(a.url).origin);
+    expect(bases).not.toContain(AZ);
+    expect(api.via).toBe(HOME);
+  });
+
+  it('asks a standby server once home is away, and moves there when it is quickest', async () => {
+    const { api, startPicking } = await loadMany(AZ);
+    down.add(HOME);
+    slow.set(EU, 400);
+    slow.set(US, 300);
+    await api.get('/v1/me');
+    expect(api.via).toBe(EU);
+    startPicking();
+    await settle();
+    expect(asked.some((a) => a.url === `${AZ}/health`)).toBe(true);
+    expect(api.via).toBe(AZ);
+  });
+
+  it('moves to a standby server when home and the others are down', async () => {
+    const { api, startPicking, OfflineError } = await loadMany(AZ);
+    down.add(HOME);
+    down.add(EU);
+    down.add(US);
+    await expect(api.get('/v1/me')).rejects.toBeInstanceOf(OfflineError);
+    startPicking();
+    await settle();
+    expect(api.via).toBe(AZ);
+  });
+
+  it('goes home and stops asking the standby server once home answers again', async () => {
+    const { api, startPicking } = await loadMany(AZ);
+    slow.set(EU, 400);
+    slow.set(US, 300);
+    down.add(HOME);
+    await api.get('/v1/me');
+    startPicking();
+    await settle();
+    expect(api.via).toBe(AZ);
+    down.delete(HOME);
+    slow.clear();
+    startPicking();
+    await settle();
+    expect(api.via).toBe(HOME);
+    asked = [];
+    startPicking();
+    await settle();
+    expect(asked.map((a) => a.url)).toEqual([`${HOME}/health`, `${EU}/health`, `${US}/health`]);
   });
 
   it('loads manga pictures from the server in use', async () => {

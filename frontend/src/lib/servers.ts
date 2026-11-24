@@ -11,10 +11,27 @@ export interface ServerEnv {
   VITE_API_SERVERS?: string;
   VITE_API_URL?: string;
   VITE_API_FALLBACK_URL?: string;
+  VITE_API_STANDBY?: string;
 }
 
 function clean(url: string): string {
   return url.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Servers that sleep until home is away (Azure, ADR 0004), each once and none already in `servers`.
+ * The app neither times nor asks them while home answers, so they stay asleep and free.
+ */
+export function standbyList(env: ServerEnv, servers: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const r of (env.VITE_API_STANDBY ?? '').split(',')) {
+    const url = clean(r);
+    if (!url) continue;
+    if (servers.includes(url)) continue;
+    if (out.includes(url)) continue;
+    out.push(url);
+  }
+  return out;
 }
 
 /**

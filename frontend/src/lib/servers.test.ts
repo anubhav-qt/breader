@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MUCH_SLOWER, pickServer, serverList, signsOf, tryOrder, type Timings } from './servers';
+import { MUCH_SLOWER, pickServer, serverList, signsOf, standbyList, tryOrder, type Timings } from './servers';
 
 const HOME = 'https://home.example';
 const EU = 'https://eu.example';
@@ -29,6 +29,18 @@ describe('serverList', () => {
 
   it('prefers the list over the older names', () => {
     expect(serverList({ VITE_API_SERVERS: US, VITE_API_URL: HOME }, 'http://localhost')).toEqual([US]);
+  });
+});
+
+describe('standbyList', () => {
+  it('is empty when none is set', () => {
+    expect(standbyList({}, ALL)).toEqual([]);
+    expect(standbyList({ VITE_API_STANDBY: ' , ' }, ALL)).toEqual([]);
+  });
+
+  it('keeps each once, trimmed, and none already a server', () => {
+    const env = { VITE_API_STANDBY: ' https://az.example/ ,https://az.example,https://eu.example' };
+    expect(standbyList(env, ALL)).toEqual(['https://az.example']);
   });
 });
 
