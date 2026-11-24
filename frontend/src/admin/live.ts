@@ -46,11 +46,11 @@ export class NotAdmin extends Error {}
 const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 /** What the server sends, with the marker's view made safe for the page: an older marker says less. */
-function snapshotOf(raw: Snapshot & { request?: Snapshot['status']['request'] }): Snapshot {
+export function snapshotOf(raw: Snapshot & { request?: Snapshot['status']['request'] }): Snapshot {
   const status = { ...raw.status };
   if (raw.request) status.request = raw.request;
   if (!status.request) status.request = { ip: '', from: '', headers: {} };
-  return { status, marker: markerOf(raw.marker), accounts: raw.accounts ?? null };
+  return { status, marker: markerOf(raw.marker), accounts: raw.accounts ?? null, infra: raw.infra ?? null };
 }
 
 function markerOf(m: Marker | null): Marker | null {
