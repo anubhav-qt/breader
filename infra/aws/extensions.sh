@@ -5,7 +5,10 @@
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
-. "$here/.env"
+# On AWS the password is in .env next to this file; on Azure it comes in the environment.
+if [ -f "$here/.env" ]; then
+  . "$here/.env"
+fi
 
 WANTED="eu.kanade.tachiyomi.extension.all.mangafire
 eu.kanade.tachiyomi.extension.en.weebcentral
@@ -34,8 +37,14 @@ change() {
 
 list=$(ask "$(jq -nc --arg q "$LIST" '{query: $q}')")
 
+# Just after Suwayomi starts, its list can still be empty: then this says so and fails, to be run again.
+missing=0
 for pkg in $WANTED; do
   installed=$(echo "$list" | jq -r --arg p "$pkg" '.data.fetchExtensions.extensions[] | select(.pkgName == $p) | .isInstalled')
+  if [ -z "$installed" ]; then
+    echo "$pkg isn't in Suwayomi's list yet"
+    missing=1
+  fi
   if [ "$installed" = "false" ]; then
     change "$pkg" install
   fi
@@ -45,4 +54,7 @@ due=$(echo "$list" | jq -r '.data.fetchExtensions.extensions[] | select(.isInsta
 for pkg in $due; do
   change "$pkg" update
 done
+if [ "$missing" = 1 ]; then
+  exit 1
+fi
 echo "extensions checked"
