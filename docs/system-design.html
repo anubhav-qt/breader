@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Breader system design</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1880px; height: 940px; background: #fff; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1f2328; position: relative; }
+  .panel { position: absolute; top: 90px; height: 740px; border-radius: 22px; border: 1.5px solid; }
+  .tag { position: absolute; top: 22px; left: 24px; padding: 5px 12px; border-radius: 10px; font-size: 14px; font-weight: 700; letter-spacing: 1.4px; }
+  .blue { background: #f1f6fd; border-color: #cddff7; } .blue .tag { background: #dde9fa; color: #2f6fc9; }
+  .amber { background: #fdf8ec; border-color: #f3e2b3; } .amber .tag { background: #f8ebc6; color: #b0700f; }
+  .purple { background: #f6f3fd; border-color: #ddd3f6; } .purple .tag { background: #e8e0fa; color: #6a45c4; }
+  .green { background: #f0faf5; border-color: #c7ead8; } .green .tag { background: #d9f2e5; color: #17875a; }
+  .box { position: absolute; background: #fff; border: 2.5px solid; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; }
+  .box b { font-size: 21px; } .box span { font-size: 15.5px; color: #59636e; }
+  .b-blue { border-color: #4a8be0; } .b-amber { border-color: #e39a2d; } .b-purple { border-color: #8a5ce0; }
+  .b-green { border-color: #1f9c69; } .b-gray { border-color: #7d8590; } .b-dark { border-color: #3a4048; }
+  .chips { display: flex; gap: 8px; margin-top: 4px; }
+  .chip { font-size: 13px; padding: 3px 10px; border-radius: 8px; background: #fbefd6; color: #8a560b; }
+  .pill { position: absolute; transform: translate(-50%, -50%); background: #fff; border: 1.5px solid #d6dbe0; border-radius: 16px; padding: 5px 13px; font-size: 14px; font-weight: 600; color: #3a4048; white-space: nowrap; }
+  svg { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+<div class="panel blue" style="left:30px;width:380px"><div class="tag">1. READERS &amp; EDGE</div></div>
+<div class="panel amber" style="left:490px;width:420px"><div class="tag">2. API SERVERS</div></div>
+<div class="panel purple" style="left:990px;width:360px"><div class="tag">3. READ COPIES</div></div>
+<div class="panel green" style="left:1450px;width:400px"><div class="tag">4. DATA &amp; OUTSIDE</div></div>
+
+<svg width="1880" height="940" viewBox="0 0 1880 940">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1L9 5L1 9z" fill="#3a4048"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="#3a4048" stroke-width="2.2" stroke-linejoin="round">
+    <path d="M310 150V50H760V146" marker-end="url(#a)"/>
+    <path d="M210 390V254" marker-end="url(#a)"/>
+    <path d="M210 490V626" marker-end="url(#a)"/>
+    <path d="M350 440H470"/>
+    <path d="M470 215V455"/>
+    <path d="M470 215H526" marker-end="url(#a)"/>
+    <path d="M470 455H526" marker-end="url(#a)"/>
+    <path d="M470 455V695H526" stroke-dasharray="7 6" marker-end="url(#a)"/>
+    <path d="M870 215H1026" marker-end="url(#a)"/>
+    <path d="M870 455H1026" marker-end="url(#a)"/>
+    <path d="M1490 455H1372"/>
+    <path d="M1372 215V455"/>
+    <path d="M1372 215H1314" marker-end="url(#a)"/>
+    <path d="M1372 455H1314" marker-end="url(#a)"/>
+    <path d="M870 255H940V330H1430V215H1486" marker-end="url(#a)"/>
+    <path d="M870 665H1430V330"/>
+    <path d="M1490 725H874" marker-end="url(#a)"/>
+    <path d="M700 830V880H1835V455H1814" marker-end="url(#a)"/>
+  </g>
+  <circle cx="700" cy="830" r="5" fill="#3a4048"/>
+</svg>
+
+<div class="box b-blue" style="left:70px;top:150px;width:280px;height:100px"><b>Cloudflare edge</b><span>Caches pages, covers</span></div>
+<div class="box b-dark" style="left:70px;top:390px;width:280px;height:100px"><b>breader.site app</b><span>Voices, panels on device</span></div>
+<div class="box b-blue" style="left:70px;top:630px;width:280px;height:100px"><b>Cloudflare R2</b><span>Pages the ThinkPad keeps</span></div>
+
+<div class="box b-amber" style="left:530px;top:150px;width:340px;height:130px"><b>ThinkPad (India)</b><span>Home: API, worker, voices</span><div class="chips"><div class="chip">Suwayomi</div><div class="chip">Engine</div><div class="chip">Redis</div></div></div>
+<div class="box b-amber" style="left:530px;top:390px;width:340px;height:130px"><b>GCP (Oregon)</b><span>API calls only, US</span><div class="chips"><div class="chip">WARP out</div><div class="chip">Egress cap</div></div></div>
+<div class="box b-amber" style="left:530px;top:630px;width:340px;height:130px;border-style:dashed"><b>Azure (Singapore)</b><span>Standby, asleep till needed</span><div class="chips"><div class="chip">Suwayomi</div><div class="chip">Modal engine</div></div></div>
+
+<div class="box b-purple" style="left:1030px;top:165px;width:280px;height:100px"><b>ThinkPad Postgres</b><span>Local read copy</span></div>
+<div class="box b-purple" style="left:1030px;top:405px;width:280px;height:100px"><b>GCP Postgres</b><span>Local read copy</span></div>
+
+<div class="box b-gray" style="left:1490px;top:165px;width:320px;height:100px"><b>Manga sites</b><span>MangaDex, MangaFire, AniList</span></div>
+<div class="box b-green" style="left:1490px;top:405px;width:320px;height:100px"><b>Supabase (Mumbai)</b><span>Sole writer</span></div>
+<div class="box b-gray" style="left:1490px;top:645px;width:320px;height:100px"><b>AWS watcher</b><span>Pings home each minute</span></div>
+
+<div class="pill" style="left:535px;top:50px">cache miss</div>
+<div class="pill" style="left:210px;top:320px">pages, covers</div>
+<div class="pill" style="left:210px;top:560px">recent pages</div>
+<div class="pill" style="left:410px;top:440px">picks fastest</div>
+<div class="pill" style="left:470px;top:580px">home down</div>
+<div class="pill" style="left:950px;top:215px">reads</div>
+<div class="pill" style="left:950px;top:455px">reads</div>
+<div class="pill" style="left:1372px;top:395px">change_log</div>
+<div class="pill" style="left:1150px;top:330px">manga</div>
+<div class="pill" style="left:1150px;top:725px">wakes Azure</div>
+<div class="pill" style="left:1150px;top:880px">all writes</div>
+</body>
+</html>
