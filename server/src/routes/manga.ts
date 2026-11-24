@@ -16,7 +16,7 @@ export const PAGE_KEPT = 30 * 24 * 3600;
  * each series from wherever it is. Anyone may look through it and read it: pages and covers are
  * the same for everyone, so Cloudflare keeps them near the reader (ADR 0001, point 1). Pages go
  * through here because MangaDex only lets its own site fetch them from a browser, and Suwayomi
- * isn't open to readers. The fallback reads the sources through the Suwayomi on AWS (infra/aws/).
+ * isn't open to readers. The fallback reads the sources through its own Suwayomi (infra/azure/).
  */
 export function mangaRoutes(deps: Deps) {
   const { manga } = deps;

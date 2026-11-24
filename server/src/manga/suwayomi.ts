@@ -74,6 +74,10 @@ const PAGES = 'mutation($id: Int!) { fetchChapterPages(input: { chapterId: $id }
 // These two ask only what Suwayomi has already, not the site: a series and a chapter by their addresses.
 const SERIES_AT = 'query($source: LongString!, $url: String!) { mangas(condition: { sourceId: $source, url: $url }) { nodes { id } } }';
 const CHAPTER_AT = 'query($series: Int!, $url: String!) { chapters(condition: { mangaId: $series, url: $url }) { nodes { id } } }';
+// And these two what a number names just now: a Suwayomi that starts afresh (Azure's, asleep when
+// unused, ADR 0004) numbers its series and chapters again.
+const SERIES_IS = 'query($id: Int!) { mangas(condition: { id: $id }) { nodes { url sourceId } } }';
+const CHAPTER_IS = 'query($id: Int!) { chapters(condition: { id: $id }) { nodes { url mangaId } } }';
 // A series taken in from a backup of it alone (bring()), then out of Suwayomi's library.
 const RESTORE = 'mutation($backup: Upload!) { restoreBackup(input: { backup: $backup }) { id } }';
 const RESTORED = 'query($id: String!) { restoreStatus(id: $id) { state } }';
@@ -248,7 +252,13 @@ function refOf(id: string): SourceRef {
   if (!m) throw notFound();
   let chapter: string | null = null;
   if (m[3]) chapter = decoded(m[3]);
-  return { source: m[1], url: decoded(m[2]), series: `sw:${m[1]}:${m[2]}`, chapter };
+  const url = decoded(m[2]);
+  return { source: m[1], url, series: seriesId(m[1], url), chapter };
+}
+
+/** What a series' id names, from its source and address. */
+function seriesRef(source: string, url: string): SourceRef {
+  return { source, url, series: seriesId(source, url), chapter: null };
 }
 
 /** A number as protobuf writes it: seven bits a byte, the lowest first, the top bit saying more follow. */
@@ -530,7 +540,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
    * The number Suwayomi has a series by. One it hasn't, found on another Suwayomi, is taken in from
    * its site by its address first.
    */
-  function localSeriesOf(ref: SourceRef): Promise<number> {
+  function localSeriesOf(ref: SourceRef, fresh = false): Promise<number> {
     if (ref.source === LOCAL) return Promise.reject(notFound());
     return localSeries.get(ref.series, async () => {
       const had = await seriesAt(ref);
@@ -541,7 +551,25 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       // Out of Suwayomi's library, which it would otherwise keep fetching from the site.
       await ask(OUT_OF_LIBRARY, { id: brought }, null);
       return brought;
-    });
+    }, fresh);
+  }
+
+  /**
+   * The number Suwayomi has a series by just now. Everything kept is kept by ids, never by these
+   * numbers, and the one remembered is checked before it's used: a Suwayomi that starts afresh
+   * (Azure's, ADR 0004) numbers its series again, and an old number may name another series.
+   */
+  async function currentSeriesOf(ref: SourceRef): Promise<number> {
+    const remembered = await localSeriesOf(ref);
+    if (await namesSeries(remembered, ref)) return remembered;
+    return localSeriesOf(ref, true);
+  }
+
+  async function namesSeries(local: number, ref: SourceRef): Promise<boolean> {
+    const r = await ask<{ mangas: { nodes: Array<{ url: string; sourceId: string }> } }>(SERIES_IS, { id: local }, null);
+    const m = r.mangas.nodes[0];
+    if (!m) return false;
+    return m.url === ref.url && String(m.sourceId) === ref.source;
   }
 
   /** Series taken in one at a time, as Suwayomi restores one backup at a time. */
@@ -582,7 +610,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   }
 
   /** The number Suwayomi has a chapter by: its series' chapters fetched from the site first, when it hasn't it yet. */
-  function localChapterOf(id: string, url: string, series: number, source: string): Promise<number> {
+  function localChapterOf(id: string, url: string, series: number, source: string, fresh = false): Promise<number> {
     return localChapters.get(id, async () => {
       const had = await chapterAt(series, url);
       if (had !== null) return had;
@@ -590,7 +618,25 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
       const fetched = await chapterAt(series, url);
       if (fetched === null) throw notFound();
       return fetched;
-    });
+    }, fresh);
+  }
+
+  /** The number Suwayomi has a chapter by just now, checked as a series' is (currentSeriesOf). */
+  async function currentChapterOf(id: string): Promise<{ chapter: number; source: string }> {
+    const ref = refOf(id);
+    if (ref.chapter === null) throw notFound();
+    const series = await currentSeriesOf(ref);
+    const remembered = await localChapterOf(id, ref.chapter, series, ref.source);
+    if (await namesChapter(remembered, ref.chapter, series)) return { chapter: remembered, source: ref.source };
+    const chapter = await localChapterOf(id, ref.chapter, series, ref.source, true);
+    return { chapter, source: ref.source };
+  }
+
+  async function namesChapter(local: number, url: string, series: number): Promise<boolean> {
+    const r = await ask<{ chapters: { nodes: Array<{ url: string; mangaId: number }> } }>(CHAPTER_IS, { id: local }, null);
+    const c = r.chapters.nodes[0];
+    if (!c) return false;
+    return c.url === url && c.mangaId === series;
   }
 
   async function chapterAt(series: number, url: string): Promise<number | null> {
@@ -601,57 +647,68 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   }
 
   /** A series as its source tells it, kept a while. */
-  function rawSeries(id: number, source: string): Promise<RawSeries> {
-    return seriesMemo.get(String(id), async () => {
-      const r = await ask<{ fetchManga: { manga: RawSeries } }>(SERIES, { id }, source);
+  function rawSeries(ref: SourceRef): Promise<RawSeries> {
+    return seriesMemo.get(ref.series, async () => {
+      const local = await currentSeriesOf(ref);
+      const r = await ask<{ fetchManga: { manga: RawSeries } }>(SERIES, { id: local }, ref.source);
       return r.fetchManga.manga;
     });
   }
 
-  /** A series that can be shown at all, by what its id names, and the number Suwayomi has it by. */
-  async function allowed(ref: SourceRef): Promise<{ m: RawSeries; local: number }> {
-    const local = await localSeriesOf(ref);
-    const m = await rawSeries(local, ref.source);
+  /** A series that can be shown at all, by what its id names. */
+  async function allowed(ref: SourceRef): Promise<RawSeries> {
+    const m = await rawSeries(ref);
     if (neverGenre(m.genre)) throw notFound();
-    return { m, local };
+    return m;
   }
 
-  /** A chapter by its id: the number Suwayomi has it by, and its series' source. */
-  async function chapterOfId(id: string): Promise<{ chapter: number; source: string }> {
+  /** A chapter's series, when it can be shown at all. */
+  async function allowedChapter(id: string): Promise<SourceRef> {
     const ref = refOf(id);
     if (ref.chapter === null) throw notFound();
-    const { local } = await allowed(ref);
-    const chapter = await localChapterOf(id, ref.chapter, local, ref.source);
-    return { chapter, source: ref.source };
+    await allowed(ref);
+    return ref;
   }
 
-  async function chapterList(m: RawSeries, source: string): Promise<MangaChapter[]> {
-    const list = await chapterLists.get(String(m.id), async () => {
-      const r = await ask<{ fetchChapters: { chapters: RawChapter[] } }>(CHAPTERS, { id: m.id }, source);
+  async function chapterList(ref: SourceRef): Promise<MangaChapter[]> {
+    const list = await chapterLists.get(ref.series, async () => {
+      const local = await currentSeriesOf(ref);
+      const r = await ask<{ fetchChapters: { chapters: RawChapter[] } }>(CHAPTERS, { id: local }, ref.source);
       const raw = [...r.fetchChapters.chapters].sort(byNumber);
-      const series = seriesId(source, m.url);
-      return raw.map((c) => chapterOf(c, series));
+      return raw.map((c) => chapterOf(c, ref.series));
     });
     // Out of the keeping, so lists kept before are cleaned too.
     return tidy(list);
   }
 
   /** Every chapter of the series can be read here, by its source's own list. Kept a day. */
-  function readable(m: RawSeries, source: string): Promise<boolean> {
-    return verdicts.get(String(m.id), async () => {
-      const list = await chapterList(m, source);
+  function readable(ref: SourceRef, m: RawSeries): Promise<boolean> {
+    return verdicts.get(ref.series, async () => {
+      const list = await chapterList(ref);
       if (list.length === 0) return false;
-      return caughtUp(cardOf(m, source).status, 0, firstMissing(list), highest(list));
+      return caughtUp(cardOf(m, ref.source).status, 0, firstMissing(list), highest(list));
     });
   }
 
-  /** A chapter's pages. fresh: asked of the site again, whatever's kept. */
-  function pageList(chapterId: number, source: string, fresh = false): Promise<string[]> {
+  /** A chapter's pages, by its id. fresh: asked of the site again, whatever's kept. */
+  function pageList(chapterId: string, fresh = false): Promise<string[]> {
     const make = async () => {
-      const r = await ask<{ fetchChapterPages: { pages: string[] } }>(PAGES, { id: chapterId }, source);
+      const { chapter, source } = await currentChapterOf(chapterId);
+      const r = await ask<{ fetchChapterPages: { pages: string[] } }>(PAGES, { id: chapter }, source);
       return r.fetchChapterPages.pages.filter((p) => PAGE_PATH.test(p));
     };
-    return pageLists.get(String(chapterId), make, fresh);
+    return pageLists.get(chapterId, make, fresh);
+  }
+
+  /**
+   * A chapter's pages, asked again when those kept name its series by a number Suwayomi has since
+   * given another (currentSeriesOf).
+   */
+  async function currentPages(ref: SourceRef, chapterId: string): Promise<string[]> {
+    const paths = await pageList(chapterId);
+    const series = await currentSeriesOf(ref);
+    if (paths.every((p) => p.startsWith(`/api/v1/manga/${series}/`))) return paths;
+    return pageList(chapterId, true);
   }
 
   /** A page of one of a source's lists, or of its results for a search, kept a while. */
@@ -672,22 +729,24 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
   /** A series a search found, when it's one to show. */
   async function foundOf(x: Listed, source: RawSource, w: Wanted): Promise<Found | null> {
-    localSeries.set(seriesId(source.id, x.url), x.id);
-    const m = await rawSeries(x.id, source.id);
+    const ref = seriesRef(source.id, x.url);
+    localSeries.set(ref.series, x.id);
+    const m = await rawSeries(ref);
     if (neverGenre(m.genre)) return null;
     const card = cardOf(m, source.id);
     if (!wants(card, w)) return null;
-    const ok = await readable(m, source.id);
+    const ok = await readable(ref, m);
     if (!ok) return null;
     return { item: { kind: 'source', source: source.name, card }, names: [m.title], people: people(m) };
   }
 
   /** A series a source lists, when it can be shown at all, whoever asks. */
   async function shelved(x: Listed, source: string): Promise<Shelved | null> {
-    localSeries.set(seriesId(source, x.url), x.id);
-    const m = await rawSeries(x.id, source);
+    const ref = seriesRef(source, x.url);
+    localSeries.set(ref.series, x.id);
+    const m = await rawSeries(ref);
     if (neverGenre(m.genre)) return null;
-    if (!(await readable(m, source))) return null;
+    if (!(await readable(ref, m))) return null;
     return { card: cardOf(m, source), names: [m.title], people: people(m) };
   }
 
@@ -896,8 +955,9 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
   }
 
   async function coverOf(id: string, width: CoverWidth, early?: number): Promise<Cover> {
-    const { local } = await allowed(refOf(id));
-    return opts.covers.get(id, id, width, () => picture(`/api/v1/manga/${local}/thumbnail`), early);
+    const ref = refOf(id);
+    await allowed(ref);
+    return opts.covers.get(id, id, width, async () => picture(`/api/v1/manga/${await currentSeriesOf(ref)}/thumbnail`), early);
   }
 
   return {
@@ -943,7 +1003,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
     async series(id, adult) {
       const ref = refOf(id);
-      const { m } = await allowed(ref);
+      const m = await allowed(ref);
       const card = cardOf(m, ref.source);
       if (card.adult && !adult) throw adultOnly();
       let source = 'Suwayomi';
@@ -953,30 +1013,30 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
 
     async chapters(id) {
       const ref = refOf(id);
-      const { m } = await allowed(ref);
-      return { lang: await langOf(ref.source), chapters: await chapterList(m, ref.source) };
+      await allowed(ref);
+      return { lang: await langOf(ref.source), chapters: await chapterList(ref) };
     },
 
     async pages(chapterId) {
-      const { chapter, source } = await chapterOfId(chapterId);
-      return (await pageList(chapter, source)).length;
+      const ref = await allowedChapter(chapterId);
+      return (await currentPages(ref, chapterId)).length;
     },
 
     async page(chapterId, n, quiet = false) {
-      const { chapter, source } = await chapterOfId(chapterId);
+      const ref = await allowedChapter(chapterId);
       return opts.disk.keep(`sw-page:${chapterId}:${n}`, async () => {
         if (opts.pooled) {
           const kept = await opts.pooled(chapterId, n);
           if (kept) return kept;
         }
-        const paths = await pageList(chapter, source);
+        const paths = await currentPages(ref, chapterId);
         try {
           if (n >= paths.length) throw noPage();
           return await picture(paths[n]);
         } catch (e) {
           if (e instanceof ApiError && e.code === 'manga_busy') throw e;
           // Its pages kept from a while ago, the site may have moved them since: asked again, once.
-          const fresh = await pageList(chapter, source, true);
+          const fresh = await pageList(chapterId, true);
           if (n >= fresh.length) throw noPage();
           return picture(fresh[n]);
         }

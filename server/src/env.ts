@@ -205,8 +205,8 @@ const Env = z.object({
   REDIS_URL: z.string().url().optional(),
   /**
    * Breader's own Suwayomi server, whose sources a manga search looks in too: the laptop's
-   * (http://suwayomi:4567), or for the fallback the one on AWS, through its tunnel and with its
-   * login (https://user:password@sw.breader.site, infra/aws/). It's off without its address.
+   * (http://suwayomi:4567), or for the fallback its own on Azure, with its login
+   * (https://user:password@host, infra/azure/). It's off without its address.
    */
   SUWAYOMI_URL: z.string().url().optional(),
 });

@@ -141,30 +141,47 @@ function fakeSuwayomi() {
     hasAll: true,
     has: new Set<number>(),
     hasChaptersOf: new Set<number>(),
+    /**
+     * The number Suwayomi has a series by, when not its id: a Suwayomi that starts afresh numbers
+     * its series again (Azure's). Its chapters' numbers follow; addresses never change.
+     */
+    local: new Map<number, number>(),
   };
   const calls: Array<{ op: string; source?: string; type?: string; page?: number }> = [];
   const refuse = (message: string) => ({ data: null, errors: [{ message: `Exception while fetching data (/x) : ${message}\r\n\r\njava.lang.Exception: ${message}\n\tat somewhere` }] });
-  const seriesById = (id: number) => state.series.find((s) => s.id === id);
+  const localOf = (s: SwSeries) => state.local.get(s.id) ?? s.id;
+  const seriesById = (local: number) => state.series.find((s) => localOf(s) === local);
   const sourceById = (id: string) => state.sources.find((s) => s.id === id)!;
   const urlOf = (s: SwSeries) => `/series/${s.id}`;
   /** A series' chapters, by the numbers Suwayomi has them by, and their addresses. */
   const chaptersOf = (s: SwSeries) => {
     let numbers = s.chapters ?? [1, 2, 3];
     if (s.uploads) numbers = s.uploads.map((u) => u.n);
-    return numbers.map((n, i) => ({ id: s.id * 1000 + i, url: `/chapter/${s.id * 1000 + i}`, n, i }));
+    return numbers.map((n, i) => ({ id: localOf(s) * 1000 + i, url: `/chapter/${s.id * 1000 + i}`, n, i }));
   };
   let restored = 'SUCCESS';
 
   function graphql(query: string, v: Record<string, any>) {
     if (query.includes('sources {')) return { data: { sources: { nodes: state.sources } } };
+    if (query.includes('mangas(condition') && v.id !== undefined) {
+      const s = seriesById(v.id);
+      if (!s) return { data: { mangas: { nodes: [] } } };
+      return { data: { mangas: { nodes: [{ url: urlOf(s), sourceId: s.source }] } } };
+    }
+    if (query.includes('chapters(condition') && v.id !== undefined) {
+      const s = seriesById(Math.floor(v.id / 1000));
+      const c = s && chaptersOf(s).find((x) => x.id === v.id);
+      if (!s || !c) return { data: { chapters: { nodes: [] } } };
+      return { data: { chapters: { nodes: [{ url: c.url, mangaId: localOf(s) }] } } };
+    }
     if (query.includes('mangas(condition')) {
       const s = state.series.find((x) => x.source === v.source && urlOf(x) === v.url);
-      if (!s || (!state.hasAll && !state.has.has(s.id))) return { data: { mangas: { nodes: [] } } };
-      return { data: { mangas: { nodes: [{ id: s.id }] } } };
+      if (!s || (!state.hasAll && !state.has.has(localOf(s)))) return { data: { mangas: { nodes: [] } } };
+      return { data: { mangas: { nodes: [{ id: localOf(s) }] } } };
     }
     if (query.includes('chapters(condition')) {
       const s = seriesById(v.series)!;
-      if (!state.hasAll && !state.hasChaptersOf.has(s.id)) return { data: { chapters: { nodes: [] } } };
+      if (!state.hasAll && !state.hasChaptersOf.has(localOf(s))) return { data: { chapters: { nodes: [] } } };
       const nodes = chaptersOf(s).filter((c) => c.url === v.url).map((c) => ({ id: c.id }));
       return { data: { chapters: { nodes } } };
     }
@@ -181,7 +198,7 @@ function fakeSuwayomi() {
       let list = state.series.filter((s) => s.source === source);
       if (type === 'SEARCH') list = list.filter((s) => s.title.toLowerCase().includes(String(v.input.query).toLowerCase()));
       const from = (page - 1) * state.perPage;
-      const mangas = list.slice(from, from + state.perPage).map((s) => ({ id: s.id, title: s.title, url: urlOf(s) }));
+      const mangas = list.slice(from, from + state.perPage).map((s) => ({ id: localOf(s), title: s.title, url: urlOf(s) }));
       for (const m of mangas) state.has.add(m.id);
       return { data: { fetchSourceManga: { hasNextPage: from + state.perPage < list.length, mangas } } };
     }
@@ -190,13 +207,13 @@ function fakeSuwayomi() {
       calls.push({ op: 'series' });
       if (!s) return refuse('Collection is empty.');
       const src = sourceById(s.source);
-      const manga = { id: s.id, title: s.title, url: urlOf(s), status: s.status ?? 'ONGOING', genre: s.genre ?? [], author: 'Writer, Drawer', artist: 'Drawer', description: 'What it is.\r\n\r\n\r\nMore.', realUrl: 'https://example.com/s', source: { id: src.id, name: src.name, isNsfw: src.isNsfw } };
+      const manga = { id: localOf(s), title: s.title, url: urlOf(s), status: s.status ?? 'ONGOING', genre: s.genre ?? [], author: 'Writer, Drawer', artist: 'Drawer', description: 'What it is.\r\n\r\n\r\nMore.', realUrl: 'https://example.com/s', source: { id: src.id, name: src.name, isNsfw: src.isNsfw } };
       return { data: { fetchManga: { manga } } };
     }
     if (query.includes('fetchChapters')) {
       const s = seriesById(v.mangaId ?? v.id)!;
       calls.push({ op: 'chapters' });
-      state.hasChaptersOf.add(s.id);
+      state.hasChaptersOf.add(localOf(s));
       const chapters = chaptersOf(s).map((c) => {
         let scanlator: string | null = null;
         if (s.uploads) scanlator = s.uploads[c.i].by;
@@ -233,7 +250,7 @@ function fakeSuwayomi() {
       const s = state.series.find((x) => x.source === source && urlOf(x) === address);
       restored = 'FAILURE';
       if (s) {
-        state.has.add(s.id);
+        state.has.add(localOf(s));
         restored = 'SUCCESS';
       }
       return json({ data: { restoreBackup: { id: '1' } } });
@@ -248,14 +265,14 @@ function fakeSuwayomi() {
     }
     let m = /^\/api\/v1\/manga\/(\d+)\/thumbnail$/.exec(url.pathname);
     if (m) {
-      calls.push({ op: 'thumbnail' });
+      calls.push({ op: 'thumbnail', source: String(seriesById(Number(m[1]))?.id) });
       return new Response(png(9));
     }
     m = /^\/api\/v1\/manga\/(\d+)\/chapter\/(\d+)\/page\/(\d+)$/.exec(url.pathname);
     if (m) {
-      calls.push({ op: 'picture' });
       const s = seriesById(Number(m[1]));
-      const upload = s?.uploads?.[Number(m[2]) - s.id * 1000];
+      calls.push({ op: 'picture', source: String(s?.id) });
+      const upload = s && s.uploads?.[Number(m[2]) - localOf(s) * 1000];
       if (upload) return new Response(pageOf(upload.width));
       return new Response(png(Number(m[3])));
     }
@@ -488,10 +505,11 @@ describe('one search everywhere', () => {
     // Kept on for three days, given while fetched again (lib/cache.ts).
     expect(keys.get('manga:v2:sw-sources:all')).toBe(72 * HOUR);
     expect(keys.get('manga:v2:sw-search:11:POPULAR:1:')).toBe(72 * HOUR);
-    expect(keys.get('manga:v2:sw-series:1')).toBe(72 * HOUR);
-    expect(keys.get('manga:v2:sw-chapters:1')).toBe(72 * HOUR);
-    expect(keys.get('manga:v2:sw-readable:1')).toBe(72 * HOUR);
-    // The numbers this Suwayomi has series by are its own, never kept where another could read them.
+    // By what a series is, never by the number this Suwayomi has it by: a Suwayomi that starts
+    // afresh numbers its series again, and its numbers are its own.
+    expect(keys.get(`manga:v2:sw-series:${sid(1)}`)).toBe(72 * HOUR);
+    expect(keys.get(`manga:v2:sw-chapters:${sid(1)}`)).toBe(72 * HOUR);
+    expect(keys.get(`manga:v2:sw-readable:${sid(1)}`)).toBe(72 * HOUR);
     expect([...keys.keys()].filter((k) => k.includes('local'))).toEqual([]);
   });
 });
@@ -580,6 +598,33 @@ describe('a series from a source', () => {
     expect(sw.calls.filter((c) => c.op === 'restore')).toHaveLength(1);
     // One its site hasn't isn't there.
     expect((await b.get(`/v1/manga/source/${sid(404)}`)).status).toBe(404);
+  });
+
+  it('reads the same series after its Suwayomi starts afresh and numbers every series again', async () => {
+    const { b, app, sw } = await setup();
+    sw.state.series = [
+      { id: 7, source: '11', title: 'Read me', chapters: [1, 2] },
+      { id: 8, source: '11', title: 'Not me', chapters: [5, 6, 7, 8] },
+    ];
+    const chapter = `/v1/manga/source/chapter/${cid(7, 7001)}`;
+    expect((await b.get(chapter)).body).toEqual({ pages: 3 });
+    expect((await b.get(`${chapter}/0`)).status).toBe(200);
+    expect((await app.request(`/v1/manga/source/${sid(7)}/cover`)).status).toBe(200);
+
+    // As Azure's Suwayomi does each time it wakes: 7 is now 8's number, and 8 is 7's.
+    sw.state.local = new Map([[7, 8], [8, 7]]);
+    const named = (op: string) => sw.calls.filter((c) => c.op === op).map((c) => c.source);
+    expect((await b.get(`/v1/manga/source/${sid(7)}`)).body.title).toBe('Read me');
+    expect((await b.get(`/v1/manga/source/${sid(8)}`)).body.title).toBe('Not me');
+    const list = await b.get(`/v1/manga/source/${sid(7)}/chapters`);
+    expect(list.body.chapters.map((c: { chapter: string }) => c.chapter)).toEqual(['1', '2']);
+    expect((await b.get(`${chapter}/1`)).status).toBe(200);
+    expect((await b.get(`/v1/manga/source/chapter/${cid(7, 7000)}/0`)).status).toBe(200);
+    expect(named('picture')).toEqual(['7', '7', '7']);
+    expect((await app.request(`/v1/manga/source/${sid(8)}/cover`)).status).toBe(200);
+    expect(named('thumbnail')).toEqual(['7', '8']);
+    const other = await b.get(`/v1/manga/source/${sid(8)}/chapters`);
+    expect(other.body.chapters.map((c: { chapter: string }) => c.chapter)).toEqual(['5', '6', '7', '8']);
   });
 });
 
@@ -905,7 +950,7 @@ describe('browsing the quick sources, searching every one', () => {
   });
 });
 
-describe('the Suwayomi on AWS', () => {
+describe('a Suwayomi with a login', () => {
   it('logs in with the name and password in its address, sent as a header and not in the address', () => {
     const { base, login } = suwayomiAddress('https://breader:p%40ss@sw.breader.site/');
     expect(base).toBe('https://sw.breader.site');
