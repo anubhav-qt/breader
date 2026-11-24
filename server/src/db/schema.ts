@@ -748,7 +748,10 @@ export const mirrorTombstones = pgTable(
   (t) => [primaryKey({ columns: [t.tbl, t.pk] })],
 );
 
-/** Fed tables and their primary keys, in the order a full reload copies them. */
+/**
+ * Fed tables and their primary keys, in the order a full reload copies them: a table after every
+ * fed table its foreign keys point to (test/copy-keys.test.ts checks it).
+ */
 export const FED_TABLES = {
   users: ['id'],
   accounts: ['id'],

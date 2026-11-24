@@ -74,13 +74,38 @@ function wait(ms: number, signal: AbortSignal) {
 }
 
 /**
+ * Makes every foreign key on the copy wait for the end of its transaction, and returns how many
+ * changed. The feed replays records in the order the primary gave out transaction ids, not the
+ * order they were committed in, so within a batch a child can come before its parent, or (just
+ * after a reload) a row can come back a moment before the record that removed it. At the end of
+ * each batch the copy matches the primary, so the check holds there. The tables' owner may do this;
+ * it needs no superuser. Run after every migration, as a new key starts out checked at once.
+ */
+export async function deferKeys(pool: pg.Pool): Promise<number> {
+  const { rows } = await pool.query<{ sql: string }>(
+    `SELECT format('ALTER TABLE %s ALTER CONSTRAINT %I DEFERRABLE INITIALLY DEFERRED', c.conrelid::regclass, c.conname) AS sql
+     FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace
+     WHERE c.contype = 'f' AND n.nspname = 'public' AND NOT (c.condeferrable AND c.condeferred)`,
+  );
+  for (const r of rows) await pool.query(r.sql);
+  return rows.length;
+}
+
+/** Brings the copy to the latest schema, its foreign keys checked as each batch ends (deferKeys). */
+export async function readyCopy(copy: Copy, folder: string) {
+  await migrateDb(copy.url, 'copy', { ssl: copy.ssl, copy: true, folder });
+  const deferred = await deferKeys(copy.pool);
+  if (deferred > 0) log.info({ copy: copy.name, deferred }, 'the read copy’s foreign keys now wait for the end of each batch');
+}
+
+/**
  * Brings the copy to the latest schema, then keeps it current whenever this server holds its feed
  * lock, until `signal` aborts. A copy that can't be migrated isn't fed, and reads stay on
  * PRIMARY_URL (db/reads.ts sees it never caught up).
  */
 export async function runCopy(primary: pg.Pool, copy: Copy, folder: string, signal: AbortSignal) {
   try {
-    await migrateDb(copy.url, 'copy', { ssl: copy.ssl, copy: true, folder });
+    await readyCopy(copy, folder);
   } catch (err) {
     log.error({ err, copy: copy.name }, 'couldn’t migrate the read copy, so it isn’t fed and reads stay on the primary');
     return;

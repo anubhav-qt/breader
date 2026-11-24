@@ -56,6 +56,12 @@ export function waitAfter(copied: number, last: number): number {
   return Math.min(before * 2, QUIET);
 }
 
+/** Whether a database error is a foreign key the copy's rows broke (Postgres code 23503). */
+export function brokeKey(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  return (err as { code?: unknown }).code === '23503';
+}
+
 export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: FeedHooks = {}) {
   const columns = new Map<string, string[]>();
   const name = hooks.name ?? 'laptop';
@@ -203,8 +209,25 @@ export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: FeedHooks = {
       return 0;
     }
 
-    const db = await mirror.connect();
     const last = rows[rows.length - 1];
+    try {
+      await applyBatch(rows, last, caughtUpAt);
+    } catch (err) {
+      if (!brokeKey(err)) throw err;
+      // A copy whose foreign keys are on checks them as each batch ends (mirror/copy.ts, deferKeys).
+      // A child can still come a batch before its parent: records are in transaction id order, not
+      // commit order. A fresh copy has both, so the feed doesn't stick on that batch for good.
+      log.warn({ err, copy: name }, 'a batch broke a foreign key on the read copy; loading it afresh');
+      await reload();
+      return 1;
+    }
+    await ack(last.txid, last.id);
+    return rows.length;
+  }
+
+  /** The batch's records and the cursor past them, in one transaction on the copy. */
+  async function applyBatch(rows: Change[], last: Change, caughtUpAt: Date | null) {
+    const db = await mirror.connect();
     try {
       await replaying(db);
       for (const c of rows) await applyChange(db, c);
@@ -219,8 +242,6 @@ export function makeFeed(primary: pg.Pool, mirror: pg.Pool, hooks: FeedHooks = {
     } finally {
       db.release();
     }
-    await ack(last.txid, last.id);
-    return rows.length;
   }
 
   /**
