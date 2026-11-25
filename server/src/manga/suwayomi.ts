@@ -1,12 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { gzipSync } from 'node:zlib';
-import { MANGA_PAGE, type MangaChapter, type MangaChapters, type SourceCard, type SourceSeries } from '@breader/shared';
+import { MANGA_PAGE, namesOf, type MangaChapter, type MangaChapters, type SourceCard, type SourceSeries } from '@breader/shared';
 import { freshly, Memo, MemoryStore, near, type Store } from '../lib/cache.ts';
 import { ApiError } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover, Covers, CoverWidth } from './covers.ts';
 import { pictureType, type Disk, type Picture, type Pooled } from './disk.ts';
-import { wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
+import { namedLike, wantedKind, wantedName, type Found, type Lot, type Place, type Wanted } from './find.ts';
 import { adultGenre, kindGenre, neverGenre, sideGenre, sideTitle, web } from './genres.ts';
 import { Busy, Gate, Pace } from './pace.ts';
 import { caughtUp, firstMissing, highest } from './readable.ts';
@@ -414,6 +414,21 @@ function wants(card: SourceCard, w: Wanted): boolean {
   if (!card.adult && w.adultOnly) return false;
   if (card.side && !w.doujinshi) return false;
   return wantedKind(card.kind, w);
+}
+
+/**
+ * Whether a search goes on past this page of a site's. A search by name goes on only while a page
+ * has a series going by it (namedLike): a site whose search takes any word turns up page after page
+ * of others, and would be asked for ever with nothing to show. Browsing, and looking for one
+ * series' copies, always go on.
+ */
+function worthGoingOn(listed: Array<{ title: string }>, w: Wanted): boolean {
+  if (!w.q) return true;
+  if (w.names) return true;
+  for (const x of listed) {
+    if (namedLike(w.q, namesOf([x.title]).keys)) return true;
+  }
+  return false;
 }
 
 /** fn for each of these, `n` at a time, the answers in their order. */
@@ -926,6 +941,7 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
     if (found.length === 0 && failed) throw failed;
     const looked = seen + some.length;
     let next: string | null = null;
+    if (!worthGoingOn(listed.mangas, w)) return { found, next };
     if (looked < listed.mangas.length) next = `${page}.${looked}`;
     else if (listed.hasNextPage && listed.mangas.length > 0) next = String(page + 1);
     return { found, next };
