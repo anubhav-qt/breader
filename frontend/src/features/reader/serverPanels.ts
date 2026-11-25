@@ -5,9 +5,9 @@ import { api, ApiError } from '../../lib/api';
 import { readMangaPrefs } from '../../lib/mangadex';
 import { readLocal, writeLocal } from '../../lib/store';
 import { framesKnown, framesSoon, type Frames } from './frames';
-import { checkDevice, gpuHere, panelModelBroke, panelsHere } from './able';
+import { checkDevice, panelModelBroke, panelsHere } from './able';
 import { framesOfPanels, modelFramesKnown, modelFramesSoon, modelPanelsOf, panelModelReady, panelModelRound, startPanelModel } from './panelModel';
-import { panelled } from './settings';
+import { panelled, type MangaLayout } from './settings';
 
 /*
  * Panels found on Breader's own computer with the panel model trained on the owner's labels
@@ -349,12 +349,20 @@ const NONE: Frames = { groups: [], panels: [] };
 
 /**
  * What page i's frames are wanted for: the Panels layout, which waits for the model to arrive the
- * first time; a page coming up in another layout, found ahead only where the browser lends the model
- * a graphics chip, as on the processor alone a page takes it a second or more, which a phone's
- * battery shouldn't spend on every page; or a tap to zoom, which uses the model once it's here but
- * doesn't wait for its 40 MB, zooming to the page meanwhile.
+ * first time; or a tap to zoom, which uses the model once it's here but doesn't wait for its 40 MB,
+ * zooming to the page meanwhile.
  */
-export type FramesFor = 'panels' | 'ahead' | 'tap';
+export type FramesFor = 'panels' | 'tap';
+
+/**
+ * The pages whose panels are found before they're wanted, about page i: only in the Panels layout.
+ * Elsewhere a page's are found only when it's tapped to zoom: found ahead, they kept a phone's
+ * graphics chip busy on every page scrolled past, and the phone hot.
+ */
+export function pagesAhead(layout: MangaLayout, i: number): number[] {
+  if (layout !== 'panels') return [];
+  return [i, i + 1, i - 1, i + 2];
+}
 
 /**
  * Page i's frames: kept on the server, found there, or found by the model on this device and sent
@@ -371,7 +379,6 @@ export async function pageFramesSoon(book: MangaBook, i: number, img: HTMLImageE
   const had = modelFramesKnown(img);
   if (had) return had;
   const meanwhile = k?.frames ?? NONE;
-  if (want === 'ahead' && !(await gpuHere())) return meanwhile;
   const ready = startPanelModel();
   if (want === 'tap' && !panelModelReady()) return meanwhile;
   if (!(await ready)) {

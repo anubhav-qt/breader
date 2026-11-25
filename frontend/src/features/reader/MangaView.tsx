@@ -5,7 +5,7 @@ import type { MangaBook, Position, RemoteChapter } from '../../books/types';
 import { glide } from '../../lib/glide';
 import { BAR, type Loc, type Start, type TurnEvent, type ViewHandle } from './FlowView';
 import { frameAt, type Box } from './frames';
-import { pageFramesKnown, pageFramesSoon, panelsAhead } from './serverPanels';
+import { pageFramesKnown, pageFramesSoon, pagesAhead, panelsAhead } from './serverPanels';
 import { PanelPicture, PanelsNote, PanelVoteBar } from './MangaPanels';
 import { MangaZoom, type Look } from './MangaZoom';
 import { useNarrowPortrait, type MangaDir, type MangaLayout } from './settings';
@@ -575,12 +575,12 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     return () => { live = false; };
   }, [pics, wantFrom, wantTo, total, shaped]);
 
-  // The panels of the pages about the one read, found ahead, so a panel held or stepped to is there at
-  // once. Outside the Panels layout, the panel model on this device finds them ahead only where it's quick.
+  // In the Panels layout, the panels of the pages about the one read, found ahead, so a panel stepped
+  // to is there at once. Elsewhere none are, until a page is tapped to zoom.
   useEffect(() => {
-    for (const i of [at.page, at.page + 1, at.page - 1, at.page + 2]) {
+    for (const i of pagesAhead(layout, at.page)) {
       const img = pics.image(i);
-      if (srcs.get(i) && img) void pageFramesSoon(pics.book, i, img, layout === 'panels' ? 'panels' : 'ahead');
+      if (srcs.get(i) && img) void pageFramesSoon(pics.book, i, img, 'panels');
     }
   }, [srcs, at.page, pics, layout]);
 
