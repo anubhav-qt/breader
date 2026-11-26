@@ -43,7 +43,7 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   description, canonical and link-preview tags (the wide `public/og.png`, 1200x630). `public/404.html`, `robots.txt`, `sitemap.xml`:
   `infra/README.md`, Cloudflare Pages.
 - The admin page's Infra tab (`frontend/src/admin/Infra.tsx`, `infraView.ts`) maps every server,
-  copy and store. Each API server says how it is every 30 s in `server_seen` (`server/src/lib/seen.ts`);
+  copy and store. Each API server says how it is every 30 s (GCP 2 min, `SEEN_EVERY_S`) in `server_seen` (`server/src/lib/seen.ts`);
   any server reads it back with `feed_copies` and the pool's tables (`server/src/lib/infra.ts`), so
   Azure is never woken to ask. The AWS watcher sends its misses in `x-breader-watch` on each ask.
 - Readers send requests and feedback from the app (`frontend/src/features/feedback/`,
@@ -85,9 +85,10 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   until the AWS machine's `watch.sh` sees the ThinkPad miss 10 minutes; the app asks
   `VITE_API_STANDBY` only while home is away. Modal is the engine on call for Azure alone.
   GCP (`gcp.breader.site`, Oregon, `infra/gcp/`) is in `VITE_API_SERVERS` for the Americas: an
-  e2-micro, IPv6 only with WARP out, API calls alone (`JSON_ONLY`, no manga, voice or panels; its
+  e2-micro, IPv6 only, WARP on only while `update.sh` pulls a new image, one HTTP/2 tunnel
+  connection (egress counts: `infra/README.md`, GCP), API calls alone (`JSON_ONLY`, no manga, voice or panels; its
   `/health` says `jsonOnly` and the app asks home or Azure for those), egress counted, a standby
-  feeder. Not set up yet: the storage pool over R2, B2, Tigris and Fastly (`POOL_MEMBERS`,
+  feeder (run only while `COPY_URLS` lists a copy). Not set up yet: the storage pool over R2, B2, Tigris and Fastly (`POOL_MEMBERS`,
   `server/src/manga/pool.ts`). The app skips a server whose `/health` says `busy`, never uses one
   near its egress limit, and asks the next server for the voice and panels when home is away.
 

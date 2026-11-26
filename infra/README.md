@@ -464,6 +464,13 @@ It answers API calls alone: no manga, voices or panels, and no pictures (`JSON_O
 client and to `VITE_API_SERVERS` in `infra/.env.ship`. It counts its egress; at `GCP_EGRESS_LIMIT_MB` its `/health` says `egress.near`, the app stops
 using it, and its standby stops. The standby feeds every copy in its `COPY_URLS` while the
 ThinkPad's worker is quiet (90 s unheard and its lease lapsed), and hands back when it's heard.
+It runs only with `COMPOSE_PROFILES=standby` in `.env`, while `COPY_URLS` lists a copy.
+
+Every byte it sends counts, so it sends little when idle (about 86 MB a day before 2026-11-26):
+WARP is connected only while `update.sh` pulls a new image (`WARP_WHILE_PULLING`), and it pulls
+only when `LATEST_FROM` (home's `/health`, over IPv6) names another release. The tunnel keeps one
+connection, HTTP/2 to Cloudflare's IPv6 edge (setup.sh's `quiet.conf`), as QUIC pings 4 every
+second. The API says how it is every 2 minutes (`SEEN_EVERY_S`), not every 30 s.
 
 **Modal.** `pip install modal && modal setup`, then
 `modal secret create breader-engine ENGINE_TOKEN=<a new token, also in that API's ENGINE_TOKEN>` and

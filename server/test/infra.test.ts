@@ -89,6 +89,13 @@ describe('how a server is', () => {
     expect(infraOf([homeRow(FRESH_S)]).servers.home?.state).toBe('up');
   });
 
+  it('gives a server that says how it is less often 3 of its own turns before it is down', () => {
+    expect(infraOf([gcpRow(360, { everyS: 120 })]).servers.gcp?.state).toBe('up');
+    expect(infraOf([gcpRow(361, { everyS: 120 })]).servers.gcp?.state).toBe('down');
+    expect(infraOf([gcpRow(FRESH_S, { everyS: 10 })]).servers.gcp?.state).toBe('up');
+    expect(infraOf([gcpRow(FRESH_S + 1, { everyS: 10 })]).servers.gcp?.state).toBe('down');
+  });
+
   it('shows engines for the ThinkPad alone', () => {
     const engine = { up: 1, workers: 2, busy: 0, waiting: 0, done: 4 };
     expect(infraOf([azureRow(5, { engine })]).servers.azure?.engine).toBeUndefined();
@@ -186,16 +193,16 @@ describe('saying and reading back, in Supabase', () => {
   afterAll(clean);
 
   const seenAs = (machine: string, more: Record<string, unknown> = {}) =>
-    makeSeen({ env: { MACHINE: machine, ROLE: 'fallback', RELEASE: 'rel1234', JSON_ONLY: false, COPY_URL: undefined, COPY_NAME: undefined, ...more }, pool: primary.pool });
+    makeSeen({ env: { MACHINE: machine, ROLE: 'fallback', RELEASE: 'rel1234', JSON_ONLY: false, COPY_URL: undefined, COPY_NAME: undefined, SEEN_EVERY_S: 30, ...more }, pool: primary.pool });
 
   it('reads back what each server said', async () => {
     const home = makeSeen({
-      env: { MACHINE: MACHINES[0], ROLE: 'laptop', RELEASE: 'rel1234', JSON_ONLY: false, COPY_URL: undefined, COPY_NAME: undefined },
+      env: { MACHINE: MACHINES[0], ROLE: 'laptop', RELEASE: 'rel1234', JSON_ONLY: false, COPY_URL: undefined, COPY_NAME: undefined, SEEN_EVERY_S: 30 },
       pool: primary.pool,
       mirror: {},
       busy: () => true,
     });
-    const gcp = seenAs(MACHINES[1], { JSON_ONLY: true, COPY_URL: 'postgres://x@h/db', COPY_NAME: COPY });
+    const gcp = seenAs(MACHINES[1], { JSON_ONLY: true, COPY_URL: 'postgres://x@h/db', COPY_NAME: COPY, SEEN_EVERY_S: 120 });
     gcp.heardWatcher(3);
     await home.say();
     await gcp.say();
@@ -205,6 +212,8 @@ describe('saying and reading back, in Supabase', () => {
     expect(infra.servers.home).toMatchObject({ state: 'busy', release: 'rel1234' });
     expect(infra.servers.gcp).toMatchObject({ state: 'up', release: 'rel1234' });
     expect(infra.watcher?.missed).toBe(3);
+    const { rows } = await primary.pool.query<{ detail: SeenDetail }>('SELECT detail FROM server_seen WHERE machine = $1', [MACHINES[1]]);
+    expect(rows[0].detail.everyS).toBe(120);
     expect(Math.abs(new Date(infra.at).getTime() - Date.now())).toBeLessThan(60_000);
   });
 

@@ -95,14 +95,43 @@ esac
 
 compose() { docker compose -f compose.yml "$@"; }
 docker info >/dev/null 2>&1 || exit 0 # Docker isn't running yet
-IMAGE=$(sed -n 's/^IMAGE=//p' .env)
+setting() { sed -n "s/^$1=//p" .env; }
+IMAGE=$(setting IMAGE)
 
-compose pull --quiet api
-want=$(docker image inspect --format '{{.Id}}' "$IMAGE")
 # The API is meant to run while its container runs, restarts, or was created and never started (an
 # update whose start failed part way). One you stopped has exited, and `compose down` leaves none.
 api=$(compose ps --quiet --status running --status restarting --status created api)
 have=$(test -n "$api" && docker inspect --format '{{.Image}}' "$api" || true)
+
+# Where WARP carries IPv4 only while pulling (GCP, gcp/setup.sh: every byte sent there counts), the
+# image is pulled only when LATEST_FROM's /health names a release other than this API's, or names
+# none. WARP is connected for the pull and off again after, whatever happens.
+WARP=$(setting WARP_WHILE_PULLING)
+if [ "$WARP" = true ]; then
+  trap 'warp-cli --accept-tos disconnect > /dev/null 2>&1 || true' EXIT
+fi
+
+release() { curl -fsS --max-time 10 "$1" 2> /dev/null | sed -n 's/.*"release":"\([^"]*\)".*/\1/p'; }
+
+# Whether to pull now, with WARP connected first where it's needed.
+pulling() {
+  if [ "$WARP" != true ]; then return 0; fi
+  if [ -z "$api" ]; then return 1; fi
+  latest=$(release "$(setting LATEST_FROM)")
+  if [ -n "$latest" ] && [ "$latest" = "$(release http://127.0.0.1:8787/health)" ]; then return 1; fi
+  warp-cli --accept-tos connect > /dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if warp-cli --accept-tos status | grep -q Connected; then return 0; fi
+    sleep 2
+  done
+  return 0
+}
+
+want=$have
+if pulling; then
+  compose pull --quiet api
+  want=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+fi
 
 if [ -n "$api" ] && [ "$want" != "$have" ]; then
   echo "$(date '+%F %T') updating to $want"

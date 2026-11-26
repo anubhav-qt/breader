@@ -1,8 +1,9 @@
 #!/bin/sh
 # Runs once on the GCP e2-micro (Debian, IPv6 only: a public IPv4 address costs money). It has no
 # IPv4 of its own, so:
-#   - Cloudflare WARP carries every outgoing IPv4 connection (MangaDex, ghcr.io, GitHub), and
-#   - cloudflared (a Cloudflare Tunnel) brings readers in, as on the ThinkPad.
+#   - Cloudflare WARP carries outgoing IPv4 (ghcr.io, GitHub) while this runs and while update.sh
+#     pulls an image, and is off otherwise: connected, it pings Cloudflare all day, which is egress;
+#   - cloudflared (a Cloudflare Tunnel) brings readers in, as on the ThinkPad, over one connection.
 # Both are system services that start again after a reboot. Then swap, Docker, and the repository's
 # infra/ folder. README.md › GCP. Run it as the machine's own user, with the tunnel's token in
 # ~/tunnel.token (`cloudflared tunnel token <name> | ssh <machine> 'umask 077; cat > ~/tunnel.token'`,
@@ -47,25 +48,6 @@ if ! warp-cli --accept-tos tunnel ip list | grep -q '::/0'; then
 fi
 warp-cli --accept-tos connect
 
-# Connects WARP again after every reboot, once warp-svc is up.
-sudo tee /etc/systemd/system/breader-warp.service > /dev/null <<UNIT
-[Unit]
-Description=Cloudflare WARP connected, for outgoing IPv4
-After=warp-svc.service network-online.target
-Wants=warp-svc.service network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStartPre=/bin/sleep 5
-ExecStart=/usr/bin/warp-cli --accept-tos connect
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-sudo systemctl daemon-reload
-sudo systemctl enable breader-warp.service
-
 # The tunnel, as a system service that starts with the machine.
 curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
   | sudo tee /usr/share/keyrings/cloudflare-main.gpg > /dev/null
@@ -77,6 +59,18 @@ if ! systemctl is-enabled cloudflared > /dev/null 2>&1; then
   sudo cloudflared service install "$(cat "$TOKEN_FILE")"
 fi
 rm -f "$TOKEN_FILE"
+# Egress costs money here: one connection over HTTP/2 rather than QUIC's 4, each pinged every
+# second, and to Cloudflare's IPv6 edge only, as IPv4 would need WARP.
+sudo mkdir -p /etc/systemd/system/cloudflared.service.d
+sudo tee /etc/systemd/system/cloudflared.service.d/quiet.conf > /dev/null <<'UNIT'
+[Service]
+Environment=TUNNEL_TRANSPORT_PROTOCOL=http2
+Environment=TUNNEL_EDGE_IP_VERSION=6
+ExecStart=
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel --ha-connections 1 run --token-file /etc/cloudflared/token
+UNIT
+sudo systemctl daemon-reload
+sudo systemctl restart cloudflared
 
 # 1 GB of memory is little: 2 GB of swap on disk, so a busy moment slows things down instead of
 # stopping them.
@@ -104,5 +98,8 @@ fi
 cd "$HOME/breader"
 git sparse-checkout set infra
 git pull --ff-only
+
+# WARP off until update.sh needs it (WARP_WHILE_PULLING in .env).
+warp-cli --accept-tos disconnect
 
 echo "setup done: fill infra/gcp/.env from .env.example, then docker compose -f infra/gcp/compose.yml up -d"

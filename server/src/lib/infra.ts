@@ -12,8 +12,10 @@ import type { SeenDetail, Watch } from './seen.ts';
  * and any other fallback is Azure.
  */
 
-/** A server heard from within this long is up; each says how it is every 30 s. */
+/** A server heard from within this long is up; most say how they are every 30 s. */
 export const FRESH_S = 90;
+/** A server that says how it is less often may be quiet this many of its own turns. */
+const TURNS = 3;
 /** The AWS watcher asks each minute: past this, its last ask says nothing about now. */
 const WATCH_FRESH_S = 180;
 /** The ThinkPad's misses in a row after which the watcher keeps Azure awake (infra/aws/watch.sh). */
@@ -88,12 +90,19 @@ function newestWatch(rows: SeenRow[]): { lastAsked: string; missed: number } | n
   return { lastAsked: best.at, missed: best.missed };
 }
 
+/** How long a server may be quiet and still be up: FRESH_S, or 3 of its own turns when it says less often. */
+function freshFor(row: SeenRow): number {
+  const every = row.detail.everyS;
+  if (!every) return FRESH_S;
+  return Math.max(FRESH_S, every * TURNS);
+}
+
 const isoAgo = (now: Date, seconds: number) => new Date(now.getTime() - seconds * 1000).toISOString();
 
 function serverFrom(row: SeenRow | undefined, slot: Slot, azureWanted: boolean, now: Date): ServerSeen | null {
   if (!row) return null;
   const out: ServerSeen = { state: 'up', release: row.release, heardAt: isoAgo(now, row.ageS) };
-  if (row.ageS > FRESH_S) {
+  if (row.ageS > freshFor(row)) {
     out.state = staleState(slot, azureWanted);
     return out;
   }
@@ -149,7 +158,7 @@ export function infraFrom(input: InfraInput): Infra {
   let modal: Infra['modal'] = null;
   if (azureRow) {
     const e = azureRow.detail.engine;
-    if (azureRow.ageS <= FRESH_S && e) modal = { up: e.up > 0, done: e.done };
+    if (azureRow.ageS <= freshFor(azureRow) && e) modal = { up: e.up > 0, done: e.done };
     else modal = { up: false, done: 0 };
   }
 

@@ -5,12 +5,13 @@
 #   docker compose -f infra/gcp/compose.yml up -d
 #
 # Every service uses the machine's own network: Docker's bridge has no IPv6, and the machine
-# reaches Supabase over IPv6 alone (its direct host; the poolers have no IPv6), and everything
-# IPv4-only through WARP. cloudflared (a system service, setup.sh) brings readers in to
-# http://localhost:8787. Nothing listens on the internet.
+# reaches Supabase over IPv6 alone (its direct host; the poolers have no IPv6). Every service it
+# calls has IPv6 too; WARP carries IPv4 only while update.sh pulls an image (ghcr.io has no IPv6).
+# cloudflared (a system service, setup.sh) brings readers in to http://localhost:8787 over one
+# IPv6 connection. Nothing listens on the internet. Every byte sent counts against the egress limit.
 #
 # Memory, of about 1 GB less what WARP and cloudflared take: the copy 200 MB, the API 450 MB, the
-# standby 160 MB. setup.sh adds 2 GB of swap for busy moments.
+# standby 160 MB while it runs. setup.sh adds 2 GB of swap for busy moments.
 name: breader-gcp
 
 x-server: &server
@@ -60,6 +61,8 @@ services:
       COPY_URL: "postgres://breader:${COPY_PASSWORD}@127.0.0.1:5432/breader"
       COPY_SSL: "off"
       CLIENT_IP_HEADER: cf-connecting-ip
+      # How it is, in server_seen, every 2 minutes rather than 30 s: each says so to Supabase.
+      SEEN_EVERY_S: "120"
       NODE_OPTIONS: --max-old-space-size=256
       MALLOC_ARENA_MAX: "2"
     volumes: ["egress:/data/egress"]
@@ -68,8 +71,11 @@ services:
 
   # Feeds every read copy (COPY_URLS) while the ThinkPad is quiet, and hands back when it's heard
   # from (server/src/mirror/standby.ts). Stops while egress is near its limit: it reads the API's count.
+  # Runs only with COMPOSE_PROFILES=standby in .env, set while COPY_URLS lists a copy: with none it
+  # has nothing to feed, and its checks would still ask Supabase every 30 s.
   standby:
     <<: *server
+    profiles: [standby]
     command: ["node", "--enable-source-maps", "dist/standby.js"]
     environment:
       ROLE: fallback

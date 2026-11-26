@@ -6,14 +6,11 @@ import { copyName } from '../mirror/copy.ts';
 import { log } from '../log.ts';
 
 /*
- * Each API server says how it is every 30 s (server_seen), for the admin page's infra map
+ * Each API server says how it is every 30 s (SEEN_EVERY_S, longer where egress costs) in server_seen, for the admin page's infra map
  * (lib/infra.ts): its release, when it started, its engines, its egress, its read copy, and when
  * the AWS watcher (infra/aws/watch.sh) last asked it, as /health heard it. Nobody asks a server
  * how it is, so a standby asleep stays asleep.
  */
-
-/** How often a server says how it is. */
-export const SAY_EVERY_MS = 30_000;
 
 /** The AWS watcher's last ask: when, and how many minutes in a row it had missed the ThinkPad by then. */
 export interface Watch {
@@ -29,11 +26,13 @@ export interface SeenDetail {
   jsonOnly?: boolean;
   /** Its read copy's name in feed_copies. */
   copy?: string;
+  /** How often it says how it is, in seconds: how long it may be quiet still counts as up (lib/infra.ts). */
+  everyS?: number;
   watch?: Watch;
 }
 
 export interface SeenDeps {
-  env: Pick<Env, 'MACHINE' | 'ROLE' | 'RELEASE' | 'JSON_ONLY' | 'COPY_URL' | 'COPY_NAME'>;
+  env: Pick<Env, 'MACHINE' | 'ROLE' | 'RELEASE' | 'JSON_ONLY' | 'COPY_URL' | 'COPY_NAME' | 'SEEN_EVERY_S'>;
   pool: Pick<pg.Pool, 'query'>;
   /** The laptop's own copy, fed as `laptop`. */
   mirror?: unknown;
@@ -75,7 +74,7 @@ export function makeSeen(deps: SeenDeps) {
   }
 
   function detail(): SeenDetail {
-    const out: SeenDetail = {};
+    const out: SeenDetail = { everyS: env.SEEN_EVERY_S };
     if (deps.engine) {
       const s = deps.engine.stats();
       const up = s.engines.filter((e) => e.up);
@@ -111,10 +110,10 @@ export function makeSeen(deps: SeenDeps) {
     heardWatcher,
     say,
     detail,
-    /** Says how it is now, and every 30 s after. */
+    /** Says how it is now, and every SEEN_EVERY_S after. */
     start() {
       sayNow();
-      timer = setInterval(sayNow, SAY_EVERY_MS);
+      timer = setInterval(sayNow, env.SEEN_EVERY_S * 1000);
       timer.unref();
     },
     stop() {

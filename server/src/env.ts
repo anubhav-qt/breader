@@ -191,6 +191,11 @@ const Env = z.object({
   GCP_EGRESS_LIMIT_MB: z.coerce.number().positive().optional(),
   /** Where the month's egress count is kept, across starts. */
   EGRESS_FILE: z.string().min(1).default('/data/egress/egress.json'),
+  /**
+   * How often this API server says how it is in server_seen (lib/seen.ts), in seconds. Every 30 s
+   * by default; longer where egress costs (GCP, 120).
+   */
+  SEEN_EVERY_S: z.coerce.number().int().min(10).max(600).default(30),
   /** The network card whose sent bytes are counted (/proc/net/dev). */
   EGRESS_CARD: z.string().min(1).default('ens4'),
   /**
