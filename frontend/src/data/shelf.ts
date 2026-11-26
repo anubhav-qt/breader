@@ -193,32 +193,38 @@ export function coverFrom(b: ShelfBook): 'site' | 'sharer' | null {
   return 'sharer';
 }
 
-async function fetchCover(token: string, b: ShelfBook): Promise<Blob | undefined> {
+/**
+ * A sharer's cover, small and the same for everyone (server routes/shelf.ts), so Cloudflare keeps
+ * it near every reader and another device of theirs gets it at once. From a server that sends
+ * pictures, the next one when that one's away.
+ */
+async function sharerCover(coverId: string): Promise<Blob | undefined> {
+  try {
+    const res = await api.manga.raw(`/v1/shared/cover/${coverId}.webp`, undefined);
+    return await res.blob();
+  } catch {
+    // Offline, or no server could send it: the drawn card until the next visit.
+    return undefined;
+  }
+}
+
+async function fetchCover(b: ShelfBook): Promise<Blob | undefined> {
   const from = coverFrom(b);
   if (!from) return undefined;
   const kept = await store.get<Blob>(`shelfcover:${b.id}`);
   if (kept) return kept;
   let blob: Blob | undefined;
-  if (from === 'site') {
-    blob = await remoteCover(b.url);
-  } else {
-    try {
-      const link = await api.post<{ url: string }>('/v1/shared/link', { token, fileId: b.coverId });
-      const res = await fetch(link.url);
-      if (res.ok) blob = await res.blob();
-    } catch {
-      // Offline, or the server is away: the drawn card until the next visit.
-    }
-  }
+  if (from === 'site') blob = await remoteCover(b.url);
+  else blob = await sharerCover(b.coverId!);
   if (blob) await store.set(`shelfcover:${b.id}`, blob);
   return blob;
 }
 
-/** The library holding a shared book, and the book, while this browser has its list. */
-function bookOf(id: string): { token: string; book: ShelfBook } | null {
-  for (const [token, lib] of Object.entries(shared.libs)) {
+/** A shared book, while this browser has the list of a library holding it. */
+function bookOf(id: string): ShelfBook | null {
+  for (const lib of Object.values(shared.libs)) {
     const book = lib.books.find((b) => b.id === id);
-    if (book) return { token, book };
+    if (book) return book;
   }
   return null;
 }
@@ -244,15 +250,15 @@ function nextCover() {
 export function wantShelfCover(id: string) {
   seenCards.add(id);
   if (shared.covers[id]) return;
-  const found = bookOf(id);
-  if (!found) return;
+  const book = bookOf(id);
+  if (!book) return;
   // None yet (one waiting for the model's yes): asked again when the library's list next changes it.
-  if (!coverFrom(found.book)) return;
-  const asked = `${id}:${found.book.coverId ?? found.book.url}`;
+  if (!coverFrom(book)) return;
+  const asked = `${id}:${book.coverId ?? book.url}`;
   if (askedCovers.has(asked)) return;
   askedCovers.add(asked);
   coverQueue.push(async () => {
-    const blob = await fetchCover(found.token, found.book);
+    const blob = await fetchCover(book);
     if (blob) set({ covers: { ...shared.covers, [id]: URL.createObjectURL(blob) } });
   });
   nextCover();

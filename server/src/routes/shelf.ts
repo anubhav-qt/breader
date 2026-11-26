@@ -43,6 +43,7 @@ import { rateLimit } from '../lib/http.ts';
 import { seal, unseal } from '../lib/seal.ts';
 import { coverState } from '../lib/coverState.ts';
 import { sessionLibrary } from '../lib/library.ts';
+import { smallCover } from '../lib/smallCover.ts';
 import { hashKey } from '../lib/session.ts';
 import { grantToken, publicTag, publicToken, readable, savesOf, sharedToken, tokenLibrary, type Opened } from '../lib/shelf.ts';
 import { applyMutation } from '../sync/apply.ts';
@@ -63,6 +64,8 @@ import { applyMutation } from '../sync/apply.ts';
 const badKey = () => new ApiError(400, 'bad_key', 'That isn’t a Breader key. Keys look like BRDR-XXXX-XXXX-XXXX-XXXX-XXXX.');
 const unknownKey = () => new ApiError(404, 'unknown_key', 'That key doesn’t open a library. Check it and try again.');
 const DAY = 86_400_000;
+/** How long a shared cover is kept, in seconds: a file's id never shows another picture. */
+const COVER_KEPT = 7 * 86_400;
 
 /** Made only to share (/shared/create): no account owns it, yet its key is kept sealed. Key libraries keep only a hash, account ones an owner. */
 const madeToShare = (lib: { ownerAccountId: string | null; keySealed: string | null }) => lib.ownerAccountId === null && lib.keySealed !== null;
@@ -551,6 +554,38 @@ export function shelfRoutes(deps: Deps) {
     if (!blob) throw new ApiError(404, 'not_found', 'That book isn’t shared in this library any more.');
     c.header('Cache-Control', 'private, no-store');
     return c.json(await storage.downloadLink(blob.r2Key));
+  });
+
+  /**
+   * A shared book's cover, small (lib/smallCover.ts), the same for everyone who sees it: by its
+   * file's id, which only those its library is open to are told. Asked for with no cookie, so
+   * Cloudflare keeps one copy near every reader (shared/src/public.ts). Only a cover some library
+   * shows now: a book's waiting for the model's yes, or one it said no to, isn't sent.
+   */
+  r.get('/shared/cover/:file{[A-Za-z0-9_-]{1,64}\\.webp}', async (c) => {
+    const coverId = c.req.param('file').replace(/\.webp$/, '');
+    const [blob] = await db
+      .select({ r2Key: blobs.r2Key })
+      .from(blobs)
+      .where(and(
+        eq(blobs.id, coverId),
+        eq(blobs.status, 'ready'),
+        sql`EXISTS (
+          SELECT 1 FROM library_items i
+          JOIN libraries l ON l.id = i.library_id AND l.retired_at IS NULL
+          WHERE i.cover_id = ${blobs.id} AND i.shared AND i.removed_at IS NULL AND ${shownAs('i')}
+            AND (i.format = 'CBZ' OR i.cover_ok = i.cover_id OR i.cover_waits IS NULL)
+        )`,
+      ));
+    if (!blob) throw new ApiError(404, 'not_found', 'That cover isn’t shared.');
+    const original = await storage.read(blob.r2Key);
+    if (!original) throw new ApiError(404, 'not_found', 'That cover isn’t shared.');
+    const small = await smallCover(original);
+    if (!small) throw new ApiError(404, 'not_found', 'That cover isn’t a picture.');
+    return c.body(small as Uint8Array<ArrayBuffer>, 200, {
+      'content-type': 'image/webp',
+      'cache-control': `public, max-age=${COVER_KEPT}, immutable`,
+    });
   });
 
   /** Whether the reader's own library is in the public feed. */

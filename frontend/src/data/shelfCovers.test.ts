@@ -8,6 +8,7 @@ import type { ShelfBook } from '@breader/shared/protocol';
 
 const TOKEN = 'publib1234567890.feed1';
 const SERIES = 'mangadex:0c2a4d7e-1f3b-4c5d-8e9f-a0b1c2d3e4f5';
+/** The sharer's covers asked for, by their file's id. */
 const links: string[] = [];
 const fromSite: string[] = [];
 let books: ShelfBook[] = [];
@@ -30,13 +31,17 @@ vi.mock('../lib/api', () => ({
   ApiError: class ApiError extends Error {},
   api: {
     get: async () => ({ libraries: [] }),
-    post: async (path: string, body: { fileId?: string }) => {
+    post: async (path: string) => {
       if (path === '/v1/shared/books') return { books, name: null, public: true, access: 'public', mayPublish: false, mayName: false };
-      if (path === '/v1/shared/link') {
-        links.push(body.fileId!);
-        return { url: `https://files.test/${body.fileId}` };
-      }
       throw new Error(`unexpected post ${path}`);
+    },
+    manga: {
+      raw: async (path: string) => {
+        const m = /^\/v1\/shared\/cover\/(.+)\.webp$/.exec(path);
+        if (!m) throw new Error(`unexpected picture ${path}`);
+        links.push(m[1]);
+        return fetch(`https://api.test${path}`);
+      },
     },
   },
 }));

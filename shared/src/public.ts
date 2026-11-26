@@ -11,6 +11,7 @@ const PUBLIC_PATHS: RegExp[] = [
   /^\/v1\/manga\/cover\//,
   /^\/v1\/manga\/anilist\/cover\//,
   /^\/v1\/manga\/source\/[^/]+\/cover$/,
+  /^\/v1\/shared\/cover\/[^/]+\.webp$/,
 ];
 
 /** Whether a path's answer is the same for everyone (its query string left off). */

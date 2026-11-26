@@ -572,6 +572,9 @@ have none, so one Cache Rule makes them cacheable (ADR 0001, point 1).
 
 Done on breader.site 2026-11-07: the rule is `public pages and covers`, Tiered Cache is on.
 
+A shared book's small cover (`/v1/shared/cover/<id>.webp`) needs no rule: Cloudflare caches the
+`.webp` ending by itself and keeps it as its `cache-control` says (a week).
+
 `fb.` is not cached this way: it is DNS only, behind Render's own Cloudflare, and Render's edge
 cache is for paid services only.
 
