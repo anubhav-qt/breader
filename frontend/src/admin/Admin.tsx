@@ -254,8 +254,7 @@ function needsOf(s: Snapshot, admin: Admin, go: Go): Need[] {
   if (m) {
     const quiet = (Date.now() - new Date(m.at).getTime()) / 1000;
     if (quiet > 180) out.push({ key: 'quiet', text: `AI marker silent for ${span(quiet)}` });
-    if (m.limitedUntil) out.push({ key: 'gemini', text: `Gemini is out on every Antigravity account, back ${until(m.limitedUntil)}`, act: { label: 'Connect another', run: jumpTo('adm-acc-h') } });
-    if (m.musicWaitsForAccount) out.push({ key: 'music', text: 'Music needs an Antigravity account', act: { label: 'Connect', run: jumpTo('adm-acc-h') } });
+    if (m.limitedUntil) out.push({ key: 'codex', text: `Codex, NVIDIA’s backup, is out, back ${until(m.limitedUntil)}`, act: { label: 'Connect another', run: jumpTo('adm-acc-h') } });
     for (const q of m.queue) {
       if (!q.failed) continue;
       out.push({ key: `q-${q.id}-${q.task}`, text: `${q.title}: ${TASK_NAMES[q.task].toLowerCase()} failed ×${q.failed.times}`, act: { label: 'Try now', run: () => admin.retry(q.id, q.task) } });
@@ -274,7 +273,7 @@ function needsOf(s: Snapshot, admin: Admin, go: Go): Need[] {
 
 const JOB_NAMES: Record<string, string> = {
   'backup': 'Nightly backup', 'restore-drill': 'Restore test', 'clean-up': 'Clean-up', 'storage-check': 'R2 check',
-  'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'manga-keep': 'Manga on the SSD', 'ai-fill': 'Gemini fills blanks', 'yt-dlp': 'yt-dlp update',
+  'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'manga-keep': 'Manga on the SSD', 'ai-fill': 'AI fills blanks', 'yt-dlp': 'yt-dlp update',
 };
 
 /** What needs doing, at the top of the page; nothing at all when nothing does. */

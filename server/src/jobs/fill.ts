@@ -1,10 +1,10 @@
 import type pg from 'pg';
 import { GENRES, joinGenres } from '@breader/shared';
-import type { Gemini } from '../lib/gemini.ts';
+import type { Tidier } from '../lib/tidier.ts';
 import { log } from '../log.ts';
 
 /*
- * What nobody gave a book, filled in by Gemini: its genres, its author when its file names none,
+ * What nobody gave a book, filled in by the model: its genres, its author when its file names none,
  * and the series a book belongs to when its file doesn't say. A manga in a library gets its genres
  * too. Each is asked about once, by its file's SHA-256 or a manga's address, whichever libraries
  * hold it, and the answer kept (ai_fills). Then it's copied into each library's books where they're
@@ -26,7 +26,7 @@ const KEY = `CASE
   WHEN b.sha256 IS NOT NULL THEN 'sha:' || b.sha256
 END`;
 
-/** A book still has something blank that Gemini could fill. */
+/** A book still has something blank that the model could fill. */
 const BLANK = `((li.genre IS NULL AND li.edit_genre IS NULL) OR li.author = '' OR (li.source <> 'remote' AND li.series IS NULL AND li.edit_series IS NULL))`;
 
 interface Wanted {
@@ -58,7 +58,7 @@ For each one give:
 Go by what you know of the work. When you don't recognise it, leave everything empty rather than guess from the title.
 Answer JSON only: {"items": [{"i": 0, "genres": [], "author": "", "series": null, "index": null}]}`;
 
-/** Gemini's answer for each book asked about, checked: known genres only, plain names, sensible numbers. */
+/** The model's answer for each book asked about, checked: known genres only, plain names, sensible numbers. */
 export function checkedFills(answer: unknown, asked: Wanted[]): Filled[] {
   const items = (answer as { items?: unknown })?.items;
   const byI = new Map<number, Record<string, unknown>>();
@@ -84,7 +84,7 @@ export function checkedFills(answer: unknown, asked: Wanted[]): Filled[] {
   });
 }
 
-/** Books with something blank that nobody has asked Gemini about yet. */
+/** Books with something blank that nobody has asked the model about yet. */
 async function wanted(pool: pg.Pool, limit: number): Promise<Wanted[]> {
   const { rows } = await pool.query<{ key: string; title: string; author: string; format: string; words: number; series: string | null; manga: boolean }>(
     `SELECT DISTINCT ON (key) key, title, author, format, words, series, manga FROM (
@@ -103,7 +103,7 @@ async function wanted(pool: pg.Pool, limit: number): Promise<Wanted[]> {
   return rows.map((r) => ({ ...r, words: Number(r.words) }));
 }
 
-/** Copies what Gemini filled in into every library's books still blank there, one library at a time. */
+/** Copies what the model filled in into every library's books still blank there, one library at a time. */
 async function spread(pool: pg.Pool): Promise<number> {
   const { rows } = await pool.query<{ id: string }>(
     `SELECT DISTINCT li.library_id AS id
@@ -147,7 +147,7 @@ async function spread(pool: pg.Pool): Promise<number> {
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
       // Its next run tries that library again.
-      log.warn({ err, libraryId: id }, 'what Gemini filled in wasn’t copied to a library');
+      log.warn({ err, libraryId: id }, 'what the tidier filled in wasn’t copied to a library');
     } finally {
       client.release();
     }
@@ -161,25 +161,28 @@ export interface FillRun {
   books: number;
 }
 
-/** Asks Gemini about what's blank and not asked about yet, keeps its answers, and copies them where they're still blank. */
-export async function fillBlanks(pool: pg.Pool, gemini: Gemini, signal?: AbortSignal): Promise<FillRun> {
+/** Asks the model about what's blank and not asked about yet, keeps its answers, and copies them where they're still blank. */
+export async function fillBlanks(pool: pg.Pool, tidier: Tidier, signal?: AbortSignal): Promise<FillRun> {
   const all = await wanted(pool, PER_RUN);
   let filled = 0;
   for (let i = 0; i < all.length && !signal?.aborted; i += PER_CALL) {
     const batch = all.slice(i, i + PER_CALL);
     const shown = batch.map((w, n) => ({ i: n, title: w.title, author: w.author, format: w.format, words: w.words || undefined, series: w.series ?? '', manga: w.manga }));
     let fills: Filled[];
+    let by: string;
     try {
-      fills = checkedFills(await gemini.json<unknown>(SYSTEM, JSON.stringify(shown), { timeout: CALL_TIMEOUT, thinking: 'low' }), batch);
+      const told = await tidier.json<unknown>(SYSTEM, JSON.stringify(shown), { timeout: CALL_TIMEOUT, thinking: 'low' });
+      fills = checkedFills(told.value, batch);
+      by = told.model;
     } catch (err) {
       // Not kept, so they're asked about again next run.
-      log.warn({ err, books: batch.length }, 'Gemini couldn’t fill in a lot of books');
+      log.warn({ err, books: batch.length }, 'No model could fill in a lot of books');
       continue;
     }
     for (const f of fills) {
       await pool.query(
         `INSERT INTO ai_fills (key, genres, author, series, series_index, by) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (key) DO NOTHING`,
-        [f.key, f.genres, f.author, f.series, f.seriesIndex, gemini.model('low')],
+        [f.key, f.genres, f.author, f.series, f.seriesIndex, by],
       );
       if (f.genres || f.author || f.series) filled += 1;
     }

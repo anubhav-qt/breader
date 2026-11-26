@@ -12,14 +12,23 @@ export type MarkerTask = (typeof MARKER_TASKS)[number];
 
 /** An NVIDIA model by its id there: "moonshotai/kimi-k2.6". */
 const NIM_ID = /^[\w.-]+\/[\w.:-]+$/;
-/** Antigravity's Gemini models, through CLIProxyAPI: "gemini-3.8-flash-high". */
-const GEMINI_ID = /^gemini-[\w.-]+$/;
 
 /** The models the page offered before it listed NVIDIA's, and theirs now. */
 const OLD_FIRST: Record<string, string> = { 'kimi-k3': 'moonshotai/kimi-k2.6', nemotron: 'nvidia/nemotron-3-ultra-550b-a55b' };
 
+/** Models NVIDIA has retired (they answer 410 Gone), and the one that takes each one's place. */
+const RETIRED: Record<string, string> = { 'moonshotai/kimi-k2.6': 'nvidia/nemotron-3.5-super-vl-120b-a12b' };
+
+/** A saved first and second, with any model NVIDIA retired swapped for its stand-in. */
+function unretired(m: Partial<MarkerSettings>) {
+  if (m.first && RETIRED[m.first]) m.first = RETIRED[m.first];
+  if (m.second && RETIRED[m.second]) m.second = RETIRED[m.second];
+  if (m.first && m.first === m.second) m.second = MARKER_DEFAULTS.second;
+  if (m.first && m.first === m.second) m.second = MARKER_DEFAULTS.first;
+}
+
 /**
- * An NVIDIA model's name in CLIProxyAPI, which serves NVIDIA's models beside Antigravity's
+ * An NVIDIA model's name in CLIProxyAPI, which serves NVIDIA's models beside Codex's
  * (server/src/jobs/cliproxy.ts), so the harness can work with them: no slash, as it goes in a path.
  */
 export const nimAlias = (id: string) => `nim-${id.replace(/\//g, '--')}`;
@@ -36,15 +45,21 @@ export const STAGES = {
 } as const;
 export type Stage = (typeof STAGES)[MarkerTask][number];
 export const ALL_STAGES: Stage[] = [...new Set(Object.values(STAGES).flat())];
-/** Stages done with tools, on Gemini unless the page says otherwise. */
+/** Stages done with tools: NVIDIA's models with the harness's tools, Codex as the backup. */
 export const HARNESS_STAGES: readonly Stage[] = ['research', 'music.gather'];
+/**
+ * Stages Codex leads, NVIDIA's models behind it when Codex can't answer: the owner's choice on
+ * 2026-11-26, as Codex gathered fuller soundtracks. A stage's pick still goes ahead of it.
+ */
+export const CODEX_STAGES: readonly Stage[] = ['music.gather'];
 
 /**
- * Who does a stage: NVIDIA or Gemini, and which model. No model is the usual order: NVIDIA's first
- * and second models (the marker's settings), or Gemini 3.8 Flash and then the newest.
+ * Who does a stage: one of NVIDIA's models, ahead of the usual order. No model is the usual order:
+ * NVIDIA's first and second models (the marker's settings), then Codex as the backup
+ * (ai/tools/backup.ts). Picks of Gemini from before are dropped as the state is read.
  */
 export interface StagePick {
-  provider: 'nim' | 'gemini';
+  provider: 'nim';
   model?: string;
 }
 
@@ -61,7 +76,7 @@ export interface MarkerSettings {
   first: string;
   /** The one that steps in while the first is down. */
   second: string;
-  /** Web research before marks, music and notes, on Antigravity. */
+  /** Web research before marks, music and notes, on NVIDIA with Codex as the backup. */
   research: boolean;
   /** A failed book waits 2 minutes, doubling each time, up to this many. */
   retryCapMinutes: number;
@@ -71,7 +86,7 @@ export const MARKER_DEFAULTS: MarkerSettings = {
   paused: false,
   tasks: { marks: true, music: true, notes: true },
   atOnce: { marks: 4, music: 2, notes: 2 },
-  first: 'moonshotai/kimi-k2.6',
+  first: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
   second: 'nvidia/nemotron-3-ultra-550b-a55b',
   research: true,
   retryCapMinutes: 60,
@@ -127,9 +142,8 @@ export const MarkerPatch = z
   .strict();
 
 const PickSchema = z
-  .object({ provider: z.enum(['nim', 'gemini']), model: z.string().max(200).optional() })
-  .strict()
-  .refine((p) => !p.model || (p.provider === 'nim' ? NIM_ID : GEMINI_ID).test(p.model), 'not a model of that provider');
+  .object({ provider: z.literal('nim'), model: z.string().max(200).regex(NIM_ID).optional() })
+  .strict();
 
 /**
  * Who does which stages, from the page: for these books (`ids`), or for books to come (no ids). A
@@ -188,6 +202,7 @@ export function adminStateOf(raw: unknown): AdminState {
     m.first = OLD_FIRST[m.first];
     m.second = Object.values(OLD_FIRST).find((x) => x !== m.first);
   }
+  unretired(m);
   const parsed = MarkerPatch.safeParse(m);
   const marker: MarkerSettings = { ...MARKER_DEFAULTS, ...(parsed.success ? parsed.data : {}) };
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);

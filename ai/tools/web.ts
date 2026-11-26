@@ -5,17 +5,26 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { Type } from '../pi/pi-ai/src/index.ts';
 import { log } from './balancer.ts';
 import { tool, type Brain } from './harness.ts';
+import { accountOf, proxyRoot, setting } from './proxy.ts';
 
 /*
- * The harness's view of the web: a search, answered by Gemini with Google Search through the
- * same Antigravity accounts, and a page read the way Firefox's reader view reads it (Mozilla's
- * Readability). Only metadata goes into a search: a series' names, never a book's text.
+ * The harness's view of the web: a search, and a page read the way Firefox's reader view reads it
+ * (Mozilla's Readability). Only metadata goes into a search: a series' names, never a book's text.
+ *
+ * NVIDIA's models can't search the web themselves, so a SearXNG (SEARXNG_URL,
+ * github.com/searxng/searxng) lists what the web has, and the model reads the pages it picks.
+ * Codex, NVIDIA's backup, searches with its own web search through the proxy, which is also the
+ * search when SearXNG can't answer.
  *
  * A page is only fetched from the public internet. The worker sits next to the proxy, the
  * database and the API, and a page the model was pointed to by another page shouldn't reach them.
  */
 
 const SEARCH_TIMEOUT_MS = 90_000;
+const SEARX_TIMEOUT_MS = 30_000;
+/** SearXNG's results shown for a search, the best first. */
+const SEARX_RESULTS = 10;
+const SNIPPET_CHARS = 300;
 const PAGE_TIMEOUT_MS = 20_000;
 const PAGE_BYTES = 3 * 1024 * 1024;
 const PAGE_CHARS = 8000;
@@ -24,59 +33,170 @@ const KEPT_PAGES = 40;
 
 const round = (n: number) => Math.round(n * 10) / 10;
 
-interface Grounded {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
-    groundingMetadata?: {
-      webSearchQueries?: string[];
-      groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
-    };
-  }>;
-  error?: { message?: string };
+/** What a search found: the answer, what was searched, and the sources. */
+interface Found {
+  answer: string;
+  queries: string[];
+  sources: Array<{ url: string; title?: string }>;
 }
 
-/** A grounded answer as the model reads it: the answer, what was searched, and the sources. */
-export function searchAnswer(body: Grounded): string {
-  const c = body.candidates?.[0];
-  if (!c) throw new Error('The search came back empty: try other words.');
-  let answer = '';
-  for (const part of c.content?.parts ?? []) {
-    if (part.thought) continue;
-    answer += part.text ?? '';
-  }
-  const lines = [answer.trim() || '(No answer.)'];
-  const queries = c.groundingMetadata?.webSearchQueries ?? [];
-  if (queries.length) lines.push('', `Searched: ${queries.join('; ')}`);
-  const sources = c.groundingMetadata?.groundingChunks ?? [];
-  if (sources.length) {
+/** A search's findings as the model reads them. */
+function asText(f: Found): string {
+  const lines = [f.answer.trim() || '(No answer.)'];
+  if (f.queries.length) lines.push('', `Searched: ${f.queries.join('; ')}`);
+  if (f.sources.length) {
     lines.push('', 'Sources (read one with read_page):');
-    sources.forEach((s, i) => {
-      lines.push(`${i + 1}. ${s.web?.title ?? 'untitled'}: ${s.web?.uri ?? ''}`);
+    f.sources.forEach((s, i) => {
+      lines.push(`${i + 1}. ${s.title ?? 'untitled'}: ${s.url}`);
     });
   }
   return lines.join('\n');
 }
 
-/** Asks the web, through Gemini with Google Search, trying the models in order. */
-export async function webSearch(b: Brain, query: string): Promise<string> {
-  const prompt = `Search the web and answer this: ${query}
+interface Responded {
+  output?: Array<{
+    type?: string;
+    action?: { query?: string; queries?: string[]; sources?: Array<{ url?: string; title?: string }> };
+    content?: Array<{ type?: string; text?: string; annotations?: Array<{ type?: string; url?: string; title?: string }> }>;
+  }>;
+}
+
+/** An address without the tag Codex puts on the ones it cites. */
+function untagged(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete('utm_source');
+    return u.href;
+  } catch {
+    return url;
+  }
+}
+
+/** Codex's answer as the model reads it: cited sources first. */
+export function responsesAnswer(body: Responded): string {
+  let answer = '';
+  const queries: string[] = [];
+  const cited: Array<{ url: string; title?: string }> = [];
+  const found: Array<{ url: string; title?: string }> = [];
+  for (const item of body.output ?? []) {
+    if (item.type === 'web_search_call') {
+      const a = item.action ?? {};
+      if (a.query) queries.push(a.query);
+      for (const q of a.queries ?? []) queries.push(q);
+      for (const src of a.sources ?? []) {
+        if (src.url) found.push({ url: src.url, title: src.title });
+      }
+    }
+    if (item.type === 'message') {
+      for (const c of item.content ?? []) {
+        if (c.type !== 'output_text') continue;
+        answer += c.text ?? '';
+        for (const note of c.annotations ?? []) {
+          if (note.type === 'url_citation' && note.url) cited.push({ url: note.url, title: note.title });
+        }
+      }
+    }
+  }
+  if (!answer.trim() && !found.length) throw new Error('The search came back empty: try other words.');
+  const sources: Found['sources'] = [];
+  const seen = new Set<string>();
+  for (const src of [...cited, ...found]) {
+    const url = untagged(src.url);
+    if (seen.has(url)) continue;
+    seen.add(url);
+    sources.push({ url, title: src.title });
+  }
+  return asText({ answer, queries: [...new Set(queries)], sources });
+}
+
+interface Searxed {
+  results?: Array<{ url?: string; title?: string; content?: string }>;
+}
+
+/** SearXNG's results as the model reads them: each one's title, address and snippet, to read with read_page. */
+export function searxAnswer(body: Searxed, query: string): string {
+  const kept: Array<{ url: string; title: string; snippet: string }> = [];
+  const seen = new Set<string>();
+  for (const r of body.results ?? []) {
+    if (!r.url || seen.has(r.url)) continue;
+    seen.add(r.url);
+    const snippet = (r.content ?? '').replace(/\s+/g, ' ').trim();
+    kept.push({ url: r.url, title: r.title?.trim() || 'untitled', snippet: snippet.slice(0, SNIPPET_CHARS) });
+    if (kept.length >= SEARX_RESULTS) break;
+  }
+  if (!kept.length) throw new Error('The search found nothing: try other words, or the names in Japanese.');
+  const lines = [`Results for: ${query}`, 'These are only snippets: read the useful pages with read_page before you trust them.', ''];
+  kept.forEach((r, i) => {
+    lines.push(`${i + 1}. ${r.title}: ${r.url}`);
+    if (r.snippet) lines.push(`   ${r.snippet}`);
+  });
+  return lines.join('\n');
+}
+
+/** SearXNG's address, or '' when there's none. */
+const searxUrl = () => setting('SEARXNG_URL').replace(/\/+$/, '');
+
+/** One search on SearXNG, for an NVIDIA model to read. */
+async function searxSearch(base: string, query: string): Promise<string> {
+  const url = new URL(`${base}/search`);
+  url.searchParams.set('q', query);
+  url.searchParams.set('format', 'json');
+  const startedAt = Date.now();
+  const res = await fetch(url, { signal: AbortSignal.timeout(SEARX_TIMEOUT_MS) });
+  const secs = round((Date.now() - startedAt) / 1000);
+  log({ at: new Date(startedAt).toISOString(), use: 'web_search', model: 'searxng', ok: res.ok, status: res.status, secs });
+  if (!res.ok) throw new Error(`SearXNG: ${res.status}`);
+  return searxAnswer((await res.json()) as Searxed, query);
+}
+
+const PROMPT = (query: string) => `Search the web and answer this: ${query}
 
 Keep to what the sources say. Write names and titles exactly as they're published, in English and in Japanese where they have both. Under 300 words.`;
-  const body = JSON.stringify({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    tools: [{ googleSearch: {} }],
-  });
+
+/** One search on a Codex model, with its own web search, at medium thinking. */
+function searchRequest(m: { id: string; baseUrl: string }, apiKey: string, query: string): { url: string; init: RequestInit } {
+  const body = {
+    model: m.id,
+    input: PROMPT(query),
+    tools: [{ type: 'web_search' }],
+    include: ['web_search_call.action.sources'],
+    reasoning: { effort: 'medium' },
+  };
+  return {
+    url: `${proxyRoot(m)}/v1/responses`,
+    init: {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+    },
+  };
+}
+
+/**
+ * Asks the web the way the harness's models can, in their order: SearXNG for an NVIDIA model
+ * (once, however many there are), Codex's own search for its.
+ */
+export async function webSearch(b: Brain, query: string): Promise<string> {
   const problems: string[] = [];
+  const searx = searxUrl();
+  let searxTried = false;
   for (const m of b.models) {
+    if (accountOf(m.id) === 'NVIDIA') {
+      if (!searx || searxTried) continue;
+      searxTried = true;
+      try {
+        return await searxSearch(searx, query);
+      } catch (e) {
+        problems.push((e as Error).message);
+      }
+      continue;
+    }
     const startedAt = Date.now();
+    const request = searchRequest(m, b.apiKey, query);
     let res: Response;
     try {
-      res = await fetch(`${m.baseUrl}/models/${m.id}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': b.apiKey },
-        body,
-        signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-      });
+      res = await fetch(request.url, request.init);
     } catch (e) {
       problems.push(`${m.id}: ${(e as Error).message}`);
       continue;
@@ -87,7 +207,7 @@ Keep to what the sources say. Write names and titles exactly as they're publishe
       problems.push(`${m.id}: ${res.status}`);
       continue;
     }
-    return searchAnswer((await res.json()) as Grounded);
+    return responsesAnswer((await res.json()) as Responded);
   }
   throw new Error(`The search failed (${problems.join('; ')}). Try again in a while, or search YouTube directly.`);
 }
@@ -232,7 +352,7 @@ export async function readPage(address: string, from: number): Promise<string> {
 export function webSearchTool(b: Brain) {
   return tool(
     'web_search',
-    'Searches the web with Google and answers from what it finds, with the sources. Ask one clear question at a time, with the names you know in English and Japanese.',
+    'Searches the web: an answer with its sources, or a list of results to read with read_page. Ask one clear question at a time, with the names you know in English and Japanese.',
     Type.Object({ query: Type.String({ description: 'The question, e.g. "Who composed the anime soundtrack of <series>, and what are its OST albums for each season?"' }) }),
     (args) => webSearch(b, args.query),
   );

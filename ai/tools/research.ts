@@ -1,16 +1,16 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Type } from '../pi/pi-ai/src/index.ts';
-import { brain, runAgent, tool, type Brain } from './harness.ts';
+import { brain, byLine, runAgent, tool, type Brain } from './harness.ts';
 import { mins, webFile } from './kimi.ts';
 import { bookDir, count, loadQueue, QUEUE, readJson, slug, WORK, writeJson, type QueueBook } from './lib.ts';
 import { readPageTool, webSearchTool } from './web.ts';
 
 /*
- * Research from the web, by the harness (harness.ts): Gemini on Antigravity looks up everything
- * the NVIDIA models need to mark, note and score a book well, from its names alone (the series,
- * the title, the author, the volume). No word of the book goes to Gemini. The NVIDIA models read
- * the book; Gemini fetches what the book doesn't say: who everyone is and how they sound, the
+ * Research from the web, by the harness (harness.ts): NVIDIA's models, or Codex as their
+ * backup, look up everything the NVIDIA models need to mark, note and score a book well, from its
+ * names alone (the series, the title, the author, the volume). No word of the book goes to it. The
+ * NVIDIA models read the book; the harness fetches what the book doesn't say: who everyone is and how they sound, the
  * spellings this translation uses, the traps (a hidden gender, a disguise, a name that changes),
  * how the story is told, and the adaptations and their music, which the soundtrack starts from
  * (music.ts).
@@ -181,8 +181,7 @@ function researchTools(b: Brain, r: SeriesResearch, volume: string) {
 
 /**
  * A book's research from the web: the series' brought up to date for this volume, into the book's
- * web.md. One series at a time. Waits while every Antigravity account is out of Gemini, and
- * carries on from the chat where a run before stopped.
+ * web.md. One series at a time. Carries on from the chat where a run before stopped.
  */
 export async function researchBook(b: QueueBook, given?: Brain): Promise<void> {
   const name = seriesName(b);
@@ -202,6 +201,7 @@ export async function researchBook(b: QueueBook, given?: Brain): Promise<void> {
       return `${missing.join(', ')} ${missing.length === 1 ? 'isn’t' : 'aren’t'} written yet.`;
     };
     const started = Date.now();
+    const answeredBy = new Set<string>();
     await runAgent({
       chat: `research-${slug(name)}`,
       ask: volume,
@@ -210,11 +210,12 @@ export async function researchBook(b: QueueBook, given?: Brain): Promise<void> {
       tools: researchTools(using, r, volume),
       unfinished,
       label: { book: b.key, research: first ? 'series' : 'volume' },
+      answeredBy,
     }, using);
     r.made = new Date().toISOString();
     save(r);
 
-    const head = `# From the web: ${name}\n\nResearched by Gemini on Antigravity, ${r.made.slice(0, 10)}, from ${r.sources.length} pages. It may say more than this book shows: notes keep to what the book shows, and where the web and the book disagree, the book wins.`;
+    const head = `# From the web: ${name}\n\nResearched by ${byLine(answeredBy)}, ${r.made.slice(0, 10)}, from ${r.sources.length} pages. It may say more than this book shows: notes keep to what the book shows, and where the web and the book disagree, the book wins.`;
     mkdirSync(bookDir(b.key), { recursive: true });
     writeFileSync(webFile(b), `${head}\n\n${render(r, volume, false)}\n`);
     const done: ResearchDone = { at: r.made, pages: r.sources.length };

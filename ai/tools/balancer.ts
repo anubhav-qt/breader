@@ -4,7 +4,8 @@ import { LADDER, nimRung, PRIMARY, SHRINKS } from './kimi.ts';
 import { chat, CallError, type Failure, type Judge, type Msg, type Reply } from './nim.ts';
 import { callOut, current, partOf, whilePaused } from './jobs.ts';
 import { WORK } from './lib.ts';
-import { FIRST_MODEL, proxy } from './proxy.ts';
+import { checkBackup, onBackup, startBackup, whenBackupEnds } from './backup.ts';
+import { CODEX_FIRST, proxy } from './proxy.ts';
 import { pickFor, stageOf } from './stages.ts';
 
 /*
@@ -36,8 +37,11 @@ import { pickFor, stageOf } from './stages.ts';
  *   is being marked, so a new book's marks go before anyone's notes.
  * - Inside one of the marker's jobs (jobs.ts), a call waits while the admin page has it paused, gives
  *   up when the book is stopped, and counts as the book's while it's out.
- * - The admin page can pick who does a stage (stages.ts): another NVIDIA model, or Gemini through
- *   CLIProxyAPI. That one goes first for the stage's calls, the usual ones behind it.
+ * - The admin page can pick another NVIDIA model for a stage (stages.ts). That one goes first for
+ *   the stage's calls, the usual ones behind it.
+ * - Codex (GPT-6.1 Terra at medium, through CLIProxyAPI) is the backup, after NVIDIA's first and
+ *   second. Once it takes a call because both are cooling, it keeps the calls for 10 minutes, and
+ *   then NVIDIA is tried again afresh (backup.ts).
  *
  * Every call is logged to ai/work/_calls.jsonl (timings and token counts, never text), which is
  * how the numbers above get checked.
@@ -53,15 +57,22 @@ export interface Rung {
   maxInFlight: number;
   /** One of the top models, sharing the calls with the others as an equal. */
   primary?: boolean;
-  /** Gemini on Antigravity, through CLIProxyAPI (proxy.ts), not NVIDIA. */
-  gemini?: boolean;
+  /** Codex, through CLIProxyAPI (proxy.ts), not NVIDIA: the backup. */
+  codex?: boolean;
 }
 
-/** Gemini's longest answer. */
-const GEMINI_MAX_TOKENS = 65_000;
+/** Codex's longest answer. */
+const CODEX_MAX_TOKENS = 64_000;
 
-/** A rung for one of Antigravity's Gemini models. */
-export const geminiRung = (model: string): Rung => ({ model, name: model, maxTokens: GEMINI_MAX_TOKENS, maxInFlight: 8, gemini: true });
+/** The backup's rung: GPT-6.1 Terra on Codex, thinking at medium. */
+export const codexRung = (): Rung => ({
+  model: CODEX_FIRST,
+  name: CODEX_FIRST,
+  maxTokens: CODEX_MAX_TOKENS,
+  maxInFlight: 4,
+  extra: { reasoning_effort: 'medium' },
+  codex: true,
+});
 
 export interface Options {
   /** How long the top models may be cooling before a weaker one takes the call. */
@@ -113,6 +124,32 @@ const stateOf = (r: Rung): State => {
   return s;
 };
 
+/** When Codex's window ends, NVIDIA's models are tried again afresh. */
+whenBackupEnds(() => {
+  for (const [model, s] of STATES) {
+    if (model === CODEX_FIRST) continue;
+    s.coolUntil = 0;
+    s.strikes = 0;
+  }
+});
+
+/** Whether every NVIDIA rung is cooling or refusing the key: down, not just turning one call away. */
+function nvidiaDown(ladder: Rung[], now: number): boolean {
+  const nvidia = ladder.filter((r) => !r.codex);
+  return nvidia.every((r) => {
+    const s = stateOf(r);
+    return s.gone || s.coolUntil > now;
+  });
+}
+
+/** The ladder with Codex's rung last, when there's a proxy; first, as the one top rung, while it has the calls. */
+export function withBackup(ladder: Rung[], now: number): Rung[] {
+  if (!proxy()) return ladder;
+  const codex = codexRung();
+  if (!onBackup(now)) return [...ladder, codex];
+  return [{ ...codex, primary: true }, ...ladder.map((r) => ({ ...r, primary: false }))];
+}
+
 export interface Answer {
   reply: Reply;
   rung: Rung;
@@ -143,17 +180,18 @@ export class Balancer {
    * kimi.ts), with the model the page picked for the call's stage first.
    */
   private ladderFor(label: Record<string, unknown>): Rung[] {
-    // A balancer on the first model alone marks again what the second did (marker.ts, top).
-    const pick = pickFor(stageOf(label, this.ladder === PRIMARY));
-    if (!pick) return this.ladder;
-    let head: Rung;
-    if (pick.provider === 'gemini') head = geminiRung(pick.model ?? FIRST_MODEL);
-    else if (pick.model) head = nimRung(pick.model);
-    else return this.ladder;
-    head.primary = true;
-    // Marking again is the first model's alone; everything else falls back to the usual ones.
-    if (this.ladder === PRIMARY) return [head];
-    return [head, ...LADDER.filter((r) => r.model !== head.model).map((r) => ({ ...r, primary: false }))];
+    // A balancer on the first model alone marks again what the second did (marker.ts, top): no backup.
+    const again = this.ladder === PRIMARY;
+    const pick = pickFor(stageOf(label, again));
+    let ladder = this.ladder;
+    if (pick?.model) {
+      const head: Rung = { ...nimRung(pick.model), primary: true };
+      // Marking again is the picked model's alone; everything else falls back to the usual ones.
+      if (again) ladder = [head];
+      else ladder = [head, ...LADDER.filter((r) => r.model !== head.model).map((r) => ({ ...r, primary: false }))];
+    }
+    if (again) return ladder;
+    return withBackup(ladder, Date.now());
   }
 
   /** The top rungs: the primary ones at the start of the ladder, or just the first. */
@@ -215,8 +253,14 @@ export class Balancer {
         await sleep(jitter(10_000));
         continue;
       }
-      const r = this.pick(ladder(), Date.now(), skip);
-      if (typeof r !== 'number') return r;
+      const now = Date.now();
+      checkBackup(now);
+      const rungs = ladder();
+      const r = this.pick(rungs, now, skip);
+      if (typeof r !== 'number') {
+        if (r.codex && nvidiaDown(rungs, now)) startBackup(now);
+        return r;
+      }
       await sleep(jitter(r));
     }
   }
@@ -259,7 +303,7 @@ export class Balancer {
       const s = stateOf(r);
       const level = levels.get(r.model) ?? 0;
       s.inFlight++;
-      const back = callOut(r.name, r.gemini ? 'Antigravity' : 'NVIDIA', partOf(label));
+      const back = callOut(r.name, r.codex ? 'Codex' : 'NVIDIA', partOf(label));
       const at = new Date().toISOString();
       let pause = 0;
       try {
@@ -308,11 +352,11 @@ export class Balancer {
   }
 }
 
-/** Where a rung's calls go: CLIProxyAPI for Gemini, NVIDIA otherwise. */
+/** Where a rung's calls go: CLIProxyAPI for Codex, NVIDIA otherwise. */
 function endpointOf(r: Rung): { url: string; key: string } | undefined {
-  if (!r.gemini) return undefined;
+  if (!r.codex) return undefined;
   const p = proxy();
-  if (!p) throw new CallError('gone', 'there’s no CLIProxyAPI for Gemini');
+  if (!p) throw new CallError('gone', 'there’s no CLIProxyAPI for Codex');
   return { url: `${p.url}/v1/chat/completions`, key: p.apiKey };
 }
 

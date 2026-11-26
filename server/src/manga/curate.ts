@@ -1,13 +1,13 @@
 import type pg from 'pg';
 import { MANGA_KINDS, type MangaFound, type MangaKind, type MangaSort } from '@breader/shared';
-import type { Gemini } from '../lib/gemini.ts';
+import type { Tidier } from '../lib/tidier.ts';
 import { log } from '../log.ts';
 
 /*
  * Browse's tabs (Popular, Updated, Top rated) hold what their sites list, which isn't always what
  * the tab says: a scanlator's recruitment post, a placeholder, a fan work in a list of real
  * series, explicit series in a list without 18+, a series of another kind. Each list is shown as
- * it's fetched; behind it, Gemini (thinking medium) looks at the cards it hasn't seen in that tab
+ * it's fetched; behind it, the model (thinking medium) looks at the cards it hasn't seen in that tab
  * and says which don't belong. Those are left out of the tab from then on, on either server
  * (rec_checks, in Supabase), and each card is looked at once per tab. A search by name shows
  * whatever it finds: only the tabs are checked.
@@ -32,7 +32,7 @@ export interface Tab {
 }
 
 export interface Curate {
-  /** The tab's cards without those Gemini said don't belong, and the ones it hasn't seen asked about behind. */
+  /** The tab's cards without those the model said don't belong, and the ones it hasn't seen asked about behind. */
   check(tab: Tab, items: MangaFound[]): Promise<MangaFound[]>;
   /** Only what's known already, from memory, at once: for what a list shows before its lot's whole. */
   known(tab: Tab, items: MangaFound[]): MangaFound[];
@@ -78,7 +78,7 @@ const SORTS: Record<MangaSort, string> = {
   relevance: 'Relevance',
 };
 
-/** What Gemini is told about the tab. */
+/** What the model is told about the tab. */
 function about(t: Tab): string {
   const kinds = t.kinds.length === MANGA_KINDS.length ? 'every kind (manga, manhwa, manhua, comics)' : `only ${t.kinds.join(', ')}`;
   let age = 'no 18+ series (no explicit sexual content)';
@@ -96,7 +96,7 @@ Say a card doesn't belong only when it clearly:
 A series you don't recognise still belongs. When unsure, it belongs.
 Answer JSON only: {"out": [{"i": 0, "why": "a few words"}]}, listing only the cards that don't belong.`;
 
-/** Gemini's cards that don't belong, checked: indices in range, each once, with a short why. */
+/** The model's cards that don't belong, checked: indices in range, each once, with a short why. */
 export function checkedOut(answer: unknown, size: number): Map<number, string> {
   const raw = (answer as { out?: unknown })?.out;
   const out = new Map<number, string>();
@@ -110,7 +110,7 @@ export function checkedOut(answer: unknown, size: number): Map<number, string> {
   return out;
 }
 
-export function makeCurate(o: { checks: Checks; gemini: Gemini | null }): Curate {
+export function makeCurate(o: { checks: Checks; tidier: Tidier | null }): Curate {
   const kept = new Map<string, boolean>();
   const unknownUntil = new Map<string, number>();
   /** Cards being looked at, by tab and card. */
@@ -124,7 +124,7 @@ export function makeCurate(o: { checks: Checks; gemini: Gemini | null }): Curate
     while (kept.size > MOST_KEPT) kept.delete(kept.keys().next().value!);
   }
 
-  /** Asks Gemini about these cards in the tab, a lot at a time, and keeps what it says. */
+  /** Asks the model about these cards in the tab, a lot at a time, and keeps what it says. */
   async function look(t: Tab, tab: string, cards: MangaFound[]) {
     for (let i = 0; i < cards.length; i += PER_CALL) {
       const lot = cards.slice(i, i + PER_CALL);
@@ -140,14 +140,14 @@ export function makeCurate(o: { checks: Checks; gemini: Gemini | null }): Curate
         people: f.people.slice(0, 3),
       }));
       try {
-        const answer = await o.gemini!.json<unknown>(SYSTEM, `${about(t)}\n${JSON.stringify(shown)}`, { timeout: CALL_TIMEOUT, thinking: 'medium' });
-        const out = checkedOut(answer, lot.length);
+        const told = await o.tidier!.json<unknown>(SYSTEM, `${about(t)}\n${JSON.stringify(shown)}`, { timeout: CALL_TIMEOUT, thinking: 'medium' });
+        const out = checkedOut(told.value, lot.length);
         const rows = lot.map((f, n) => ({ card: f.card.id, hide: out.has(n), why: out.get(n) ?? '' }));
-        await o.checks.put(tab, rows, o.gemini!.model('medium'));
+        await o.checks.put(tab, rows, told.model);
         for (const r of rows) keep(at(tab, r.card), r.hide);
-        if (out.size) log.info({ tab, out: [...out].map(([n, why]) => `${lot[n].card.title}: ${why}`) }, 'Gemini left cards out of a Browse tab');
+        if (out.size) log.info({ tab, out: [...out].map(([n, why]) => `${lot[n].card.title}: ${why}`) }, 'The tidier left cards out of a Browse tab');
       } catch (err) {
-        log.warn({ err, tab }, 'Gemini couldn’t check a Browse tab’s cards, so they’re shown as fetched');
+        log.warn({ err, tab }, 'No model could check a Browse tab’s cards, so they’re shown as fetched');
       } finally {
         for (const f of lot) looking.delete(at(tab, f.card.id));
       }
@@ -180,8 +180,8 @@ export function makeCurate(o: { checks: Checks; gemini: Gemini | null }): Curate
           log.warn({ err }, 'Browse’s checks couldn’t be read, so the tab is shown as fetched');
         }
       }
-      // What Gemini hasn't seen in this tab is looked at behind the reader, once.
-      if (o.gemini) {
+      // What the model hasn't seen in this tab is looked at behind the reader, once.
+      if (o.tidier) {
         const fresh: MangaFound[] = [];
         for (const f of items) {
           const key = at(tab, f.card.id);

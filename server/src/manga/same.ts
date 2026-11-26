@@ -2,16 +2,16 @@ import { createHash } from 'node:crypto';
 import type pg from 'pg';
 import type { MangaFound } from '@breader/shared';
 import type { Store } from '../lib/cache.ts';
-import type { Gemini } from '../lib/gemini.ts';
+import type { Tidier } from '../lib/tidier.ts';
 import { log } from '../log.ts';
 
 /*
  * Which series a search found are one series, where their names don't say: "Sousou no Frieren" on
  * one site and "Frieren: Beyond Journey's End" on another, a title in Korean and its English one.
- * Gemini looks at a lot's cards the first time they come together and groups the ones that are the
+ * The model looks at a lot's cards the first time they come together and groups the ones that are the
  * same work. Each group's key (a G and letters, which no title keys to, as seriesName's are in
  * small letters) goes among its cards' names, so Browse, a series' sheet and the prefetch show them
- * as one card as they do series of one name (shared sameSeries). Every card Gemini has looked at
+ * as one card as they do series of one name (shared sameSeries). Every card the model has looked at
  * is kept with its group in Supabase (series_matches), a card with no other copy as a group of its
  * own, so each is asked about once, on either server. A lot whose groups have been looked at
  * together before isn't asked about again (kept by its groups, in Redis).
@@ -98,7 +98,7 @@ export function pgGroups(pool: pg.Pool): Groups {
   };
 }
 
-/** A card as Gemini is shown it. */
+/** A card as the model is shown it. */
 interface Shown {
   i: number;
   title: string;
@@ -120,7 +120,7 @@ Never group: a sequel, prequel or spin-off with its original; an anthology, douj
 Cards that already share a "group" are the same series; you may add cards to that group.
 Answer JSON only: {"groups": [[i, i, ...], ...]}, listing only groups of two or more cards, each card at most once.`;
 
-/** What Gemini is told about each card. */
+/** What the model is told about each card. */
 function shown(list: MangaFound[], groups: Map<string, string>): Shown[] {
   return list.map((f, i) => {
     const s: Shown = {
@@ -140,7 +140,7 @@ function shown(list: MangaFound[], groups: Map<string, string>): Shown[] {
   });
 }
 
-/** Gemini's groups, checked: indices in range, each once, groups of two or more. */
+/** The model's groups, checked: indices in range, each once, groups of two or more. */
 export function checkedGroups(answer: unknown, size: number): number[][] {
   const raw = (answer as { groups?: unknown })?.groups;
   if (!Array.isArray(raw)) return [];
@@ -171,7 +171,7 @@ function withGroup(f: MangaFound, canon: string | undefined): MangaFound {
   return { ...f, keys: [...f.keys, canon] };
 }
 
-export function makeSame(o: { groups: Groups; gemini: Gemini | null; store: Store }): Same {
+export function makeSame(o: { groups: Groups; tidier: Tidier | null; store: Store }): Same {
   const kept = new Map<string, string>();
   const unknownUntil = new Map<string, number>();
   const asking = new Map<string, Promise<void>>();
@@ -211,10 +211,10 @@ export function makeSame(o: { groups: Groups; gemini: Gemini | null; store: Stor
     return out;
   }
 
-  /** Asks Gemini about one lot's cards, and keeps what it says. */
+  /** Asks the model about one lot's cards, and keeps what it says. */
   async function ask(list: MangaFound[], groups: Map<string, string>) {
-    const answer = await o.gemini!.json<unknown>(SYSTEM, JSON.stringify(shown(list, groups)), { timeout: BEHIND, thinking: 'low' });
-    const told = checkedGroups(answer, list.length);
+    const answer = await o.tidier!.json<unknown>(SYSTEM, JSON.stringify(shown(list, groups)), { timeout: BEHIND, thinking: 'low' });
+    const told = checkedGroups(answer.value, list.length);
     const target = new Map<number, string>();
     const into = new Map<string, string>();
     for (const members of told) {
@@ -231,7 +231,7 @@ export function makeSame(o: { groups: Groups; gemini: Gemini | null; store: Stor
       if (was === canon) continue;
       rows.push({ card: f.card.id, canon, names: f.keys.filter((k) => !isGroupKey(k)) });
     }
-    if (rows.length || into.size) await o.groups.put(rows, into, o.gemini!.model('low'));
+    if (rows.length || into.size) await o.groups.put(rows, into, answer.model);
     for (const r of rows) keep(r.card, r.canon);
     if (into.size) {
       for (const [card, g] of kept) {
@@ -241,7 +241,7 @@ export function makeSame(o: { groups: Groups; gemini: Gemini | null; store: Stor
     }
     // Kept by the groups the lot has now, as the next lot like it will be.
     await o.store.set(lotKey(list, (c) => kept.get(c)), true, LOOKED_FOR);
-    if (told.length) log.info({ groups: told.length, cards: list.length, model: o.gemini!.model('low') }, 'Gemini grouped a lot’s series');
+    if (told.length) log.info({ groups: told.length, cards: list.length, model: answer.model }, 'The tidier grouped a lot’s series');
   }
 
   return {
@@ -255,7 +255,7 @@ export function makeSame(o: { groups: Groups; gemini: Gemini | null; store: Stor
       const list = [...byCard.values()].slice(0, MOST_CARDS);
       let groups = await groupsOf(list.map((f) => f.card.id));
 
-      if (o.gemini && list.length >= 2) {
+      if (o.tidier && list.length >= 2) {
         // Looked at together before when every card has a group and those groups were in one lot.
         const all = list.every((f) => groups.has(f.card.id));
         const look = lotKey(list, (c) => groups.get(c));
@@ -263,7 +263,7 @@ export function makeSame(o: { groups: Groups; gemini: Gemini | null; store: Stor
         if (!seen) {
           let going = asking.get(look);
           if (!going) {
-            going = ask(list, groups).catch((err) => log.warn({ err }, 'Gemini couldn’t group a lot’s series, so they’re shown as their names group them'));
+            going = ask(list, groups).catch((err) => log.warn({ err }, 'No model could group a lot’s series, so they’re shown as their names group them'));
             asking.set(look, going);
             void going.finally(() => asking.delete(look));
           }

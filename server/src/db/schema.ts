@@ -310,8 +310,8 @@ export const aiFirst = pgTable('ai_first', {
 });
 
 /**
- * Which series a search found are one series, as Gemini told (manga/same.ts): each card, by its id
- * where it was found, and its group. Cards in one group are shown as one. A card Gemini looked at
+ * Which series a search found are one series, as the model told (manga/same.ts): each card, by its id
+ * where it was found, and its group. Cards in one group are shown as one. A card the model looked at
  * and found no other copy of is a group of its own, so it isn't asked about again. `names` are the
  * card's names, keyed (shared seriesName), so a sheet looking for its series' other copies looks
  * under every name its group goes by. Not fed: only the API reads it, from Supabase.
@@ -330,7 +330,7 @@ export const seriesMatches = pgTable(
 );
 
 /**
- * Whether a card belongs in a Browse tab, as Gemini told (manga/curate.ts): by the tab (its order,
+ * Whether a card belongs in a Browse tab, as the model told (manga/curate.ts): by the tab (its order,
  * language, kinds and what's allowed) and the card's id. Those that don't are left out of it. Not
  * fed: only the API reads it, from Supabase.
  */
@@ -349,9 +349,9 @@ export const recChecks = pgTable(
 );
 
 /**
- * What Gemini filled in for a book nobody had (jobs/fill.ts): its genres, author and series, by its
+ * What the model filled in for a book nobody had (jobs/fill.ts): its genres, author and series, by its
  * file's SHA-256 (sha:…) or a manga's address (url:…), so every library holding it shares one
- * answer. Empty where Gemini couldn't tell. Copied into each library's books where they're still
+ * answer. Empty where the model couldn't tell. Copied into each library's books where they're still
  * blank, never over what someone picked. Not fed: only the API reads it, from Supabase.
  */
 export const aiFills = pgTable('ai_fills', {

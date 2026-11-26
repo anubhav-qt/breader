@@ -148,7 +148,7 @@ export interface ChatOptions {
   idleS?: number;
   /** Cuts the call off: the admin page stopped its book (jobs.ts). */
   signal?: AbortSignal;
-  /** Another OpenAI-style endpoint than NVIDIA's: CLIProxyAPI, for Gemini (balancer.ts). */
+  /** Another OpenAI-style endpoint than NVIDIA's: CLIProxyAPI, for Codex (balancer.ts). */
   endpoint?: { url: string; key: string };
   /** A check that the model answers (models.ts): an answer cut short or all thinking still counts. */
   probe?: boolean;

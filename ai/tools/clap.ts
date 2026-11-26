@@ -16,7 +16,7 @@ import { MUSIC } from './youtube.ts';
  *
  * It listens to a few ten-second stretches spread through a track and says which words fit it
  * best: its mood, its instruments, whether anyone sings, and its pace. The director (music.ts)
- * reads this beside the loudness (sound.ts), as Gemini can't hear. They're a model's best
+ * reads this beside the loudness (sound.ts), as the harness's models can't hear. They're a model's best
  * guesses, not a person's ear.
  *
  * The model is fetched once into the work folder (78 MB) and checked against its hash. Loaded, it

@@ -24,7 +24,7 @@ import { GATHERING, musicBy, musicLedger, musicLedgerFile, musicStage, noDownloa
 import { nvidiaKey } from './nim.ts';
 import { writeNotes } from './notes.ts';
 import { revisitOf } from './pack.ts';
-import { noHarness, servesGemini } from './proxy.ts';
+import { noHarness } from './proxy.ts';
 import { researchBook, researched, seriesName } from './research.ts';
 import { dropUpload, fits, readUpload, uploads } from './uploads.ts';
 import { validate, type Notes } from './validate.ts';
@@ -36,7 +36,7 @@ import { store } from './youtube.ts';
  * run marker runs it here. With no NVIDIA key it stays off.
  *
  * About once a minute it lists the books. A book with nothing on the server yet gets its voice
- * marks: fetched, researched on the web by the harness (research.ts) when Antigravity is here, its
+ * marks: fetched, researched on the web by the harness (research.ts), its
  * cast read from the book with that research (cast.ts), every part marked, everyone given their
  * voices (casting.ts), packed and imported, up to 4 books at once (or what the admin page says).
  * A book marked before voices were picked gets them at random instead, first thing each round. Only when no book is being marked does
@@ -56,10 +56,8 @@ import { store } from './youtube.ts';
  * and holds the rest of its series until it's done or kept back from the admin page. A first
  * book's music and notes don't wait for other books' marks, nor its notes for their music.
  *
- * A book being researched on the web, or gathering its series' soundtrack, isn't using NVIDIA, so
- * nothing waits behind it. That matters most while every Antigravity account is out of Gemini and
- * the harness waits for the first to fill again (harness.ts), which can be days. With no Antigravity
- * account connected at all, no music starts: it waits for one, and the status page says so.
+ * A book being researched on the web, or gathering its series' soundtrack, runs in the harness
+ * (harness.ts), on NVIDIA with Codex as its backup, so nothing else waits behind it.
  *
  * Music scored somewhere else and uploaded from the admin page (uploads.ts) goes in whatever else
  * is running, since it needs no model: the series' soundtrack is kept, the tracks the score plays
@@ -152,10 +150,9 @@ const ended = new Set<string>();
 const researching = new Set<string>();
 /**
  * What the marker can do here besides marks and notes, set when it starts: research needs the
- * harness; music the harness, yt-dlp and ffmpeg; uploaded music only yt-dlp and ffmpeg. And
- * whether an Antigravity account serves Gemini, looked at each round: music waits for one.
+ * harness; music the harness, yt-dlp and ffmpeg; uploaded music only yt-dlp and ffmpeg.
  */
-export const can = { research: false, music: false, uploads: false, account: false };
+export const can = { research: false, music: false, uploads: false };
 /** Uploaded music going in, by book key: how many of its tracks are stored. */
 const uploading = new Map<string, { done: number; of: number }>();
 /** The last look at the books and the server. */
@@ -233,12 +230,12 @@ function earlier(o: QueueBook, b: QueueBook): boolean {
 }
 
 /**
- * Whether a book's music is waited for now: music can be made here, the admin page has it on, an
- * Antigravity account serves Gemini and they aren't all out of it. Otherwise a volume goes on to its
- * notes, and the next volume of its series starts, without it; its music comes once it can.
+ * Whether a book's music is waited for now: music can be made here and the admin page has it on.
+ * Otherwise a volume goes on to its notes, and the next volume of its series starts, without it;
+ * its music comes once it can.
  */
 function musicCounts(): boolean {
-  return can.music && can.account && control.marker.tasks.music && !waitingForLimits();
+  return can.music && control.marker.tasks.music;
 }
 
 /** The tasks a book still has that its series waits for: marks, then music, then notes. */
@@ -489,7 +486,7 @@ function hold() {
 /**
  * A book's research from the web, when the harness is here and it has none. Research that fails
  * fails the book's job, to be tried again later, until the book is stuck (STUCK failures in a
- * row): then the job carries on without it, so an Antigravity sign-in that broke can't hold a book
+ * row): then the job carries on without it, so a model that keeps failing can't hold a book
  * up for good.
  */
 async function research(b: QueueBook, phase: Phase) {
@@ -1086,12 +1083,11 @@ function waiting(b: QueueBook, task: Phase, waitsFor: string | null): Waiting {
 
 /**
  * What a book's music or notes wait for besides their series, or null when they can start: a book
- * being marked (for a first book, only another first book), an account, or music being scored.
+ * being marked (for a first book, only another first book), or music being scored.
  */
 function gateOf(b: QueueBook, phase: Phase): string | null {
   const first = isFirst(b);
   if (marking(first)) return 'marks';
-  if (phase === 'music' && !can.account) return 'an Antigravity account';
   if (phase === 'notes' && [...running.values()].some((j) => scoring(j) && (!first || isFirst(j.b)))) return 'music';
   return null;
 }
@@ -1123,10 +1119,8 @@ export interface Live {
   finished: number;
   working: Working[];
   queue: Waiting[];
-  /** While every Antigravity account is out of Gemini, until when: research and soundtracks wait for it. */
+  /** While Codex, NVIDIA's backup, is out of its limits, until when. */
   limitedUntil?: string;
-  /** While no Antigravity account serves Gemini at all: music waits for one to be connected. */
-  musicWaitsForAccount?: boolean;
   /** The readers with more than one book waiting, and each one's first book. */
   readers: ReaderLine[];
 }
@@ -1145,7 +1139,6 @@ function liveNow(): Live {
   };
   const limited = waitingForLimits();
   if (limited) live.limitedUntil = new Date(limited).toISOString();
-  if (can.music && !can.account) live.musicWaitsForAccount = true;
   return live;
 }
 
@@ -1330,7 +1323,6 @@ function ready(books: QueueBook[], phase: Phase): QueueBook[] {
  */
 async function round(lbs: Balancers, pool: pg.Pool) {
   const { books, server } = await look(true);
-  if (can.music) can.account = await servesGemini();
   seen = { books, server };
   ended.clear();
   pickFirsts(books, server);
@@ -1350,10 +1342,9 @@ async function round(lbs: Balancers, pool: pg.Pool) {
   }
   // Uploaded music needs no model, so it goes in while books are being marked too.
   if (can.uploads && m.tasks.music) await startUploads(books, pool);
-  // Music only while no book is being marked, past its research, and an Antigravity account is
-  // connected; notes only while no book's music is being scored either. A first book's wait only
-  // for other first books (gateOf).
-  if (can.account && m.tasks.music) {
+  // Music only while no book is being marked, past its research; notes only while no book's music
+  // is being scored either. A first book's wait only for other first books (gateOf).
+  if (m.tasks.music) {
     for (const b of ready(toMusic(books, server), 'music').filter((o) => !gateOf(o, 'music')).slice(0, free('music'))) {
       start(b, 'music', () => musicJob(b, lbs), pool);
     }

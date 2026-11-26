@@ -45,11 +45,11 @@ test('a call’s stage is read from its label', () => {
 });
 
 test('a book’s own pick goes over the one for books to come, and only for that book', async () => {
-  const s = withStages(withStages(ADMIN_DEFAULTS, { picks: { 'marks.mark': { provider: 'gemini' } } }), { ids: [BOOK], picks: { 'marks.mark': { provider: 'nim', model: 'z-ai/glm-5.3' } } });
+  const s = withStages(withStages(ADMIN_DEFAULTS, { picks: { 'marks.mark': { provider: 'nim', model: 'qwen/qwen3.5-397b' } } }), { ids: [BOOK], picks: { 'marks.mark': { provider: 'nim', model: 'z-ai/glm-5.3' } } });
   Object.assign(control, { stages: s.stages, stagesFor: s.stagesFor });
   try {
     assert.deepEqual(await inJob(async () => pickFor('marks.mark')), { provider: 'nim', model: 'z-ai/glm-5.3' });
-    assert.deepEqual(await inJob(async () => pickFor('marks.mark'), 'b'.repeat(64)), { provider: 'gemini' });
+    assert.deepEqual(await inJob(async () => pickFor('marks.mark'), 'b'.repeat(64)), { provider: 'nim', model: 'qwen/qwen3.5-397b' });
     assert.equal(await inJob(async () => pickFor('notes.write')), null);
     const back = withStages(s, { ids: [BOOK], picks: { 'marks.mark': null } });
     assert.equal(back.stagesFor[BOOK], undefined);
@@ -58,24 +58,17 @@ test('a book’s own pick goes over the one for books to come, and only for that
   }
 });
 
-test('the balancer asks the stage’s pick first, Gemini through CLIProxyAPI, the usual models behind it', async () => {
+test('the balancer asks the stage’s pick first, the usual models behind it', async () => {
   setModels('test/first', 'test/second');
-  const urls: string[] = [];
-  answerWith((model) => (model === 'gemini-4-argon' ? 503 : `${model} says hi`));
-  const inner = globalThis.fetch;
-  globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
-    urls.push(String(url));
-    return inner(url as string, init);
-  }) as typeof fetch;
-  Object.assign(control, { stages: { 'marks.mark': { provider: 'nim', model: 'test/picked' } }, stagesFor: { [BOOK]: { 'marks.cast': { provider: 'gemini', model: 'gemini-3.8-flash-high' } } } });
+  answerWith((model) => `${model} says hi`);
+  Object.assign(control, { stages: { 'marks.mark': { provider: 'nim', model: 'test/picked' } }, stagesFor: { [BOOK]: { 'marks.cast': { provider: 'nim', model: 'test/cast' } } } });
   try {
     const lb = new Balancer(LADDER, { waitForTopS: 0, strikesToFall: 1, maxTries: 3 });
     calls.length = 0;
     const marked = await inJob(() => lb.chat(ask, { book: 'b', part: 1, round: 1 }));
     assert.equal(marked.rung.model, 'test/picked');
     const cast = await inJob(() => lb.chat(ask, { book: 'b', cast: 'pass' }));
-    assert.equal(cast.rung.model, 'gemini-3.8-flash-high');
-    assert.equal(urls.at(-1), 'http://proxy.test/v1/chat/completions');
+    assert.equal(cast.rung.model, 'test/cast');
     // Settling has no pick: the first model, as ever.
     const settled = await inJob(() => lb.chat(ask, { book: 'b', settle: 2 }));
     assert.equal(settled.rung.model, 'test/first');
@@ -85,17 +78,26 @@ test('the balancer asks the stage’s pick first, Gemini through CLIProxyAPI, th
     assert.equal(redo.rung.model, 'test/first');
   } finally {
     Object.assign(control, { stages: {}, stagesFor: {} });
-    globalThis.fetch = inner;
   }
 });
 
-test('settings from before NVIDIA’s list keep working: Kimi K3 is retired, so its pick moves to Kimi K2.6', () => {
-  assert.deepEqual(
-    { first: adminStateOf({ marker: { first: 'kimi-k3' } }).marker.first, second: adminStateOf({ marker: { first: 'kimi-k3' } }).marker.second },
-    { first: 'moonshotai/kimi-k2.6', second: 'nvidia/nemotron-3-ultra-550b-a55b' },
-  );
-  assert.equal(adminStateOf({ marker: { first: 'nemotron', paused: true } }).marker.second, 'moonshotai/kimi-k2.6');
-  assert.equal(adminStateOf({ marker: { first: 'nemotron', paused: true } }).marker.paused, true);
-  assert.deepEqual(adminStateOf({ stages: { 'marks.mark': { provider: 'gemini' }, bogus: { provider: 'nim' } } }).stages, { 'marks.mark': { provider: 'gemini' } });
+const SUPER = 'nvidia/nemotron-3.5-super-vl-120b-a12b';
+const ULTRA = 'nvidia/nemotron-3-ultra-550b-a55b';
+
+test('settings from before keep working: Kimi K3 and K2.6 are retired, so their picks move to Super VL', () => {
+  const k3 = adminStateOf({ marker: { first: 'kimi-k3' } }).marker;
+  assert.deepEqual({ first: k3.first, second: k3.second }, { first: SUPER, second: ULTRA });
+  const old = adminStateOf({ marker: { first: 'nemotron', paused: true } }).marker;
+  assert.deepEqual({ first: old.first, second: old.second, paused: old.paused }, { first: ULTRA, second: SUPER, paused: true });
+  const k26 = adminStateOf({ marker: { first: 'moonshotai/kimi-k2.6', second: ULTRA } }).marker;
+  assert.deepEqual({ first: k26.first, second: k26.second }, { first: SUPER, second: ULTRA });
+  const both = adminStateOf({ marker: { first: SUPER, second: 'moonshotai/kimi-k2.6' } }).marker;
+  assert.deepEqual({ first: both.first, second: both.second }, { first: SUPER, second: ULTRA }, 'never the same model twice');
+  assert.deepEqual(adminStateOf({}).marker.first, SUPER, 'Super VL first by default');
+});
+
+test('Gemini picks from before are dropped, NVIDIA’s kept', () => {
+  const stages = adminStateOf({ stages: { 'marks.mark': { provider: 'gemini' }, 'marks.cast': { provider: 'nim', model: ULTRA }, bogus: { provider: 'nim' } } }).stages;
+  assert.deepEqual(stages, { 'marks.cast': { provider: 'nim', model: ULTRA } });
   assert.equal(nimAlias('moonshotai/kimi-k2.6'), 'nim-moonshotai--kimi-k2.6');
 });

@@ -113,7 +113,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           // The book's own details. Card edits and removal have their own mutations.
           set: {
             title: sql`excluded.title`,
-            // A file naming no author or series keeps what Gemini filled in (jobs/fill.ts).
+            // A file naming no author or series keeps what the model filled in (jobs/fill.ts).
             author: sql`coalesce(nullif(excluded.author, ''), ${libraryItems.author})`,
             format: sql`excluded.format`,
             source: sql`excluded.source`,

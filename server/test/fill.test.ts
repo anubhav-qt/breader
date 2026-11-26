@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { Gemini } from '../src/lib/gemini.ts';
+import type { Tidier } from '../src/lib/tidier.ts';
 import { fillBlanks } from '../src/jobs/fill.ts';
 import { pgChecks } from '../src/manga/curate.ts';
 import { pgGroups } from '../src/manga/same.ts';
@@ -9,20 +9,20 @@ import { book, primary, push, registered } from './helpers.ts';
 type Reader = Awaited<ReturnType<typeof registered>>['b'];
 const pulled = async (b: Reader, id: string) => (await b.get('/v1/sync/pull?since=0')).body.books.find((x: { id: string }) => x.id === id);
 
-/** Gemini that knows every book as a fantasy by Kanehito Yamada, in the Frieren series, counting what it's asked. */
+/** The model that knows every book as a fantasy by Kanehito Yamada, in the Frieren series, counting what it's asked. */
 function knowsAll() {
-  const g = { asked: [] as string[] } as Gemini & { asked: string[] };
-  g.model = (t) => `gemini-3.8-flash-high:${t}`;
+  const g = { asked: [] as string[] } as Tidier & { asked: string[] };
   g.json = async <T,>(_s: string, prompt: string) => {
     const shown = JSON.parse(prompt) as Array<{ i: number; title: string }>;
     g.asked.push(...shown.map((x) => x.title));
-    return { items: shown.map((x) => ({ i: x.i, genres: ['fantasy', 'adventure'], author: 'Kanehito Yamada', series: 'Frieren', index: 3 })) } as T;
+    const value = { items: shown.map((x) => ({ i: x.i, genres: ['fantasy', 'adventure'], author: 'Kanehito Yamada', series: 'Frieren', index: 3 })) } as T;
+    return { value, model: 'gpt-6.1-terra:medium' };
   };
   return g;
 }
 
 /** Runs until nothing in the test database is left to ask about: other tests' books are there too. */
-async function fillAll(g: Gemini) {
+async function fillAll(g: Tidier) {
   for (let i = 0; i < 50; i++) {
     const r = await fillBlanks(primary.pool, g);
     if (r.asked === 0) return;
@@ -36,7 +36,7 @@ async function upload(b: Reader, body = Buffer.from(`fill ${Math.random()}`)) {
   return ask.body.fileId as string;
 }
 
-describe('what Gemini fills in', () => {
+describe('what the model fills in', () => {
   it('fills a book’s blanks once, and never over what the reader set', async () => {
     const { b } = await registered();
     const bytes = Buffer.from(`blank ${Math.random()}`);
@@ -81,7 +81,7 @@ describe('what Gemini fills in', () => {
   });
 });
 
-describe('what Gemini told about Browse, kept in Supabase', () => {
+describe('what the model told about Browse, kept in Supabase', () => {
   it('keeps series groups and finds a group’s other names', async () => {
     const groups = pgGroups(primary.pool);
     const a = `t:${Math.random()}`;

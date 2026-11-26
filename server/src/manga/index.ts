@@ -70,9 +70,9 @@ export interface MangaOptions {
   suwayomi?: string;
   /** How long a lot it hasn't seen may take a source for it to be browsed (suwayomi.ts). Tests go faster. */
   browseWithin?: number;
-  /** Which series found are one, as Gemini told (same.ts). */
+  /** Which series found are one, as the model told (same.ts). */
   same?: Same | null;
-  /** Which cards don't belong in Browse's tabs, as Gemini told (curate.ts). */
+  /** Which cards don't belong in Browse's tabs, as the model told (curate.ts). */
   curate?: Curate | null;
   /** Where every page and cover is kept for good, behind the cache (lib/archive.ts). */
   archive?: Archive | null;
@@ -88,7 +88,7 @@ export interface MangaOptions {
 const off = () => new ApiError(404, 'manga_not_found', 'That source isn’t on, on this server.');
 const unmeasured = () => new ApiError(503, 'manga_unreachable', 'Its pages couldn’t be measured just now. Try again in a minute.');
 
-/** How long a lot may wait for Gemini to group its series the first time they come together, within the app's 20 s for a search. */
+/** How long a lot may wait for the model to group its series the first time they come together, within the app's 20 s for a search. */
 const GROUP_WAIT = 6_000;
 const SEARCH_WITHIN = 19_000;
 
@@ -305,9 +305,9 @@ export function makeManga(opts: MangaOptions): Manga {
       // and only series going by what they searched for, as some sites answer with anything like it.
       let grace: number | null = GRACE;
       if (w.names) grace = null;
-      // What's come so far shows the groups known already; the lot's whole waits a moment for Gemini
+      // What's come so far shows the groups known already; the lot's whole waits a moment for the model
       // to group what it hasn't seen together, only the first time (same.ts).
-      // A tab (no name searched for) leaves out the cards Gemini said don't belong, and has the
+      // A tab (no name searched for) leaves out the cards the model said don't belong, and has the
       // ones it hasn't seen there checked behind the reader (curate.ts).
       const curate = opts.curate ?? null;
       let tab: Tab | null = null;

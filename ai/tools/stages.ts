@@ -4,8 +4,9 @@ import { current } from './jobs.ts';
 
 /*
  * Who does each stage of the pipeline, as the admin page picked it (shared/src/admin.ts): NVIDIA
- * or Gemini, for one book or for books to come. A call says which stage it is by its label, the
- * one it's logged with (balancer.ts, harness.ts).
+ * model, for one book or for books to come, ahead of the usual order (NVIDIA first and Codex its
+ * backup, backup.ts; Codex first for CODEX_STAGES, harness.ts). A call says which stage it is by
+ * its label, the one it's logged with (balancer.ts, harness.ts).
  */
 
 /** The stage a call is, by its label. `redo`: a call on the first model only, marking parts again. */
@@ -40,5 +41,5 @@ export function pickFor(stage: Stage | null): StagePick | null {
   return stagePick(control, stage, current()?.id);
 }
 
-/** Whether a stage works with tools: Gemini's, unless the page says otherwise. */
+/** Whether a stage works with tools: the harness's, not the balancer's. */
 export const usesTools = (stage: Stage) => HARNESS_STAGES.includes(stage);

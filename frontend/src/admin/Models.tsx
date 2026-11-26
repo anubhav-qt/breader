@@ -3,12 +3,12 @@ import { Modal } from '../components/Modal';
 import { ago, modelName } from './format';
 import { Dots, Seg } from './parts';
 import { pickable, statsLine, statsOf } from './stats';
-import { STAGES, stageStep, TASK_NAMES, TOOL_STAGES, type Admin, type Marker, type ModelLine, type Stage, type StagePick, type Task } from './types';
+import { CODEX_STAGES, STAGES, stageStep, TASK_NAMES, TOOL_STAGES, type Admin, type Marker, type ModelLine, type Stage, type StagePick, type Task } from './types';
 
 /*
  * Which models the marker asks: NVIDIA's, as it checks them once a day (ai/tools/models.ts), to
- * pick its first and second from; and who does each stage of the pipeline, NVIDIA or Gemini, for
- * one book, the books waiting now, or the books to come.
+ * pick its first and second from; and which NVIDIA model does each stage of the pipeline, for
+ * one book, the books waiting now, or the books to come. Codex is the backup behind them all.
  */
 
 /** Days a model counts as new after it first shows up in NVIDIA's list. */
@@ -106,26 +106,25 @@ export function ModelsDialog({ m, admin, onClose }: { m: Marker; admin: Admin; o
   );
 }
 
-/** A pick as the select holds it: "" for the usual, "nim:" or "gemini:" for the provider's usual, else "nim:<id>". */
+/** A pick as the select holds it: "" for the usual, "nim:" for NVIDIA's usual, else "nim:<id>". */
 const valueOf = (p: StagePick | null | undefined) => (p ? `${p.provider}:${p.model ?? ''}` : '');
 function pickOf(v: string): StagePick | null {
   if (!v) return null;
-  const [provider, ...rest] = v.split(':');
-  const model = rest.join(':');
-  return { provider: provider as StagePick['provider'], ...(model ? { model } : {}) };
+  const model = v.slice('nim:'.length);
+  if (!model) return { provider: 'nim' };
+  return { provider: 'nim', model };
 }
 
 /** Who does a stage when nothing is picked. */
 function usual(stage: Stage, m: Marker): string {
-  if (TOOL_STAGES.includes(stage)) return 'Gemini 3.8 Flash, then the newest';
   if (stage === 'marks.redo' || stage === 'notes.review') return modelName(m.settings.first);
-  return `${modelName(m.settings.first)}, then ${modelName(m.settings.second)}`;
+  if (CODEX_STAGES.includes(stage)) return `Codex, then ${modelName(m.settings.first)}, then ${modelName(m.settings.second)}`;
+  return `${modelName(m.settings.first)}, then ${modelName(m.settings.second)}, Codex as backup`;
 }
 
 function pickName(p: StagePick | null | undefined, stage: Stage, m: Marker): string {
   if (!p) return usual(stage, m);
   if (p.model) return modelName(p.model);
-  if (p.provider === 'gemini') return 'Gemini, usual order';
   return `NVIDIA: ${modelName(m.settings.first)}`;
 }
 
@@ -142,7 +141,6 @@ export function StagesDialog({ m, admin, book, onClose }: { m: Marker; admin: Ad
   const [forQueue, setForQueue] = useState<Partial<Record<Stage, string>>>({});
 
   const nim = (m.models?.models ?? []).filter(pickable).filter((x) => !x.checks.length || x.checks.some((c) => c.ok));
-  const gemini = m.models?.gemini ?? [];
   const order: Array<{ task: Task | null; stages: Stage[] }> = [
     { task: null, stages: ['research'] },
     ...(['marks', 'music', 'notes'] as Task[]).map((t) => ({ task: t, stages: STAGES[t].filter((s) => s !== 'research') })),
@@ -212,13 +210,6 @@ export function StagesDialog({ m, admin, book, onClose }: { m: Marker; admin: Ad
                         <option key={x.id} value={`nim:${x.id}`}>{modelName(x.id)} · {statsLine(statsOf(x))}</option>
                       ))}
                       {v.startsWith('nim:') && v !== 'nim:' && !nim.some((x) => `nim:${x.id}` === v) && <option value={v}>{modelName(v.slice(4))}</option>}
-                    </optgroup>
-                    <optgroup label="Gemini (Antigravity)">
-                      <option value="gemini:">Gemini 3.8 Flash, then the newest</option>
-                      {gemini.map((id) => (
-                        <option key={id} value={`gemini:${id}`}>{modelName(id)}</option>
-                      ))}
-                      {v.startsWith('gemini:') && v !== 'gemini:' && !gemini.includes(v.slice(7)) && <option value={v}>{modelName(v.slice(7))}</option>}
                     </optgroup>
                   </select>
                 </div>
