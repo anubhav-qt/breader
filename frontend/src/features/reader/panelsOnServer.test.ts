@@ -70,6 +70,17 @@ describe('panels on server', () => {
     expect(asked).toEqual([]);
   });
 
+  it('finds no page ahead outside the Panels layout', async () => {
+    const m = await load();
+    expect(m.pagesAhead('scroll', 5)).toEqual([]);
+    expect(m.pagesAhead('pages', 5)).toEqual([]);
+  });
+
+  it('finds the pages about the one read ahead in the Panels layout', async () => {
+    const m = await load();
+    expect(m.pagesAhead('panels', 5)).toEqual([5, 6, 4, 7]);
+  });
+
   it('reads a broken note as off', async () => {
     kept.set('breader.panels.server.v1', '{"on":"yes"}');
     const m = await load();
