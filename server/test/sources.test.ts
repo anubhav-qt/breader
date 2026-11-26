@@ -129,6 +129,8 @@ function fakeSuwayomi() {
     broken: new Set<string>(),
     /** Sources whose site says to slow down. */
     slowDown: new Set<string>(),
+    /** Sources whose search turns up everything they have, whatever was asked, as some sites' do. */
+    loose: new Set<string>(),
     /** Sources whose site takes this long (ms) over every call. */
     lag: new Map<string, number>(),
     /** Suwayomi itself not answering. */
@@ -196,7 +198,7 @@ function fakeSuwayomi() {
       if (state.broken.has(source)) return refuse('Failed to find buildId');
       if (state.slowDown.has(source)) return refuse('HTTP error 429');
       let list = state.series.filter((s) => s.source === source);
-      if (type === 'SEARCH') list = list.filter((s) => s.title.toLowerCase().includes(String(v.input.query).toLowerCase()));
+      if (type === 'SEARCH' && !state.loose.has(source)) list = list.filter((s) => s.title.toLowerCase().includes(String(v.input.query).toLowerCase()));
       const from = (page - 1) * state.perPage;
       const mangas = list.slice(from, from + state.perPage).map((s) => ({ id: localOf(s), title: s.title, url: urlOf(s) }));
       for (const m of mangas) state.has.add(m.id);
@@ -478,6 +480,26 @@ describe('one search everywhere', () => {
     expect(dexCalls).toEqual([]);
     expect(sw.calls.filter((c) => c.op === 'search' && c.source === '22').map((c) => c.page)).toEqual([1, 2]);
     expect((await b.get('/v1/manga/search?next=nope')).status).toBe(400);
+  });
+
+  it('stops a search by name at a site page with nothing going by it, as a loose site would go on for ever', async () => {
+    const { b, sw } = await setup();
+    sw.state.loose.add('11');
+    sw.state.series = [
+      { id: 1, source: '11', title: 'A Party Reignited' },
+      ...Array.from({ length: 200 }, (_, i) => ({ id: 101 + i, source: '11', title: `Other ${i + 1}` })),
+    ];
+    const ask = (next?: string) => b.get(`/v1/manga/search?lang=en&q=Party%20Reignited${next ? `&next=${next}` : ''}`);
+    const first = await ask();
+    expect(shown(first.body)).toEqual(['Asura Scans: A Party Reignited']);
+    expect(first.body.next).toBe('sw11:1.10');
+    const second = await ask(first.body.next);
+    expect(second.body.items).toEqual([]);
+    expect(second.body.next).toBe('sw11:2');
+    const third = await ask(second.body.next);
+    expect(third.body.items).toEqual([]);
+    expect(third.body.next).toBeNull();
+    expect(Math.max(...sw.calls.filter((c) => c.op === 'search').map((c) => c.page ?? 0))).toBe(2);
   });
 
   it('leaves a source alone for a minute when its site says to slow down', async () => {
