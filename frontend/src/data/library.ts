@@ -1,4 +1,5 @@
 import type { BookRecord, Format } from '../books/types';
+import { categoryOf } from '../books/category';
 import { colorKeyFor } from './colors';
 
 const HOUR = 3_600_000;
@@ -260,6 +261,19 @@ export function shelfRecords(now: number): BookRecord[] {
     addedAt: now - (10 + j * j * 14) * HOUR, words: p.words, color: colorKeyFor(p.title), progress: 0, line: p.line, lastOpened: now - (10 + j * j * 14) * HOUR,
     ...seriesOf(p.title),
   }));
+}
+
+/**
+ * A reader's own book shows a cover given since the check began once the model said it's really that
+ * book's (server jobs/covers.ts), so a blank or unrelated picture never stands for it; until then its
+ * drawn card. One from before the check (no `coverOk`) shows until a no. Manga, uploaded ones too,
+ * samples and previews show theirs as they are.
+ */
+export function shownCover(rec: BookRecord, covers: Record<string, string>): string | undefined {
+  if (rec.source !== 'file') return covers[rec.id];
+  if (categoryOf(rec) === 'manga') return covers[rec.id];
+  if (rec.coverOk === false) return undefined;
+  return covers[rec.id];
 }
 
 /** Any of the reader's own books can be shared with their key, copies of others' too, and series from Browse. */

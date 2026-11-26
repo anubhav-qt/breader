@@ -7,6 +7,7 @@ import { makeReads } from './db/reads.ts';
 import { loadEnv, mangaArchiveMb, mangaCacheMb, onThinkPad } from './env.ts';
 import { pruneStaleFeed } from './jobs/chores.ts';
 import { fillBlanks } from './jobs/fill.ts';
+import { checkCovers } from './jobs/covers.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
 import { asJob, runKind, takeCommands } from './lib/admin.ts';
 import { Archive } from './lib/archive.ts';
@@ -253,6 +254,44 @@ if (tidier) {
   runNow[runKind('ai-fill')] = () => void fill(true);
 }
 
+// Whether each book's cover is really its cover, asked of the model every 30 minutes, the first
+// soon after a start (jobs/covers.ts), and a minute after a full run while covers are waiting.
+// Each cover image is asked about once. Books only.
+let coversAt: NodeJS.Timeout | undefined;
+if (tidier) {
+  let checking = false;
+  /** Checks a run of covers, and says whether more are waiting. */
+  const check = async (now = false): Promise<boolean> => {
+    if (checking) return false;
+    checking = true;
+    try {
+      const r = await asJob(primary.pool, 'ai-covers', () => checkCovers(primary.pool, tidier, storage, prefetching.signal), { evenIfOff: now });
+      if (!r) return false;
+      if (r.asked || r.books) log.info(r, 'the model checked books’ covers');
+      if (!prefetching.signal.aborted) await recordOk(primary.pool, 'ai-covers', r);
+      return r.more;
+    } catch (err) {
+      log.error({ err }, 'checking covers failed');
+      report(err, { job: 'ai-covers' });
+      await recordError(primary.pool, 'ai-covers', err).catch(() => {});
+      return false;
+    } finally {
+      checking = false;
+    }
+  };
+  const again = (ms: number) => {
+    coversAt = setTimeout(async () => {
+      const more = await check();
+      if (prefetching.signal.aborted) return;
+      let next = 30 * 60_000;
+      if (more) next = 60_000;
+      again(next);
+    }, ms);
+  };
+  again(5 * 60_000);
+  runNow[runKind('ai-covers')] = () => void check(true);
+}
+
 // Run now, from the admin page.
 if (Object.keys(runNow).length) {
   commands = setInterval(() => {
@@ -271,6 +310,7 @@ const stop = () => {
   clearTimeout(prefetchAt);
   clearTimeout(keepAt);
   clearTimeout(fillAt);
+  clearTimeout(coversAt);
   clearInterval(commands);
   seen.stop();
   prefetching.abort();

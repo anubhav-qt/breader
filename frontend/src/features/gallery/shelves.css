@@ -125,6 +125,8 @@
 .shelf-row[data-end] { --fade-r: 0px; }
 .shelf-row > .tile-slot:first-child { scroll-snap-align: start; }
 .shelf-tile { flex: none; width: var(--shelf-w); height: var(--shelf-h); scroll-snap-align: start; }
+/* A manga's cover in a row (the public feed's): as wide as a card, as tall as its cover. */
+.shelf-row > .cv { flex: none; width: calc(var(--shelf-w) * 0.8); scroll-snap-align: start; }
 @media (max-width: 720px) {
   .shelf-row { --shelf-w: 144px; --shelf-h: 200px; --fade-l: 24px; --fade-r: 24px; scroll-padding-inline: 20px; }
   .shelf-row[data-start] { --fade-l: 0px; }

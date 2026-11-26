@@ -150,6 +150,8 @@ export interface BookRecord {
   /** Server ids of the stored file and cover, once uploaded. */
   fileId?: string;
   coverId?: string;
+  /** True after the model's yes to its cover, false while it waits or after a no (then it isn't shown), none for one from before the check (server jobs/covers.ts). */
+  coverOk?: boolean;
   /** A copy of a book someone shared: the first book's id, however many copies away. Its file stays the sharer's. */
   origin?: string;
   /** The series its file names, and its number in it. */

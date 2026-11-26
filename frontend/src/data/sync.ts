@@ -205,6 +205,7 @@ export function fromWire(b: SyncedBook, local?: BookRecord): BookRecord {
     lastOpened: b.lastOpened,
     fileId: b.fileId ?? local?.fileId,
     coverId: b.coverId ?? local?.coverId,
+    ...(b.coverOk !== undefined ? { coverOk: b.coverOk } : {}),
     ...(b.origin ?? local?.origin ? { origin: b.origin ?? local?.origin } : {}),
     ...(b.series ? { series: b.series } : {}),
     ...(b.seriesIndex != null ? { seriesIndex: b.seriesIndex } : {}),
@@ -382,7 +383,7 @@ async function register() {
 }
 
 /** Runs a request, reopening the session with the stored key if the cookie was lost. */
-async function signedIn<T>(fn: () => Promise<T>): Promise<T> {
+export async function signedIn<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (e) {

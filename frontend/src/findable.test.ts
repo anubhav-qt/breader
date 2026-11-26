@@ -47,7 +47,7 @@ describe('public pages', () => {
   it('the home page says what Breader is before any script runs, in the empty library’s words', () => {
     expect(home).toContain('<h1 class="wl-h">Start with a book</h1>');
     for (const card of BOOKS) {
-      expect(home).toContain(`<b>${card.name}</b><span>${card.what}</span>`);
+      expect(home).toContain(`<div class="wl-card"><span>${card.line}</span></div>`);
     }
   });
 

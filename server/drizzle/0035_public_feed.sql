@@ -1,0 +1,1 @@
+ALTER TABLE "libraries" ADD COLUMN "public_at" timestamp with time zone;

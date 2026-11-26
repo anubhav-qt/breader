@@ -5,6 +5,7 @@ import { Mutation, PushRequest, SYNC, type PullResponse, type PushResponse, type
 import type { AppEnv, Deps } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { libraries, libraryItems, librarySettings, readingStates, syncClients, syncMeta } from '../db/schema.ts';
+import { coverState } from '../lib/coverState.ts';
 import { ApiError, parse, pgCode, readJson } from '../lib/errors.ts';
 import { requireLibrary } from '../lib/library.ts';
 import { log } from '../log.ts';
@@ -167,6 +168,7 @@ export function syncRoutes(deps: Deps) {
             lastOpened: i.lastOpened.getTime(),
             fileId: i.fileId,
             coverId: i.coverId,
+            ...coverState(i),
             ...(i.origin ? { origin: i.origin } : {}),
             ...(i.series ? { series: i.series } : {}),
             ...(i.seriesIndex !== null ? { seriesIndex: i.seriesIndex } : {}),

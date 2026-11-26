@@ -4,6 +4,7 @@ import type { ShelfItem } from '../../data/useLibrary';
 import { readLocal, writeLocal } from '../../lib/store';
 import { springs } from '../../lib/springs';
 import { IconBack, IconChevron } from '../../components/icons';
+import { CoverCard } from './CoverCard';
 import { KeepSeries } from './KeepSeries';
 import { pickedOf } from './picking';
 import { finishedIn, type Series } from './series';
@@ -189,10 +190,17 @@ function ShelfList({ shelves, lazy, root, ...rest }: ListProps) {
   );
 }
 
-type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'root'> & { shelf: Shelf };
+type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'root'> & {
+  shelf: Shelf;
+  /** What its name opens, where it isn't a series: a library in the public feed (features/shared/PublicFeed.tsx). */
+  onName?: () => void;
+  /** Manga: each card is its cover (CoverCard), with its title on it unless `coversOnly`. */
+  manga?: boolean;
+  coversOnly?: boolean;
+};
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-function Row({ shelf, authors, now, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: RowProps) {
+export function Row({ shelf, authors, now, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries, onName, manga = false, coversOnly = false }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -227,13 +235,15 @@ function Row({ shelf, authors, now, enter, editingId, picked, onOpen, onEdit, on
   };
   const s = shelf.series;
   const layoutKey = entries.map((e) => e.key).join('|');
+  let openName = onName;
+  if (s) openName = () => onSeries(s);
 
   return (
     <section className="shelf" aria-label={shelf.name}>
       <header className="shelf-head">
         <h3 className="shelf-name">
-          {s ? (
-            <button type="button" aria-haspopup="dialog" onClick={() => onSeries(s)}>
+          {openName ? (
+            <button type="button" aria-haspopup={s ? 'dialog' : undefined} onClick={openName}>
               <span>{shelf.name}</span>
               <IconChevron aria-hidden="true" />
             </button>
@@ -260,6 +270,21 @@ function Row({ shelf, authors, now, enter, editingId, picked, onOpen, onEdit, on
         <AnimatePresence mode="popLayout" initial={false}>
           {entries.map((e) => {
             const stack = e.stack;
+            if (manga) {
+              return (
+                <CoverCard
+                  key={e.key}
+                  item={{ key: e.key, book: e.book, author: authors.get(e.book.id) }}
+                  words={!coversOnly}
+                  enter={enter}
+                  picked={pickedOf(picked, [e.book])}
+                  layoutKey={layoutKey}
+                  onOpen={onOpen}
+                  onEdit={onEdit}
+                  onKeep={onKeep}
+                />
+              );
+            }
             return (
               <Tile
                 key={e.key}

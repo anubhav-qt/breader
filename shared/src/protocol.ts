@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LIBRARY_NAME_CHARS, PREFS_CHARS, SPEECH_CHARS, SYNC } from './limits.ts';
+import { LIBRARY_NAME_CHARS, PREFS_CHARS, SHELF_LIMIT, SPEECH_CHARS, SYNC } from './limits.ts';
 
 /*
  * The wire format between the app and the server. Both sides validate with these schemas, so a
@@ -70,6 +70,8 @@ export const Book = z.object({
   lastOpened: Millis,
   fileId: Id.nullish(),
   coverId: Id.nullish(),
+  /** True once the model said its cover is really this book's, false while it waits or after a no, none for a cover from before the check (server/src/jobs/covers.ts). Sent by the server only. */
+  coverOk: z.boolean().optional(),
   /** A copy of a book on the Shared Library, started by this reader: the shared book's id. */
   origin: Id.nullish(),
   /** The series it belongs to, as its file says, and its number in it. */
@@ -256,6 +258,8 @@ export const ShelfBook = z.object({
   /** None for a series read from a catalogue. */
   fileId: Id.nullable(),
   coverId: Id.nullable(),
+  /** As on a book: true after the model's yes, false while it waits or after a no, none for a cover from before the check. */
+  coverOk: z.boolean().optional(),
   /** A series read from a catalogue: where (REMOTE_URL), for anyone it's shared with to read it there too. */
   url: z.string().regex(REMOTE_URL).optional(),
   series: z.string().nullish(),
@@ -279,8 +283,71 @@ export const SharedOpenResponse = z.object({
 export type SharedOpenResponse = z.infer<typeof SharedOpenResponse>;
 
 export const SharedBooksRequest = z.object({ token: SharedToken });
-export const SharedBooksResponse = z.object({ name: z.string().nullable(), books: z.array(ShelfBook) });
+export const SharedBooksResponse = z.object({
+  name: z.string().nullable(),
+  books: z.array(ShelfBook),
+  /** It's in the public feed. */
+  public: z.boolean(),
+  /**
+   * key: opened with its key, to read, add to and take from; grant: the same by the owner's yes to
+   * this reader alone; public: found in the feed, to read only.
+   */
+  access: z.enum(['key', 'grant', 'public']),
+  /** This token may put it in the public feed or take it out: a key to a library made only to share. */
+  mayPublish: z.boolean(),
+  /** This token may name it for everyone it's open to: a key to a library made only to share, copies too. */
+  mayName: z.boolean(),
+  /** A copy saved from the feed, opened with its key: what it's a copy of, and the ask to change that. */
+  copy: z.object({
+    /** The original's id: its feed token starts with it. */
+    of: z.string(),
+    /** none: not asked; asked: waiting; given: `grant` changes the original; refused or taken: may ask again. */
+    asked: z.enum(['none', 'asked', 'given', 'refused', 'taken']),
+    /** The reader's own yes: only a browser signed in to their library gets it. */
+    grant: SharedToken.nullable(),
+    /** The original is still public: it feeds this copy and takes asks. */
+    live: z.boolean(),
+  }).optional(),
+});
 export type SharedBooksResponse = z.infer<typeof SharedBooksResponse>;
+
+/** Saves a library from the feed as a copy of the reader's own: its token, its name and the original's id. */
+export const SharedCopyRequest = z.object({ token: SharedToken });
+export const SharedCopyResponse = z.object({ token: SharedToken, name: z.string().nullable(), of: z.string() });
+export type SharedCopyResponse = z.infer<typeof SharedCopyResponse>;
+
+/** Takes books out of a library by its key or a grant: out of its sharing only, where they're its owner's own. */
+export const SharedRemoveRequest = z.object({ token: SharedToken, ids: z.array(Id).min(1).max(SHELF_LIMIT) });
+export const SharedRemoveResponse = z.object({ removed: z.number() });
+export type SharedRemoveResponse = z.infer<typeof SharedRemoveResponse>;
+
+/** The longest note an ask to change a library carries. */
+export const ASK_NOTE_CHARS = 500;
+
+/** Asks a copy's original's owner to let the reader change it, by the copy's key token, with a note or none: for the reader's own library alone. */
+export const SharedAskRequest = z.object({ token: SharedToken, note: z.string().trim().max(ASK_NOTE_CHARS).optional() });
+export const SharedAskResponse = z.object({ asked: z.enum(['asked', 'given']) });
+export type SharedAskResponse = z.infer<typeof SharedAskResponse>;
+
+/** An ask to change a library, as its owner sees it: the asker's copy's short id, and their note. */
+export const LibraryAsk = z.object({
+  id: z.string(),
+  tag: z.string(),
+  note: z.string().nullable(),
+  askedAt: Millis,
+  state: z.enum(['asked', 'given']),
+});
+export type LibraryAsk = z.infer<typeof LibraryAsk>;
+
+/** The open and given asks to change a library: one made only to share by its key's token, else the reader's own. */
+export const SharedAsksRequest = z.object({ token: SharedToken.optional() });
+export const SharedAsksResponse = z.object({ asks: z.array(LibraryAsk) });
+export type SharedAsksResponse = z.infer<typeof SharedAsksResponse>;
+
+/** Says yes or no to an ask; no to one given already takes it back. */
+export const SharedAnswerRequest = z.object({ token: SharedToken.optional(), id: z.string().max(64), give: z.boolean() });
+export const SharedAnswerResponse = z.object({ state: z.enum(['given', 'refused', 'taken']) });
+export type SharedAnswerResponse = z.infer<typeof SharedAnswerResponse>;
 
 /** A signed link to one of its shared books' files, or a cover. */
 export const SharedLinkRequest = z.object({ token: SharedToken, fileId: Id });
@@ -299,6 +366,41 @@ export type SharedCreateResponse = z.infer<typeof SharedCreateResponse>;
 export const SharedKeyRequest = z.object({ token: SharedToken });
 export const SharedKeyResponse = z.object({ key: z.string().nullable() });
 export type SharedKeyResponse = z.infer<typeof SharedKeyResponse>;
+
+/*
+ * The public feed. A library its owner makes public is listed for everyone, with a token that reads
+ * its shared books while it stays public. That token never adds to them or gives out the key.
+ */
+
+/** Puts a library in the feed or takes it out: one made only to share by its key's token, else the reader's own. */
+export const SharedPublicRequest = z.object({ token: SharedToken.optional(), on: z.boolean() });
+export const SharedPublicResponse = z.object({ public: z.boolean() });
+export type SharedPublicResponse = z.infer<typeof SharedPublicResponse>;
+
+/** Names a library made only to share, by its key's token, for everyone it's open to; an empty name takes it away. */
+export const SharedNameRequest = z.object({ token: SharedToken, name: z.string().trim().max(LIBRARY_NAME_CHARS) });
+export const SharedNameResponse = z.object({ name: z.string().nullable() });
+export type SharedNameResponse = z.infer<typeof SharedNameResponse>;
+
+/** A library in the public feed. */
+export const FeedLibrary = z.object({
+  token: SharedToken,
+  name: z.string().nullable(),
+  /** A short id of its own, to tell it apart while it has no name: "3fa94c’s shared library". */
+  tag: z.string(),
+  /** Its shared books, and manga, as anyone sees them. */
+  books: z.number(),
+  manga: z.number(),
+  /** How many other libraries keep it in their shared list. */
+  saves: z.number(),
+  /** When a book last came into it, or it went public if none has since. */
+  updatedAt: Millis,
+  /** The library this browser is in itself. */
+  own: z.boolean(),
+});
+export type FeedLibrary = z.infer<typeof FeedLibrary>;
+export const FeedResponse = z.object({ libraries: z.array(FeedLibrary) });
+export type FeedResponse = z.infer<typeof FeedResponse>;
 
 /* ---- Voice list ---- */
 

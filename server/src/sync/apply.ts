@@ -1,9 +1,9 @@
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, or, sql, type SQL } from 'drizzle-orm';
 import { KOKORO_PACK_BYTES, REMOTE_URL, type Mutation } from '@breader/shared';
 import type { Db } from '../db/client.ts';
 import { blobs, libraryItems, librarySettings, readingStates, readingTime, voices, voiceUses } from '../db/schema.ts';
 import { ApiError } from '../lib/errors.ts';
-import { sharedSomewhere, usedBy } from '../lib/shelf.ts';
+import { forgetSaves, sharedSomewhere, usedBy } from '../lib/shelf.ts';
 import { usable } from '../lib/voices.ts';
 import { settleAi } from './ai.ts';
 
@@ -42,6 +42,14 @@ async function checkOwnFile(tx: Tx, libraryId: string, fileId: string, kind: 'vo
 }
 
 const voiceGone = () => new ApiError(404, 'not_found', 'That voice isn’t available.');
+
+/**
+ * A book given a different cover waits for the model's yes before it shows (jobs/covers.ts); the
+ * same cover again keeps what it had, so one from before the check still shows.
+ */
+function newCoverWaits(cover: SQL) {
+  return sql`CASE WHEN ${cover} IS NOT NULL AND ${cover} IS DISTINCT FROM ${libraryItems.coverId} THEN true ELSE ${libraryItems.coverWaits} END`;
+}
 
 const item = (libraryId: string, bookId: string) => and(eq(libraryItems.libraryId, libraryId), eq(libraryItems.bookId, bookId));
 
@@ -126,6 +134,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
             line: sql`excluded.line`,
             fileId: sql`coalesce(excluded.file_id, ${libraryItems.fileId})`,
             coverId: sql`coalesce(excluded.cover_id, ${libraryItems.coverId})`,
+            coverWaits: newCoverWaits(sql`excluded.cover_id`),
             origin: sql`coalesce(excluded.origin, ${libraryItems.origin})`,
             series: sql`coalesce(excluded.series, ${libraryItems.series})`,
             seriesIndex: sql`CASE WHEN excluded.series IS NULL THEN ${libraryItems.seriesIndex} ELSE excluded.series_index END`,
@@ -147,6 +156,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
           fileId: m.fileId ? m.fileId : sql`${libraryItems.fileId}`,
           coverId: m.coverId ? m.coverId : sql`${libraryItems.coverId}`,
           hasCover: m.coverId ? true : sql`${libraryItems.hasCover}`,
+          coverWaits: newCoverWaits(m.coverId ? sql`${m.coverId}::text` : sql`null`),
           rev,
         })
         .where(item(libraryId, m.bookId))
@@ -319,6 +329,7 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
         .insert(librarySettings)
         .values({ libraryId, prefs: m.prefs, rev })
         .onConflictDoUpdate({ target: librarySettings.libraryId, set: { prefs: sql`${librarySettings.prefs} || excluded.prefs`, rev } });
+      if ('sharedLibraries' in m.prefs) forgetSaves();
       return;
     }
   }

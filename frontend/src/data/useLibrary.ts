@@ -8,7 +8,7 @@ import { store } from '../lib/store';
 import { onNews, tell, withData } from '../lib/tabs';
 import type { BookEdit, BookRecord, ReadMark, ReadState } from '../books/types';
 import { normColor, pickColor } from './colors';
-import { sampleRecords } from './library';
+import { sampleRecords, shownCover } from './library';
 import { newId, newLibraryKey } from '../lib/key';
 import { countLocked } from './readTime';
 import { queueSharedAdd, sendSharedAdds } from './sharedAdds';
@@ -374,13 +374,15 @@ async function storeCover(id: string, cover: Blob, upload: boolean) {
     URL.revokeObjectURL(covers[id]);
     covers = without(covers, id);
   }
-  await change((d) => ({ records: d.records.map((r) => (r.id === id ? { ...r, hasCover: true } : r)) }), [], { uploads: upload ? [id] : [] });
+  // A new cover waits for its own check (shownCover).
+  await change((d) => ({ records: d.records.map((r) => (r.id === id ? { ...r, hasCover: true, coverOk: false } : r)) }), [], { uploads: upload ? [id] : [] });
 }
 
 async function addBook(rec: BookRecord, blob: Blob | string, cover?: Blob) {
   await store.set(`file:${rec.id}`, blob);
   if (cover) {
-    rec = { ...rec, hasCover: true };
+    // A new cover waits for its own check (shownCover).
+    rec = { ...rec, hasCover: true, coverOk: false };
     await store.set(`cover:${rec.id}`, cover);
     noCover.delete(rec.id);
   }
@@ -699,7 +701,7 @@ export function withReading(
     ai: !!e.ai,
     aiElsewhere: !!e.aiElsewhere,
     opened: !!r,
-    coverUrl: covers[rec.id],
+    coverUrl: shownCover(rec, covers),
     // How far it's really read, not a page jumped ahead to (books/mark.ts).
     progress: r && rec.source !== 'placeholder' ? (r.mark ?? r).progress : rec.progress,
     line: r && rec.source !== 'placeholder' && (r.mark ?? r).line && !UNTITLED.test((r.mark ?? r).line) ? (r.mark ?? r).line : rec.line,

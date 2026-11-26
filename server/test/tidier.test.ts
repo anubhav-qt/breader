@@ -72,6 +72,44 @@ describe('the tidier: Codex first, NVIDIA behind it', () => {
     expect(sent[0].body.messages).toEqual([{ role: 'system', content: 's' }, { role: 'user', content: 'p' }]);
   });
 
+  it('sends a picture beside the prompt when given one', async () => {
+    const { sent, fetcher } = sides();
+    const tidier = makeTidier(env, fetcher, 'nv-key')!;
+    await tidier.json('s', 'p', { ...ask, image: 'data:image/png;base64,AAAA' });
+    expect((sent[0].body.messages as unknown[])[1]).toEqual({
+      role: 'user',
+      content: [{ type: 'text', text: 'p' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }],
+    });
+  });
+
+  it('lets background calls wait behind the others, and keeps a place free for them', async () => {
+    const order: string[] = [];
+    const held: Array<() => void> = [];
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { messages: Array<{ content: unknown }> };
+      order.push(String(body.messages[1].content));
+      await new Promise<void>((go) => held.push(go));
+      return Response.json(reply);
+    }) as unknown as typeof fetch;
+    const tidier = makeTidier(env, fetcher, 'nv-key')!;
+    const first = tidier.json('s', 'cover 1', { ...ask, later: true });
+    const second = tidier.json('s', 'cover 2', { ...ask, later: true });
+    const browse = tidier.json('s', 'browse', ask);
+    await new Promise((go) => setTimeout(go, 10));
+    expect(order).toEqual(['cover 1', 'browse']);
+    // Cover 1 done: cover 2 still waits, as browse holds the other place.
+    held.shift()!();
+    await first;
+    await new Promise((go) => setTimeout(go, 10));
+    expect(order).toEqual(['cover 1', 'browse']);
+    held.shift()!();
+    await browse;
+    await new Promise((go) => setTimeout(go, 10));
+    expect(order).toEqual(['cover 1', 'browse', 'cover 2']);
+    held.shift()!();
+    await second;
+  });
+
   it('with no proxy named, asks the worker’s', async () => {
     const { sent, fetcher } = sides();
     await makeTidier({ ADMIN_TOKEN: ADMIN }, fetcher, 'nv-key')!.json('s', 'p', ask);

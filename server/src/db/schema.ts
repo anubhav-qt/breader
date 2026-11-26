@@ -53,6 +53,13 @@ export const libraries = pgTable(
     createdAt: at('created_at').notNull().defaultNow(),
     lastActiveAt: at('last_active_at').notNull().defaultNow(),
     retiredAt: at('retired_at'),
+    /** When its owner put it in the public feed (routes/shelf.ts); null, only its key opens it. */
+    publicAt: at('public_at'),
+    /**
+     * Saved from the public feed: the library it's a copy of (routes/shelf.ts). It takes in what the
+     * original gets and keeps what the original loses; only its own key holders take books out.
+     */
+    copyOf: text('copy_of'),
     /** The highest rev among tombstones purged so far. A browser that pulled from before it may have missed a removal. */
     purgedRev: big('purged_rev').notNull().default(0),
     version: version(),
@@ -136,6 +143,16 @@ export const libraryItems = pgTable(
     lastOpened: at('last_opened').notNull(),
     fileId: text('file_id').references(() => blobs.id),
     coverId: text('cover_id').references(() => blobs.id),
+    /**
+     * The cover the model checked and found right for the book (cover_checks): its blob id, so a
+     * new cover counts as unchecked until it's checked too. Null for none yet.
+     */
+    coverOk: text('cover_ok'),
+    /**
+     * True when the cover shows only after the model's yes: every cover given since the check began,
+     * and an older one it said no to. Null for a cover from before the check: it shows until a no.
+     */
+    coverWaits: boolean('cover_waits').default(true),
     /** A copy of a shared book, started by this reader: the first book's id, however many copies away. Its file stays the sharer's. */
     origin: text('origin'),
     /** The series the book's file names, and its number in it. */
@@ -364,6 +381,60 @@ export const aiFills = pgTable('ai_fills', {
   by: text('by').notNull(),
   at: at('at').notNull().defaultNow(),
 });
+
+/**
+ * Whether a book's cover is really its front cover, as the model saw it: not blank, not something
+ * else. Asked once by the cover image's SHA-256, whichever libraries hold it, and kept. Books only,
+ * never manga. Copied into each library's books as `cover_ok` (jobs/covers.ts). Not fed.
+ */
+export const coverChecks = pgTable('cover_checks', {
+  key: text('key').primaryKey(),
+  ok: boolean('ok').notNull(),
+  by: text('by').notNull(),
+  at: at('at').notNull().defaultNow(),
+});
+
+/**
+ * Each book a copy of a public library took in from it, kept after the copy's own book is removed
+ * and its tombstone purged, so it never comes back. A book here is the copy's for good: its file
+ * opens from the copy whatever the original does with it (lib/shelf.ts `source`). Fed.
+ */
+export const copiedBooks = pgTable(
+  'copied_books',
+  {
+    copyId: text('copy_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    bookId: text('book_id').notNull(),
+    at: at('at').notNull().defaultNow(),
+    version: version(),
+  },
+  (t) => [primaryKey({ columns: [t.copyId, t.bookId] })],
+);
+
+/**
+ * A reader's ask to change a public library they saved a copy of, and its owner's answer. Given, it
+ * makes a token of its own (lib/shelf.ts `grantToken`) that adds to and takes from the library, for
+ * the asker alone (signed in to `askerId`), until the owner takes it back or takes the library out of
+ * Public. One per asker and copy: asking again opens it again.
+ */
+export const libraryGrants = pgTable(
+  'library_grants',
+  {
+    id: text('id').primaryKey(),
+    libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    copyId: text('copy_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
+    /** The asker's own library: only a browser signed in to it changes the library by this yes. */
+    askerId: text('asker_id').references(() => libraries.id, { onDelete: 'cascade' }),
+    note: text('note'),
+    /** asked | given | refused | taken */
+    state: text('state').notNull().default('asked'),
+    askedAt: at('asked_at').notNull().defaultNow(),
+    answeredAt: at('answered_at'),
+  },
+  (t) => [
+    uniqueIndex('library_grants_asker_idx').on(t.libraryId, t.copyId, t.askerId),
+    index('library_grants_library_idx').on(t.libraryId, t.state),
+  ],
+);
 
 /**
  * The name a library commented under, from when readers could comment. Nothing reads or writes it;
@@ -814,6 +885,7 @@ export const FED_TABLES = {
   users: ['id'],
   accounts: ['id'],
   libraries: ['id'],
+  copied_books: ['copy_id', 'book_id'],
   blobs: ['id'],
   library_items: ['library_id', 'book_id'],
   reading_states: ['library_id', 'book_id'],

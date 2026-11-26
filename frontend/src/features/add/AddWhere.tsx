@@ -26,7 +26,14 @@ const NEW = 'new';
 export function AddWhere({ onChoose, onCreated }: Props) {
   const sharing = useShared();
   const labels = useLabels();
-  const open = sharing.saved.filter((l) => sharing.libs[l.token]?.state !== 'closed');
+  const listed = sharing.saved.filter((l) => sharing.libs[l.token]?.state !== 'closed');
+  // Each library the reader may add to: those in the list, and the original of a copy its owner said yes to.
+  const open: Array<{ token: string; label: string }> = [];
+  for (const l of listed) {
+    open.push({ token: l.token, label: libraryName(sharing, l.token) });
+    const grant = sharing.libs[l.token]?.copy?.grant;
+    if (grant) open.push({ token: grant, label: libraryName(sharing, grant) });
+  }
   const [toShared, setToShared] = useState(false);
   // The one showing in the shared tab, when it's one that can be added to; else the first, or a new one.
   const [picked, setPicked] = useState<string>(() => {
@@ -75,7 +82,7 @@ export function AddWhere({ onChoose, onCreated }: Props) {
             <label className="add-pick">
               <span className="sr-only">Shared library</span>
               <select value={picked} autoFocus={open.length > 0} onChange={(e) => { setPicked(e.target.value); setError(null); }}>
-                {open.map((l) => <option key={l.token} value={l.token}>{libraryName(sharing, l.token)}</option>)}
+                {open.map((l) => <option key={l.token} value={l.token}>{l.label}</option>)}
                 <option value={NEW}>New shared library…</option>
               </select>
             </label>

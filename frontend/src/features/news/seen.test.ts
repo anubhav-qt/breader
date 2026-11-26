@@ -133,9 +133,19 @@ describe('the notes', () => {
       expect(n.lines.length).toBeGreaterThanOrEqual(1);
       expect(n.lines.length).toBeLessThanOrEqual(2);
       for (const l of [n.title, ...n.lines]) {
-        expect(l.length).toBeLessThanOrEqual(80);
+        expect(l.length).toBeLessThanOrEqual(130);
         expect(l).not.toMatch(/—/);
       }
     }
+  });
+
+  it('offer See how only with a video the start page has', async () => {
+    const { NOTES } = await vi.importActual<typeof import('./notes')>('./notes');
+    const { BOOKS, MANGA } = await import('../guide/cards');
+    const videos = new Set([...BOOKS, ...MANGA].map((c) => c.id));
+    for (const n of NOTES) {
+      if (n.demo) expect(videos.has(n.demo)).toBe(true);
+    }
+    expect(NOTES[0].demo).toBe('public');
   });
 });

@@ -1,3 +1,5 @@
+import type { DemoId } from '../guide/Demo';
+
 /*
  * What changed, for readers, newest first. Every line is asked of the owner before it goes in;
  * never add one without that. Each shows once, in a dialog (News.tsx), to readers who had Breader
@@ -10,12 +12,22 @@ export interface Note {
   id: string;
   title: string;
   lines: string[];
+  /** The start page's short video of it (guide/Demo.tsx), offered as See how under the lines. */
+  demo?: DemoId;
 }
 
 /** No note up to this day is shown to anyone. Only notes after it, each line approved by the owner. */
 export const QUIET_THROUGH = '2026-11-23';
 
 export const NOTES: Note[] = [
+  {
+    id: '2026-11-26',
+    title: 'What’s new',
+    lines: [
+      'There is now a way to make your shared libraries public, and browse and access other people’s publicly shared libraries.',
+    ],
+    demo: 'public',
+  },
   {
     id: '2026-11-18',
     title: 'Replies to your feedback',

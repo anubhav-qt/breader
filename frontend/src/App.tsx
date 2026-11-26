@@ -10,6 +10,7 @@ import type { Go } from './features/guide/list';
 import { markSeen, useGuideKept, useNews } from './features/guide/seen';
 import { checkDevice } from './features/reader/able';
 import { WelcomeBooks, WelcomeManga, WelcomeShared } from './features/guide/Welcome';
+import type { DemoId } from './features/guide/Demo';
 import type { Note } from './features/news/notes';
 import { firstOnServer, markShown, unseen } from './features/news/seen';
 import { anyWorking, askReplies, doneNote, WORKING, WORKING_MS } from './features/feedback/replies';
@@ -26,10 +27,12 @@ import type { BookEdit, BookRecord, LoadedBook, Position, ReadState } from './bo
 import { normColor } from './data/colors';
 import { canRemove, canShare, mixedCovers, mixedRecords, placeholderRecords, PREVIEW_MODES, sampleRecords, seriesRecords, type PreviewMode } from './data/library';
 import { useMangaPreview } from './data/mangaPreview';
-import type { AccountResponse } from '@breader/shared/protocol';
+import type { AccountResponse, FeedLibrary } from '@breader/shared/protocol';
 import { namesOf, type MangaFound } from '@breader/shared/manga';
 import { useLabels } from './data/labels';
-import { addLibrary, keepShelfCover, libraryName, sharedNow, shelfCover, shelfRecord, showLibrary, useShared, type Showing } from './data/shelf';
+import { addLibrary, changeToken, isSaved, isYours, keepShelfCover, libraryName, refreshFeed, refreshLibrary, removeFromLibrary, renameLibrary, saveLibrary, sharedNow, shelfCover, shelfRecord, showLibrary, unsaveLibrary, useShared, yoursAs, type Showing } from './data/shelf';
+import { feedName } from './features/shared/facts';
+import { LibraryHead } from './features/shared/LibraryHead';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
 import type { Where } from './features/add/AddWhere';
@@ -41,7 +44,7 @@ import { fillGaps, genreFor } from './features/gallery/fill';
 import { urlOf } from './features/manga/copies';
 import type { About, Picked } from './features/manga/MangaPage';
 import { loginError, logOut, refreshAccount, useAccount, verifyEmail } from './lib/account';
-import { api } from './lib/api';
+import { api, ApiError } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
 import { genreOf, mangadex, readMangaPrefs, sources, type MangaPrefs } from './lib/mangadex';
 import { springs } from './lib/springs';
@@ -167,14 +170,17 @@ const RETURN_PARAMS = ['login', 'error', 'verify', 'reset'];
  */
 const loadReader = () => import('./features/reader/Reader');
 const loadBrowse = () => import('./features/manga/Browse');
+const loadFeed = () => import('./features/shared/PublicFeed');
 const loadPage = () => import('./features/manga/MangaPage');
 const loadAdd = () => import('./features/add/AddBook');
 const Reader = lazy(() => loadReader().then((m) => ({ default: m.Reader })));
 const Browse = lazy(() => loadBrowse().then((m) => ({ default: m.Browse })));
+const PublicFeed = lazy(() => loadFeed().then((m) => ({ default: m.PublicFeed })));
 const MangaPage = lazy(() => loadPage().then((m) => ({ default: m.MangaPage })));
 const AddBook = lazy(() => loadAdd().then((m) => ({ default: m.AddBook })));
 const Guide = lazy(() => import('./features/guide/Guide').then((m) => ({ default: m.Guide })));
 const News = lazy(() => import('./features/news/News').then((m) => ({ default: m.News })));
+const Demo = lazy(() => import('./features/guide/Demo').then((m) => ({ default: m.Demo })));
 const Feedback = lazy(() => import('./features/feedback/Feedback').then((m) => ({ default: m.Feedback })));
 /* The dialogs and menus too: none shows as the library opens. */
 const loadLogin = () => import('./features/account/LoginDialog');
@@ -273,6 +279,13 @@ export default function App() {
   const [now] = useState(() => Date.now());
   const [route, setRoute] = useState<Route>(parseHash);
   const [tab, setTab] = useState<Tab>('mine');
+  /** A library opened from the public feed, by its token: it shows as a shared library does, read only. */
+  const [peek, setPeek] = useState<string | null>(null);
+  // Leaving Public by any way closes the library opened from it.
+  if (tab !== 'public' && peek) setPeek(null);
+  /** The library showing: a library opened from the feed is the Shared tab's look, under Public. */
+  let shownTab: Tab = tab;
+  if (tab === 'public' && peek) shownTab = 'shelf';
   /** Books or manga: the shelf both tabs show, as the reader last left it. */
   const [category, setCategory] = useState<Category>(() => (readLocal<string>('breader.category.v1', 'books') === 'manga' ? 'manga' : 'books'));
   useEffect(() => { writeLocal('breader.category.v1', category); }, [category]);
@@ -300,14 +313,15 @@ export default function App() {
    */
   const [picking, setPicking] = useState<{ place: string; ids: ReadonlySet<string> } | null>(null);
   let pickPlace = '';
-  if (route.name === 'library' && tab === 'mine') pickPlace = `${category} mine`;
-  if (route.name === 'library' && tab === 'shelf') pickPlace = `${category} shelf ${sharing.showing}`;
+  if (route.name === 'library' && shownTab === 'mine') pickPlace = `${category} mine`;
+  if (route.name === 'library' && shownTab === 'shelf') pickPlace = `${category} shelf ${peek ?? sharing.showing}`;
   if (picking && picking.place !== pickPlace) setPicking(null);
   // Each tab's library stays once it's been seen, so switching back finds it as it was, and so does
   // each shelf's: a tab seen on one shelf is there on the other too once that's been seen, so
   // switching between books and manga never has a library to make, only one to show.
   const [seen, setSeen] = useState<ReadonlySet<Tab>>(() => new Set([tab]));
   if (!seen.has(tab)) setSeen(new Set([...seen, tab]));
+  else if (!seen.has(shownTab)) setSeen(new Set([...seen, shownTab]));
   const [visited, setVisited] = useState<ReadonlySet<Category>>(() => new Set([category]));
   if (!visited.has(category)) setVisited(new Set([...visited, category]));
   const [preview, setPreview] = useState<PreviewMode>(() => (devTools ? readParam('preview', PREVIEW_MODES.map((m) => m.id), 'live') : 'live'));
@@ -332,6 +346,8 @@ export default function App() {
   const [whatsNew, setWhatsNew] = useState<Note[] | null>(null);
   /** What's new, cleared by the server to show, waiting for nothing else to be open. */
   const [newsWaiting, setNewsWaiting] = useState<Note[] | null>(null);
+  /** A What's new note's video, opened by its See how. */
+  const [newsDemo, setNewsDemo] = useState<DemoId | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const newsAsked = useRef(false);
   /** What this library is told about feedback it sent (features/feedback/replies.ts), asked once a visit. */
@@ -481,7 +497,13 @@ export default function App() {
    * The shared libraries tab: the books the reader shares, or those of a library in their list, as
    * its owner has them. A book of theirs the reader has too, as their own or a copy, is `kept`.
    */
-  const showing = sharing.showing;
+  let showing: Showing = sharing.showing;
+  if (shownTab === 'shelf' && tab === 'public' && peek) {
+    showing = peek;
+    // The reader's own, found in the feed: shown as theirs, not as someone else's to keep from.
+    const ownRow = sharing.feed.libraries.find((l) => l.token === peek)?.own === true;
+    if (ownRow) showing = 'own';
+  }
   const others = showing === 'own' ? null : sharing.libs[showing];
   const sharedRecords = useMemo(
     () => (showing === 'own' ? lib.records.filter((r) => r.shared && !lapsed.has(r.id)) : (others?.books ?? []).map(shelfRecord)),
@@ -915,11 +937,11 @@ export default function App() {
     const rec = lib.records.find((r) => r.id === id);
     const title = (rec && lib.edits[id]?.title?.trim()) || rec?.title || '';
     if (rec && canShare(rec) && rec.shared && !rec.sharedOnly) {
-      setAsking({ id, title, from: tab === 'shelf' ? 'shelf' : 'mine', category: categoryOf(rec), fromKeyboard, then });
+      setAsking({ id, title, from: shownTab === 'shelf' ? 'shelf' : 'mine', category: categoryOf(rec), fromKeyboard, then });
       return;
     }
     void removeBook(id, fromKeyboard).then(then);
-  }, [lib, tab, removeBook]);
+  }, [lib, shownTab, removeBook]);
 
   const chooseRemove = useCallback((both: boolean) => {
     if (!asking) return;
@@ -1060,6 +1082,17 @@ export default function App() {
   }, [route.name, adding, addFiles]);
 
   /** The guide, from settings, an empty library, a tip or ? in the library; `q`: what it looks for first. */
+  /** The button under a What's new video: Public's opens Public; the others have none yet. */
+  const demoAct = (id: DemoId) => {
+    if (id !== 'public') return null;
+    const run = () => {
+      setNewsDemo(null);
+      setPeek(null);
+      setTab('public');
+    };
+    return { label: 'Open Public', run };
+  };
+
   const openGuide = useCallback((q?: string) => {
     setGuide({ seenAt: guideKept.seen, q });
     markSeen();
@@ -1167,8 +1200,50 @@ export default function App() {
     }
     return undefined;
   }, [shownId, everything]);
-  const books = tab === 'shelf' ? items.shelf : items.mine;
+  const books = useMemo(() => {
+    if (shownTab === 'shelf') return items.shelf;
+    if (shownTab === 'mine') return items.mine;
+    return [];
+  }, [shownTab, items]);
   const ownShared = useMemo(() => lib.records.filter((r) => r.shared && !lapsed.has(r.id) && !hidden.has(r.id)).length, [lib.records, lapsed, hidden]);
+  /** The Shared tab's count, of the library it shows, also while one from the feed is open. */
+  const shelfCount = useMemo(() => {
+    if (!peek || tab !== 'public') return items.shelf.length;
+    const which = sharing.showing;
+    if (which === 'own') return lib.records.filter((r) => r.shared && !lapsed.has(r.id) && !hidden.has(r.id) && categoryOf(r) === category).length;
+    return (sharing.libs[which]?.books ?? []).map(shelfRecord).filter((r) => categoryOf(r) === category).length;
+  }, [peek, tab, items.shelf.length, sharing.showing, sharing.libs, lib.records, lapsed, hidden, category]);
+  /** Public's count: the feed's libraries with any on this shelf, as the feed shows them. */
+  const publicCount = sharing.feed.libraries.filter((l) => (category === 'manga' ? l.manga : l.books) > 0).length;
+  /** The feed's own facts on the library opened from it. */
+  const peeked = peek ? sharing.feed.libraries.find((l) => l.token === peek) : undefined;
+  // The feed again each time Public opens; a library opened from it, fresh.
+  useEffect(() => { if (tab === 'public') void refreshFeed(); }, [tab]);
+  useEffect(() => { if (peek) void refreshLibrary(peek, true); }, [peek]);
+  /** Saves the library opened from the feed to the reader's Shared list as their own copy, or takes it off again. */
+  const flipSaved = useCallback((l: FeedLibrary) => {
+    if (isSaved(sharing, l.token)) {
+      unsaveLibrary(l.token);
+      say(`Taken off ${labels.shelf}`);
+      return;
+    }
+    let unnamed: string | undefined;
+    if (!l.name) unnamed = feedName(l);
+    saveLibrary(l.token, unnamed).then(
+      () => say(`Saved to ${labels.shelf}`),
+      (err: unknown) => say(err instanceof ApiError ? err.message : 'Couldn’t save it. Check your connection and try again.'),
+    );
+  }, [sharing, say, labels.shelf]);
+  /** Renames a library opened from the feed, where it's the reader's: the same as renaming it in Shared's list. */
+  const renameAs = (l: FeedLibrary): ((name: string) => void) | undefined => {
+    const which = yoursAs(sharing, l);
+    if (which === null) return undefined;
+    return (name: string) => {
+      renameLibrary(which, name).catch((err: unknown) => {
+        say(err instanceof ApiError ? err.message : 'Couldn’t rename it. Check your connection and try again.');
+      });
+    };
+  };
   /** Someone's book, put in the reader's own library from their shared one without opening it. */
   const keep = useCallback(async (b: ShelfItem) => {
     const entry = recordById.get(b.id);
@@ -1313,9 +1388,29 @@ export default function App() {
     });
   };
 
+  /** The token that changes the library showing, when the reader may: its key, or the owner's yes to them. */
+  const changing = showing === 'own' ? null : changeToken(sharing, showing);
+  /** In someone else's library the reader may change: takes the picked books out of it. */
+  const takeOutPicked = async (fromKeyboard: boolean) => {
+    if (!changing) return;
+    const ids = pickedBooks.map((b) => b.id);
+    setPicking(null);
+    try {
+      const n = await removeFromLibrary(changing, ids);
+      say(`Took ${countOf(n, category)} out of ${libraryName(sharing, showing)}`, { focus: fromKeyboard });
+      // Opened from the feed with a yes from its owner: the feed's own view of it, and its facts, fresh.
+      if (changing !== showing) {
+        void refreshLibrary(showing, true);
+        void refreshFeed();
+      }
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : 'Couldn’t take them out. Check your connection and try again.');
+    }
+  };
+
   /** What can be done with the picked books, by the library they're in. */
   let actions: BulkAction[] = [];
-  if (tab === 'mine') {
+  if (shownTab === 'mine') {
     actions = [
       { key: 'favourite', label: allFavourites ? 'Unfavourite' : 'Favourite', icon: <IconStar />, run: favouritePicked },
       { key: 'share', label: 'Share', icon: <IconPeople />, disabled: !toShare.length, run: sharePicked },
@@ -1331,6 +1426,7 @@ export default function App() {
     actions = [
       { key: 'add', label: 'Add', icon: <IconAddBook />, disabled: !notKept.length, run: (k) => void keepPicked(k) },
     ];
+    if (changing) actions.push({ key: 'remove', label: 'Remove', icon: <IconTrash />, danger: true, run: (k) => void takeOutPicked(k) });
   }
   /** Every book in the library showing is picked. */
   const allPicked = pickedBooks.length > 0 && pickedBooks.length === books.length;
@@ -1349,7 +1445,7 @@ export default function App() {
   }
   /** Select, where the library showing has books to pick. */
   let startPicking: (() => void) | undefined = undefined;
-  if (tab !== 'browse' && books.length > 0) startPicking = () => setPicking({ place: pickPlace, ids: new Set() });
+  if (books.length > 0) startPicking = () => setPicking({ place: pickPlace, ids: new Set() });
   // The shared libraries' list goes with the tab it hangs from.
   if (tab !== 'shelf' && librariesOpen) setLibrariesOpen(false);
 
@@ -1384,7 +1480,7 @@ export default function App() {
     });
   }
   const readerHints: HintSpec[] = mouse ? [{ id: 'reader-keys', text: 'Press ? to see the keys.', ms: 6000 }] : [];
-  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || implemented || feedbackOpen || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
+  const busy = !!(choosing || adding || login || keyOpen || guide || whatsNew || newsDemo || implemented || feedbackOpen || asking || askingAll || askingWhere || freshKey || picking || opening || closing || librariesOpen !== false || dragOver || toast);
   // What's new waits for the library and for nothing else to be open, then asks the server
   // whether this account or address has been shown it already, and shows it once.
   useEffect(() => {
@@ -1466,9 +1562,9 @@ export default function App() {
       return <WelcomeShared manga={c === 'manga'} onShare={addTo(c)} onOpen={() => setLibrariesOpen('key')} onGuide={() => openGuide('sharing')} />;
     }
     if (c === 'manga') {
-      return <WelcomeManga onBrowse={mdOn === false ? null : () => setTab('browse')} onAdd={() => setAdding({ mode: 'file' })} onGuide={() => openGuide()} />;
+      return <WelcomeManga onBrowse={mdOn === false ? null : () => setTab('browse')} onAdd={() => setAdding({ mode: 'file' })} onPublic={() => { setPeek(null); setTab('public'); }} onGuide={() => openGuide()} />;
     }
-    return <WelcomeBooks onAdd={() => setAdding({ mode: 'file' })} onPaste={() => setAdding({ mode: 'paste' })} onGuide={() => openGuide()} />;
+    return <WelcomeBooks onAdd={() => setAdding({ mode: 'file' })} onPaste={() => setAdding({ mode: 'paste' })} onPublic={() => { setPeek(null); setTab('public'); }} onGuide={() => openGuide()} />;
   };
 
   return (
@@ -1481,9 +1577,9 @@ export default function App() {
             category={category}
             onCategory={setCategory}
             tab={tab}
-            counts={{ mine: items.mine.length, shelf: items.shelf.length }}
+            counts={{ mine: items.mine.length, shelf: shelfCount, public: publicCount }}
             labels={labels}
-            onTab={setTab}
+            onTab={(t: Tab) => { setPeek(null); setTab(t); }}
             onAdd={() => setChoosing(true)}
             libraries={(close) => (
               <Suspense key="libraries" fallback={null}>
@@ -1517,7 +1613,7 @@ export default function App() {
                 onLogOut={logOutAll}
                 onKey={() => setKeyOpen(true)}
                 // Only over manga's covers, where there are some to show.
-                coversOnly={manga && tab !== 'browse' && books.length > 0 ? coversOnly : undefined}
+                coversOnly={manga && books.length > 0 ? coversOnly : undefined}
                 onCoversOnly={flipCovers}
                 onGuide={() => openGuide()}
                 onFeedback={() => setFeedbackOpen(true)}
@@ -1541,7 +1637,7 @@ export default function App() {
               now={now}
               id={`library-${c}-${t}`}
               labelledBy={`tab-${t}`}
-              hidden={t !== tab || c !== category}
+              hidden={t !== shownTab || c !== category}
               onOpen={(b, rect) => void onOpen(b, rect)}
               onAdd={addTo(c)}
               onEdit={(id, patch) => void editBook(id, patch)}
@@ -1558,10 +1654,26 @@ export default function App() {
                 lib.setShared(b.id, shared);
                 say(shared ? `“${b.title}” is shared with your key` : `Stopped sharing “${b.title}”`);
               }}
-              picked={picking && t === tab && c === category ? picking.ids : undefined}
+              picked={picking && t === shownTab && c === category ? picking.ids : undefined}
+              head={t === 'shelf' && peek && peeked ? (
+                <LibraryHead
+                  library={peeked}
+                  yours={isYours(sharing, peeked)}
+                  saved={isSaved(sharing, peeked.token)}
+                  now={now}
+                  onBack={() => setPeek(null)}
+                  onSave={() => flipSaved(peeked)}
+                  onRename={renameAs(peeked)}
+                />
+              ) : undefined}
               onPick={pick}
             />
           ))}
+          {lib.ready && seen.has('public') && (
+            <Suspense fallback={null}>
+              <PublicFeed category={category} coversOnly={coversOnly} now={now} hidden={tab !== 'public' || !!peek} onLibrary={setPeek} />
+            </Suspense>
+          )}
           {lib.ready && mdOn !== false && seen.has('browse') && (
             <Suspense fallback={null}>
               <Browse
@@ -1702,12 +1814,17 @@ export default function App() {
         {freshKey && route.name !== 'read' && <Suspense key="fresh-key" fallback={null}><KeyDialog libraryKey={freshKey} fresh onLogin={loggedIn ? undefined : loginInstead} onClose={() => setFreshKey(null)} /></Suspense>}
         {whatsNew && (
           <Suspense key="news" fallback={null}>
-            <News notes={whatsNew} onClose={() => setWhatsNew(null)} onFeedback={() => { setWhatsNew(null); setFeedbackOpen(true); }} />
+            <News notes={whatsNew} onClose={() => setWhatsNew(null)} onFeedback={() => { setWhatsNew(null); setFeedbackOpen(true); }} onDemo={(id) => { setWhatsNew(null); setNewsDemo(id); }} />
+          </Suspense>
+        )}
+        {newsDemo && (
+          <Suspense key="news-demo" fallback={null}>
+            <Demo id={newsDemo} act={demoAct(newsDemo)} onClose={() => setNewsDemo(null)} />
           </Suspense>
         )}
         {implemented && (
           <Suspense key="implemented" fallback={null}>
-            <News notes={[implemented]} onClose={() => setImplemented(null)} onFeedback={() => { setImplemented(null); setFeedbackOpen(true); }} />
+            <News notes={[implemented]} onClose={() => setImplemented(null)} onFeedback={() => { setImplemented(null); setFeedbackOpen(true); }} onDemo={(id) => { setImplemented(null); setNewsDemo(id); }} />
           </Suspense>
         )}
         {feedbackOpen && (

@@ -400,7 +400,16 @@
   box-shadow: 0 0 0 1px var(--tile-border);
   pointer-events: none;
 }
-.tile.is-manga.has-art > .tile-art.is-made { display: flex; }
+/* Its drawn cover keeps its colour on narrow cards too, not only past 440px. */
+.tile.is-manga.has-art > .tile-art.is-made {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: calc(var(--mg-art-w) * 0.08);
+  background: var(--bc);
+  color: var(--bc-ink);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bc-ink) 14%, transparent);
+}
 .tile.is-manga.has-art > .tile-face { padding-left: calc(var(--mg-inset) + var(--mg-art-w) + var(--mg-gap)); }
 /*
  * The corner's buttons on the cover's corner, so the words beside it have the card's whole width,
@@ -562,3 +571,8 @@
 /* Design round, AI C: the spark in a card's corner (features/ai). */
 .tile-ai .ai-spark { font-size: 12px; }
 .cv .tile-ai .ai-spark { font-size: calc(var(--tool) * 0.42); }
+
+/* A book on a shelf with a cover of its own (Tile, `photo`): the cover alone, filling its card. */
+.tile-photo { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: inherit; background: var(--fill); }
+.tile-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tile.is-photo > .tile-face { visibility: hidden; }

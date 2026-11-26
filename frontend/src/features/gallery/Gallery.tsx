@@ -56,6 +56,8 @@ interface Props {
   picked?: ReadonlySet<string>;
   /** While picking: ticks these books, or takes the tick off when they all have one. */
   onPick?: (books: ShelfItem[]) => void;
+  /** Above the books, scrolling with them: a library opened from the public feed's name and Save. */
+  head?: ReactNode;
 }
 
 /**
@@ -72,7 +74,7 @@ const canBeFirst = (b: ShelfItem) => !!b.ai && b.format !== 'CBZ' && b.source !=
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty, picked, onPick }: Props) {
+export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty, picked, onPick, head }: Props) {
   let shelf: 'books' | 'manga' = 'books';
   if (manga) shelf = 'manga';
   const first = useRef(!entered[shelf]);
@@ -119,6 +121,14 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
 
   const panel = { id, role: 'tabpanel', 'aria-labelledby': labelledBy, hidden } as const;
 
+  if (!books.length && head) {
+    return (
+      <div {...panel} className="gallery">
+        {head}
+        {empty}
+      </div>
+    );
+  }
   if (!books.length) {
     return (
       <div {...panel} className="gallery is-empty">
@@ -143,6 +153,7 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
   const more = books.length > RECENT || stacks.size > 0;
   return (
     <motion.div {...panel} ref={scrollRef} className="gallery" layoutScroll>
+      {head}
       {manga && <MangaLibrary books={books} coversOnly={coversOnly} {...shared} />}
       {!manga && (
         <section className="recent" aria-label="Recent">

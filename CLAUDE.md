@@ -62,8 +62,32 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   `manga/curate.ts`, filling in books `jobs/fill.ts`) ask Codex's `gpt-6.1-terra` at medium first,
   NVIDIA's Super VL as the backup for 10 minutes when Codex is down, on the ThinkPad only
   (`server/src/lib/tidier.ts`). On NVIDIA a low job has its thinking off.
+- Covers: a library's shelves show each book's cover alone, or its drawn card (`gallery/Tile.tsx`).
+  A reader's uploaded book shows a new cover only once the model said it's really that book's
+  (`server/src/jobs/covers.ts`, once per image in `cover_checks`, marked as `library_items.cover_ok`;
+  `shownCover`, `frontend/src/data/library.ts`). Covers from before the check (`cover_waits` null)
+  show until a no; `coverOk` on the wire is true, false (waits or no) or left out (old). Manga (uploaded too), samples and previews aren't checked.
+  Covers go at 512px, behind the server's other model calls (`later`, `lib/tidier.ts`); one with no answer waits 6 hours.
+  50 a run, every 30 minutes, or a minute after a full run the model answered in.
 - The AI marker cuts someone else's words quoted inside a line into their voice (`nest`,
   `ai/tools/marks.ts`) and rereads lines whose speech tag names someone else (`ai/tools/tags.ts`).
+- Public feed: a library made public (`libraries.public_at`, Shared's list, the globe) shows in
+  Public (`GET /v1/shared/feed`, `frontend/src/features/shared/PublicFeed.tsx`). Its feed token only
+  reads (`publicToken`, `server/src/lib/shelf.ts`); only an owner or a made-to-share key holder flips it. One with no name shows as
+  its short id's shared library (`publicTag`, the id's first 6 characters; `feedName`, `features/shared/facts.ts`).
+  Renaming a library of the reader's own, in Shared's list or in Public (`renameLibrary`, `data/shelf.ts`) names it
+  everywhere: their own by the synced setting, one made only to share by `POST /v1/shared/name`.
+  On phones (up to 720px) the Personal | Shared | Public switch is one button that opens the other two
+  (`frontend/src/components/LibraryPick.tsx`).
+- Saving from Public makes the reader's own copy (`libraries.copy_of`, `POST /v1/shared/copy`): it takes in
+  what the original adds (`copied_books`, fed) and keeps what it loses. To change the original the reader
+  asks (`/v1/shared/ask`, a note up to 500 characters); the owner answers under that library in Shared's
+  list (`/v1/shared/answer`: yes, no, take back), and a yes is a grant of their own (`library_grants`,
+  `grantToken`, access `grant`): add and remove only, never the key, the public switch or a rename.
+  The ask and its yes are for the asker's own library (`asker_id`): others with the copy's key only read.
+  Saved again, the reader gets the copy they asked from back. Taken out of Public, every yes and ask on
+  it ends; copies keep what they have, and only its key holders change it.
+  Anyone who may change a library takes books out (`/v1/shared/remove`, Select then Remove).
 - Audiobooks are made on readers' devices only. The server never makes them.
 - Reading aloud and finding panels run on the reader's device when it can
   (`frontend/src/features/reader/able.ts`, checked as a book opens, nothing sent). Only a device too
@@ -112,6 +136,7 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - What's new notes (`frontend/src/features/news/notes.ts`): ask the owner for every single line
   before adding it; never decide alone. Shown once in a dialog, once only for an account, an address
   and a device (`server/src/routes/news.ts`). Notes up to `QUIET_THROUGH` show to no one.
+  A note's `demo` adds See how, the start page's video for it (`guide/Demo.tsx`).
 - Never print `infra/.env` or any secret.
 - Commits: one line, `type: message`. No em dashes. No Claude attribution.
 - Keep this file, `infra/README.md` and the ADRs in step with every change.

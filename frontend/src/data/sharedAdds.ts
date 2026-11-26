@@ -4,7 +4,7 @@ import { api, ApiError } from '../lib/api';
 import { newId } from '../lib/key';
 import { store } from '../lib/store';
 import { refreshLibrary } from './shelf';
-import { flush, toWire } from './sync';
+import { flush, signedIn, toWire } from './sync';
 
 /*
  * Books the reader adds to other people's shared libraries. A file can only go once it's uploaded
@@ -38,10 +38,13 @@ async function sendOne(rec: BookRecord, w: Waiting): Promise<string[]> {
   for (const token of w.tokens) {
     const book = { ...toWire(rec), id: w.copyId, origin: rec.origin ?? rec.id };
     try {
-      await api.post<SharedAddResponse>('/v1/shared/add', { token, book });
+      // A grant changes a library only for the reader signed in here.
+      await signedIn(() => api.post<SharedAddResponse>('/v1/shared/add', { token, book }));
       void refreshLibrary(token, true);
     } catch (e) {
       if (!settled(e)) left.push(token);
+      // Shut to this reader: the app learns so, and stops offering it.
+      if (e instanceof ApiError && e.code === 'shared_closed') void refreshLibrary(token, true);
     }
   }
   return left;

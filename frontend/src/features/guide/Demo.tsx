@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { Modal } from '../../components/Modal';
 import { Logo } from '../../components/Logo';
-import { IconAddBook, IconCheck, IconClose, IconDownload, IconMore, IconPlus, IconSearch, IconSpeaker } from '../../components/icons';
+import { IconAddBook, IconBack, IconCaret, IconCheck, IconChevron, IconClose, IconDownload, IconGlobe, IconMore, IconPencil, IconPlus, IconSearch, IconSpeaker } from '../../components/icons';
 import { BOOK_COLORS, colorVars } from '../../data/colors';
 import { AppearancePanel, Segmented } from '../reader/Panels';
 import { DEFAULTS, THEMES, type MangaLayout, type ReaderSettings } from '../reader/settings';
@@ -17,6 +17,8 @@ import '../gallery/gallery.css';
 import '../audiobook/audiobook.css';
 import '../manga/manga.css';
 import '../../components/library-switch.css';
+import '../gallery/shelves.css';
+import '../shared/shared.css';
 import '../../components/steps.css';
 import './demo.css';
 
@@ -29,7 +31,7 @@ import './demo.css';
  * motion asked for, the picture holds still at its end and the words carry it.
  */
 
-export type DemoId = 'read' | 'listen' | 'audiobook' | 'share' | 'find' | 'panels' | 'offline';
+export type DemoId = 'read' | 'listen' | 'audiobook' | 'share' | 'public' | 'find' | 'panels' | 'offline';
 
 const DEMOS: Record<DemoId, { title: string; steps: string[] }> = {
   read: {
@@ -47,6 +49,10 @@ const DEMOS: Record<DemoId, { title: string; steps: string[] }> = {
   share: {
     title: 'Share',
     steps: ['A book’s ⋯, then Share with your key.', 'Give your key to someone you trust (Settings, then Library key).', 'They paste it in Shared, and read your book.'],
+  },
+  public: {
+    title: 'Public',
+    steps: ['In Shared, open your list of libraries, tap the globe, then Make public.', 'Tap Public to see everyone’s. Search, or sort by Popular or New.', 'Open one, and Save it to your Shared list.'],
   },
   find: {
     title: 'Find',
@@ -385,21 +391,76 @@ function More() {
   return <button type="button" className="tile-more"><IconMore /></button>;
 }
 
-function Library({ narrow, shelf = 'mine', manga = false, children }: { narrow: boolean; shelf?: 'mine' | 'shelf'; manga?: boolean; children: ReactNode }) {
+type Half = 'mine' | 'shelf' | 'public';
+const HALF_NAMES: Record<Half, string> = { mine: 'Personal', shelf: 'Shared', public: 'Public' };
+const HALVES: Half[] = ['mine', 'shelf', 'public'];
+
+/** The switch between libraries: three halves, or on phones one button that opens the other two (LibraryPick). */
+function Halves({ narrow, shown, picking }: { narrow: boolean; shown: Half; picking: boolean }) {
+  if (narrow) {
+    return (
+      <div className="lpk">
+        <button type="button" className="lpk-btn" aria-expanded={picking}>
+          <span className="lpk-name">{HALF_NAMES[shown]}</span>
+          <IconCaret />
+        </button>
+        {picking && (
+          <div className="lpk-menu dm-pop">
+            {HALVES.filter((h) => h !== shown).map((h) => (
+              <button key={h} type="button" className={`lpk-item dm-lpk-${h}`}><span className="lpk-name">{HALF_NAMES[h]}</span></button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="lsw">
+      {HALVES.map((h) => (
+        <button key={h} type="button" className={`lsw-tab dm-lsw-${h}`} aria-selected={shown === h}>
+          {shown === h && <span className="lsw-on" />}
+          <span className="lsw-name">{HALF_NAMES[h]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The button beside the switch: the shared ones' arrow (a pencil on phones), else the pencil, greyed in Public. */
+function EditButton({ narrow, shown, open }: { narrow: boolean; shown: Half; open: boolean }) {
+  let icon = <IconPencil />;
+  if (shown === 'shelf' && !narrow) icon = <IconCaret />;
+  return (
+    <div className="le">
+      <button type="button" className={`btn btn-ghost hdr-icon le-btn${open ? ' is-open' : ''}`} disabled={shown === 'public'}>{icon}</button>
+    </div>
+  );
+}
+
+interface LibraryProps {
+  narrow: boolean;
+  shelf?: Half;
+  manga?: boolean;
+  /** On phones, the one button's list of the other two is open. */
+  picking?: boolean;
+  /** The dropdown under the button beside the switch, when it's open. */
+  menu?: ReactNode;
+  children: ReactNode;
+}
+
+function Library({ narrow, shelf = 'mine', manga = false, picking = false, menu = null, children }: LibraryProps) {
   return (
     <div className={`dm-lib${narrow ? ' is-narrow' : ''}`}>
       <header className="hdr dm-hdr">
         <div className="hdr-start">
           <Logo />
-          <div className="lsw">
-            {(['mine', 'shelf'] as const).map((t) => (
-              <button key={t} type="button" className={`lsw-tab dm-lsw-${t}`} aria-selected={shelf === t}>
-                {shelf === t && <span className="lsw-on" />}
-                <span className="lsw-name">{t === 'mine' ? 'Personal' : 'Shared'}</span>
-              </button>
-            ))}
+          <div className="hdr-lib">
+            <Halves narrow={narrow} shown={shelf} picking={picking} />
+            <EditButton narrow={narrow} shown={shelf} open={menu !== null} />
+            {menu}
           </div>
         </div>
+        {/* Books or manga, without the + button: with three halves at the start, it wouldn't fit. */}
         {!narrow && (
           <div className="hdr-actions">
             <div className="ls">
@@ -412,7 +473,6 @@ function Library({ narrow, shelf = 'mine', manga = false, children }: { narrow: 
                     </button>
                   ))}
                 </div>
-                <button type="button" className="ls-plus"><IconPlus /><span className="ls-plus-word">Add</span></button>
               </div>
             </div>
           </div>
@@ -421,6 +481,15 @@ function Library({ narrow, shelf = 'mine', manga = false, children }: { narrow: 
       <div className="dm-shelf">{children}</div>
     </div>
   );
+}
+
+/** The taps that go to another library: its half, or on phones the one button and then its name. */
+function toHalf(narrow: boolean, half: Half, setPicking: (on: boolean) => void, go: () => void, wait: number): Beat[] {
+  if (!narrow) return [{ tap: `.dm-lsw-${half}`, then: go, wait }];
+  return [
+    { tap: '.lpk-btn', then: () => setPicking(true), wait: 600 },
+    { tap: `.dm-lpk-${half}`, then: () => { setPicking(false); go(); }, wait },
+  ];
 }
 
 const slots = (narrow: boolean, n: number) => {
@@ -502,6 +571,7 @@ function useShareScene({ narrow }: { narrow: boolean }) {
   const [open, setOpen] = useState(false);
   const [shared, setShared] = useState(false);
   const [friend, setFriend] = useState<'none' | 'mine' | 'shelf'>('none');
+  const [picking, setPicking] = useState(false);
   const box = slots(narrow, 3);
   const mine = (
     <Library narrow={narrow}>
@@ -515,7 +585,7 @@ function useShareScene({ narrow }: { narrow: boolean }) {
     </Library>
   );
   const theirs = (
-    <Library narrow={narrow} shelf={friend === 'shelf' ? 'shelf' : 'mine'}>
+    <Library narrow={narrow} shelf={friend === 'shelf' ? 'shelf' : 'mine'} picking={picking}>
       {friend === 'shelf'
         ? <Card title="Pride and Prejudice" by="Jane Austen" mark="P" color="teal" foot="New" box={box[0]} tools={<button type="button" className="tile-fav tile-keep"><IconAddBook /></button>} />
         : <Card title="Little Women" by="Louisa May Alcott" mark="L" color="rose" foot="12%" box={box[0]} tools={<><button type="button" className="tile-ab"><IconDownload /></button><More /></>} />}
@@ -527,12 +597,161 @@ function useShareScene({ narrow }: { narrow: boolean }) {
         {friend === 'none' ? mine : <div className="dm-friend">{theirs}<span className="dm-who">A friend’s Breader</span></div>}
       </>
     ),
-    start: () => { setOpen(false); setShared(false); setFriend('none'); },
+    start: () => { setOpen(false); setShared(false); setFriend('none'); setPicking(false); },
     beats: [
       { tap: '.tile-slot:first-child .tile-more', then: () => setOpen(true), wait: 800 },
       { tap: '.ep-share .switch', then: () => setShared(true), wait: 1400 },
       { then: () => setFriend('mine'), wait: 900 },
-      { tap: '.dm-lsw-shelf', then: () => setFriend('shelf'), wait: 2400 },
+      ...toHalf(narrow, 'shelf', setPicking, () => setFriend('shelf'), 2400),
+    ] as Beat[],
+  };
+}
+
+/* Public: making a shared library public from Shared's list, then the feed, and saving one. */
+
+interface FeedRowDemo { name: string; facts: string; books: Array<{ title: string; by: string; mark: string; color: string }> }
+
+// Made up, as a feed might show them; the books are old ones, in the public domain.
+const FEED: FeedRowDemo[] = [
+  {
+    name: 'Ash’s shelf',
+    facts: '14 books · saved 41 · 3h ago',
+    books: [
+      { title: 'Jane Eyre', by: 'Charlotte Brontë', mark: 'J', color: 'rose' },
+      { title: 'Dracula', by: 'Bram Stoker', mark: 'D', color: 'lilac' },
+      { title: 'Emma', by: 'Jane Austen', mark: 'E', color: 'sky' },
+      { title: 'Walden', by: 'Henry David Thoreau', mark: 'W', color: 'teal' },
+      { title: 'Persuasion', by: 'Jane Austen', mark: 'P', color: 'ochre' },
+    ],
+  },
+  {
+    name: 'Classics club',
+    facts: '22 books · saved 18 · 2 days ago',
+    books: [
+      { title: 'Middlemarch', by: 'George Eliot', mark: 'M', color: 'ochre' },
+      { title: 'The Odyssey', by: 'Homer', mark: 'O', color: 'teal' },
+      { title: 'Ivanhoe', by: 'Walter Scott', mark: 'I', color: 'rose' },
+      { title: 'Candide', by: 'Voltaire', mark: 'C', color: 'sky' },
+      { title: 'Beowulf', by: 'Unknown', mark: 'B', color: 'lilac' },
+    ],
+  },
+];
+
+/** A library's covers in a row, as a shelf shows them (gallery/Shelves.tsx). */
+function Covers({ narrow, books }: { narrow: boolean; books: FeedRowDemo['books'] }) {
+  const box: CSSProperties = { position: 'relative', flex: 'none', width: 150, height: 225, borderRadius: '8px 18px 18px 8px' };
+  return (
+    <div className="dm-row">
+      {books.slice(0, narrow ? 3 : 5).map((b) => <Card key={b.title} {...b} foot="New" box={box} />)}
+    </div>
+  );
+}
+
+/** Shared's list (shared/LibraryMenu.tsx): the reader's own, with its globe. */
+function SharedList({ pub }: { pub: 'off' | 'asking' | 'on' }) {
+  let sub = '2 books';
+  if (pub === 'on') sub = '2 books, public';
+  return (
+    <div className="lm dm-pop">
+      <div className="lm-list">
+        <div className="lm-row is-on">
+          <button type="button" className="lm-pick"><span className="lm-name">Shared</span><span className="lm-sub">{sub}</span></button>
+          <button type="button" className="lm-pub" role="switch" aria-checked={pub !== 'off'}><i><IconGlobe /></i></button>
+          <button type="button" className="lm-icon"><IconPencil /></button>
+          {pub === 'asking' && (
+            <div className="lm-ask">
+              <p>Anyone can find and open it.</p>
+              <div>
+                <button type="button" className="btn btn-quiet">Cancel</button>
+                <button type="button" className="btn btn-primary dm-make">Make public</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function usePublicScene({ narrow }: { narrow: boolean }) {
+  const [listOpen, setListOpen] = useState(false);
+  const [pub, setPub] = useState<'off' | 'asking' | 'on'>('off');
+  const [picking, setPicking] = useState(false);
+  const [half, setHalf] = useState<'shelf' | 'public'>('shelf');
+  const [text, setText] = useState('');
+  const [opened, setOpened] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const box = slots(narrow, 3);
+
+  let view: ReactNode;
+  if (half === 'shelf') {
+    view = (
+      <Library narrow={narrow} shelf="shelf" picking={picking} menu={listOpen ? <SharedList pub={pub} /> : null}>
+        <Card title="Pride and Prejudice" by="Jane Austen" mark="P" color="teal" foot="32%" box={box[0]} />
+        <Card title="Moby-Dick" by="Herman Melville" mark="M" color="ochre" foot="New" box={box[1]} />
+      </Library>
+    );
+  } else if (opened) {
+    const lib = FEED[0];
+    view = (
+      <Library narrow={narrow} shelf="public">
+        <div className="dm-feed">
+          <div className="pub-head">
+            <button type="button" className="btn btn-ghost hdr-icon"><IconBack /></button>
+            <div className="pub-title"><h2>{lib.name}</h2><p>{lib.facts}</p></div>
+            <button type="button" className={`btn btn-quiet pub-save dm-save${saved ? ' is-on' : ''}`}>
+              {saved ? <IconCheck /> : <IconPlus />}
+              <span>{saved ? 'Saved' : 'Save'}</span>
+            </button>
+          </div>
+          <Covers narrow={narrow} books={lib.books} />
+        </div>
+      </Library>
+    );
+  } else {
+    const q = text.trim().toLowerCase();
+    const rows = FEED.filter((l) => l.name.toLowerCase().includes(q));
+    view = (
+      <Library narrow={narrow} shelf="public">
+        <div className="dm-feed">
+          <div className="pub-bar">
+            <label className="mdx-search">
+              <IconSearch />
+              <input type="search" value={text} placeholder="Search" readOnly tabIndex={-1} />
+            </label>
+            <div className="mdx-sorts">
+              <button type="button" className="mdx-sort" aria-checked>Popular</button>
+              <button type="button" className="mdx-sort" aria-checked={false}>New</button>
+            </div>
+          </div>
+          <div className="shelf-list">
+            {rows.map((l) => (
+              <section key={l.name} className="shelf">
+                <header className="shelf-head">
+                  <h3 className="shelf-name"><button type="button" className="dm-row-name"><span>{l.name}</span><IconChevron /></button></h3>
+                  <span className="shelf-meta">{l.facts}</span>
+                </header>
+                <Covers narrow={narrow} books={l.books} />
+              </section>
+            ))}
+          </div>
+        </div>
+      </Library>
+    );
+  }
+
+  return {
+    view,
+    start: () => { setListOpen(false); setPub('off'); setPicking(false); setHalf('shelf'); setText(''); setOpened(false); setSaved(false); },
+    beats: [
+      { tap: '.le-btn', then: () => setListOpen(true), wait: 800 },
+      { tap: '.lm-pub', then: () => setPub('asking'), wait: 1000 },
+      { tap: '.dm-make', then: () => setPub('on'), wait: 1300 },
+      { then: () => setListOpen(false), wait: 400 },
+      ...toHalf(narrow, 'public', setPicking, () => setHalf('public'), 1400),
+      { tap: '.mdx-search input', type: { text: 'ash', set: setText }, wait: 1100 },
+      { tap: '.dm-row-name', then: () => setOpened(true), wait: 1100 },
+      { tap: '.dm-save', then: () => setSaved(true), wait: 2200 },
     ] as Beat[],
   };
 }
@@ -751,6 +970,7 @@ function Scene({ id, narrow }: { id: DemoId; narrow: boolean }) {
     listen: useListenScene,
     audiobook: useAudiobookScene,
     share: useShareScene,
+    public: usePublicScene,
     find: useFindScene,
     panels: usePanelsScene,
     offline: useOfflineScene,

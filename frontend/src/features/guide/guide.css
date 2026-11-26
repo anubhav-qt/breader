@@ -94,13 +94,13 @@
 .hint-x svg { width: 16px; height: 16px; }
 /* Above what floats at the bottom, where toasts go too: books-or-manga (library-switch.css) and an
    audiobook's play and pause (audiobook.css). */
-@media (max-width: 880px) {
+@media (max-width: 1020px) {
   .hint.is-library { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
 }
-@media (min-width: 881px) and (max-width: 1000px) {
+@media (min-width: 1021px) and (max-width: 1100px) {
   :root:has(.hdr-ab) .hint.is-library { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
 }
-@media (max-width: 560px) {
+@media (max-width: 560px), (min-width: 721px) and (max-width: 760px) {
   :root:has(.hdr-ab) .hint.is-library { bottom: calc(130px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
 }
 
@@ -114,15 +114,14 @@
 .wl-note { margin-top: -6px; font: var(--ui-w) 12.5px/1.3 var(--ui); color: var(--ink-2); }
 .wl-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; width: 100%; margin: 14px 0 0; padding: 0; list-style: none; text-align: left; }
 .wl-cards li { display: grid; }
-.wl-card { display: grid; align-content: start; justify-items: start; gap: 6px; width: 100%; padding: 14px 16px 14px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--tile-border); text-align: left; cursor: pointer; transition: box-shadow 140ms ease, transform 140ms ease; }
+.wl-card { display: grid; grid-template-rows: 1fr auto; justify-items: start; gap: 10px; width: 100%; padding: 14px 16px 14px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--tile-border); text-align: left; cursor: pointer; transition: box-shadow 140ms ease, transform 140ms ease; }
 .wl-card:hover { box-shadow: inset 0 0 0 1px var(--tile-border-hover, var(--ink-2)); }
 .wl-card:active { transform: scale(0.98); }
 .wl-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .wl-how { display: inline-flex; align-items: center; gap: 5px; margin-top: auto; padding-top: 4px; font: var(--ui-w) 11.5px/1 var(--ui); font-style: normal; color: var(--ink-2); }
 .wl-how::before { content: ''; border-style: solid; border-width: 4px 0 4px 7px; border-color: transparent transparent transparent currentColor; }
 .wl-card:hover .wl-how { color: var(--ink); }
-.wl-card b { font: var(--ui-w-strong) 13px/1.2 var(--ui); color: var(--ink); }
-.wl-card span { font: 400 19px/0.95 var(--read); color: var(--ink-2); }
+.wl-card span { font: 400 25px/0.9 var(--read); color: var(--ink); }
 .wl-guide { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 8px 0 12px; border-radius: 10px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); transition: background-color 140ms ease, color 140ms ease; }
 .wl-guide:hover { background: var(--fill); color: var(--ink); }
 .wl-guide svg { width: 16px; height: 16px; }
@@ -130,7 +129,9 @@
   .wl { gap: 14px; padding: 12px 16px 24px; }
   .wl-h { font-size: 34px; }
   .wl-cards { grid-template-columns: 1fr 1fr; }
+  /* An odd card at the end takes the whole row. */
+  .wl-cards li:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .wl-card { padding: 12px 14px 14px; }
-  .wl-card span { font-size: 17px; }
+  .wl-card span { font-size: 22px; }
   .wl-acts .btn { flex: 1 1 150px; }
 }

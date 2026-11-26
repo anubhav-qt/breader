@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { IconClose, IconKey, IconPencil, IconPlus, IconStar } from '../../components/icons';
-import { addLibrary, createLibrary, libraryKey, libraryName, removeLibrary, renameLibrary, setDefaultLibrary, type Shared, type Showing } from '../../data/shelf';
+import { ASK_NOTE_CHARS } from '@breader/shared/protocol';
+import { IconClose, IconGlobe, IconKey, IconPencil, IconPeople, IconPlus, IconStar } from '../../components/icons';
+import { addLibrary, answerAsk, askToChange, createLibrary, libraryKey, libraryName, loadAsks, loadOwnPublic, removeLibrary, renameLibrary, setDefaultLibrary, setPublic, type Shared, type Showing } from '../../data/shelf';
 import { ApiError } from '../../lib/api';
 import { springs } from '../../lib/springs';
 import './shared.css';
@@ -24,6 +25,9 @@ interface Props {
  * The star picks the one the tab opens at, the first unless the reader picks another. A key pasted
  * below adds one, and a name makes a new one only to share, with its own key. Others see the
  * reader's shared books by the name they give their own.
+ *
+ * A copy saved from Public asks its original's owner to let the reader change it, with a note or
+ * none. The owner sees each ask under that library's row, says yes or no, and can take a yes back.
  */
 export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey = false }: Props) {
   const [renaming, setRenaming] = useState<Showing | null>(null);
@@ -33,6 +37,77 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
   const [error, setError] = useState<string | null>(null);
   /** A new library's name, while one is being made. */
   const [making, setMaking] = useState<string | null>(null);
+  /** The library whose Make public is being asked. */
+  const [asking, setAsking] = useState<Showing | null>(null);
+  /** The copy whose ask to change its original is being written, and its note. */
+  const [askingFor, setAskingFor] = useState<Showing | null>(null);
+  const [note, setNote] = useState('');
+  /** An ask being answered, so a second click does nothing. */
+  const [answering, setAnswering] = useState<string | null>(null);
+  useEffect(() => { void loadOwnPublic(); }, []);
+  // The asks to change each library the reader may answer for: their own, and those made only to share.
+  const answerable = sharing.saved.filter((l) => sharing.libs[l.token]?.mayPublish === true).map((l) => l.token).join(' ');
+  useEffect(() => {
+    void loadAsks('own');
+    for (const token of answerable.split(' ')) {
+      if (token) void loadAsks(token);
+    }
+  }, [answerable]);
+
+  /** It's in the public feed. */
+  const isPublic = (which: Showing) => {
+    if (which === 'own') return sharing.ownPublic === true;
+    return sharing.libs[which]?.public === true;
+  };
+  /** The reader may put it in the feed: their own, or one made only to share they have the key to. */
+  const mayPublish = (which: Showing) => {
+    if (which === 'own') return sharing.ownPublic !== null;
+    return sharing.libs[which]?.mayPublish === true;
+  };
+  const publish = async (which: Showing, on: boolean, name: string) => {
+    setAsking(null);
+    try {
+      await setPublic(which, on);
+      say(on ? `${name} is public` : `Only its key opens ${name} now`);
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : 'Couldn’t change that. Check your connection and try again.');
+    }
+  };
+  const flipPublic = (which: Showing, name: string) => {
+    if (isPublic(which)) { void publish(which, false, name); return; }
+    if (asking === which) { setAsking(null); return; }
+    setAsking(which);
+  };
+
+  /** Asks the copy's original's owner to let the reader change it. */
+  const sendAsk = async (which: Showing, name: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await askToChange(which, note);
+      setAskingFor(null);
+      setNote('');
+      say(`Asked to change the original of “${name}”`);
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : 'Couldn’t ask. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  /** Yes or no to an ask, or a yes taken back. */
+  const answer = async (which: Showing, id: string, give: boolean) => {
+    if (answering) return;
+    setAnswering(id);
+    try {
+      const state = await answerAsk(which, id, give);
+      if (state === 'given') say('They can change it now');
+      if (state === 'taken') say('Took it back');
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : 'Couldn’t answer. Check your connection and try again.');
+    } finally {
+      setAnswering(null);
+    }
+  };
 
   const rows: Array<{ which: Showing; count: number | null; closed: boolean }> = [
     ...sharing.saved.map((l) => ({ which: l.token, count: sharing.libs[l.token]?.books.length ?? null, closed: sharing.libs[l.token]?.state === 'closed' })),
@@ -47,8 +122,10 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
   };
   const saveRename = () => {
     if (renaming === null) return;
-    renameLibrary(renaming, draft);
     setRenaming(null);
+    renameLibrary(renaming, draft).catch((err: unknown) => {
+      say(err instanceof ApiError ? err.message : 'Couldn’t rename it. Check your connection and try again.');
+    });
   };
 
   const open = async (e: FormEvent) => {
@@ -121,6 +198,12 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
           const isDefault = sharing.byDefault === which;
           // What its owner calls it, when that isn't the name it has here.
           const theirs = which === 'own' ? null : sharing.libs[which]?.name;
+          const copy = which === 'own' ? undefined : sharing.libs[which]?.copy;
+          // A copy may ask to change its original while it's public, until it's waiting or given.
+          let mayAsk = false;
+          if (copy?.live) mayAsk = copy.asked !== 'asked' && copy.asked !== 'given';
+          const asks = sharing.asks[which] ?? [];
+          const waiting = asks.filter((a) => a.state === 'asked').length;
           return (
             <div key={which} className={`lm-row${on ? ' is-on' : ''}`}>
               {renaming === which ? (
@@ -145,7 +228,36 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
                     {closed ? 'its key has changed' : count === null ? 'opening…' : `${count} ${count === 1 ? 'book' : 'books'}`}
                     {choosing && isDefault ? ', opens first' : ''}
                     {theirs && theirs !== name ? <>, “{theirs}” to its owner</> : null}
+                    {isPublic(which) ? ', public' : ''}
+                    {copy?.asked === 'asked' ? ', asked its owner' : ''}
+                    {copy?.grant ? ', can change the original' : ''}
+                    {waiting > 0 ? `, ${waiting} asking` : ''}
                   </span>
+                </button>
+              )}
+              {mayPublish(which) && (
+                <button
+                  type="button"
+                  className="lm-pub"
+                  role="switch"
+                  aria-checked={isPublic(which) || asking === which}
+                  title="Public"
+                  aria-label={`Public: ${name} in the feed`}
+                  onClick={() => flipPublic(which, name)}
+                >
+                  <i><IconGlobe /></i>
+                </button>
+              )}
+              {mayAsk && (
+                <button
+                  type="button"
+                  className="lm-icon"
+                  title="Ask to change the original"
+                  aria-label={`Ask to change the original of ${name}`}
+                  aria-expanded={askingFor === which}
+                  onClick={() => { setAskingFor(askingFor === which ? null : which); setNote(''); }}
+                >
+                  <IconPeople />
                 </button>
               )}
               {choosing && (
@@ -160,7 +272,7 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
                   <IconStar />
                 </button>
               )}
-              {which !== 'own' && !closed && (
+              {which !== 'own' && !closed && sharing.libs[which]?.access !== 'public' && (
                 <button type="button" className="lm-icon" title="Copy its key" aria-label={`Copy the key to ${name}`} onClick={() => void copyKey(which, name)}>
                   <IconKey />
                 </button>
@@ -178,6 +290,55 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
                 >
                   <IconClose />
                 </button>
+              )}
+              {askingFor === which && (
+                <form className="lm-ask" onSubmit={(e) => { e.preventDefault(); void sendAsk(which, name); }}>
+                  <input
+                    className="lm-input"
+                    autoFocus
+                    value={note}
+                    maxLength={ASK_NOTE_CHARS}
+                    placeholder="A note to its owner (optional)"
+                    aria-label={`A note with your ask to change ${name}`}
+                    onChange={(e) => setNote(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setAskingFor(null); } }}
+                  />
+                  <div>
+                    <button type="button" className="btn btn-quiet" onClick={() => setAskingFor(null)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Asking…' : 'Ask'}</button>
+                  </div>
+                </form>
+              )}
+              {asks.length > 0 && (
+                <ul className="lm-asks-list" aria-label={`Asks to change ${name}`}>
+                  {asks.map((a) => (
+                    <li key={a.id}>
+                      <p>
+                        <b>{a.tag}</b>
+                        {a.note ? <span>{a.note}</span> : null}
+                      </p>
+                      {a.state === 'asked' ? (
+                        <div>
+                          <button type="button" className="btn btn-quiet" disabled={answering === a.id} onClick={() => void answer(which, a.id, false)}>No</button>
+                          <button type="button" className="btn btn-primary" disabled={answering === a.id} onClick={() => void answer(which, a.id, true)}>Let them</button>
+                        </div>
+                      ) : (
+                        <div>
+                          <button type="button" className="btn btn-quiet" disabled={answering === a.id} onClick={() => void answer(which, a.id, false)}>Take back</button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {asking === which && (
+                <div className="lm-ask">
+                  <p>Anyone can find and open it.</p>
+                  <div>
+                    <button type="button" className="btn btn-quiet" onClick={() => setAsking(null)}>Cancel</button>
+                    <button type="button" className="btn btn-primary" onClick={() => void publish(which, true, name)}>Make public</button>
+                  </div>
+                </div>
               )}
             </div>
           );

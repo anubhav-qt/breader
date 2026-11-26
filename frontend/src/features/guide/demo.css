@@ -111,3 +111,16 @@
   .dm-actions { grid-template-columns: 1fr; }
   .dm-steps { font-size: 18px; }
 }
+
+/* The library switch as the header draws it: three halves, or on phones one button (LibraryPick).
+   The demo picks which by its own size, not the window's. */
+.dm-lib .lpk { display: flex; }
+.dm-lib .lsw { display: flex; }
+.dm-pop { animation: dm-pop 200ms ease both; }
+
+/* Public: the feed's search and orders, its rows of covers, and a library opened from it. */
+.dm-feed { position: absolute; inset: 0; padding: 0 36px; }
+.dm-lib.is-narrow .dm-feed { padding: 0 24px; }
+.dm-feed .shelf-list { margin-top: 18px; }
+.dm-row { display: flex; gap: 14px; margin-top: 10px; }
+.dm-feed .pub-head { padding-top: 0; }

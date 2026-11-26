@@ -27,8 +27,7 @@ function Cards({ list, actOf }: { list: Card[]; actOf: (id: DemoId) => Act }) {
         {list.map((c) => (
           <li key={c.id}>
             <button type="button" className="wl-card" onClick={() => setOpen(c.id)}>
-              <b>{c.name}</b>
-              <span>{c.what}</span>
+              <span>{c.line}</span>
               <em className="wl-how">See how</em>
             </button>
           </li>
@@ -56,8 +55,24 @@ function GuideLink({ label, onGuide }: { label: string; onGuide: () => void }) {
   );
 }
 
+const OPEN_PUBLIC = 'Open Public';
+
+/** The button under a books card's demo. */
+function booksAct(id: DemoId, run: { onAdd: () => void; onPaste: () => void; onPublic: () => void }): Act {
+  if (id === 'public') return { label: OPEN_PUBLIC, run: run.onPublic };
+  if (id === 'listen') return { label: 'Paste text to try it', run: run.onPaste };
+  return { label: 'Add a book', run: run.onAdd };
+}
+
+/** The button under a manga card's demo. */
+function mangaAct(id: DemoId, run: { onBrowse: (() => void) | null; onAdd: () => void; onPublic: () => void }): Act {
+  if (id === 'public') return { label: OPEN_PUBLIC, run: run.onPublic };
+  if (run.onBrowse) return { label: 'Find manga', run: run.onBrowse };
+  return { label: 'Add CBZ files', run: run.onAdd };
+}
+
 /** Your own books, none yet. */
-export function WelcomeBooks({ onAdd, onPaste, onGuide }: { onAdd: () => void; onPaste: () => void; onGuide: () => void }) {
+export function WelcomeBooks({ onAdd, onPaste, onPublic, onGuide }: { onAdd: () => void; onPaste: () => void; onPublic: () => void; onGuide: () => void }) {
   const mouse = useMemo(hasMouse, []);
   return (
     <div className="wl">
@@ -67,14 +82,14 @@ export function WelcomeBooks({ onAdd, onPaste, onGuide }: { onAdd: () => void; o
         <button type="button" className="btn btn-quiet wl-second" onClick={onPaste}><IconPaste /> Paste text</button>
       </div>
       {mouse && <span className="wl-note">or drop files anywhere here</span>}
-      <Cards list={BOOKS} actOf={(id) => (id === 'listen' ? { label: 'Paste text to try it', run: onPaste } : { label: 'Add a book', run: onAdd })} />
+      <Cards list={BOOKS} actOf={(id) => booksAct(id, { onAdd, onPaste, onPublic })} />
       <GuideLink label="Everything Breader does" onGuide={onGuide} />
     </div>
   );
 }
 
 /** Your own manga, none yet. `onBrowse` is null where Breader's computer has nowhere to find manga. */
-export function WelcomeManga({ onBrowse, onAdd, onGuide }: { onBrowse: (() => void) | null; onAdd: () => void; onGuide: () => void }) {
+export function WelcomeManga({ onBrowse, onAdd, onPublic, onGuide }: { onBrowse: (() => void) | null; onAdd: () => void; onPublic: () => void; onGuide: () => void }) {
   return (
     <div className="wl">
       <h1 className="wl-h">Start with a manga</h1>
@@ -83,7 +98,7 @@ export function WelcomeManga({ onBrowse, onAdd, onGuide }: { onBrowse: (() => vo
         <button type="button" className={`btn ${onBrowse ? 'btn-quiet wl-second' : 'btn-primary wl-main'}`} onClick={onAdd}><IconPlus /> Add CBZ files</button>
       </div>
       {!onBrowse && <span className="wl-note">Breader’s computer can’t look for manga right now.</span>}
-      <Cards list={MANGA} actOf={() => (onBrowse ? { label: 'Find manga', run: onBrowse } : { label: 'Add CBZ files', run: onAdd })} />
+      <Cards list={MANGA} actOf={(id) => mangaAct(id, { onBrowse, onAdd, onPublic })} />
       <GuideLink label="Everything Breader does" onGuide={onGuide} />
     </div>
   );

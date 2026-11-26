@@ -246,6 +246,41 @@
       "when": 1795516609920,
       "tag": "0034_server_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795704640603,
+      "tag": "0035_public_feed",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795708174082,
+      "tag": "0036_cover_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1795711830829,
+      "tag": "0037_copies_and_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795714684019,
+      "tag": "0038_grant_askers",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795715696104,
+      "tag": "0039_cover_waits",
+      "breakpoints": true
     }
   ]
 }

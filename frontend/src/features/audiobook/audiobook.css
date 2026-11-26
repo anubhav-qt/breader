@@ -140,9 +140,10 @@
 .hdr-ab .hdr-icon:hover:not(:disabled) { background: var(--line); }
 .hdr-ab .i3-dots-icon { font-size: 15px; }
 .hdr-ab .i3-dots-icon rect { fill: currentColor; }
-/* Where the top bar has no room left for it (phones; and from 881px to 1000px, where books-or-manga
-   is up there too), it floats at the thumb: just above books-or-manga, or on its own. */
-@media (max-width: 560px), (min-width: 881px) and (max-width: 1000px) {
+/* Where the top bar has no room left for it, it floats at the thumb: on its own from 1021px to 1100px,
+   where books-or-manga is up there too; just above books-or-manga on phones and from 721px to 760px,
+   where the whole switch between libraries comes back. */
+@media (max-width: 560px), (min-width: 721px) and (max-width: 760px), (min-width: 1021px) and (max-width: 1100px) {
   .hdr-ab {
     position: fixed;
     left: 50%;
@@ -159,7 +160,7 @@
   /* Messages rise above it. */
   :root:has(.hdr-ab) body .toast-host { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
 }
-@media (max-width: 560px) {
+@media (max-width: 560px), (min-width: 721px) and (max-width: 760px) {
   .hdr-ab { bottom: calc(76px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
   :root:has(.hdr-ab) body .toast-host { bottom: calc(130px + var(--pv-room, 0px) + env(safe-area-inset-bottom)); }
 }

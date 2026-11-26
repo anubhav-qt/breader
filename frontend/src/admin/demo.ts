@@ -177,6 +177,7 @@ function statusFor(scene: Scene): Status {
       job('manga-prefetch', 20 * 60),
       job('manga-keep', 10 * 60),
       job('ai-fill', 30 * 60),
+      job('ai-covers', 30 * 60),
       job('ai-marker', 10),
       job('yt-dlp', 30 * 3600),
     ],

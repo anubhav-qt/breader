@@ -85,6 +85,8 @@ export function Tile({ item, variant, enter, now, art = false, className = '', s
   };
   // The cover keeps its own proportions, so it is never cropped.
   const [artRatio, setArtRatio] = useState(2 / 3);
+  // A cover that won't load: the drawn card instead.
+  const [broken, setBroken] = useState(false);
 
   // The patches are drawn once, at their size; changing a mask costs a repaint of the whole card,
   // so it only changes when the amount read does. On the library's first appearance they fade in.
@@ -103,6 +105,8 @@ export function Tile({ item, variant, enter, now, art = false, className = '', s
   const hasArt = art && !!b.coverUrl && roomy;
   // A recent book without a cover gets one drawn.
   const made = art && !b.coverUrl && roomy;
+  // On a shelf a book is its cover alone; without one, the drawn card. A series' card stays drawn.
+  const photo = variant === 'cover' && !stack && !!b.coverUrl && !broken;
   const started = b.progress > 0;
   const done = b.progress >= 1;
   // Someone else's book, in their shared library: theirs to change. It can only be read, or kept.
@@ -147,7 +151,7 @@ export function Tile({ item, variant, enter, now, art = false, className = '', s
     >
       <div
         ref={ref}
-        className={`tile tile-${variant}${hasArt || made ? ' has-art' : ''}${manga ? ' is-manga' : ''}`}
+        className={`tile tile-${variant}${hasArt || made ? ' has-art' : ''}${photo ? ' is-photo' : ''}${manga ? ' is-manga' : ''}`}
         style={{ ...bookVars(b), '--tools': tools, ...(hasArt ? { '--art-ratio': artRatio } : null) } as CSSProperties}
         onContextMenu={(e) => {
           if (!moreRef.current) return;
@@ -157,6 +161,11 @@ export function Tile({ item, variant, enter, now, art = false, className = '', s
       >
         <div className="tile-face">{face}</div>
         {started && <div ref={inkRef} className={`tile-face is-ink${enter ? ' is-fading' : ''}`} aria-hidden="true">{face}</div>}
+        {photo && (
+          <span className="tile-photo" aria-hidden="true">
+            <img src={b.coverUrl} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setBroken(true)} />
+          </span>
+        )}
         <button
           type="button"
           className="tile-hit"

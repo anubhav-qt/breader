@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { Category } from '../books/category';
 import type { LibraryLabels } from '../data/labels';
-import { IconCaret, IconSelect } from './icons';
+import { IconCaret, IconPencil, IconSelect } from './icons';
 import { LibraryEdit } from './LibraryEdit';
+import { LibraryPick } from './LibraryPick';
 import { LibrarySwitch } from './LibrarySwitch';
 import { Logo } from './Logo';
 import { ShelfSwitch } from './ShelfSwitch';
@@ -10,7 +11,7 @@ import { ThemeToggle } from './ThemeToggle';
 import './header.css';
 
 /** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened from Add, not a tab. */
-export type Tab = 'mine' | 'shelf' | 'browse';
+export type Tab = 'mine' | 'shelf' | 'public' | 'browse';
 
 /** The + button, Add on either shelf: it asks books or manga (features/add/AddWhat.tsx). */
 export interface PlusButton {
@@ -24,7 +25,7 @@ interface Props {
   category: Category;
   onCategory: (c: Category) => void;
   tab: Tab;
-  counts: Record<'mine' | 'shelf', number>;
+  counts: Record<'mine' | 'shelf' | 'public', number>;
   /** The names of the switch between libraries, and of the reader's own library. */
   labels: LibraryLabels;
   onTab: (t: Tab) => void;
@@ -50,10 +51,20 @@ interface Props {
   bulk?: ReactNode;
 }
 
+/** The shared ones' list opens from an arrow; on phones a pencil, as the button beside it has the arrow. */
+function SharedIcon() {
+  return (
+    <>
+      <IconCaret className="le-wide" />
+      <IconPencil className="le-phone" />
+    </>
+  );
+}
+
 /**
- * The library header: the switch between the reader's own library and the shared ones at the
- * start, with the pencil for the one showing; books-or-manga and the + button, Select, light or dark
- * and settings at the end. On phones books-or-manga floats at the bottom instead (ShelfSwitch).
+ * The library header: the switch between the reader's own library, the shared ones and Public at
+ * the start (one button for them on phones), with the pencil for the one showing; books-or-manga
+ * and the + button, Select, light or dark and settings at the end. On phones books-or-manga floats at the bottom instead (ShelfSwitch).
  */
 export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd, libraries, ownMenu, librariesOpen, onLibrariesOpen, dark, onTheme, settings, onSelect, bulk, audiobook }: Props) {
   const plus: PlusButton = { run: onAdd, pressed: tab === 'browse' };
@@ -64,10 +75,20 @@ export function Header({ category, onCategory, tab, counts, labels, onTab, onAdd
         <Logo />
         <div className="hdr-lib">
           <LibrarySwitch category={category} tab={tab} counts={counts} labels={labels} onTab={onTab} />
+          {/* On phones, one button instead: it opens the other two. */}
+          <LibraryPick category={category} tab={tab} counts={counts} labels={labels} onTab={onTab} />
           {/* The library showing's dropdown: a rename, or the shared ones' list, with the box for someone's key. */}
           {tab === 'mine' && <LibraryEdit label={`Rename ${labels.mine}`} menu={ownMenu} />}
           {tab === 'shelf' && (
-            <LibraryEdit label="Shared libraries, and opening someone’s with their key" icon={<IconCaret />} menu={libraries} open={librariesOpen} onOpen={onLibrariesOpen} />
+            <LibraryEdit label="Shared libraries, and opening someone’s with their key" icon={<SharedIcon />} menu={libraries} open={librariesOpen} onOpen={onLibrariesOpen} />
+          )}
+          {/* Nothing to rename in the feed: the pencil stays, greyed out, so nothing around it moves. */}
+          {tab === 'public' && (
+            <div className="le">
+              <button type="button" className="btn btn-ghost hdr-icon le-btn" disabled aria-label="Rename" title="Rename">
+                <IconPencil />
+              </button>
+            </div>
           )}
         </div>
       </div>

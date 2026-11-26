@@ -1,10 +1,13 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { LIBRARY_NAME, LIBRARY_NAME_CHARS } from '@breader/shared/limits';
-import type { SharedBooksResponse, SharedCreateResponse, SharedKeyResponse, SharedOpenResponse, ShelfBook } from '@breader/shared/protocol';
+import type { FeedLibrary, FeedResponse, LibraryAsk, SharedAnswerResponse, SharedAskResponse, SharedAsksResponse, SharedBooksResponse, SharedCopyResponse, SharedCreateResponse, SharedKeyResponse, SharedNameResponse, SharedOpenResponse, SharedPublicResponse, SharedRemoveResponse, ShelfBook } from '@breader/shared/protocol';
+import { categoryOf } from '../books/category';
+import { feedName } from '../features/shared/facts';
 import type { BookRecord } from '../books/types';
 import { readSetting, writeSetting } from '../features/reader/settings';
 import { api, ApiError } from '../lib/api';
 import { store } from '../lib/store';
+import { signedIn } from './sync';
 
 /*
  * Shared libraries. Each reader's key opens the books they share (server routes/shelf.ts): anyone
@@ -14,6 +17,12 @@ import { store } from '../lib/store';
  * the key) in the synced reader settings, so the list follows the reader between browsers, and so
  * does which library the tab opens at: the reader's pick, or the first in the list. Each library's
  * last list of books is kept here too, so the tab opens at once and offline.
+ *
+ * A library its owner makes public is in the public feed for everyone, with a token that only reads
+ * it. Saving one from the feed makes a copy of the reader's own (server routes/shelf.ts): it takes in
+ * what the original adds and keeps what it loses, and only the reader, or whoever they give its key
+ * to, takes books out. To change the original they ask its owner, whose yes gives them a token of
+ * their own (`copy.grant`) that the owner can take back.
  */
 
 export interface SavedLibrary {
@@ -23,6 +32,8 @@ export interface SavedLibrary {
   /** Its N in Shared N: the lowest free when it was added. */
   n?: number;
   at: number;
+  /** A copy saved from the feed: the original's id, so it counts as a save of it there. */
+  of?: string;
 }
 
 export interface SharedLibrary {
@@ -31,6 +42,22 @@ export interface SharedLibrary {
   name: string | null;
   /** `closed`: the key doesn't open it any more; its owner may have a new one. */
   state: 'loading' | 'ready' | 'closed';
+  /** It's in the public feed. */
+  public: boolean;
+  /** key: opened with its key, to change; grant: by its owner's yes to the reader; public: from the feed, to read only. */
+  access: 'key' | 'grant' | 'public';
+  /** The reader may put it in the feed or take it out: they have the key to a library made only to share. */
+  mayPublish: boolean;
+  /** The reader may name it for everyone it's open to: they have the key to a library made only to share, copies too. */
+  mayName: boolean;
+  /** A copy saved from the feed: its original's id, the reader's ask to change it, and the token a yes gave. */
+  copy?: SharedBooksResponse['copy'];
+}
+
+/** The public feed, as last fetched. */
+export interface Feed {
+  libraries: FeedLibrary[];
+  state: 'loading' | 'ready' | 'error';
 }
 
 /** Which library the tab shows: the reader's own shared books, or someone's by their token. */
@@ -46,6 +73,11 @@ interface Shared {
   byDefault: Showing;
   /** The reader's name for their own library, which the people they share it with see. */
   ownName: string | null;
+  feed: Feed;
+  /** The reader's own library is in the feed; null until the server says. */
+  ownPublic: boolean | null;
+  /** Asks to change the reader's libraries, waiting or given, by library, once fetched. */
+  asks: Record<Showing, LibraryAsk[]>;
 }
 
 const SAVED = 'sharedLibraries';
@@ -85,7 +117,17 @@ const ownNameNow = () => {
 
 const savedAtStart = savedNow();
 const defaultAtStart = defaultNow(savedAtStart);
-let shared: Shared = { saved: savedAtStart, libs: {}, covers: {}, showing: defaultAtStart, byDefault: defaultAtStart, ownName: ownNameNow() };
+let shared: Shared = {
+  saved: savedAtStart,
+  libs: {},
+  covers: {},
+  showing: defaultAtStart,
+  byDefault: defaultAtStart,
+  ownName: ownNameNow(),
+  feed: { libraries: [], state: 'loading' },
+  ownPublic: null,
+  asks: {},
+};
 const subscribers = new Set<() => void>();
 const fetched = new Map<string, number>();
 const fetching = new Map<string, Promise<void>>();
@@ -96,7 +138,7 @@ function set(next: Partial<Shared>) {
 }
 const libOf = (token: string): SharedLibrary | undefined => shared.libs[token];
 const setLib = (token: string, patch: Partial<SharedLibrary>) =>
-  set({ libs: { ...shared.libs, [token]: { books: [], name: null, state: 'loading', ...libOf(token), ...patch } } });
+  set({ libs: { ...shared.libs, [token]: { books: [], name: null, state: 'loading', public: false, access: 'public', mayPublish: false, mayName: false, ...libOf(token), ...patch } } });
 
 
 /** A library's books again, at most every 30 seconds unless asked to now. */
@@ -106,12 +148,17 @@ export function refreshLibrary(token: string, now = false): Promise<void> {
   fetched.set(token, Date.now());
   const p = (async () => {
     try {
-      const { books, name } = await api.post<SharedBooksResponse>('/v1/shared/books', { token }, 10_000);
-      setLib(token, { books, name, state: 'ready' });
-      await store.set(`shared:${token}`, { books, name });
+      const r = await api.post<SharedBooksResponse>('/v1/shared/books', { token }, 10_000);
+      const { books, name } = r;
+      const facts = { public: r.public, access: r.access, mayPublish: r.mayPublish, mayName: r.mayName, copy: r.copy };
+      setLib(token, { books, name, state: 'ready', ...facts });
+      await store.set(`shared:${token}`, { books, name, ...facts });
       void loadCovers(token, books);
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'shared_closed') setLib(token, { books: [], state: 'closed' });
+      if (e instanceof ApiError && e.code === 'shared_closed') {
+        setLib(token, { books: [], state: 'closed' });
+        forgetGrant(token);
+      }
       // Offline, or the server is away: keep the list from last time.
     } finally {
       fetching.delete(token);
@@ -121,9 +168,19 @@ export function refreshLibrary(token: string, now = false): Promise<void> {
   return p;
 }
 
+/** A grant its owner took back: the copy that held it asks anew, so it stops offering the original. */
+function forgetGrant(token: string) {
+  for (const l of shared.saved) {
+    const copy = libOf(l.token)?.copy;
+    if (copy?.grant === token) void refreshLibrary(l.token, true);
+  }
+}
+
 async function loadCovers(token: string, books: ShelfBook[]) {
   for (const b of books.slice(0, COVERS)) {
     if (!b.coverId || shared.covers[b.id]) continue;
+    // A book's cover not while it waits for the model's yes, or after a no; a manga's always.
+    if (categoryOf(b) === 'books' && b.coverOk === false) continue;
     let blob = await store.get<Blob>(`shelfcover:${b.id}`);
     if (!blob) {
       try {
@@ -140,10 +197,15 @@ async function loadCovers(token: string, books: ShelfBook[]) {
   }
 }
 
+/** A feed library's books, for its row, once the row comes into view (PublicFeed.tsx). */
+export function warmLibrary(token: string) {
+  void warm(token);
+}
+
 /** The library's last list, from this browser, while the server is asked again. */
 async function warm(token: string) {
   if (!libOf(token)) {
-    const kept = await store.get<{ books: ShelfBook[]; name: string | null }>(`shared:${token}`);
+    const kept = await store.get<Pick<SharedLibrary, 'books' | 'name'> & Partial<SharedLibrary>>(`shared:${token}`);
     if (kept && !libOf(token)?.books.length) {
       setLib(token, { ...kept, state: 'ready' });
       void loadCovers(token, kept.books);
@@ -187,7 +249,7 @@ export async function addLibrary(key: string): Promise<{ own: boolean; label: st
   keepSaved(had
     ? shared.saved.map((l) => (l === had ? { ...had, token: r.token } : l))
     : [...shared.saved, { token: r.token, n: freeNumber(shared.saved), at: Date.now() }]);
-  setLib(r.token, { name: r.name });
+  setLib(r.token, { name: r.name, access: 'key' });
   fetched.delete(r.token);
   showLibrary(r.token);
   return { own: false, label: libraryName(shared, r.token), token: r.token };
@@ -200,7 +262,7 @@ export async function addLibrary(key: string): Promise<{ own: boolean; label: st
 export async function createLibrary(name: string): Promise<{ token: string; key: string; label: string }> {
   const r = await api.post<SharedCreateResponse>('/v1/shared/create', { name: name.trim() });
   keepSaved([...shared.saved, { token: r.token, n: freeNumber(shared.saved), at: Date.now() }]);
-  setLib(r.token, { name: r.name, books: [], state: 'ready' });
+  setLib(r.token, { name: r.name, books: [], state: 'ready', access: 'key', mayPublish: true, mayName: true });
   fetched.set(r.token, Date.now());
   return { token: r.token, key: r.key, label: libraryName(shared, r.token) };
 }
@@ -217,30 +279,232 @@ export function removeLibrary(token: string) {
   if (shared.showing === token) showLibrary(shared.byDefault);
 }
 
-/** Names the reader's own library, for everyone it's shared with, or their entry for someone else's. */
-export function renameLibrary(which: Showing, name: string) {
+/**
+ * Names a library. The reader's own, or one made only to share they hold the key to, is named for
+ * everyone it's open to, in the feed too; someone else's is named only in the reader's own list.
+ */
+export async function renameLibrary(which: Showing, name: string): Promise<void> {
   const clean = name.trim().slice(0, LIBRARY_NAME_CHARS);
   if (which === 'own') {
     set({ ownName: clean || null });
     writeSetting(LIBRARY_NAME, clean);
+    nameInFeed((l) => l.own === true, clean);
+    return;
+  }
+  // Not known yet whether it's one made only to share (just opened, or kept from before): asked first.
+  if (!shared.libs[which]?.mayName) await refreshLibrary(which, true);
+  if (shared.libs[which]?.mayName) {
+    const r = await api.post<SharedNameResponse>('/v1/shared/name', { token: which, name: clean });
+    setLib(which, { name: r.name });
+    // Its name is its owner's now: no name of the reader's own over it.
+    keepSaved(shared.saved.map((l) => (l.token === which ? { ...l, name: undefined } : l)));
+    nameInFeed((l) => libraryOf(l.token) === libraryOf(which), r.name ?? '');
     return;
   }
   keepSaved(shared.saved.map((l) => (l.token === which ? { ...l, name: clean || undefined } : l)));
+}
+
+/** The new name on the feed's row for a library, at once, not on the feed's next ask. */
+function nameInFeed(isIt: (l: FeedLibrary) => boolean, name: string) {
+  const libraries = shared.feed.libraries.map((l) => (isIt(l) ? { ...l, name: name || null } : l));
+  set({ feed: { ...shared.feed, libraries } });
 }
 
 /** A library's name: the reader's own for it, else what its owner named it, or Shared for their own and Shared N for someone else's. */
 export function libraryName(s: Shared, which: Showing): string {
   if (which === 'own') return s.ownName ?? 'Shared';
   const l = s.saved.find((x) => x.token === which);
-  return l?.name ?? s.libs[which]?.name ?? `Shared ${l?.n ?? ''}`.trim();
+  if (l) return l.name ?? s.libs[which]?.name ?? `Shared ${l.n ?? ''}`.trim();
+  // The original of a copy in the list, by the token its owner's yes gave.
+  const copy = s.saved.find((x) => s.libs[x.token]?.copy?.grant === which);
+  if (copy) return `${libraryName(s, copy.token)} (original)`;
+  const row = s.feed.libraries.find((x) => x.token === which);
+  if (row) return feedName(row);
+  return s.libs[which]?.name ?? 'Shared';
 }
 
-/** A library in the list that shares this file, to fetch it through, for a book not yet the reader's own. */
+/**
+ * A library that shares this file, to fetch it through, for a book not yet the reader's own: one in
+ * the list first, else one looked at in the feed.
+ */
 export function tokenForFile(fileId: string): string | null {
+  const has = (token: string) => !!shared.libs[token]?.books.some((b) => b.fileId === fileId || b.coverId === fileId);
   for (const l of shared.saved) {
-    if (shared.libs[l.token]?.books.some((b) => b.fileId === fileId || b.coverId === fileId)) return l.token;
+    if (has(l.token)) return l.token;
+  }
+  for (const token of Object.keys(shared.libs)) {
+    if (has(token)) return token;
   }
   return null;
+}
+
+let feedFetching: Promise<void> | null = null;
+
+/** The public feed again, and the libraries' books for their rows; one ask at a time. */
+export function refreshFeed(): Promise<void> {
+  if (feedFetching) return feedFetching;
+  feedFetching = loadFeed().finally(() => {
+    feedFetching = null;
+  });
+  return feedFetching;
+}
+
+/**
+ * The reader's own library's row with the name it has here: a new name reaches the server with the
+ * next sync, and the feed may be asked before that.
+ */
+function withOwnName(l: FeedLibrary): FeedLibrary {
+  if (!l.own) return l;
+  return { ...l, name: shared.ownName };
+}
+
+async function loadFeed(): Promise<void> {
+  try {
+    const { libraries } = await api.get<FeedResponse>('/v1/shared/feed', 10_000);
+    set({ feed: { libraries: libraries.map(withOwnName), state: 'ready' } });
+  } catch {
+    // Offline, or the server is away: the feed from last time, if there was one.
+    if (shared.feed.state === 'loading') set({ feed: { ...shared.feed, state: 'error' } });
+  }
+}
+
+/** Whether the reader's own library is in the feed, once the server says. With no library here, it stays unknown: nothing to make public. */
+export async function loadOwnPublic(): Promise<void> {
+  try {
+    const r = await api.get<SharedPublicResponse>('/v1/shared/public', 10_000);
+    set({ ownPublic: r.public });
+  } catch {
+    // Signed out, offline or the server away: no switch until it says.
+  }
+}
+
+/** Puts a library in the feed or takes it out: the reader's own, or one made only to share they have the key to. */
+export async function setPublic(which: Showing, on: boolean): Promise<void> {
+  const body: { on: boolean; token?: string } = { on };
+  if (which !== 'own') body.token = which;
+  const r = await api.post<SharedPublicResponse>('/v1/shared/public', body);
+  if (which === 'own') set({ ownPublic: r.public });
+  else setLib(which, { public: r.public });
+  // Taken out, every ask and yes to change it ended with it.
+  if (!r.public) void loadAsks(which);
+  // Asked anew, not joined to an ask from before the change.
+  void loadFeed();
+}
+
+/** The library a token opens is in the reader's list already, by either kind of token, or a copy of it is. */
+export const isSaved = (s: Shared, token: string) => s.saved.some((l) => sameLibrary(l, token));
+
+/** This entry in the list is the library a token opens, or a copy of it. */
+const sameLibrary = (l: SavedLibrary, token: string) => libraryOf(l.token) === libraryOf(token) || l.of === libraryOf(token);
+
+/**
+ * Which of the reader's libraries a feed library is, to rename it there: their own, or one made only
+ * to share they hold the key to. Null when it isn't theirs.
+ */
+export function yoursAs(s: Shared, l: FeedLibrary): Showing | null {
+  if (l.own) return 'own';
+  const held = s.saved.find((x) => libraryOf(x.token) === libraryOf(l.token) && s.libs[x.token]?.mayPublish === true);
+  if (held) return held.token;
+  return null;
+}
+
+/** The reader's own library, or one made only to share they hold the key to: theirs to make public, not to save. */
+export function isYours(s: Shared, l: FeedLibrary): boolean {
+  return yoursAs(s, l) !== null;
+}
+
+const saving = new Map<string, Promise<string>>();
+
+/**
+ * Saves a library from the feed to the reader's list as a copy of their own, and returns its name
+ * there. `unnamed` names it in the list when its owner gave it no name. One ask at a time.
+ */
+export function saveLibrary(token: string, unnamed?: string): Promise<string> {
+  const had = shared.saved.find((l) => sameLibrary(l, token));
+  if (had) return Promise.resolve(libraryName(shared, had.token));
+  const busy = saving.get(libraryOf(token));
+  if (busy) return busy;
+  const p = (async () => {
+    const r = await api.post<SharedCopyResponse>('/v1/shared/copy', { token });
+    const entry: SavedLibrary = { token: r.token, n: freeNumber(shared.saved), at: Date.now(), of: r.of };
+    if (!r.name && unnamed) entry.name = unnamed;
+    keepSaved([...shared.saved, entry]);
+    setLib(r.token, { name: r.name, access: 'key' });
+    void refreshLibrary(r.token, true);
+    return libraryName(shared, r.token);
+  })().finally(() => saving.delete(libraryOf(token)));
+  saving.set(libraryOf(token), p);
+  return p;
+}
+
+/** Takes a library saved from the feed off the list again, by its feed token. */
+export function unsaveLibrary(token: string) {
+  const had = shared.saved.find((l) => sameLibrary(l, token));
+  if (had) removeLibrary(had.token);
+}
+
+/**
+ * The token that changes a library, if the reader holds one: its own when opened by a key or a
+ * grant, else, for one opened from the feed, the grant on the reader's copy of it.
+ */
+export function changeToken(s: Shared, token: string): string | null {
+  const lib = s.libs[token];
+  if (lib?.state === 'closed') return null;
+  if (lib?.access === 'key' || lib?.access === 'grant') return token;
+  for (const l of s.saved) {
+    const copy = s.libs[l.token]?.copy;
+    if (copy && copy.of === libraryOf(token) && copy.grant) return copy.grant;
+  }
+  return null;
+}
+
+/** Takes books out of a library the reader may change; out of its sharing only, where they're its owner's own. */
+export async function removeFromLibrary(token: string, ids: string[]): Promise<number> {
+  let r: SharedRemoveResponse;
+  try {
+    r = await signedIn(() => api.post<SharedRemoveResponse>('/v1/shared/remove', { token, ids }));
+  } catch (e) {
+    // Shut to this reader, a grant taken back say: the app learns so before the error shows.
+    if (e instanceof ApiError && e.code === 'shared_closed') void refreshLibrary(token, true);
+    throw e;
+  }
+  const lib = libOf(token);
+  if (lib) setLib(token, { books: lib.books.filter((b) => !ids.includes(b.id)) });
+  void refreshLibrary(token, true);
+  return r.removed;
+}
+
+/** Asks the owner of a copy's original to let the reader change it, with a note or none. */
+export async function askToChange(copyToken: string, note: string): Promise<void> {
+  const body: { token: string; note?: string } = { token: copyToken };
+  if (note.trim()) body.note = note.trim();
+  const r = await signedIn(() => api.post<SharedAskResponse>('/v1/shared/ask', body));
+  const copy = libOf(copyToken)?.copy;
+  if (copy) setLib(copyToken, { copy: { ...copy, asked: r.asked } });
+  void refreshLibrary(copyToken, true);
+}
+
+/** The asks to change a library of the reader's: their own, or one made only to share they hold the key to. */
+export async function loadAsks(which: Showing): Promise<void> {
+  const body: { token?: string } = {};
+  if (which !== 'own') body.token = which;
+  try {
+    const r = await api.post<SharedAsksResponse>('/v1/shared/asks', body, 10_000);
+    set({ asks: { ...shared.asks, [which]: r.asks } });
+  } catch {
+    // Signed out, offline or the server away: none shown until it says.
+  }
+}
+
+/** Yes or no to an ask; no to one given takes it back. */
+export async function answerAsk(which: Showing, id: string, give: boolean): Promise<SharedAnswerResponse['state']> {
+  const body: { token?: string; id: string; give: boolean } = { id, give };
+  if (which !== 'own') body.token = which;
+  const r = await api.post<SharedAnswerResponse>('/v1/shared/answer', body);
+  let asks = (shared.asks[which] ?? []).filter((a) => a.id !== id);
+  if (r.state === 'given') asks = (shared.asks[which] ?? []).map((a) => (a.id === id ? { ...a, state: 'given' as const } : a));
+  set({ asks: { ...shared.asks, [which]: asks } });
+  return r.state;
 }
 
 /** The cover this browser holds for a shared book, to give a copy of it the same one. */

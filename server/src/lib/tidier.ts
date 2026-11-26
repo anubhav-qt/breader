@@ -34,9 +34,28 @@ export interface Told<T> {
   model: string;
 }
 
+/** How one call goes: how long it may take, how hard the model thinks, and a picture to look at. */
+export interface Asking {
+  timeout: number;
+  thinking: Thinking;
+  /** An image sent with the prompt, as a data URL (data:image/jpeg;base64,…). */
+  image?: string;
+  /** Background work: it waits until nothing else is waiting (jobs/covers.ts). */
+  later?: boolean;
+}
+
 export interface Tidier {
   /** The model's JSON answer to the prompt, or a throw when it can't be had in time, counted from its turn. */
-  json<T>(system: string, prompt: string, o: { timeout: number; thinking: Thinking }): Promise<Told<T>>;
+  json<T>(system: string, prompt: string, o: Asking): Promise<Told<T>>;
+}
+
+/** The user's turn: the prompt alone, or the prompt and its image. */
+function userContent(prompt: string, image: string | undefined) {
+  if (!image) return prompt;
+  return [
+    { type: 'text', text: prompt },
+    { type: 'image_url', image_url: { url: image } },
+  ];
 }
 
 /** Text the model wrote as JSON, with the fences it sometimes puts round it taken off. */
@@ -98,18 +117,35 @@ export function makeTidier(
 
   let going = 0;
   const waiting: Array<() => void> = [];
-  async function turn<T>(fn: () => Promise<T>): Promise<T> {
-    if (going >= AT_ONCE) await new Promise<void>((go) => waiting.push(go));
+  /** Background calls: they wait behind every other call, and leave one place free for them. */
+  const waitingLater: Array<() => void> = [];
+  const roomFor = (later: boolean) => {
+    if (later) return AT_ONCE - 1;
+    return AT_ONCE;
+  };
+  async function turn<T>(fn: () => Promise<T>, later = false): Promise<T> {
+    if (going >= roomFor(later)) {
+      let line = waiting;
+      if (later) line = waitingLater;
+      await new Promise<void>((go) => line.push(go));
+    }
     going += 1;
     try {
       return await fn();
     } finally {
       going -= 1;
-      waiting.shift()?.();
+      letNextGo();
     }
   }
+  function letNextGo() {
+    if (waiting.length) {
+      waiting.shift()!();
+      return;
+    }
+    if (waitingLater.length && going < roomFor(true)) waitingLater.shift()!();
+  }
 
-  async function ask<T>(door: Door, system: string, prompt: string, o: { timeout: number; thinking: Thinking }): Promise<Told<T>> {
+  async function ask<T>(door: Door, system: string, prompt: string, o: Asking): Promise<Told<T>> {
     const res = await fetcher(door.url, {
       method: 'POST',
       headers: { authorization: `Bearer ${door.key}`, 'content-type': 'application/json' },
@@ -119,7 +155,7 @@ export function makeTidier(
         max_tokens: MAX_TOKENS,
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: prompt },
+          { role: 'user', content: userContent(prompt, o.image) },
         ],
       }),
       signal: AbortSignal.timeout(o.timeout),
@@ -150,7 +186,7 @@ export function makeTidier(
   }
 
   return {
-    json<T>(system: string, prompt: string, o: { timeout: number; thinking: Thinking }) {
+    json<T>(system: string, prompt: string, o: Asking) {
       // From its turn, so work queued behind a busy Browse isn't timed out waiting. Whoever's waiting
       // on an answer waits only so long anyway (manga/same.ts).
       return turn(async () => {
@@ -168,7 +204,7 @@ export function makeTidier(
           }
         }
         throw last;
-      });
+      }, o.later === true);
     },
   };
 }
