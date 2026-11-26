@@ -43,9 +43,14 @@ export function useClock() {
   }, []);
 }
 
-const MODEL_NAMES: Record<string, string> = { 'kimi-k3': 'Kimi K3', 'nemotron-3-ultra': 'Nemotron 3 Ultra', 'nemotron-3-ultra-550b-a55b': 'Nemotron 3 Ultra' };
+const MODEL_NAMES: Record<string, string> = {
+  'kimi-k3': 'Kimi K3',
+  'nemotron-3-ultra': 'Nemotron 3 Ultra',
+  'nemotron-3-ultra-550b-a55b': 'Nemotron 3 Ultra',
+  'nemotron-3.5-super-vl-120b-a12b': 'Nemotron 3.5 Super VL',
+};
 
-/** A model as people say it: Kimi K3, Gemini 3.1 Pro. NVIDIA's ids lose their maker: "moonshotai/kimi-k2.6" is Kimi K2.6. */
+/** A model as people say it: Kimi K3, Nemotron 3.5 Super VL. NVIDIA's ids lose their maker: "moonshotai/kimi-k2.6" is Kimi K2.6. */
 export function modelName(id: string) {
   const short = id.split('/').pop() ?? id;
   const known = MODEL_NAMES[short];

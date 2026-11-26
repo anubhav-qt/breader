@@ -45,7 +45,7 @@ const AFTER: Record<string, string> = { b03: 'b02' };
 
 /** NVIDIA's models as a day of checks might find them: answered of 7, seconds to start, tokens a second. */
 const NIM: Array<[string, number, number, number]> = [
-  ['moonshotai/kimi-k2.6', 7, 4.1, 62],
+  ['nvidia/nemotron-3.5-super-vl-120b-a12b', 7, 1.2, 120],
   ['nvidia/nemotron-3-ultra-550b-a55b', 7, 2.3, 48],
   ['z-ai/glm-5.3', 6, 1.8, 91],
   ['z-ai/glm-5.3-flash', 7, 0.6, 184],
@@ -75,7 +75,7 @@ function modelsFor(): Models {
     }
     return line;
   });
-  return { firstListAt: at(-40 * day), listedAt: at(-3600), sweptAt: at(-3000), checking: null, models, gemini: ['gemini-4-argon', 'gemini-3.8-pro-high', 'gemini-3.8-flash-high', 'gemini-3.8-flash-low', 'gemini-3.1-pro-high'] };
+  return { firstListAt: at(-40 * day), listedAt: at(-3600), sweptAt: at(-3000), checking: null, models };
 }
 
 /** The steps a book goes through this time, without the ones it skips. */
@@ -120,8 +120,8 @@ function partway(id: string, task: Task, step: string, done: number, settings: M
     w.parts = parts;
   }
   w.log = [
-    { at: at(-30), text: `Part ${done} done by Kimi K2.6` },
-    { at: at(-75), text: `Part ${done - 1} done by Kimi K2.6` },
+    { at: at(-30), text: `Part ${done} done by Nemotron 3.5 Super VL` },
+    { at: at(-75), text: `Part ${done - 1} done by Nemotron 3.5 Super VL` },
     { at: at(-minutes * 20), text: `Started: ${s.name.toLowerCase()}` },
     { at: at(-minutes * 60), text: 'Started: fetching the book' },
   ];
@@ -132,7 +132,7 @@ const SETTINGS: MarkerSettings = {
   paused: false,
   tasks: { marks: true, music: true, notes: true },
   atOnce: { marks: 4, music: 2, notes: 2 },
-  first: 'moonshotai/kimi-k2.6',
+  first: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
   second: 'nvidia/nemotron-3-ultra-550b-a55b',
   research: true,
   retryCapMinutes: 60,
@@ -253,10 +253,8 @@ function markerFor(scene: Scene): Marker | null {
   ];
   const marker: Marker = { at: at(0), books: 41, finished: 33, working, queue, readers, settings, stages: {}, stagesFor: {}, models: modelsFor() };
   if (scene === 'trouble') {
-    queue[4].failed = { times: 3, next: at(95), why: 'Kimi K2.6’s answer for part 9 didn’t parse: it stopped halfway through a line.' };
+    queue[4].failed = { times: 3, next: at(95), why: 'Nemotron 3.5 Super VL’s answer for part 9 didn’t parse: it stopped halfway through a line.' };
     marker.limitedUntil = at(2 * 3600 + 14 * 60);
-    queue[2].waitsFor = 'Gemini, which every Antigravity account is out of for now';
-    queue[3].waitsFor = 'Gemini, which every Antigravity account is out of for now';
   }
   return marker;
 }
@@ -335,16 +333,16 @@ export function demoAdmin(scene: Scene): Admin {
     w.log = [{ at: at(0), text, bad }, ...w.log].slice(0, 40);
   };
 
-  /** Who does a step: Gemini on an Antigravity account for the web, else the first model on NVIDIA. */
+  /** Who does a step: the first model on NVIDIA, for the web too. */
   const crewFor = (w: Working) => {
     const m = marker!;
-    if (w.step === 'research' || w.step === 'gather') {
-      const free = accounts.find((a) => a.kind === 'antigravity' && !a.problem && (a.usage?.[0]?.usedPercent ?? 0) < 100);
-      w.model = 'Gemini 3 Pro';
-      w.account = free ? free.name : null;
+    if (w.step === 'gather') {
+      // Codex leads the soundtrack (CODEX_STAGES).
+      w.model = modelName('gpt-6.1-terra');
+      w.account = 'Codex';
       return;
     }
-    const thinking = ['cast', 'mark', 'check', 'redo', 'settle', 'plan', 'score', 'roster', 'write', 'review'];
+    const thinking = ['research', 'cast', 'mark', 'check', 'redo', 'settle', 'plan', 'score', 'roster', 'write', 'review'];
     if (thinking.includes(w.step)) {
       w.model = modelName(m.settings.first);
       w.account = 'NVIDIA';
@@ -401,10 +399,10 @@ export function demoAdmin(scene: Scene): Admin {
     if (now >= 0) {
       let done: PartState = 'done';
       let by = w.model ?? 'the model';
-      // While Kimi is busy, Nemotron takes the odd part, to be marked again later.
+      // While the first is busy, Nemotron 3 Ultra takes the odd part, to be marked again later.
       if (w.step === 'mark' && Math.random() < 0.12) {
         done = 'backup';
-        by = 'Nemotron 3 Ultra, as Kimi K2.6 was busy';
+        by = 'Nemotron 3 Ultra, as Nemotron 3.5 Super VL was busy';
       }
       w.parts[now] = done;
       say(w, `Part ${now + 1} done by ${by}`);
@@ -529,7 +527,7 @@ export function demoAdmin(scene: Scene): Admin {
     checkModels(id) {
       const ms = marker?.models;
       if (!ms) return;
-      const line = ms.models.find((x) => x.id === (id ?? 'moonshotai/kimi-k2.6'));
+      const line = ms.models.find((x) => x.id === (id ?? 'nvidia/nemotron-3.5-super-vl-120b-a12b'));
       if (!line) return;
       ms.checking = line.id;
       push();
@@ -635,12 +633,7 @@ export function demoAdmin(scene: Scene): Admin {
           { label: 'Week', usedPercent: 0, resetsAt: null },
         ],
       }];
-      if (marker && kind === 'antigravity') {
-        delete marker.limitedUntil;
-        for (const q of marker.queue) {
-          if (q.waitsFor?.startsWith('Gemini')) delete q.waitsFor;
-        }
-      }
+      if (marker && kind === 'codex') delete marker.limitedUntil;
       push();
     },
     async uploadMusic(text) {

@@ -6,7 +6,6 @@ import { jitter } from './balancer.ts';
 import { control } from './control.ts';
 import { readJson, WORK, writeJson } from './lib.ts';
 import { CallError, chat, NIM_BASE, nvidiaKey, type Failure } from './nim.ts';
-import { geminiModels, proxy } from './proxy.ts';
 
 /*
  * NVIDIA's models, for the admin page to pick the marker's first and second from, and a stage's
@@ -14,9 +13,6 @@ import { geminiModels, proxy } from './proxy.ts';
  * small question, one at a time with a pause between, so the page can say which answer and how
  * fast: the wait for the first token (mostly NVIDIA's queue) and tokens a second after it. The
  * models the page uses go first. The page can also ask for a look now, at all of them or one.
- *
- * It lists the Gemini models Antigravity serves through CLIProxyAPI too, every GEMINI_MS, for the
- * page to pick a stage's from; those are the accounts' own limits, so they aren't asked anything.
  *
  * What it found is kept in the work folder (_models.json), the last CHECKS_KEPT checks of each,
  * and goes to job_runs as "nim-models" for the page.
@@ -29,7 +25,6 @@ const DAY_MS = 24 * 3600_000;
 const LOOK_MS = 5_000;
 /** After a look that failed (NVIDIA's list down), the wait before the next. */
 const FAILED_WAIT_MS = 30 * 60_000;
-const GEMINI_MS = 3600_000;
 /** The pause between two models' checks. */
 const GAP_S = 15;
 const CHECKS_KEPT = 14;
@@ -76,13 +71,13 @@ export interface Models {
   /** The model being asked now. */
   checking: string | null;
   models: ModelLine[];
-  /** Antigravity's Gemini models, newest first, and when they were listed. */
-  gemini?: string[];
-  geminiAt?: string;
 }
 
 let state: Models = existsSync(FILE) ? readJson<Models>(FILE) : { firstListAt: null, listedAt: null, sweptAt: null, checking: null, models: [] };
 state.checking = null;
+// Lists of Gemini models kept from before: no stage picks one now.
+delete (state as { gemini?: unknown }).gemini;
+delete (state as { geminiAt?: unknown }).geminiAt;
 /** What the page asked for: everything now, or these models. */
 let askedAll = false;
 const askedOne = new Set<string>();
@@ -113,18 +108,6 @@ async function list(): Promise<void> {
   for (const m of state.models) if (!ids.has(m.id)) m.goneAt ??= now;
   state.models = state.models.filter((m) => !m.goneAt || Date.now() - Date.parse(m.goneAt) < GONE_KEPT_MS).sort((a, b) => a.id.localeCompare(b.id));
   state.listedAt = now;
-}
-
-/** Antigravity's Gemini models, into `state`, when CLIProxyAPI answers. */
-async function listGemini() {
-  const p = proxy();
-  state.geminiAt = new Date().toISOString();
-  if (!p) return;
-  try {
-    state.gemini = (await geminiModels(p)).map((m) => m.id);
-  } catch {
-    /* the last list stands */
-  }
 }
 
 /** One small question to one model. */
@@ -202,10 +185,6 @@ export async function modelsLoop(pool: pg.Pool) {
           const m = state.models.find((x) => x.id === id);
           if (m) await checkOne(pool, m);
         }
-      }
-      if (!state.geminiAt || Date.now() - Date.parse(state.geminiAt) > GEMINI_MS) {
-        await listGemini();
-        await push(pool);
       }
       const due = (!state.sweptAt || Date.now() - Date.parse(state.sweptAt) > DAY_MS) && Date.now() - failedAt > FAILED_WAIT_MS;
       if (askedAll || due) {

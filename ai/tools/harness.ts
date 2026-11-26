@@ -6,16 +6,19 @@ import { estimateContextTokens, estimateMessageTokens, streamSimple, toToolDecla
 import { backoffS, jitter, log } from './balancer.ts';
 import { callOut, current, stopIfStopped, whilePaused } from './jobs.ts';
 import { WORK } from './lib.ts';
-import { nimAlias } from '../../shared/src/admin.ts';
+import { CODEX_STAGES, nimAlias } from '../../shared/src/admin.ts';
+import { checkBackup, onBackup, startBackup, whenBackupEnds } from './backup.ts';
 import { LADDER } from './kimi.ts';
-import { geminiModels, geminiOpensAt, modelFor, noHarness, proxy, THINKING } from './proxy.ts';
+import { accountOf, accountsOpenAt, codexModels, noHarness, proxy, THINKING } from './proxy.ts';
+import { NIM_PROVIDER, nimModel, nimStream } from './nimtools.ts';
 import { pickFor, stageOf } from './stages.ts';
 
 /*
- * The harness: a Gemini model on Antigravity (proxy.ts) working through a task with tools, on
- * pi's agent loop (ai/pi, forked from github.com/earendil-works/pi, as breader_writer does). The
- * NVIDIA models (balancer.ts) do the big reading; the harness does what needs looking around for,
- * searching the web and YouTube and deciding as it goes.
+ * The harness: NVIDIA's first and second models (the admin page's, kimi.ts), with Codex as the
+ * backup (backup.ts, proxy.ts), working through a task with tools, on pi's agent loop (ai/pi,
+ * forked from github.com/earendil-works/pi, as breader_writer does). The balancer (balancer.ts)
+ * does the big reading; the harness does what needs looking around for, searching the web and
+ * YouTube and deciding as it goes.
  *
  * Each series' job, its research or its soundtrack, is done in one chat that's kept for good, the
  * way breader_writer's Procreator plays a scene and Seelie (pde) keeps a chat:
@@ -25,7 +28,7 @@ import { pickFor, stageOf } from './stages.ts';
  *   and carries on from its last turn. A job asked again later (the next volume, a soundtrack a
  *   month old) is asked in the same chat too.
  * - No cap on calls or time: the chat goes on until the task's own check agrees it's finished.
- * - Every call sends the chat as it stands. It only grows at the end, so Gemini's cache covers all
+ * - Every call sends the chat as it stands. It only grows at the end, so the model's cache covers all
  *   but the newest turn.
  * - Our own compaction, as Procreator's: past 400k tokens, the model first saves with its tools
  *   whatever it hasn't, then writes the work so far, and the chat goes on from a fresh brief, that
@@ -36,14 +39,15 @@ import { pickFor, stageOf } from './stages.ts';
  *   and tokens, never text.
  * - Failures are waited out the way the NIM balancer's are (and AWS's "Exponential backoff and
  *   jitter"): a failing model cools down, the wait doubling with each failure in a row up to a
- *   cap, with random jitter, and the next Gemini model takes the calls while Flash cools for
- *   long. When every Antigravity account is out of its 5-hour or weekly limit, the harness waits
- *   for the first to fill again; with the proxy or the network down, it keeps looking until
- *   they're back. What waiting can't fix (a sign-in turned away, every model refusing) ends the
- *   run, and the next run picks the chat up again.
+ *   cap, with random jitter, and the next model takes the calls while the first cools for long.
+ *   NVIDIA's first model is tried again, then its second; once both are cooling, Codex takes the
+ *   calls for 10 minutes (backup.ts). A Codex limit hit cools every Codex model, since they share
+ *   it, until the account fills again. With the network down, it keeps looking until it's back.
+ *   What waiting can't fix (every model refusing) ends the run, and the next run picks the chat
+ *   up again.
  */
 
-/** How long Flash may be cooling, and after how many failures in a row, before another model takes the calls. */
+/** How long the first model may be cooling, and after how many failures in a row, before another model takes the calls. */
 const WAIT_FOR_FIRST_S = 120;
 const STRIKES_TO_FALL = 2;
 /** First cooldown and cap, in seconds, for each kind of failure that waits. */
@@ -74,6 +78,8 @@ export interface Task {
   unfinished: () => string | null;
   /** For the call log. */
   label: Record<string, unknown>;
+  /** Filled with each model that answered in this run, for the work's "by". */
+  answeredBy?: Set<string>;
 }
 
 /** What the harness thinks with: the models in order, and how to reach them. Tests make their own. */
@@ -81,43 +87,82 @@ export interface Brain {
   models: Array<Model<'google-generative-ai'>>;
   apiKey: string;
   stream: StreamFn;
-  /** When an Antigravity account has Gemini to give again, or null when that can't be told. */
+  /** When an account has room again, or null when that can't be told. */
   opensAt: () => Promise<number | null>;
 }
 
+/** NVIDIA's first and second models, as the admin page has them, asked straight with the NVIDIA key. */
+export function nvidiaModels(): Array<Model<'google-generative-ai'>> {
+  const ids = [...new Set(LADDER.map((r) => r.model))];
+  return ids.map((id) => nimModel(id));
+}
+
 export async function brain(): Promise<Brain> {
+  const why = noHarness();
+  if (why) throw new Error(`The harness can’t run: ${why}.`);
+  const nvidia = nvidiaModels();
   const p = proxy();
-  if (!p) throw new Error(`The harness can’t run: ${noHarness()}.`);
+  if (!p) return { models: nvidia, apiKey: '', stream: streamFor, opensAt: async () => null };
+  // No Codex account, or the proxy not answering: NVIDIA works alone.
+  const codex = await codexModels(p);
   return {
-    models: await geminiModels(p),
+    models: [...nvidia, ...codex],
     apiKey: p.apiKey,
-    stream: streamSimple,
-    opensAt: () => geminiOpensAt(p),
+    stream: streamFor,
+    opensAt: () => accountsOpenAt(p),
   };
 }
 
-/** An NVIDIA model's window as the harness counts it, through CLIProxyAPI: compacted well before most fill. */
-const NIM_WINDOW = 128_000;
-const NIM_MAX_TOKENS = 16_000;
+/** Codex thinks at medium, as the owner asked; NVIDIA at THINKING. */
+const CODEX_THINKING = 'medium';
+/**
+ * The budget the proxy reads as medium: pi sends Codex, a model it doesn't know as Gemini 3, a
+ * thinking budget, and CLIProxyAPI turns 1,025 to 8,192 into Codex's "medium".
+ */
+const CODEX_BUDGETS = { medium: 8192 };
+
+/** A stream that gives a Codex model Codex's thinking, and passes the rest as they are. */
+export function withCodexThinking(stream: StreamFn): StreamFn {
+  return (model, context, options) => {
+    if (model.provider !== 'codex') return stream(model, context, options);
+    return stream(model, context, { ...options, reasoning: CODEX_THINKING, thinkingBudgets: CODEX_BUDGETS });
+  };
+}
+
+/** A stream that asks NVIDIA straight for an NVIDIA model (nimtools.ts), and passes the rest as they are. */
+export function withNim(stream: StreamFn): StreamFn {
+  return (model, context, options) => {
+    if (model.provider !== NIM_PROVIDER) return stream(model, context, options);
+    return nimStream(model as Model<'google-generative-ai'>, context, options);
+  };
+}
+
+/** pi's stream, with Codex's thinking for a Codex model, and NVIDIA's models asked straight. */
+const streamFor = withNim(withCodexThinking(streamSimple));
 
 /**
- * The brain with the model the admin page picked for the task's stage first (stages.ts): another
- * Gemini, or an NVIDIA model that CLIProxyAPI serves beside them. The Gemini models stay behind it.
+ * The brain in the order for the task's stage: the NVIDIA model the admin page picked first
+ * (stages.ts), asked straight with the NVIDIA key, the usual models behind it. With no pick, a
+ * stage Codex leads (CODEX_STAGES) has Codex first and NVIDIA behind; any other, NVIDIA first.
  */
 export function routed(b: Brain, label: Record<string, unknown>): Brain {
-  const pick = pickFor(stageOf(label));
-  const p = proxy();
-  if (!pick || !p) return b;
-  let id: string;
-  if (pick.provider === 'nim') id = nimAlias(pick.model ?? LADDER[0].model);
-  else if (pick.model) id = pick.model;
-  else return b;
-  let head = b.models.find((m) => m.id === id);
-  if (!head) {
-    head = modelFor(p, id);
-    if (pick.provider === 'nim') head = { ...head, name: pick.model ?? LADDER[0].model, contextWindow: NIM_WINDOW, maxTokens: NIM_MAX_TOKENS };
+  const stage = stageOf(label);
+  const pick = pickFor(stage);
+  if (pick && pick.model) {
+    const id = nimAlias(pick.model);
+    let head = b.models.find((m) => m.id === id);
+    if (!head) head = nimModel(pick.model);
+    return { ...b, models: [head, ...b.models.filter((m) => m.id !== id)] };
   }
-  return { ...b, models: [head, ...b.models.filter((m) => m.id !== id)] };
+  if (stage && CODEX_STAGES.includes(stage)) return { ...b, models: codexFirst(b.models) };
+  return b;
+}
+
+/** The models with Codex's first, in their order, and the rest behind them. */
+export function codexFirst<M extends { id: string }>(models: M[]): M[] {
+  const codex = models.filter((m) => accountOf(m.id) === 'Codex');
+  const rest = models.filter((m) => accountOf(m.id) !== 'Codex');
+  return [...codex, ...rest];
 }
 
 /** A tool whose answer is text. An error it throws goes back to the model, so its message should say what to do instead. */
@@ -181,14 +226,41 @@ export function cool(id: string, kind: 'rate' | 'busy') {
   c.until = Date.now() + backoffS(c.strikes, base, cap) * 1000;
 }
 
+/** A Codex limit is the account's: every Codex model cools, until `until` when the account says, else as a rate failure does. */
+export function coolCodex(models: Array<{ id: string }>, until: number | null) {
+  for (const m of models) {
+    if (accountOf(m.id) !== 'Codex') continue;
+    if (until === null) {
+      cool(m.id, 'rate');
+      continue;
+    }
+    const c = coolingOf(m.id);
+    c.strikes++;
+    c.until = until;
+  }
+}
+
+/** When Codex's window ends, NVIDIA's models are tried again afresh. */
+whenBackupEnds(() => {
+  for (const id of [...COOLING.keys()]) {
+    if (accountOf(id) === 'NVIDIA') COOLING.delete(id);
+  }
+});
+
+/** The models in the order to try them now: Codex first while it has the calls (backup.ts). */
+export function inTurn<M extends { id: string }>(models: M[], now: number): M[] {
+  if (!onBackup(now)) return models;
+  return codexFirst(models);
+}
+
 /**
- * The model to call now, or how long to wait before looking again. Flash is worth waiting for a
- * while; after that, any Gemini model that isn't cooling takes the call. `skip`: models that
+ * The model to call now, or how long to wait before looking again. The first is worth waiting for
+ * a while; after that, any model that isn't cooling takes the call. `skip`: models that
  * turned this run's requests away, and why.
  */
 export function pick<M extends { id: string }>(models: M[], skip: Map<string, string>, now: number): M | number {
   const usable = models.filter((m) => !skip.has(m.id));
-  if (!usable.length) throw new Error(`Every Gemini model turned the request away: ${[...skip.values()].join('; ')}`);
+  if (!usable.length) throw new Error(`Every model turned the request away: ${[...skip.values()].join('; ')}`);
   const first = usable[0];
   const firstCooling = coolingOf(first.id);
   if (firstCooling.until <= now) return first;
@@ -204,36 +276,53 @@ export function pick<M extends { id: string }>(models: M[], skip: Map<string, st
   return Math.min(wait, LOOK_AGAIN_MS);
 }
 
-async function choose<M extends { id: string }>(models: M[], skip: Map<string, string>): Promise<M> {
+/** Whether every NVIDIA model is cooling: down, not just turning one request away. */
+export function nvidiaDown(models: Array<{ id: string }>, now: number): boolean {
+  const nvidia = models.filter((m) => accountOf(m.id) === 'NVIDIA');
+  return nvidia.every((m) => coolingOf(m.id).until > now);
+}
+
+/**
+ * The model to call, waiting while every one is cooling. Codex taking a call while NVIDIA is down
+ * opens its window (backup.ts); taking one NVIDIA turned away doesn't.
+ */
+export async function choose<M extends { id: string }>(models: M[], skip: Map<string, string>): Promise<M> {
   for (;;) {
-    const picked = pick(models, skip, Date.now());
-    if (typeof picked !== 'number') return picked;
+    const now = Date.now();
+    checkBackup(now);
+    const picked = pick(inTurn(models, now), skip, now);
+    if (typeof picked !== 'number') {
+      if (accountOf(picked.id) === 'Codex' && nvidiaDown(models, now)) startBackup(now);
+      return picked;
+    }
     await sleep(jitter(picked));
   }
 }
 
 let limitedUntil = 0;
 
-/** When every Antigravity account is out of Gemini, until when, for the marker's live view; else 0. */
-export const waitingForLimits = () => limitedUntil;
+/** While every Codex account is out of its limits, until when, for the marker's live view; else 0. */
+export function waitingForLimits(): number {
+  if (limitedUntil <= Date.now()) return 0;
+  return limitedUntil;
+}
 
-/** Waits for an Antigravity account with Gemini left, when none has any. True if it waited. */
-async function waitForLimits(b: Brain): Promise<boolean> {
+/** Codex hit a limit: its models cool until the first account fills again, when that can be told. */
+async function codexLimited(b: Brain) {
   let at: number | null = null;
   try {
     at = await b.opensAt();
   } catch {
-    return false;
+    at = null;
   }
-  if (at === null) return false;
-  const wait = at - Date.now();
-  if (wait <= 0) return false;
-  console.log(`    Every Antigravity account is out of Gemini until ${new Date(at).toISOString()}: waiting for it.`);
-  limitedUntil = at;
-  // A minute or so past the reset, so the accounts are surely open again.
-  await sleep(wait + jitter(60_000));
-  limitedUntil = 0;
-  return true;
+  if (at !== null && at <= Date.now()) at = null;
+  if (at !== null) {
+    // A minute or so past the reset, so the account is surely open again.
+    at += jitter(60_000);
+    limitedUntil = at;
+    console.log(`    Every Codex account is out until ${new Date(at).toISOString()}.`);
+  }
+  coolCodex(b.models, at);
 }
 
 function systemFor(task: Task): string {
@@ -372,6 +461,13 @@ class Chat {
   }
 }
 
+/** Who did a run's work, for its file: "gpt-6.1-terra on Codex", models joined by "and". */
+export function byLine(models: Iterable<string>): string {
+  const names = [...models].map((id) => `${id} on ${accountOf(id)}`);
+  if (!names.length) return 'no model';
+  return names.join(' and ');
+}
+
 /** Where a model's chats are compacted. */
 export function compactAt(model: { contextWindow: number; maxTokens: number }): number {
   let room = model.contextWindow - model.maxTokens;
@@ -503,14 +599,17 @@ export async function runAgent(task: Task, given?: Brain): Promise<string> {
       const model = await choose(using.models, skip);
       startedAt = Date.now();
       back?.();
-      back = callOut(model.id, 'Antigravity', null);
+      back = callOut(model.id, accountOf(model.id), null);
       return { model };
     },
     // One turn at a time: the run keeps it, and looks at the chat's size, before the next.
     finishTurn: (turn) => {
       const m = turn.message;
       logCall(task.label, m, startedAt);
-      if (m.stopReason !== 'error' && m.stopReason !== 'aborted') COOLING.delete(m.model);
+      if (m.stopReason !== 'error' && m.stopReason !== 'aborted') {
+        COOLING.delete(m.model);
+        task.answeredBy?.add(m.model);
+      }
       return { action: 'end' };
     },
   };
@@ -519,16 +618,22 @@ export async function runAgent(task: Task, given?: Brain): Promise<string> {
   async function afterFailure(m: AssistantMessage) {
     const why = m.errorMessage ?? 'no reason given';
     const kind = failureOf(why);
-    if (kind === 'signIn') {
-      throw new Error(`Antigravity turned the sign-in away (${why.slice(0, 200)}): connect the account again from the admin page. The chat is kept, and the next run carries on from it.`);
+    const codex = accountOf(m.model) === 'Codex';
+    if (kind === 'signIn' && codex) {
+      // The backup's sign-in is the account's: every Codex model is out for this run.
+      console.log(`    Codex turned the sign-in away (${why.slice(0, 120)}): connect it again from the admin page.`);
+      for (const other of using.models) {
+        if (accountOf(other.id) === 'Codex') skip.set(other.id, `${other.id}: Codex turned the sign-in away`);
+      }
+      return;
     }
-    if (kind === 'bad') {
+    if (kind === 'signIn' || kind === 'bad') {
       skip.set(m.model, `${m.model}: ${why.slice(0, 200)}`);
       return;
     }
-    if (kind === 'rate') {
-      const waited = await waitForLimits(using);
-      if (waited) return;
+    if (kind === 'rate' && codex) {
+      await codexLimited(using);
+      return;
     }
     cool(m.model, kind);
   }

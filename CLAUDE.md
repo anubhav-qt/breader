@@ -50,6 +50,18 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   `server/src/routes/feedback.ts`); they show on the admin page (`frontend/src/admin/`). Working and
   Done (with the admin's one line) tell the library that sent it, once each: a thin toast, and the
   What's new dialog (`features/feedback/replies.ts`).
+- Every marker stage runs on NVIDIA: Nemotron 3.5 Super VL first, tried again, then Nemotron 3
+  Ultra (the admin picks per stage, NVIDIA only). Codex (`gpt-6.1-terra` at medium, through the
+  worker's CLIProxyAPI, `ai/tools/proxy.ts`) is the backup: once every NVIDIA model is down it
+  keeps the calls 10 minutes, then NVIDIA is asked again (`ai/tools/backup.ts`, `balancer.ts`,
+  `harness.ts`). Gathering a soundtrack is the one stage Codex leads, NVIDIA behind it
+  (`CODEX_STAGES`, `shared/src/admin.ts`); downloading the tracks is code. NVIDIA searches the web
+  through SearXNG (`SEARXNG_URL`), Codex with its own `web_search` on `/v1/responses`
+  (`ai/tools/web.ts`). Plan and decisions: `docs/codex-plan.md`.
+- The server's small jobs (joining a search's copies `manga/same.ts`, checking Browse's tabs
+  `manga/curate.ts`, filling in books `jobs/fill.ts`) ask Codex's `gpt-6.1-terra` at medium first,
+  NVIDIA's Super VL as the backup for 10 minutes when Codex is down, on the ThinkPad only
+  (`server/src/lib/tidier.ts`). On NVIDIA a low job has its thinking off.
 - The AI marker cuts someone else's words quoted inside a line into their voice (`nest`,
   `ai/tools/marks.ts`) and rereads lines whose speech tag names someone else (`ai/tools/tags.ts`).
 - Audiobooks are made on readers' devices only. The server never makes them.

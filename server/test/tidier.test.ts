@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { namesOf, sameSeries, type MangaFound } from '@breader/shared';
 import { MemoryStore } from '../src/lib/cache.ts';
-import { makeTidier, parseJson, type Tidier } from '../src/lib/tidier.ts';
+import { cliproxyKeys } from '../src/lib/cliproxy.ts';
+import { BACKUP_MS, makeTidier, parseJson, type Tidier } from '../src/lib/tidier.ts';
 import { checkedFills } from '../src/jobs/fill.ts';
 import { checkedOut, makeCurate, tabKey, type Checks, type Tab } from '../src/manga/curate.ts';
 import { checkedGroups, groupKey, makeSame, type Groups } from '../src/manga/same.ts';
@@ -14,10 +15,9 @@ function found(id: string, title: string, source: string, people: string[] = [])
 /** The model that answers with what it's given, counting its calls. */
 function fakeTidier(answer: (prompt: string) => unknown) {
   const g = { calls: 0 } as Tidier & { calls: number };
-  g.model = (t) => `nvidia/nemotron-3.5-super-vl-120b-a12b:${t}`;
   g.json = async <T,>(_system: string, prompt: string) => {
     g.calls += 1;
-    return answer(prompt) as T;
+    return { value: (await answer(prompt)) as T, model: 'gpt-6.1-terra:medium' };
   };
   return g;
 }
@@ -39,55 +39,107 @@ function memoryGroups(): Groups & { rows: Map<string, string> } {
   };
 }
 
-describe('NVIDIA’s model and its answers', () => {
-  type Sent = { url: string; auth: string; body: { model: string; chat_template_kwargs: { enable_thinking: boolean } } };
+describe('the tidier: Codex first, NVIDIA behind it', () => {
+  type Sent = { url: string; auth: string; body: Record<string, unknown> };
+  const ADMIN = 'a'.repeat(32);
+  const env = { ADMIN_TOKEN: ADMIN, CLIPROXY_URL: 'http://proxy.test/' };
+  const reply = { choices: [{ message: { content: '```json\n{"a":1}\n```' } }] };
+  const ask = { timeout: 1_000, thinking: 'low' as const };
 
-  /** A fetch that keeps what was sent and answers with the given body and status. */
-  function recorder(answer: unknown, status = 200) {
+  /** A fetch that keeps what was sent and answers each side as told: a status, or the reply. */
+  function sides(o: { codex?: number | unknown; nvidia?: number | unknown } = {}) {
     const sent: Sent[] = [];
     const fetcher = (async (url: string, init: RequestInit) => {
       const headers = init.headers as Record<string, string>;
       sent.push({ url, auth: headers.authorization, body: JSON.parse(String(init.body)) });
-      if (status !== 200) return new Response('slow down', { status });
-      return Response.json(answer);
+      let say: number | unknown = o.nvidia ?? reply;
+      if (url.startsWith('http://proxy.test')) say = o.codex ?? reply;
+      if (typeof say === 'number') return new Response('not now', { status: say });
+      return Response.json(say);
     }) as unknown as typeof fetch;
     return { sent, fetcher };
   }
 
-  const reply = { choices: [{ message: { content: '```json\n{"a":1}\n```' } }] };
-
-  it('asks Nemotron 3.5 Super VL at NVIDIA, with thinking off for a low job', async () => {
-    const { sent, fetcher } = recorder(reply);
-    const tidier = makeTidier({}, fetcher, 'nv-key')!;
-    expect(await tidier.json('s', 'p', { timeout: 1_000, thinking: 'low' })).toEqual({ a: 1 });
-    expect(sent[0].url).toBe('https://integrate.api.nvidia.com/v1/chat/completions');
-    expect(sent[0].auth).toBe('Bearer nv-key');
-    expect(sent[0].body.model).toBe('nvidia/nemotron-3.5-super-vl-120b-a12b');
-    expect(sent[0].body.chat_template_kwargs).toEqual({ enable_thinking: false });
+  it('asks Codex’s Terra at medium through the worker’s proxy, with the proxy’s own key', async () => {
+    const { sent, fetcher } = sides();
+    const tidier = makeTidier(env, fetcher, 'nv-key')!;
+    expect(await tidier.json('s', 'p', ask)).toEqual({ value: { a: 1 }, model: 'gpt-6.1-terra:medium' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('http://proxy.test/v1/chat/completions');
+    expect(sent[0].auth).toBe(`Bearer ${cliproxyKeys(ADMIN).apiKey}`);
+    expect(sent[0].body.model).toBe('gpt-6.1-terra');
+    expect(sent[0].body.reasoning_effort).toBe('medium');
+    expect(sent[0].body.messages).toEqual([{ role: 'system', content: 's' }, { role: 'user', content: 'p' }]);
   });
 
-  it('turns thinking on for a medium job', async () => {
-    const { sent, fetcher } = recorder(reply);
-    const tidier = makeTidier({}, fetcher, 'nv-key')!;
-    await tidier.json('s', 'p', { timeout: 1_000, thinking: 'medium' });
-    expect(sent[0].body.chat_template_kwargs).toEqual({ enable_thinking: true });
+  it('with no proxy named, asks the worker’s', async () => {
+    const { sent, fetcher } = sides();
+    await makeTidier({ ADMIN_TOKEN: ADMIN }, fetcher, 'nv-key')!.json('s', 'p', ask);
+    expect(sent[0].url).toBe('http://worker:8327/v1/chat/completions');
   });
 
-  it('names the model with its thinking', () => {
-    const tidier = makeTidier({}, fetch, 'nv-key')!;
-    expect(tidier.model('low')).toBe('nvidia/nemotron-3.5-super-vl-120b-a12b:low');
+  it('Codex down: NVIDIA answers, with thinking off for a low job, and keeps the calls 10 minutes', async () => {
+    let clock = 0;
+    const { sent, fetcher } = sides({ codex: 503 });
+    const tidier = makeTidier(env, fetcher, 'nv-key', () => clock)!;
+    expect(await tidier.json('s', 'p', ask)).toEqual({ value: { a: 1 }, model: 'nvidia/nemotron-3.5-super-vl-120b-a12b:low' });
+    expect(sent.map((x) => x.url)).toEqual(['http://proxy.test/v1/chat/completions', 'https://integrate.api.nvidia.com/v1/chat/completions']);
+    expect(sent[1].auth).toBe('Bearer nv-key');
+    expect(sent[1].body.model).toBe('nvidia/nemotron-3.5-super-vl-120b-a12b');
+    expect(sent[1].body.chat_template_kwargs).toEqual({ enable_thinking: false });
+
+    clock = BACKUP_MS - 1;
+    await tidier.json('s', 'p', ask);
+    expect(sent).toHaveLength(3);
+    expect(sent[2].url).toContain('nvidia.com');
+
+    clock = BACKUP_MS;
+    await tidier.json('s', 'p', ask);
+    expect(sent[3].url).toContain('proxy.test');
   });
 
-  it('throws when NVIDIA says no, or the answer isn’t JSON', async () => {
-    const refused = makeTidier({}, recorder(reply, 429).fetcher, 'nv-key')!;
-    await expect(refused.json('s', 'p', { timeout: 1_000, thinking: 'low' })).rejects.toThrow('NVIDIA answered 429');
-    const noJson = { choices: [{ message: { content: 'not json' } }] };
-    const muddled = makeTidier({}, recorder(noJson).fetcher, 'nv-key')!;
-    await expect(muddled.json('s', 'p', { timeout: 1_000, thinking: 'low' })).rejects.toThrow();
+  it('turns NVIDIA’s thinking on for a medium job', async () => {
+    const { sent, fetcher } = sides({ codex: 429 });
+    await makeTidier(env, fetcher, 'nv-key')!.json('s', 'p', { timeout: 1_000, thinking: 'medium' });
+    expect(sent[1].body.chat_template_kwargs).toEqual({ enable_thinking: true });
   });
 
-  it('is null without an NVIDIA key', () => {
+  it('Codex answering with no JSON hands that call to NVIDIA, but keeps Codex first', async () => {
+    const { sent, fetcher } = sides({ codex: { choices: [{ message: { content: 'not json' } }] } });
+    const tidier = makeTidier(env, fetcher, 'nv-key')!;
+    expect((await tidier.json('s', 'p', ask)).model).toBe('nvidia/nemotron-3.5-super-vl-120b-a12b:low');
+    await tidier.json('s', 'p', ask);
+    expect(sent[2].url).toContain('proxy.test');
+  });
+
+  it('NVIDIA failing while it has the calls hands them back to Codex', async () => {
+    let codexSays: number | unknown = 503;
+    const sent: string[] = [];
+    const fetcher = (async (url: string) => {
+      sent.push(url);
+      let say: number | unknown = 500;
+      if (url.startsWith('http://proxy.test')) say = codexSays;
+      if (typeof say === 'number') return new Response('no', { status: say });
+      return Response.json(say);
+    }) as unknown as typeof fetch;
+    const tidier = makeTidier(env, fetcher, 'nv-key')!;
+    await expect(tidier.json('s', 'p', ask)).rejects.toThrow('NVIDIA answered 500');
+    codexSays = reply;
+    expect((await tidier.json('s', 'p', ask)).model).toBe('gpt-6.1-terra:medium');
+    expect(sent.slice(2)).toEqual(['https://integrate.api.nvidia.com/v1/chat/completions', 'http://proxy.test/v1/chat/completions']);
+  });
+
+  it('without ADMIN_TOKEN, NVIDIA alone; with neither, nothing', async () => {
+    const { sent, fetcher } = sides();
+    const alone = makeTidier({}, fetcher, 'nv-key')!;
+    expect((await alone.json('s', 'p', ask)).model).toBe('nvidia/nemotron-3.5-super-vl-120b-a12b:low');
+    expect(sent).toHaveLength(1);
     expect(makeTidier({}, fetch, null)).toBeNull();
+  });
+
+  it('Codex alone, without an NVIDIA key, says why it failed', async () => {
+    const tidier = makeTidier(env, sides({ codex: 429 }).fetcher, null)!;
+    await expect(tidier.json('s', 'p', ask)).rejects.toThrow('Codex answered 429');
   });
 
   it('reads JSON with or without fences', () => {

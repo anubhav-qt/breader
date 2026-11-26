@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { Type } from '../pi/pi-ai/src/index.ts';
 import type { Balancer } from './balancer.ts';
-import { brain, runAgent, tool, type Brain } from './harness.ts';
+import { brain, byLine, routed, runAgent, tool, type Brain } from './harness.ts';
 import { context, longName, mins, text, type Done, type Ledger } from './kimi.ts';
 import { blockAt, bookDir, cmp, count, hasText, inPart, partName, parsePos, posText, readJson, slug, writeJson, type Book, type Part, type Pos, type QueueBook } from './lib.ts';
 import type { Msg } from './nim.ts';
@@ -17,14 +17,14 @@ import { audioFile, LONGEST_S, MUSIC, search, SHORTEST_S, store, video } from '.
 /*
  * A book's background music, scored the way an anime is (shared/src/music.ts). Two steps:
  *
- * 1. The soundtrack, once per series, by the harness (harness.ts): Gemini looks for the series'
- *    official music first, every season and film of its adaptations, by its English and Japanese
+ * 1. The soundtrack, once per series, by the harness (harness.ts): Codex, or NVIDIA's models when
+ *    Codex can't answer, looks for the series' official music first, every season and film of its adaptations, by its English and Japanese
  *    names, finds each track on YouTube, and when there's none, or too little, the best
  *    alternates. Every track it adds is downloaded, measured (sound.ts), listened to (clap.ts),
  *    described (its feel and the scenes it fits) and saved there and then, all in the series' one
  *    soundtrack chat, which a stopped run carries on from. A series keeps its soundtrack from one
  *    volume to the next and brings it up to date once it's a month old, as new seasons come out.
- *    Gemini gets the series' names and its research from the web (research.ts), never the book.
+ *    The harness gets the series' names and its research from the web (research.ts), never the book.
  *
  * 2. The score, by the NVIDIA models, who read the whole book (kimi.ts): one call plans it (whose
  *    themes are which, the biggest moments and what's saved for them), then every part at once
@@ -67,9 +67,11 @@ export interface CatalogTrack {
 export interface Soundtrack {
   name: string;
   made: string;
-  /** What Gemini found: the official music and its seasons, or why it's alternates. */
+  /** What the harness found: the official music and its seasons, or why it's alternates. */
   summary: string;
   tracks: CatalogTrack[];
+  /** Who gathered it, as byLine says. Missing from soundtracks Gemini gathered before Codex. */
+  by?: string;
 }
 
 /** Who did each step of a book's music: music-by.json. */
@@ -77,6 +79,8 @@ export interface MusicLedger {
   plan?: Done;
   parts: Ledger;
   fixed?: Done;
+  /** Who gathered the soundtrack this score uses. Missing: Gemini, from before Codex. */
+  gathered?: string;
   /** The tracks the score uses are in the file store. */
   stored?: string;
 }
@@ -317,8 +321,12 @@ export async function soundtrackFor(name: string, given?: Brain): Promise<Soundt
     };
     const started = Date.now();
     try {
-      let using = given;
-      if (!using) using = await brain();
+      let made = given;
+      if (!made) made = await brain();
+      const label = { soundtrack: slug(name) };
+      // In the stage's order, so its web searches go the same way as its calls: Codex first.
+      const using = routed(made, label);
+      const answeredBy = new Set<string>();
       const summary = await runAgent({
         chat: `soundtrack-${slug(name)}`,
         ask: 'soundtrack',
@@ -326,9 +334,11 @@ export async function soundtrackFor(name: string, given?: Brain): Promise<Soundt
         brief: () => soundtrackBrief(name, s),
         tools: soundtrackTools(using, s),
         unfinished,
-        label: { soundtrack: slug(name) },
+        label,
+        answeredBy,
       }, using);
       s.summary = summary.slice(0, 1000);
+      if (answeredBy.size) s.by = byLine(answeredBy);
     } catch (e) {
       if (!had || !had.made || had.tracks.length < MIN_TRACKS) throw e;
       console.log(`${name}: the soundtrack couldn’t be brought up to date (${e instanceof Error ? e.message : String(e)}), so it stays as it was`);
@@ -581,12 +591,14 @@ export function buildScore(book: Book, tracks: CatalogTrack[], answers: Map<numb
   };
 }
 
-/** Who scored the book, for its file's "by": Gemini for the soundtrack, then the NVIDIA models by their long names. */
+/** Who scored the book, for its file's "by": who gathered the soundtrack, then the NVIDIA models by their long names. */
 export function musicBy(book: { key: string }): string {
   const l = musicLedger(book);
   const steps = [l.plan, ...Object.values(l.parts), l.fixed].filter((d): d is Done => !!d && !!d.model);
   const models = [...new Set(steps.map((d) => d.model))].map(longName);
-  return ['Gemini', ...models].join(' and ');
+  let gathered = 'Gemini';
+  if (l.gathered) gathered = l.gathered;
+  return [gathered, ...models].join(' and ');
 }
 
 /**
@@ -617,6 +629,10 @@ export async function scoreBook(b: QueueBook, book: Book, lb: Balancer, flags: R
     const s = await soundtrackFor(seriesName(b));
     tracks = s.tracks;
     writeJson(tracksFile(book), tracks);
+    if (s.by) {
+      led.gathered = s.by;
+      saveLedger(book, led);
+    }
   }
 
   musicStage.set(book.key, 'Planning the score');

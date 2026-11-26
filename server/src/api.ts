@@ -15,7 +15,7 @@ import { archiveTo, connectRedis, memoryRoom, near, type Redis, type Store } fro
 import { makeBusy } from './lib/busy.ts';
 import { makeEgress, type Egress } from './lib/egress.ts';
 import { makeSeen } from './lib/seen.ts';
-import { makeGemini } from './lib/gemini.ts';
+import { makeTidier } from './lib/tidier.ts';
 import { report, startReporting } from './lib/report.ts';
 import { makeStorage } from './lib/storage.ts';
 import { log } from './log.ts';
@@ -93,13 +93,13 @@ if (env.POOL_MEMBERS && poolOf.length) {
   const pages = storagePool;
   mangaOptions.pooled = (chapterId, n) => pages.page(chapterId, n);
 }
-// Gemini, through the worker's proxy for the AI accounts, on the laptop only (lib/gemini.ts). Both
+// Codex's Terra through the worker's proxy, NVIDIA's model behind it, on the laptop only (lib/tidier.ts). Both
 // servers go by what it has said, kept in Supabase: which series found are one (manga/same.ts) and
 // which cards don't belong in Browse's tabs (manga/curate.ts).
-const gemini = env.ROLE === 'laptop' ? makeGemini(env) : null;
+const tidier = env.ROLE === 'laptop' ? makeTidier(env) : null;
 if (mangaOn) {
-  mangaOptions.same = makeSame({ groups: pgGroups(primary.pool), gemini, store: near(answers, 5_000) });
-  mangaOptions.curate = makeCurate({ checks: pgChecks(primary.pool), gemini });
+  mangaOptions.same = makeSame({ groups: pgGroups(primary.pool), tidier, store: near(answers, 5_000) });
+  mangaOptions.curate = makeCurate({ checks: pgChecks(primary.pool), tidier });
 }
 const manga = mangaOn ? makeManga(mangaOptions) : null;
 // A regional server puts the chapters its readers fetch in the pool, where there's room (manga/uploads.ts).
@@ -225,18 +225,18 @@ if (manga && (env.MANGA_KEEP ?? onThinkPad(env))) {
   runNow[runKind('manga-keep')] = () => void turn(true);
 }
 
-// What nobody gave a book (its genres, author, series), filled in by Gemini every 30 minutes, the
+// What nobody gave a book (its genres, author, series), filled in by the model every 30 minutes, the
 // first soon after a start (jobs/fill.ts). Each book is asked about once, whichever libraries hold it.
 let fillAt: NodeJS.Timeout | undefined;
-if (gemini) {
+if (tidier) {
   let filling = false;
   const fill = async (now = false) => {
     if (filling) return;
     filling = true;
     try {
-      const r = await asJob(primary.pool, 'ai-fill', () => fillBlanks(primary.pool, gemini, prefetching.signal), { evenIfOff: now });
+      const r = await asJob(primary.pool, 'ai-fill', () => fillBlanks(primary.pool, tidier, prefetching.signal), { evenIfOff: now });
       if (!r) return;
-      if (r.asked || r.books) log.info(r, 'Gemini filled in what books left blank');
+      if (r.asked || r.books) log.info(r, 'NVIDIA filled in what books left blank');
       if (!prefetching.signal.aborted) await recordOk(primary.pool, 'ai-fill', r);
     } catch (err) {
       log.error({ err }, 'filling in books failed');

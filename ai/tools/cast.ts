@@ -7,7 +7,7 @@ import { validate } from './validate.ts';
 
 /*
  * Research from the book, for a book no one researched by hand: what the marker does in place of
- * procedure.md, part 4, step 2, with Gemini's research from the web (research.ts, web.md) when
+ * procedure.md, part 4, step 2, with the harness's research from the web (research.ts, web.md) when
  * the book has some. One call reads the whole book and answers with notes for research.md (the narration, every name each person goes by, the traps, identities the book
  * hides and where it shows them) and a cast line for everyone, with the paragraph where the book
  * shows their gender. mark.ts then starts from both, as it would from Antigravity's. Who did it
@@ -19,7 +19,7 @@ const PROC = readFileSync(join(AI, 'procedure.md'), 'utf8');
 const between = (from: string, to: string) => PROC.slice(PROC.indexOf(from), PROC.indexOf(to));
 const RULES = [between('### 5.2 Finding the speaker', '### 5.5 Group scenes'), between('### 7.3 `cast.json`', '### 7.4 `notes.json`')].join('\n').trim();
 
-const SYSTEM = `You get a novel ready for voice marking in the Breader e-reader, which reads books aloud with two voices, one male and one female. Another model then marks who speaks every line, part by part, starting from what you write. You have the whole book, and research from the web when there is some: what Gemini found on the series' wikis and its publishers' pages, by its English and Japanese names. Use the web for who people are, how their names are spelled in this translation, and how they sound, and check it against the book: where they disagree, the book wins. A wrong voice is heard on every line that person speaks, so accuracy matters more than speed.
+const SYSTEM = `You get a novel ready for voice marking in the Breader e-reader, which reads books aloud with two voices, one male and one female. Another model then marks who speaks every line, part by part, starting from what you write. You have the whole book, and research from the web when there is some: what a model found on the series' wikis and its publishers' pages, by its English and Japanese names. Use the web for who people are, how their names are spelled in this translation, and how they sound, and check it against the book: where they disagree, the book wins. A wrong voice is heard on every line that person speaks, so accuracy matters more than speed.
 
 # The rules the marking follows
 
@@ -53,7 +53,7 @@ function dropBadChanges(book: Book): number {
   return dropped;
 }
 
-/** Reads the book's cast and writes research.md, with Gemini's research from the web when there is some. */
+/** Reads the book's cast and writes research.md, with the research from the web when there is some. */
 export async function castPass(book: Book, lb: Balancer) {
   const hasWeb = existsSync(webFile(book));
   let web = '';
@@ -77,7 +77,7 @@ export async function castPass(book: Book, lb: Balancer) {
   }
   const research = notes.join('\n').trim();
   let from = 'From the book alone';
-  if (hasWeb) from = 'From the book, with Gemini’s research from the web (web.md)';
+  if (hasWeb) from = 'From the book, with research from the web (web.md)';
   writeFileSync(join(bookDir(book.key), 'research.md'), `# Research: ${book.title}\n\n${from}, by ${rung.name}.\n\n${research}\n`);
 
   const merged = mergeCast(book, castLines, rung.name);

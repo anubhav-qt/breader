@@ -279,12 +279,12 @@ export function notesBy(book: { key: string }): string {
   return [...new Set(models)].map((m) => LONG[m] ?? m).join(' and ');
 }
 
-/** Who did the research: Antigravity by hand, or a model reading the book (cast-by.json), with Gemini's research from the web when there's some (research.ts). */
+/** Who did the research: Antigravity by hand, or a model reading the book (cast-by.json), with research from the web when there's some (research.ts, web.md says by whom). */
 function researchBy(book: Book): string {
   if (!existsSync(castByFile(book))) return 'research by Antigravity';
   const model = readJson<Done>(castByFile(book)).model;
   const cast = `cast by ${LONG[model] ?? model}`;
-  if (existsSync(webFile(book))) return `${cast} with web research by Gemini`;
+  if (existsSync(webFile(book))) return `${cast} with web research`;
   return cast;
 }
 

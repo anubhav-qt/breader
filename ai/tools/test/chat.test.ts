@@ -7,7 +7,7 @@ import type { AssistantMessage, Message, Model } from '../../pi/pi-ai/src/index.
 import type { Brain, Numbered, Task } from '../harness.ts';
 
 /*
- * The harness's chats, with a pretend Gemini: each job is done in one chat kept in its file, a
+ * The harness's chats, with a pretend model: each job is done in one chat kept in its file, a
  * run that fails is carried on by the next from where the chat stopped, a finished chat takes the
  * next job, and a chat past its limit is compacted, its older turns folding into a summary while
  * the file keeps them all.
@@ -28,8 +28,8 @@ const NO_USAGE = {
 
 function model(contextWindow: number, maxTokens: number): Model<'google-generative-ai'> {
   return {
-    id: 'gemini-pretend',
-    name: 'gemini-pretend',
+    id: 'pretend-model',
+    name: 'pretend-model',
     api: 'google-generative-ai',
     provider: 'antigravity',
     baseUrl: 'http://pretend',
@@ -41,7 +41,7 @@ function model(contextWindow: number, maxTokens: number): Model<'google-generati
   };
 }
 
-/** What the pretend Gemini answers: some text, tool calls, or a failure. */
+/** What the pretend model answers: some text, tool calls, or a failure. */
 interface Reply {
   text?: string;
   calls?: Array<[string, Record<string, unknown>]>;
@@ -73,7 +73,7 @@ function answer(id: string, reply: Reply): AssistantMessage {
   };
 }
 
-/** A pretend Gemini that answers each call with `say`, from what it was sent, and keeps what every call was sent. */
+/** A pretend model that answers each call with `say`, from what it was sent, and keeps what every call was sent. */
 function pretend(say: (messages: Message[]) => Reply, m = model(1_000_000, 32_000)) {
   const calls: Message[][] = [];
   const brain: Brain = {
@@ -168,7 +168,7 @@ function numbered(roles: string, chars: number): Numbered[] {
   for (const role of roles) {
     n++;
     const text = 'x'.repeat(chars);
-    if (role === 'a') list.push({ n, message: answer('gemini-pretend', { text }) });
+    if (role === 'a') list.push({ n, message: answer('pretend-model', { text }) });
     if (role === 'r') {
       list.push({ n, message: { role: 'toolResult', toolCallId: 'c', toolName: 't', content: [{ type: 'text', text }], isError: false, timestamp: 0 } });
     }
@@ -205,7 +205,7 @@ test('a run that fails is carried on by the next from where its chat stopped, lo
     if (made === 1) return { calls: [['shelve', { book: 'first' }]] };
     return { error: '401 Unauthorized' };
   });
-  await assert.rejects(runAgent(shelving('resume', 'shelf', shelf, 2), first.brain), /turned the sign-in away.*The chat is kept/s);
+  await assert.rejects(runAgent(shelving('resume', 'shelf', shelf, 2), first.brain), /Every model turned the request away: pretend-model: 401 Unauthorized/);
   assert.deepEqual(shelf, ['first']);
   // And a power cut mid-write left a line cut short.
   appendFileSync(join(process.env.AI_WORK!, 'chats', 'resume.jsonl'), '{"kind":"message","n":3,"mess');

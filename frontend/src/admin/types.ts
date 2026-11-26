@@ -29,7 +29,7 @@ export interface Step {
 export const STEPS: Record<Task, Step[]> = {
   marks: [
     { key: 'fetch', name: 'Fetching the book', about: 'Takes the book’s file from the file store and splits it into its parts.' },
-    { key: 'research', name: 'Researching it on the web', about: 'Gemini, on an Antigravity account, looks up the book and its series: who’s in it, and how each of them talks.' },
+    { key: 'research', name: 'Researching it on the web', about: 'NVIDIA’s models, or Codex as their backup, look up the book and its series: who’s in it, and how each of them talks.' },
     { key: 'cast', name: 'Reading the cast from the book', about: 'Lists everyone who speaks, by the names the book gives them as it goes.' },
     { key: 'mark', name: 'Marking who speaks, part by part', about: 'Every line gets its speaker. The first model marks the parts; the second takes one while the first is down.', parts: true },
     { key: 'check', name: 'Checking the marks', about: 'Looks for lines with no speaker or the wrong one, and fixes them, a round at a time.' },
@@ -40,8 +40,8 @@ export const STEPS: Record<Task, Step[]> = {
   ],
   music: [
     { key: 'fetch', name: 'Fetching the book', about: 'Takes the book’s file from the file store and splits it into its parts.' },
-    { key: 'research', name: 'Researching it on the web', about: 'Gemini, on an Antigravity account, looks up the book and its series, for the score to follow.' },
-    { key: 'gather', name: 'Gathering the soundtrack', about: 'Gemini picks the series’ soundtrack once, from its first volume, and finds each track on YouTube.' },
+    { key: 'research', name: 'Researching it on the web', about: 'NVIDIA’s models, or Codex as their backup, look up the book and its series, for the score to follow.' },
+    { key: 'gather', name: 'Gathering the soundtrack', about: 'Codex, or NVIDIA’s models when it can’t answer, picks the series’ soundtrack once, from its first volume, and find each track on YouTube.' },
     { key: 'plan', name: 'Planning the score', about: 'Decides where the music changes through the book: the moods, and which track carries each.' },
     { key: 'score', name: 'Scoring, part by part', about: 'Each part gets its cues: where a track starts, fades, or goes quiet.', parts: true },
     { key: 'check', name: 'Checking the score', about: 'Looks for cues that clash or tracks that can’t be played, and fixes them.' },
@@ -50,7 +50,7 @@ export const STEPS: Record<Task, Step[]> = {
   ],
   notes: [
     { key: 'fetch', name: 'Fetching the book', about: 'Takes the book’s file from the server and the book from the file store, and checks they read the same.' },
-    { key: 'research', name: 'Researching it on the web', about: 'Gemini, on an Antigravity account, looks up the book and its series, for the notes to lean on.' },
+    { key: 'research', name: 'Researching it on the web', about: 'NVIDIA’s models, or Codex as their backup, look up the book and its series, for the notes to lean on.' },
     { key: 'roster', name: 'Listing who’s who', about: 'Starts from the earlier volumes’ notes: everyone, and what’s already known about them.' },
     { key: 'write', name: 'Writing notes, part by part', about: 'The first model writes Revisit’s notes for each part, knowing only what the reader has read by then.', parts: true },
     { key: 'check', name: 'Checking the notes', about: 'Looks for anything said before the book says it, and for names that drift, and fixes them.' },
@@ -144,7 +144,7 @@ export interface MarkerSettings {
   /** The NVIDIA model that marks and writes first, by its id there; the second steps in while it's down. */
   first: string;
   second: string;
-  /** Web research before marking and music, on Antigravity. */
+  /** Web research before marking and music. */
   research: boolean;
   /** A failed book waits 2 minutes, doubling each time, up to this many. */
   retryCapMinutes: number;
@@ -157,10 +157,8 @@ export interface Marker {
   finished: number;
   working: Working[];
   queue: Waiting[];
-  /** Every Antigravity account is out of Gemini until then. */
+  /** Codex, NVIDIA's backup, is out of its limits until then. */
   limitedUntil?: string;
-  /** No Antigravity account at all, so music waits for one. */
-  musicWaitsForAccount?: boolean;
   /** Readers with more than one book waiting (missing from a marker that doesn't say yet). */
   readers?: ReaderLine[];
   settings: MarkerSettings;
@@ -199,8 +197,6 @@ export interface Models {
   sweptAt: string | null;
   checking: string | null;
   models: ModelLine[];
-  /** Antigravity's Gemini models, newest first. */
-  gemini?: string[];
 }
 
 /** The stages that ask a model, each task's in order, with what they're called here. */
@@ -209,8 +205,10 @@ export const STAGES: Record<Task, Stage[]> = {
   music: ['research', 'music.gather', 'music.plan', 'music.score', 'music.check'],
   notes: ['research', 'notes.roster', 'notes.write', 'notes.check', 'notes.review'],
 };
-/** Stages done with tools: Gemini's unless picked otherwise. */
+/** Stages done with tools, in the harness rather than the balancer. */
 export const TOOL_STAGES: Stage[] = ['research', 'music.gather'];
+/** Stages Codex leads, NVIDIA's models behind it (shared/src/admin.ts, CODEX_STAGES). */
+export const CODEX_STAGES: Stage[] = ['music.gather'];
 
 /** A stage's step, as STEPS names it. */
 export function stageStep(stage: Stage): Step {
