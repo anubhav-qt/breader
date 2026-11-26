@@ -30,7 +30,7 @@ import { useMangaPreview } from './data/mangaPreview';
 import type { AccountResponse, FeedLibrary } from '@breader/shared/protocol';
 import { namesOf, type MangaFound } from '@breader/shared/manga';
 import { useLabels } from './data/labels';
-import { addLibrary, changeToken, isSaved, isYours, keepShelfCover, libraryName, refreshFeed, refreshLibrary, removeFromLibrary, renameLibrary, saveLibrary, sharedNow, shelfCover, shelfRecord, showLibrary, unsaveLibrary, useShared, yoursAs, type Showing } from './data/shelf';
+import { addLibrary, changeToken, isSaved, isYours, libraryName, refreshFeed, refreshLibrary, removeFromLibrary, renameLibrary, saveLibrary, sharedNow, shelfRecord, showLibrary, unsaveLibrary, useShared, yoursAs, type Showing } from './data/shelf';
 import { feedName } from './features/shared/facts';
 import { LibraryHead } from './features/shared/LibraryHead';
 import { flush, openWithKey } from './data/sync';
@@ -859,22 +859,6 @@ export default function App() {
       });
     }
   }, [libIsReady, libRecords, category, setCover]);
-
-  // Someone's shared series brings its cover through the laptop too, once, then from this browser.
-  const shelfCoverAsked = useRef(new Set<string>());
-  useEffect(() => {
-    if (category !== 'manga') return;
-    for (const r of sharedRecords) {
-      if (r.source !== 'shelf' || !r.url) continue;
-      if (sharing.covers[r.id] || shelfCoverAsked.current.has(r.id)) continue;
-      shelfCoverAsked.current.add(r.id);
-      void shelfCover(r.id)
-        .then((kept) => kept ?? remoteCover(r.url))
-        .then((blob) => {
-          if (blob) void keepShelfCover(r.id, blob);
-        });
-    }
-  }, [category, sharedRecords, sharing.covers]);
 
   // Closing waits two frames, so the library underneath has laid out the card to land on.
   useEffect(() => {

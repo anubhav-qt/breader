@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
 import { animate, motion, useMotionValue } from 'motion/react';
+import { useShelfCover } from '../../data/shelf';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
 import { blotsFor, maskFor, radiiFor } from './blots';
@@ -66,6 +67,7 @@ function setMask(el: HTMLElement | null, mask: string) {
 export function Tile({ item, variant, enter, now, art = false, className = '', style, radius = 22, open = false, picked, layoutKey, number, stack, manga = false, ref: slotRef, onOpen, onEdit, onKeep }: TileProps) {
   const b = item.book;
   const [ref, size] = useSize<HTMLDivElement>();
+  useShelfCover(ref, b);
   const inkRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const progress = b.progress >= 1 ? 1 : b.progress;
@@ -105,8 +107,9 @@ export function Tile({ item, variant, enter, now, art = false, className = '', s
   const hasArt = art && !!b.coverUrl && roomy;
   // A recent book without a cover gets one drawn.
   const made = art && !b.coverUrl && roomy;
-  // On a shelf a book is its cover alone; without one, the drawn card. A series' card stays drawn.
-  const photo = variant === 'cover' && !stack && !!b.coverUrl && !broken;
+  // On a shelf a book is its cover alone; without one, the drawn card. A series' card is the cover
+  // of the book it stands on (series.ts nextIn), with the pages of the rest behind it.
+  const photo = variant === 'cover' && !!b.coverUrl && !broken;
   const started = b.progress > 0;
   const done = b.progress >= 1;
   // Someone else's book, in their shared library: theirs to change. It can only be read, or kept.

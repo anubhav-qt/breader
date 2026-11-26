@@ -40,8 +40,23 @@ export const numberOf = (s: Series, b: ShelfItem) => b.seriesIndex ?? s.books.in
 
 export const finishedIn = (s: Series) => s.books.filter((b) => b.progress >= 1).length;
 
-/** The book a series stands for as one card: the first one not finished, or the last once all are. */
-export const nextIn = (s: Series) => s.books.find((b) => b.progress < 1) ?? s.books[s.books.length - 1];
+/**
+ * The book a series stands for as one card: the one the reader is at (started, not finished, and
+ * opened most lately), else the first not finished, or the last once all are. In a shared library
+ * no one's reading shows, so that's its first book.
+ */
+export function nextIn(s: Series): ShelfItem {
+  let at: ShelfItem | undefined;
+  for (const b of s.books) {
+    const reading = b.progress > 0 && b.progress < 1;
+    if (!reading) continue;
+    if (!at || b.lastOpened > at.lastOpened) at = b;
+  }
+  if (at) return at;
+  const unfinished = s.books.find((b) => b.progress < 1);
+  if (unfinished) return unfinished;
+  return s.books[s.books.length - 1];
+}
 
 /** What most of its books have, or undefined when none does; the next book's breaks a tie. */
 function most(values: Array<string | undefined>, tie?: string): string | undefined {

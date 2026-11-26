@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { motion } from 'motion/react';
+import { useShelfCover } from '../../data/shelf';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
 import { cardNames, markFor } from './names';
@@ -33,6 +34,8 @@ interface Props {
 export function CoverCard({ item, enter, words, open = false, picked, layoutKey, onOpen, onEdit, onKeep }: Props) {
   const b = item.book;
   const moreRef = useRef<HTMLButtonElement>(null);
+  const artRef = useRef<HTMLDivElement>(null);
+  useShelfCover(artRef, b);
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const n = cardNames(b, item.author);
@@ -52,6 +55,7 @@ export function CoverCard({ item, enter, words, open = false, picked, layoutKey,
       layoutDependency={layoutKey}
     >
       <div
+        ref={artRef}
         className="cv-art"
         onContextMenu={(e) => {
           if (!moreRef.current) return;

@@ -63,6 +63,9 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   NVIDIA's Super VL as the backup for 10 minutes when Codex is down, on the ThinkPad only
   (`server/src/lib/tidier.ts`). On NVIDIA a low job has its thinking off.
 - Covers: a library's shelves show each book's cover alone, or its drawn card (`gallery/Tile.tsx`).
+  A series' stack shows the cover of the book it stands on (`nextIn`, `gallery/series.ts`): the one the
+  reader is at, or the first in a shared library. Someone's shared covers load as their cards come near
+  the screen (`useShelfCover`, `data/shelf.ts`), 4 at a time; a manga series' from its site, as in Browse.
   A reader's uploaded book shows a new cover only once the model said it's really that book's
   (`server/src/jobs/covers.ts`, once per image in `cover_checks`, marked as `library_items.cover_ok`;
   `shownCover`, `frontend/src/data/library.ts`). Covers from before the check (`cover_waits` null)

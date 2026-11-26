@@ -1,11 +1,13 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore, type RefObject } from 'react';
 import { LIBRARY_NAME, LIBRARY_NAME_CHARS } from '@breader/shared/limits';
 import type { FeedLibrary, FeedResponse, LibraryAsk, SharedAnswerResponse, SharedAskResponse, SharedAsksResponse, SharedBooksResponse, SharedCopyResponse, SharedCreateResponse, SharedKeyResponse, SharedNameResponse, SharedOpenResponse, SharedPublicResponse, SharedRemoveResponse, ShelfBook } from '@breader/shared/protocol';
 import { categoryOf } from '../books/category';
+import { remoteCover, remoteOf } from '../books/remote';
 import { feedName } from '../features/shared/facts';
 import type { BookRecord } from '../books/types';
 import { readSetting, writeSetting } from '../features/reader/settings';
 import { api, ApiError } from '../lib/api';
+import { whenInView } from '../lib/inView';
 import { store } from '../lib/store';
 import { signedIn } from './sync';
 
@@ -84,8 +86,8 @@ const SAVED = 'sharedLibraries';
 /** The library id the tab opens at, or 'own'; unset, the first in the list. */
 const DEFAULT = 'sharedDefault';
 const REFRESH_AFTER = 30_000;
-/** Covers are fetched for the newest books only; the library shows only the two most recent. */
-const COVERS = 12;
+/** Covers fetched at a time, as their cards come near the screen. */
+const COVERS_AT_ONCE = 4;
 
 const counted = (n: unknown): n is number => Number.isInteger(n) && (n as number) > 0;
 /** The lowest N no library in the list has. */
@@ -153,7 +155,10 @@ export function refreshLibrary(token: string, now = false): Promise<void> {
       const facts = { public: r.public, access: r.access, mayPublish: r.mayPublish, mayName: r.mayName, copy: r.copy };
       setLib(token, { books, name, state: 'ready', ...facts });
       await store.set(`shared:${token}`, { books, name, ...facts });
-      void loadCovers(token, books);
+      // A card already seen whose cover came since: a new one, or one the model said yes to.
+      for (const b of books) {
+        if (seenCards.has(b.id)) wantShelfCover(b.id);
+      }
     } catch (e) {
       if (e instanceof ApiError && e.code === 'shared_closed') {
         setLib(token, { books: [], state: 'closed' });
@@ -176,25 +181,92 @@ function forgetGrant(token: string) {
   }
 }
 
-async function loadCovers(token: string, books: ShelfBook[]) {
-  for (const b of books.slice(0, COVERS)) {
-    if (!b.coverId || shared.covers[b.id]) continue;
-    // A book's cover not while it waits for the model's yes, or after a no; a manga's always.
-    if (categoryOf(b) === 'books' && b.coverOk === false) continue;
-    let blob = await store.get<Blob>(`shelfcover:${b.id}`);
-    if (!blob) {
-      try {
-        const link = await api.post<{ url: string }>('/v1/shared/link', { token, fileId: b.coverId });
-        const res = await fetch(link.url);
-        if (!res.ok) continue;
-        blob = await res.blob();
-        await store.set(`shelfcover:${b.id}`, blob);
-      } catch {
-        continue;
-      }
+/**
+ * Where a shared book's cover comes from: a series from a manga site has it there, as in Browse;
+ * any other from its sharer, unless it's a book's cover waiting for the model's yes, or one it said
+ * no to (server jobs/covers.ts). Null: none to show.
+ */
+export function coverFrom(b: ShelfBook): 'site' | 'sharer' | null {
+  if (remoteOf(b.url)) return 'site';
+  if (!b.coverId) return null;
+  if (categoryOf(b) === 'books' && b.coverOk === false) return null;
+  return 'sharer';
+}
+
+async function fetchCover(token: string, b: ShelfBook): Promise<Blob | undefined> {
+  const from = coverFrom(b);
+  if (!from) return undefined;
+  const kept = await store.get<Blob>(`shelfcover:${b.id}`);
+  if (kept) return kept;
+  let blob: Blob | undefined;
+  if (from === 'site') {
+    blob = await remoteCover(b.url);
+  } else {
+    try {
+      const link = await api.post<{ url: string }>('/v1/shared/link', { token, fileId: b.coverId });
+      const res = await fetch(link.url);
+      if (res.ok) blob = await res.blob();
+    } catch {
+      // Offline, or the server is away: the drawn card until the next visit.
     }
-    set({ covers: { ...shared.covers, [b.id]: URL.createObjectURL(blob) } });
   }
+  if (blob) await store.set(`shelfcover:${b.id}`, blob);
+  return blob;
+}
+
+/** The library holding a shared book, and the book, while this browser has its list. */
+function bookOf(id: string): { token: string; book: ShelfBook } | null {
+  for (const [token, lib] of Object.entries(shared.libs)) {
+    const book = lib.books.find((b) => b.id === id);
+    if (book) return { token, book };
+  }
+  return null;
+}
+
+/** Books whose cards came near the screen this visit, and the covers asked for (book id and cover). */
+const seenCards = new Set<string>();
+const askedCovers = new Set<string>();
+const coverQueue: Array<() => Promise<void>> = [];
+let coversRunning = 0;
+
+function nextCover() {
+  while (coversRunning < COVERS_AT_ONCE && coverQueue.length > 0) {
+    const job = coverQueue.shift()!;
+    coversRunning++;
+    void job().finally(() => {
+      coversRunning--;
+      nextCover();
+    });
+  }
+}
+
+/** A shared book's cover, once its card comes near the screen (useShelfCover). */
+export function wantShelfCover(id: string) {
+  seenCards.add(id);
+  if (shared.covers[id]) return;
+  const found = bookOf(id);
+  if (!found) return;
+  // None yet (one waiting for the model's yes): asked again when the library's list next changes it.
+  if (!coverFrom(found.book)) return;
+  const asked = `${id}:${found.book.coverId ?? found.book.url}`;
+  if (askedCovers.has(asked)) return;
+  askedCovers.add(asked);
+  coverQueue.push(async () => {
+    const blob = await fetchCover(found.token, found.book);
+    if (blob) set({ covers: { ...shared.covers, [id]: URL.createObjectURL(blob) } });
+  });
+  nextCover();
+}
+
+/** A card of someone's shared book asks for its cover as it first comes near the screen. */
+export function useShelfCover(ref: RefObject<HTMLElement | null>, book: { id: string; source: BookRecord['source']; coverUrl?: string }) {
+  const wants = book.source === 'shelf' && !book.coverUrl;
+  const id = book.id;
+  useEffect(() => {
+    const el = ref.current;
+    if (!wants || !el) return;
+    return whenInView(el, () => wantShelfCover(id));
+  }, [ref, wants, id]);
 }
 
 /** A feed library's books, for its row, once the row comes into view (PublicFeed.tsx). */
@@ -208,7 +280,6 @@ async function warm(token: string) {
     const kept = await store.get<Pick<SharedLibrary, 'books' | 'name'> & Partial<SharedLibrary>>(`shared:${token}`);
     if (kept && !libOf(token)?.books.length) {
       setLib(token, { ...kept, state: 'ready' });
-      void loadCovers(token, kept.books);
     }
   }
   void refreshLibrary(token);
@@ -509,12 +580,6 @@ export async function answerAsk(which: Showing, id: string, give: boolean): Prom
 
 /** The cover this browser holds for a shared book, to give a copy of it the same one. */
 export const shelfCover = (id: string) => store.get<Blob>(`shelfcover:${id}`);
-
-/** A shared series' cover, which comes from its catalogue rather than the sharer: kept, and shown. */
-export async function keepShelfCover(id: string, blob: Blob) {
-  await store.set(`shelfcover:${id}`, blob);
-  set({ covers: { ...shared.covers, [id]: URL.createObjectURL(blob) } });
-}
 
 /** A shared book as a card, as its owner has it. Starting it makes a copy in the reader's library. */
 export function shelfRecord(b: ShelfBook): BookRecord {
