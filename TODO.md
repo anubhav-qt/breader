@@ -1,5 +1,10 @@
 # Breader: to do later
 
+## The Azure standby (az1) is behind prod (since 2026-11-26)
+- [ ] `az login` fails with AADSTS530035 (Microsoft security defaults): finish the sign-in, then run
+      `sh infra/azure/deploy.sh sg southeastasia` and check `az1.breader.site/health` says prod's release.
+      It is still on an image from before 427dc88 (public feed), so while home is away readers get the older server.
+
 ## The AWS Suwayomi (down 2026-11-09 to 2026-11-18, nobody told)
 - [x] Capped at 1.3 GB, and its machine rebooted by a CloudWatch alarm (`infra/README.md`).
 - [ ] An UptimeRobot monitor on `sw.breader.site` (401 is up), so the next time it's down we hear.
