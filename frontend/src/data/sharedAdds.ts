@@ -1,4 +1,5 @@
 import type { SharedAddResponse } from '@breader/shared/protocol';
+import { remoteOf } from '../books/remote';
 import type { BookRecord } from '../books/types';
 import { api, ApiError } from '../lib/api';
 import { newId } from '../lib/key';
@@ -82,6 +83,37 @@ export async function sendSharedAdds(recordOf: (id: string) => BookRecord | unde
       again = false;
       void sendSharedAdds(recordOf);
     }
+  }
+}
+
+/**
+ * Someone else's book, into a library the reader may change, pointing at their file. It goes now
+ * or not at all: their file is uploaded already.
+ */
+export async function addShelfBook(entry: BookRecord, token: string) {
+  let source: BookRecord['source'] = 'file';
+  if (remoteOf(entry.url)) source = 'remote';
+  await addNow({ ...entry, source }, token);
+}
+
+/**
+ * One of the reader's own books, into a library they may change (Add to). It goes now or says why
+ * not, so the sheet's tick shows where the book really is.
+ */
+export async function addOwnBook(rec: BookRecord, token: string) {
+  if (rec.source === 'file' && !rec.fileId) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
+  // The server checks the book's file by the reader's own books, so their latest changes go first.
+  await flush().catch(() => {});
+  await addNow(rec, token);
+}
+
+/** Sends a book to a library as a new card there, and fetches the library's list again either way. */
+async function addNow(rec: BookRecord, token: string) {
+  const book = { ...toWire(rec), id: newId(), origin: rec.origin ?? rec.id };
+  try {
+    await signedIn(() => api.post<SharedAddResponse>('/v1/shared/add', { token, book }));
+  } finally {
+    await refreshLibrary(token, true).catch(() => {});
   }
 }
 

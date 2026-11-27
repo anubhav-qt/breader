@@ -16,15 +16,18 @@ const notFound = () => new ApiError(404, 'not_found', 'That book isn’t in this
  * copy of a shared book), or one a book here points at already. The share lock holds until the
  * push commits, so clean-up (jobs/cleanup.ts) can't delete the file in between.
  */
-async function checkFile(tx: Tx, libraryId: string, fileId: string | null | undefined) {
+async function checkFile(tx: Tx, libraryId: string, fileId: string | null | undefined, uploader?: string) {
   if (!fileId) return;
+  const allowed = [eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true), sharedSomewhere(blobs.id), usedBy(libraryId, blobs.id)];
+  // A reader putting their own upload into a library they may change.
+  if (uploader) allowed.push(eq(blobs.ownerLibraryId, uploader));
   const [b] = await tx
     .select({ id: blobs.id })
     .from(blobs)
     .where(and(
       eq(blobs.id, fileId),
       eq(blobs.status, 'ready'),
-      or(eq(blobs.ownerLibraryId, libraryId), eq(blobs.isPublic, true), sharedSomewhere(blobs.id), usedBy(libraryId, blobs.id)),
+      or(...allowed),
     ))
     .for('share', { of: blobs });
   if (!b) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
@@ -72,8 +75,9 @@ async function urlToKeep(tx: Tx, libraryId: string, bookId: string, url: string 
  * Applies one queued change inside the push transaction. Every row it touches is stamped with
  * `rev`, the library's new revision, so the next pull from any browser picks it up. A book whose
  * AI switch is on after it adds its file's SHA-256 to `ai`, for the push to spread (sync/ai.ts).
+ * `uploader`: a library whose own uploads a book put here may point at (routes/shelf.ts /shared/add).
  */
-export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: Mutation, ai?: Set<string>): Promise<void> {
+export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: Mutation, ai?: Set<string>, uploader?: string): Promise<void> {
   const settle = async (bookId: string) => {
     const sha = await settleAi(tx, libraryId, bookId, rev);
     if (sha) ai?.add(sha);
@@ -86,8 +90,8 @@ export async function applyMutation(tx: Tx, libraryId: string, rev: number, m: M
       if (!ok) throw new ApiError(400, 'bad_book', 'Only bundled samples and remote books have a url.');
       // A remote book's pages come from its catalogue, never from a stored file.
       if (b.source === 'remote' && b.fileId) throw new ApiError(400, 'bad_book', 'A remote book has no file.');
-      await checkFile(tx, libraryId, b.fileId);
-      await checkFile(tx, libraryId, b.coverId);
+      await checkFile(tx, libraryId, b.fileId, uploader);
+      await checkFile(tx, libraryId, b.coverId, uploader);
       const url = await urlToKeep(tx, libraryId, b.id, b.url);
       await tx
         .insert(libraryItems)

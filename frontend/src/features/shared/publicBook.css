@@ -1,0 +1,19 @@
+/* A book from a Public row (PublicBook.tsx): the top of a manga's page (manga.css, mds-), in a dialog. */
+.pb { padding: 26px; }
+/* The title is the book's own, big: the dialog's head keeps only its close button. */
+.pb .modal-head { position: absolute; top: 14px; right: 14px; z-index: 2; margin: 0; }
+.pb .modal-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pb-top { grid-template-columns: 180px minmax(0, 1fr); padding-right: 28px; }
+.pb .mds-title { font-size: 44px; line-height: 0.92; }
+
+/* No cover: the one drawn on its card, filling the cover's place. */
+.pb-drawn { position: absolute; inset: 0; display: block; }
+.pb-drawn .cv-art { display: block; height: 100%; aspect-ratio: auto; }
+
+@media (max-width: 720px) {
+  .pb { padding: 20px; }
+  .pb-top { grid-template-columns: 116px minmax(0, 1fr); padding-right: 0; }
+  .pb .mds-title { font-size: 26px; }
+  /* Only the title's first line sits beside the close button; the rest takes the whole width. */
+  .pb .mds-title::before { content: ''; float: right; width: 30px; height: 1lh; }
+}

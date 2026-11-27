@@ -36,6 +36,9 @@ import { LibraryHead } from './features/shared/LibraryHead';
 import { flush, openWithKey } from './data/sync';
 import { useLibrary, withReading, type RemovedBook, type ShelfItem } from './data/useLibrary';
 import type { Where } from './features/add/AddWhere';
+import type { Shown } from './features/add/AddTo';
+import { holds, mineOf, targetsOf, type Hands } from './features/add/places';
+import { addOwnBook, addShelfBook } from './data/sharedAdds';
 import { SettingsMenu } from './features/account/SettingsMenu';
 import type { LoginStart } from './features/account/LoginDialog';
 import { Gallery } from './features/gallery/Gallery';
@@ -100,6 +103,39 @@ function seriesNow(route: Route): SeriesAt | null {
 const seriesId = (s: SeriesAt) => s.found[0].card.id;
 
 /** A series in My manga, as found where it's read from: what its card knows, until its page has the rest. */
+/** A series as one of the reader's books, read from this url; its cover comes apart. */
+function seriesRecord(about: About, url: string, color: string): BookRecord {
+  const now = Date.now();
+  let author = '';
+  let genre = '';
+  if (about.kind === 'mangadex') {
+    const s = about.series;
+    author = [...new Set([...s.authors, ...s.artists])].join(', ');
+    genre = genreOf(s.tags);
+  } else {
+    const s = about.series;
+    author = s.authors.join(', ');
+    genre = genreOf(s.genres.map((name) => ({ name })));
+  }
+  const rec: BookRecord = {
+    id: newId(),
+    title: about.series.title.slice(0, 500),
+    author: author.slice(0, 300),
+    format: 'CBZ',
+    source: 'remote',
+    url,
+    shared: false,
+    addedAt: now,
+    words: 0,
+    color,
+    progress: 0,
+    line: '',
+    lastOpened: now,
+  };
+  if (genre) rec.genre = genre;
+  return rec;
+}
+
 function foundOf(b: BookRecord): MangaFound[] | null {
   const w = remoteOf(b.url);
   const names = namesOf([b.title], b.author ? b.author.split(',') : []);
@@ -119,7 +155,7 @@ function foundOf(b: BookRecord): MangaFound[] | null {
  * books. Production shows only real books.
  */
 const devTools = import.meta.env.DEV;
-/** Where the eye over manga's covers is kept, on this device. */
+/** Where Only covers is kept, on this device (named for manga, where it began). */
 const COVERS_ONLY = 'breader.manga.coversOnly.v1';
 /** Light or dark, once the sun-or-moon button has picked one, on this device (read early by index.html too). */
 const THEME = 'breader.theme.v1';
@@ -186,6 +222,7 @@ const Feedback = lazy(() => import('./features/feedback/Feedback').then((m) => (
 const loadLogin = () => import('./features/account/LoginDialog');
 const loadKey = () => import('./features/add/KeyDialog');
 const loadWhere = () => import('./features/add/AddWhere');
+const loadAddTo = () => import('./features/add/AddTo');
 const loadRemove = () => import('./features/gallery/RemoveDialog');
 const loadLibraries = () => import('./features/shared/LibraryMenu');
 const loadOwn = () => import('./features/shared/OwnLibraryMenu');
@@ -196,11 +233,14 @@ const loadAudiobooks = () => Promise.all([import('./features/audiobook/Audiobook
 const LoginDialog = lazy(() => loadLogin().then((m) => ({ default: m.LoginDialog })));
 const KeyDialog = lazy(() => loadKey().then((m) => ({ default: m.KeyDialog })));
 const AddWhere = lazy(() => loadWhere().then((m) => ({ default: m.AddWhere })));
+const AddTo = lazy(() => loadAddTo().then((m) => ({ default: m.AddTo })));
+const loadPublicBook = () => import('./features/shared/PublicBook');
+const PublicBook = lazy(() => loadPublicBook().then((m) => ({ default: m.PublicBook })));
 const RemoveDialog = lazy(() => loadRemove().then((m) => ({ default: m.RemoveDialog })));
 const LibraryMenu = lazy(() => loadLibraries().then((m) => ({ default: m.LibraryMenu })));
 const OwnLibraryMenu = lazy(() => loadOwn().then((m) => ({ default: m.OwnLibraryMenu })));
 const DesignBar = lazy(() => import('./features/design/DesignBar').then((m) => ({ default: m.DesignBar })));
-const LATER = [loadReader, loadBrowse, loadPage, loadAdd, loadLogin, loadKey, loadWhere, loadRemove, loadLibraries, loadOwn, loadEditPopover, loadAudiobooks];
+const LATER = [loadReader, loadBrowse, loadPage, loadAdd, loadLogin, loadKey, loadWhere, loadAddTo, loadPublicBook, loadRemove, loadLibraries, loadOwn, loadEditPopover, loadAudiobooks];
 function loadSoon() {
   const all = () => { for (const load of LATER) void load().catch(() => {}); };
   // Safari has no requestIdleCallback.
@@ -330,8 +370,8 @@ export default function App() {
   const deviceDark = useDeviceDark();
   const dark = theme === 'dark' || (theme === 'auto' && deviceDark);
   const labels = useLabels();
-  /** Manga's covers without their titles: off until the reader turns it on, then kept on this device. */
-  const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, false) === true);
+  /** Covers without their titles and how far they're read, books and manga: on until the reader turns it off, then kept on this device. */
+  const [coversOnly, setCoversOnly] = useState(() => readLocal<unknown>(COVERS_ONLY, true) !== false);
   const [adding, setAdding] = useState<{ file?: File | null; mode?: 'file' | 'paste' } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
@@ -655,15 +695,25 @@ export default function App() {
     }
   }, [recordById, lib, say, chaptersOf, ensureKey]);
 
-  const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect) => {
+  const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect, given?: BookRecord) => {
     openAnimDone.current = false;
     loadedId.current = null;
     // A shared book this reader hasn't started joins their library as they open it. Its copy needs
     // a key to reach the server: that's where its AI switch comes on, when the sharer's file has
     // been read, and where its voices, music and notes are fetched from.
-    const entry = recordById.get(book.id);
-    if (entry?.source === 'shelf') await ensureKey();
-    const rec = entry?.source === 'shelf' ? await lib.startShelfBook(entry) : entry;
+    // A book in a public library's row isn't among the cards: it comes as it is, and its copy here
+    // isn't shared with the reader's key, since they never picked that stranger's book to share.
+    let entry = recordById.get(book.id);
+    let shareCopy = true;
+    if (given) {
+      entry = given;
+      shareCopy = false;
+    }
+    let rec = entry;
+    if (entry?.source === 'shelf') {
+      await ensureKey();
+      rec = await lib.startShelfBook(entry, shareCopy);
+    }
     if (!rec) return;
     // One taken out of My books comes back in once it's being read again.
     if (rec.sharedOnly) lib.setSharedOnly(rec.id, false);
@@ -732,37 +782,15 @@ export default function App() {
 
   /** A series into My manga, read from the copy picked: its cover kept here, its genres from its tags. */
   const addNewSeries = useCallback(async (about: About, url: string): Promise<BookRecord> => {
-    const now = Date.now();
     let cover: Blob | undefined = undefined;
-    let author = '';
-    let genre = '';
     if (about.kind === 'mangadex') {
       const s = about.series;
       if (s.cover) cover = await mangadex.cover(s.id, s.cover, 512);
-      author = [...new Set([...s.authors, ...s.artists])].join(', ');
-      genre = genreOf(s.tags);
     } else {
       const s = about.series;
       if (s.cover) cover = await sources.cover(s.cover);
-      author = s.authors.join(', ');
-      genre = genreOf(s.genres.map((name) => ({ name })));
     }
-    const rec: BookRecord = {
-      id: newId(),
-      title: about.series.title.slice(0, 500),
-      author: author.slice(0, 300),
-      format: 'CBZ',
-      source: 'remote',
-      url,
-      shared: false,
-      addedAt: now,
-      words: 0,
-      color: lib.nextColor(),
-      progress: 0,
-      line: '',
-      lastOpened: now,
-      ...(genre ? { genre } : {}),
-    };
+    const rec = seriesRecord(about, url, lib.nextColor());
     await lib.addRemote(rec, cover);
     setPreview('live');
     // As with a first book: a key gives it somewhere to sync, and its pages a library to go to.
@@ -829,17 +857,6 @@ export default function App() {
   /** What a book added to these libraries says it joined. */
   const namesOfLibraries = useCallback((tokens: string[]) => tokens.map((t) => libraryName(sharedNow(), t)).join(', '), []);
 
-  const addSeriesOnly = useCallback(async (about: About, picked: Picked) => {
-    const where = await whereTo(true);
-    if (!where) return;
-    const rec = await addSeries(about, withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also));
-    if (where.tokens.length > 0) {
-      await lib.addToShared(rec, where.tokens);
-      say(`Added “${rec.title}” to ${namesOfLibraries(where.tokens)}`);
-      return;
-    }
-    say(`Added “${rec.title}” to ${labels.mine}`);
-  }, [addSeries, say, labels.mine, whereTo, lib, namesOfLibraries]);
 
   const recordOf = useCallback((id: string) => remoteSeries.get(id), [remoteSeries]);
 
@@ -1228,13 +1245,95 @@ export default function App() {
       });
     };
   };
-  /** Someone's book, put in the reader's own library from their shared one without opening it. */
-  const keep = useCallback(async (b: ShelfItem) => {
-    const entry = recordById.get(b.id);
-    if (entry?.source !== 'shelf') return;
-    await lib.startShelfBook(entry);
-    say(`Added “${b.title}” to ${labels.mine}`);
-  }, [recordById, lib, say, labels.mine]);
+  /** The Add to sheet, for these books: every library they can go in, ticked where they are. */
+  const [addingTo, setAddingTo] = useState<{ entries: BookRecord[]; shown: Shown[]; theirs: boolean; what: string; hands?: Hands } | null>(null);
+  /** `outside`: books from a Public row, not among the reader's cards, taken as they are. */
+  const openAddTo = useCallback((books: ShelfItem[], outside = false) => {
+    const entries: BookRecord[] = [];
+    const shown: Shown[] = [];
+    for (const b of books) {
+      let rec: BookRecord | undefined = recordById.get(b.id);
+      if (outside) rec = b;
+      if (!rec) continue;
+      entries.push(rec);
+      shown.push({ id: b.id, title: b.title, color: b.color });
+    }
+    if (entries.length === 0) return;
+    const theirs = entries.every((e) => e.source === 'shelf');
+    let what = countOf(entries.length, categoryOf(entries[0]));
+    if (entries.length === 1) what = `“${shown[0].title}”`;
+    setAddingTo({ entries, shown, theirs, what });
+  }, [recordById]);
+  const closeAddTo = useCallback((line: string | null) => {
+    setAddingTo(null);
+    if (line) say(line);
+  }, [say]);
+  // The sheet reads the reader's books as they are after each change, not as they were when it opened.
+  const recordsNow = useRef(lib.records);
+  recordsNow.current = lib.records;
+  const { startShelfBook, setShared, setSharedOnly, removeBook: removeOwn, nextColor } = lib;
+  const addToHands = useMemo<Hands>(() => ({
+    records: () => recordsNow.current,
+    shared: sharedNow,
+    keep: async (entry, shared) => {
+      await ensureKey();
+      return startShelfBook(entry, shared);
+    },
+    setShared,
+    setSharedOnly,
+    remove: removeOwn,
+    addOwn: addOwnBook,
+    addTheirs: addShelfBook,
+    fresh: (token) => refreshLibrary(token, true),
+    takeOut: removeFromLibrary,
+  }), [startShelfBook, setShared, setSharedOnly, removeOwn, ensureKey]);
+  /**
+   * A series from its page into any library, Personal a row too. One not in My manga yet goes in
+   * as Personal or the reader's shared library is ticked; any other library takes it by its url.
+   */
+  const openSeriesAddTo = useCallback((about: About, picked: Picked, had: BookRecord | undefined) => {
+    const url = withAlso(urlOf(picked.found, picked.group, picked.lang), picked.also);
+    let entry = had;
+    if (!entry) entry = seriesRecord(about, url, nextColor());
+    const keep = async (_entry: BookRecord, shared: boolean) => {
+      const rec = await addSeries(about, url);
+      if (shared) setShared(rec.id, true);
+      return rec;
+    };
+    setAddingTo({
+      entries: [entry],
+      shown: [{ id: entry.id, title: entry.title, color: entry.color }],
+      theirs: true,
+      what: `“${entry.title}”`,
+      hands: { ...addToHands, keep },
+    });
+  }, [addSeries, setShared, nextColor, addToHands]);
+  /** A book picked in a Public row: a manga series opens its page, any other book its window. */
+  const [publicBook, setPublicBook] = useState<{ book: ShelfItem; from: string } | null>(null);
+  const pickPublic = useCallback((b: ShelfItem, _rect: DOMRect, from: string) => {
+    const found = foundOf(b);
+    if (found) {
+      openSeries(found, 'Public');
+      return;
+    }
+    setPublicBook({ book: b, from });
+  }, [openSeries]);
+  /** The reader's own copy of a Public book, with how far they are in it, if they have one. */
+  const shownMine = (b: ShelfItem): ShelfItem | undefined => {
+    const mine = mineOf(lib.records, b);
+    if (!mine) return undefined;
+    return withReading(mine, lib.reads, lib.covers, lib.edits);
+  };
+  /** The libraries a book is in besides the reader's own books, for the chips in its popover. */
+  const librariesOf = useCallback((b: ShelfItem) => {
+    const rec = recordById.get(b.id);
+    if (!rec) return [];
+    const names: string[] = [];
+    for (const t of targetsOf(sharing, rec.source === 'shelf', labels.mine)) {
+      if (holds(sharing, lib.records, t.place, rec)) names.push(t.name);
+    }
+    return names;
+  }, [recordById, sharing, labels.mine, lib.records]);
   /**
    * Books from someone's shared library, put in the reader's own at once, last book first so the
    * first is the newest in Recent. Returns the ones it added.
@@ -1302,18 +1401,8 @@ export default function App() {
     }
     void removeAll(ids, [], fromKeyboard);
   };
-  /** The picked books that can be shared and aren't yet: shares them with the reader's key. They stay picked. */
-  const toShare = pickedBooks.filter((b) => canShare(b) && !b.shared);
-  const sharePicked = () => {
-    for (const b of toShare) lib.setShared(b.id, true);
-    say(`Shared ${countOf(toShare.length, category)} with your key`);
-  };
-  /** The picked books shared already: stops sharing them. They stay picked. */
-  const toStop = pickedBooks.filter((b) => canShare(b) && b.shared);
-  const stopSharingPicked = () => {
-    for (const b of toStop) lib.setShared(b.id, false);
-    say(stoppedSharing(toStop.length, category));
-  };
+  /** The picked books that can go in a library: Add to opens for them. They stay picked. */
+  const toAdd = pickedBooks.filter((b) => canShare(b));
   /** In the reader's own shared library: the picked books taken out of their own books, put back in. */
   const outOfMine = pickedBooks.filter((b) => b.sharedOnly);
   const addBackPicked = (fromKeyboard: boolean) => {
@@ -1397,8 +1486,7 @@ export default function App() {
   if (shownTab === 'mine') {
     actions = [
       { key: 'favourite', label: allFavourites ? 'Unfavourite' : 'Favourite', icon: <IconStar />, run: favouritePicked },
-      { key: 'share', label: 'Share', icon: <IconPeople />, disabled: !toShare.length, run: sharePicked },
-      { key: 'unshare', label: 'Unshare', icon: <IconLock />, disabled: !toStop.length, run: stopSharingPicked },
+      { key: 'addto', label: 'Add to', icon: <IconPeople />, disabled: !toAdd.length, run: () => openAddTo(toAdd) },
       { key: 'remove', label: 'Remove', icon: <IconTrash />, danger: true, run: removePicked },
     ];
   } else if (showing === 'own') {
@@ -1596,8 +1684,8 @@ export default function App() {
                 onLogin={() => setLogin({ mode: 'login' })}
                 onLogOut={logOutAll}
                 onKey={() => setKeyOpen(true)}
-                // Only over manga's covers, where there are some to show.
-                coversOnly={manga && books.length > 0 ? coversOnly : undefined}
+                // Only where there are covers to show.
+                coversOnly={books.length > 0 || shownTab === 'public' ? coversOnly : undefined}
                 onCoversOnly={flipCovers}
                 onGuide={() => openGuide()}
                 onFeedback={() => setFeedbackOpen(true)}
@@ -1627,17 +1715,13 @@ export default function App() {
               onEdit={(id, patch) => void editBook(id, patch)}
               // Reading shows only in My books.
               onFinish={t === 'mine' ? (b, finished) => lib.setFinished(b.id, finished, b) : undefined}
-              onKeep={t === 'shelf' && showing !== 'own' ? (b) => void keep(b) : undefined}
+              onKeep={t === 'shelf' && showing !== 'own' ? (b) => openAddTo([b]) : undefined}
               onKeepAll={t === 'shelf' && showing !== 'own' ? (books, series) => void keepAll(books, series) : undefined}
               onChapters={chaptersOf}
               empty={emptyOf(c, t)}
               onRemove={(b, fromKeyboard) => askRemove(b.id, fromKeyboard)}
-              onShare={(b, shared) => {
-                // Out of their books already: not shared either, it's nowhere, so it goes.
-                if (!shared && b.sharedOnly) { void removeBook(b.id); return; }
-                lib.setShared(b.id, shared);
-                say(shared ? `“${b.title}” is shared with your key` : `Stopped sharing “${b.title}”`);
-              }}
+              onAddTo={(b) => openAddTo([b])}
+              librariesOf={librariesOf}
               picked={picking && t === shownTab && c === category ? picking.ids : undefined}
               head={t === 'shelf' && peek && peeked ? (
                 <LibraryHead
@@ -1655,7 +1739,7 @@ export default function App() {
           ))}
           {lib.ready && seen.has('public') && (
             <Suspense fallback={null}>
-              <PublicFeed category={category} coversOnly={coversOnly} now={now} hidden={tab !== 'public' || !!peek} onLibrary={setPeek} />
+              <PublicFeed category={category} coversOnly={coversOnly} now={now} hidden={tab !== 'public' || !!peek} onLibrary={setPeek} onBook={pickPublic} />
             </Suspense>
           )}
           {lib.ready && mdOn !== false && seen.has('browse') && (
@@ -1686,7 +1770,7 @@ export default function App() {
             recordOf={recordOf}
             placeOf={placeOf}
             onRead={(about, picked, had, from, rect) => readSeries(about, picked, had, from, rect)}
-            onAdd={(about, picked) => addSeriesOnly(about, picked)}
+            onAddTo={openSeriesAddTo}
             onBack={leaveSeries}
           />
           </Suspense>
@@ -1780,6 +1864,38 @@ export default function App() {
           </Suspense>
         )}
         {askingWhere && <Suspense key="add-where" fallback={null}><AddWhere onChoose={chooseWhere} onCreated={madeLibrary} /></Suspense>}
+        {publicBook && (
+          <Suspense key="public-book" fallback={null}>
+            <PublicBook
+              book={publicBook.book}
+              from={publicBook.from}
+              mine={shownMine(publicBook.book)}
+              personal={labels.mine}
+              onRead={(rect) => {
+                const b = publicBook.book;
+                setPublicBook(null);
+                void onOpen(b, rect, b);
+              }}
+              onAddTo={() => openAddTo([publicBook.book], true)}
+              onClose={() => setPublicBook(null)}
+            />
+          </Suspense>
+        )}
+        {addingTo && (
+          <Suspense key="add-to" fallback={null}>
+            <AddTo
+              entries={addingTo.entries}
+              shown={addingTo.shown}
+              records={lib.records}
+              theirs={addingTo.theirs}
+              personal={labels.mine}
+              what={addingTo.what}
+              hands={addingTo.hands ?? addToHands}
+              onMade={madeLibrary}
+              onClose={closeAddTo}
+            />
+          </Suspense>
+        )}
         {asking && <Suspense key="remove" fallback={null}><RemoveDialog title={asking.title} from={asking.from} manga={asking.category === 'manga'} onChoose={chooseRemove} onClose={() => setAsking(null)} /></Suspense>}
         {askingAll && (
           <Suspense key="remove-all" fallback={null}>

@@ -62,7 +62,6 @@
 .tile { --pad-y: 20px; --pad-x: 22px; }
 .tile-hero { --pad-y: 30px; --pad-x: 34px; }
 .tile-small { --pad-y: 16px; --pad-x: 18px; }
-.tile-cover { --pad-y: 18px; --pad-x: 20px; }
 
 .tile-face {
   position: absolute;
@@ -103,8 +102,8 @@
 .tile-more svg, .tile-fav svg { width: 16px; height: 16px; }
 .tile-fav svg { fill: currentColor; }
 .tile-done svg { fill: none; width: 15px; height: 15px; }
-.tile-keep:not(.is-on):hover { background: var(--canvas); }
-/* Someone's book: into the reader's own library, then a tick once it's there. */
+.tile-keep:hover { background: var(--canvas); }
+/* Someone's book: opens Add to, with a tick once it's in the reader's own library. */
 .tile-keep svg { fill: none; width: 16px; height: 16px; }
 /* Picking books to favourite or remove together: an empty circle in the corner, filled with a tick
    once picked. */
@@ -119,7 +118,6 @@
 }
 .tile-pick.is-on { background: var(--ink); color: var(--canvas); box-shadow: none; }
 .tile-pick svg { width: 16px; height: 16px; fill: none; }
-.tile-keep.is-on { cursor: default; }
 .tile-keep.is-on svg { width: 15px; height: 15px; }
 
 /* Type inside cards */
@@ -183,7 +181,6 @@
 .tile-wide .t-title { font-size: 22px; }
 .tile-tall .t-title { font-size: 28px; }
 .tile-small .t-title { font-size: 20px; }
-.tile-cover .t-title { font-size: 24px; }
 @container (min-width: 800px) {
   .tile-hero .t-title { font-size: 48px; }
 }
@@ -206,9 +203,6 @@
 @container (max-width: 189px) {
   .tile-tall .t-title { font-size: 24px; }
   .tile-small .t-title { font-size: 18px; }
-}
-@container (max-width: 159px) {
-  .tile-cover .t-title { font-size: 21px; }
 }
 
 /*
@@ -275,7 +269,6 @@
 }
 .c-foot > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .c-short { display: none; }
-.tile-cover .c-mark { font-size: min(26cqh, 48cqw); }
 /* Small cards: the mark, the title, and how far under it. */
 .tile-small:not(.has-art) > .tile-face { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "mark" "name" "foot"; }
 .tile-small .c-by, .tile-small .c-sub, .tile-small .c-foot > :nth-child(2) { display: none; }
@@ -298,11 +291,11 @@
   .tile:not(.tile-hero) .c-sub { display: none; }
 }
 @container (max-height: 199px) {
-  .tile:is(.tile-square, .tile-cover):not(.has-art) > .tile-face { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "mark" "name" "foot"; }
-  .tile:is(.tile-square, .tile-cover) :is(.c-by, .c-foot > :nth-child(2), .c-long) { display: none; }
+  .tile.tile-square:not(.has-art) > .tile-face { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "mark" "name" "foot"; }
+  .tile.tile-square :is(.c-by, .c-foot > :nth-child(2), .c-long) { display: none; }
   .tile-square .c-short { display: inline; }
-  .tile:is(.tile-square, .tile-cover) > .tile-face > .c-mark { margin-top: 0; font-size: min(22cqh, 30cqw); }
-  .tile:is(.tile-square, .tile-cover) .c-foot { margin-top: 4px; padding: 0; border: 0; }
+  .tile.tile-square > .tile-face > .c-mark { margin-top: 0; font-size: min(22cqh, 30cqw); }
+  .tile.tile-square .c-foot { margin-top: 4px; padding: 0; border: 0; }
 }
 
 /* Narrow heroes (phones) give the text more of the card. */
@@ -514,6 +507,14 @@
 .ep-hex-bad { flex-basis: 100%; margin: 0; }
 .ep-share { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
 .ep-share .ep-label { margin: 0; }
+/* The libraries the book is in, and Add to: each chip opens the Add to sheet. */
+.ep-libs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ep-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; height: 30px; padding: 0 12px; border-radius: 999px; background: var(--fill); font: var(--ui-w) 13px/1 var(--ui); color: var(--ink); transition: background-color 140ms ease, opacity 140ms ease; }
+.ep-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ep-chip:hover { background: var(--line); }
+.ep-chip svg { flex: none; width: 14px; height: 14px; }
+.ep-chip.is-go { background: var(--ink); color: var(--canvas); }
+.ep-chip.is-go:hover { background: var(--ink); opacity: 0.86; }
 .ep-note { margin: -4px 0 0; font: var(--ui-w) 11.5px/1.35 var(--ui); color: var(--ink-2); }
 .ep-off { display: grid; gap: 8px; }
 .ep-off-b { display: flex; align-items: center; gap: 6px; }
@@ -572,7 +573,3 @@
 .tile-ai .ai-spark { font-size: 12px; }
 .cv .tile-ai .ai-spark { font-size: calc(var(--tool) * 0.42); }
 
-/* A book on a shelf with a cover of its own (Tile, `photo`): the cover alone, filling its card. */
-.tile-photo { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: inherit; background: var(--fill); }
-.tile-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.tile.is-photo > .tile-face { visibility: hidden; }

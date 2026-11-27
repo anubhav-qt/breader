@@ -49,8 +49,10 @@
 /* The public feed (PublicFeed.tsx): the search and the order on one line, Browse's look. */
 .pub-bar { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pub-bar .mdx-search { flex: 1; min-width: 0; }
-/* A row's covers only open the library: none of a card's own buttons. */
+/* A row's covers only open their book: none of a card's own buttons. */
 .pub-feed .tile-tools { display: none; }
+/* Nobody's reading shows in the feed: no progress line on a manga, no foot on a book. */
+.pub-feed .cv-line, .pub-feed .c-foot { display: none; }
 
 /* Over a library opened from the feed (LibraryHead.tsx): back, its name and facts, Save. */
 .pub-head { display: flex; align-items: center; gap: 10px; padding: 12px 0 14px; }

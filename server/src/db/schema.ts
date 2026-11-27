@@ -155,6 +155,11 @@ export const libraryItems = pgTable(
     coverWaits: boolean('cover_waits').default(true),
     /** A copy of a shared book, started by this reader: the first book's id, however many copies away. Its file stays the sharer's. */
     origin: text('origin'),
+    /**
+     * Put here by the reader whose upload its file is, into a library they may change: it shares the
+     * file by itself, as the book it was copied from does. Null for every other book.
+     */
+    fromUploader: boolean('from_uploader'),
     /** The series the book's file names, and its number in it. */
     series: text('series'),
     seriesIndex: doublePrecision('series_index'),

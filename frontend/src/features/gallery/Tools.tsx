@@ -21,13 +21,13 @@ interface Props {
 }
 
 /**
- * A card's corner: keep (someone's shared book) or a tick once it's finished, the favourite star,
+ * A card's corner: Add to (someone's shared book) or a tick once it's finished, the favourite star,
  * the audiobook (a speaker once it's made), and the edit button, whose popover marks it finished. While picking, a tick takes the place of
  * the edit and keep buttons.
  */
 export function Tools({ book: b, open, picked, moreRef, onEdit, onKeep }: Props) {
   const done = b.progress >= 1;
-  // Someone else's book, in their shared library: theirs to change. It can only be read, or kept.
+  // Someone else's book, in their shared library: theirs to change. It can only be read, or added to libraries.
   const theirs = b.source === 'shelf';
   const keepable = !!onKeep && theirs && picked === undefined;
   return (
@@ -36,10 +36,9 @@ export function Tools({ book: b, open, picked, moreRef, onEdit, onKeep }: Props)
         <button
           type="button"
           className={`tile-fav tile-keep${b.kept ? ' is-on' : ''}`}
-          aria-pressed={!!b.kept}
-          aria-label={b.kept ? `${b.title} is in your library` : `Add ${b.title} to your library`}
-          title={b.kept ? 'In your library' : 'Add to my library'}
-          onClick={() => { if (!b.kept) onKeep!(b); }}
+          aria-label={`Add ${b.title} to`}
+          title="Add to"
+          onClick={() => onKeep!(b)}
         >
           {b.kept ? <IconCheck /> : <IconAddBook />}
         </button>

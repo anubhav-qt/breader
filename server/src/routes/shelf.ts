@@ -46,7 +46,7 @@ import { sessionLibrary } from '../lib/library.ts';
 import { smallCover } from '../lib/smallCover.ts';
 import { hashKey } from '../lib/session.ts';
 import { grantToken, publicTag, publicToken, readable, savesOf, sharedToken, tokenLibrary, type Opened } from '../lib/shelf.ts';
-import { applyMutation } from '../sync/apply.ts';
+import { applyMutation, type Tx } from '../sync/apply.ts';
 
 /*
  * Shared libraries (lib/shelf.ts): anyone with a library's key sees the books it shares, opens
@@ -131,6 +131,27 @@ export function shelfRoutes(deps: Deps) {
     const mine = await sessionLibrary(c, deps);
     if (!mine) throw signedOut();
     return mine.id === found.asker;
+  };
+
+  /** The signed-in reader's library, when this file is their own upload: theirs to put anywhere they may change. */
+  const ownUpload = async (c: Parameters<typeof sessionLibrary>[0], fileId: string | null | undefined): Promise<string | null> => {
+    if (!fileId) return null;
+    const mine = await sessionLibrary(c, deps);
+    if (!mine) return null;
+    const [own] = await db
+      .select({ id: blobs.id })
+      .from(blobs)
+      .where(and(eq(blobs.id, fileId), eq(blobs.ownerLibraryId, mine.id)));
+    if (!own) return null;
+    return mine.id;
+  };
+
+  /** Marks a card as put in its library by the one whose upload its file is (`from_uploader`). */
+  const markUploader = async (tx: Tx, libraryId: string, bookId: string, rev: number) => {
+    await tx
+      .update(libraryItems)
+      .set({ fromUploader: true, rev })
+      .where(and(eq(libraryItems.libraryId, libraryId), eq(libraryItems.bookId, bookId)));
   };
 
   /**
@@ -516,19 +537,31 @@ export function shelfRoutes(deps: Deps) {
     const { lib } = found;
     if (book.source === 'sample') throw new ApiError(400, 'bad_book', 'A bundled sample can’t be added to a library.');
     if (book.source === 'file' && !book.fileId) throw new ApiError(400, 'file_missing', 'That file hasn’t finished uploading.');
+    const uploader = await ownUpload(c, book.fileId);
     const added = await db.transaction(async (tx) => {
       const [{ rev }] = await tx.select({ rev: libraries.rev }).from(libraries).where(eq(libraries.id, lib.id)).for('update');
       const sameBook = [eq(libraryItems.bookId, book.id)];
       if (book.origin) sameBook.push(and(eq(libraryItems.origin, book.origin), isNull(libraryItems.removedAt))!);
       if (book.source === 'remote' && book.url) sameBook.push(and(eq(libraryItems.url, book.url), isNull(libraryItems.removedAt))!);
       const [had] = await tx
-        .select({ id: libraryItems.bookId })
+        .select({ id: libraryItems.bookId, fileId: libraryItems.fileId, fromUploader: libraryItems.fromUploader, removedAt: libraryItems.removedAt })
         .from(libraryItems)
         .where(and(eq(libraryItems.libraryId, lib.id), or(...sameBook)));
-      if (had) return false;
       const next = rev + 1;
+      if (had) {
+        // Put here before from_uploader came, by the one whose upload it is: from now it reads here by itself.
+        // Only a card on that same file: another card's file isn't theirs to open up.
+        let mark = !!uploader && !had.fromUploader && !had.removedAt;
+        if (had.fileId !== book.fileId) mark = false;
+        if (!mark) return false;
+        await markUploader(tx, lib.id, had.id, next);
+        await tx.update(libraries).set({ rev: next }).where(eq(libraries.id, lib.id));
+        return false;
+      }
       const put: Mutation = { id: 1, type: 'book.put', book: { ...book, shared: true, sharedOnly: true, progress: 0 } };
-      await applyMutation(tx, lib.id, next, put);
+      await applyMutation(tx, lib.id, next, put, undefined, uploader ?? undefined);
+      // The reader's own upload reads here by itself, whatever they do with their own book.
+      if (uploader) await markUploader(tx, lib.id, book.id, next);
       await tx.update(libraries).set({ rev: next }).where(eq(libraries.id, lib.id));
       return true;
     });

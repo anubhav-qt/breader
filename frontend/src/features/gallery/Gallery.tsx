@@ -41,7 +41,10 @@ interface Props {
   onAdd: () => void;
   onEdit: (id: string, patch: BookEdit) => void;
   onRemove: (book: ShelfItem, fromKeyboard: boolean) => void;
-  onShare: (book: ShelfItem, shared: boolean) => void;
+  /** Opens Add to for a book: every library it can go in. */
+  onAddTo: (book: ShelfItem) => void;
+  /** The libraries a book is in besides the reader's own books, for its popover. */
+  librariesOf: (book: ShelfItem) => string[];
   /** Absent in the shared libraries, where no one's reading shows. */
   onFinish?: (book: ShelfItem, finished: boolean) => void;
   /** Someone's shared library: puts one of its books in the reader's own. */
@@ -74,7 +77,7 @@ const canBeFirst = (b: ShelfItem) => !!b.ai && b.format !== 'CBZ' && b.source !=
  * The library: the most recent books as a bento block, one card per book, whether or not it's in a
  * series. Below it, every book again, by genre, series or date (Shelves).
  */
-export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onShare, onFinish, onKeep, onKeepAll, onChapters, empty, picked, onPick, head }: Props) {
+export function Gallery({ books, seriesNames, place, view, manga = false, coversOnly = false, now, id, labelledBy, hidden = false, onOpen, onAdd, onEdit, onRemove, onAddTo, librariesOf, onFinish, onKeep, onKeepAll, onChapters, empty, picked, onPick, head }: Props) {
   let shelf: 'books' | 'manga' = 'books';
   if (manga) shelf = 'manga';
   const first = useRef(!entered[shelf]);
@@ -173,6 +176,7 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
           root={scrollRef}
           onSeries={showSeries}
           onKeepAll={onKeepAll}
+          coversOnly={coversOnly}
           {...shared}
         />
       )}
@@ -190,7 +194,8 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
               onChange={(patch) => onEdit(editingBook.id, patch)}
               onChangeOther={(b, patch) => onEdit(b.id, patch)}
               onRemove={canRemove(editingBook) ? (fromKeyboard) => { setEditing(null); onRemove(editingBook, fromKeyboard); } : undefined}
-              onShare={canShare(editingBook) ? (shared) => onShare(editingBook, shared) : undefined}
+              libraries={canShare(editingBook) ? librariesOf(editingBook) : undefined}
+              onAddTo={canShare(editingBook) ? () => { setEditing(null); onAddTo(editingBook); } : undefined}
               // A shared book not started has no reading of the reader's own to finish.
               onFinish={onFinish && editingBook.source !== 'shelf' ? (finished) => onFinish(editingBook, finished) : undefined}
               onChapters={onChapters && editingBook.source === 'remote' ? () => { setEditing(null); onChapters(editingBook); } : undefined}
@@ -207,7 +212,7 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
             key={open.key}
             series={open}
             authors={authors}
-            now={now}
+            coversOnly={coversOnly}
             editingId={editing?.id}
             onOpen={onOpen}
             onEdit={openEdit}

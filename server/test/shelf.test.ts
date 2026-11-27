@@ -91,17 +91,68 @@ describe('shared libraries', () => {
     expect(got[0].id).toBe(series.id);
   });
 
-  it('add a member’s file only when they share it', async () => {
+  it('add a member’s file when they share it, or when it’s their own upload', async () => {
     const owner = await sharer();
     const token = await tokenFor(owner.key);
     const member = await sharer();
     const shared = await member.b.post('/v1/shared/add', { token, book: { ...member.shared, id: crypto.randomUUID(), origin: member.shared.id } });
     expect(shared.body.added).toBe(true);
-    const secret = await member.b.post('/v1/shared/add', { token, book: { ...member.mine, id: crypto.randomUUID(), origin: member.mine.id } });
-    expect(secret.status).toBe(400);
-    expect(secret.body.code).toBe('file_missing');
+    // Their own upload, shared nowhere: it goes in, and reads there by itself.
+    const own = await member.b.post('/v1/shared/add', { token, book: { ...member.mine, id: crypto.randomUUID(), origin: member.mine.id } });
+    expect(own.status, JSON.stringify(own.body)).toBe(200);
+    expect(own.body.added).toBe(true);
     const list = await browser().post('/v1/shared/books', { token });
     expect(list.body.books.map((x: { fileId: string }) => x.fileId)).toContain(member.shared.fileId);
+    expect(list.body.books.map((x: { fileId: string }) => x.fileId)).toContain(member.mine.fileId);
+    expect((await browser().post('/v1/shared/link', { token, fileId: member.mine.fileId })).status).toBe(200);
+    // It stays readable there when they take it out of their own books.
+    await member.b.post('/v1/sync/push', push('rm', { type: 'book.remove', bookId: member.mine.id }));
+    expect((await browser().post('/v1/shared/link', { token, fileId: member.mine.fileId })).status).toBe(200);
+  });
+
+  it('mark a card put in before from_uploader when its uploader adds it again', async () => {
+    const owner = await sharer();
+    const token = await tokenFor(owner.key);
+    const member = await sharer();
+    const card = { ...member.shared, id: crypto.randomUUID(), origin: member.shared.id };
+    expect((await member.b.post('/v1/shared/add', { token, book: card })).body.added).toBe(true);
+    // As a card from before the column was there, and then the member stops sharing it at home.
+    await deps.pool.query('UPDATE library_items SET from_uploader = NULL WHERE book_id = $1', [card.id]);
+    await member.b.post('/v1/sync/push', push('u', { type: 'book.put', book: { ...member.shared, shared: false } }));
+    expect((await browser().post('/v1/shared/link', { token, fileId: member.shared.fileId })).status).not.toBe(200);
+    // Added again from Add to: the same card, now reading by itself.
+    const again = await member.b.post('/v1/shared/add', { token, book: { ...card, id: crypto.randomUUID() } });
+    expect(again.body.added).toBe(false);
+    expect((await browser().post('/v1/shared/link', { token, fileId: member.shared.fileId })).status).toBe(200);
+  });
+
+  it('never mark a card on someone else’s file, by its origin', async () => {
+    const owner = await sharer();
+    const token = await tokenFor(owner.key);
+    const sharerOf = await sharer();
+    const card = { ...sharerOf.shared, id: crypto.randomUUID(), origin: sharerOf.shared.id };
+    expect((await sharerOf.b.post('/v1/shared/add', { token, book: card })).body.added).toBe(true);
+    await deps.pool.query('UPDATE library_items SET from_uploader = NULL WHERE book_id = $1', [card.id]);
+    // Someone else sends the same origin with their own file: the card stays as it was.
+    const other = await sharer();
+    await other.b.post('/v1/shared/add', { token, book: { ...other.mine, id: crypto.randomUUID(), origin: sharerOf.shared.id } });
+    const { rows } = await deps.pool.query('SELECT from_uploader FROM library_items WHERE book_id = $1', [card.id]);
+    expect(rows[0].from_uploader).toBeNull();
+  });
+
+  it('never let a reader add someone else’s unshared upload', async () => {
+    const owner = await sharer();
+    const token = await tokenFor(owner.key);
+    const member = await sharer();
+    const stranger = await sharer();
+    // Someone else's private file, by its id: no.
+    const theirs = await stranger.b.post('/v1/shared/add', { token, book: { ...member.mine, id: crypto.randomUUID(), origin: member.mine.id } });
+    expect(theirs.status).toBe(400);
+    expect(theirs.body.code).toBe('file_missing');
+    // Nor signed out, by a key alone.
+    const anon = await browser().post('/v1/shared/add', { token, book: { ...member.mine, id: crypto.randomUUID(), origin: member.mine.id } });
+    expect(anon.body.code).toBe('file_missing');
+    const list = await browser().post('/v1/shared/books', { token });
     expect(list.body.books.map((x: { fileId: string }) => x.fileId)).not.toContain(member.mine.fileId);
   });
 

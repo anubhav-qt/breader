@@ -154,6 +154,8 @@
 .mds-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip.is-rating { background: var(--danger-soft); color: var(--danger); }
 .mds-actions { grid-area: actions; align-self: start; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.mds-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.mds-actions .btn svg { width: 16px; height: 16px; }
 .mds-in { display: inline-flex; align-items: center; gap: 6px; font: var(--ui-w) 13px/1 var(--ui); color: var(--ink-2); }
 .mds-in svg { width: 16px; height: 16px; }
 .mds-desc { margin-top: 18px; }

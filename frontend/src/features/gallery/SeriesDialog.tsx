@@ -1,18 +1,17 @@
-import { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { ShelfItem } from '../../data/useLibrary';
 import { Modal } from '../../components/Modal';
 import { KeepSeries } from './KeepSeries';
 import { cardAuthor } from './names';
 import { finishedIn, numberOf, type Series } from './series';
-import { Tile } from './Tile';
-import { TitleHint } from './TitleHint';
+import { CoverCard } from './CoverCard';
 
 interface Props {
   series: Series;
   /** The name its cards go by, by book id. */
   authors: Map<string, string>;
-  now: number;
+  /** The covers without their titles and how far they're read (Settings, Only covers). */
+  coversOnly: boolean;
   editingId?: string;
   onOpen: (book: ShelfItem, rect: DOMRect) => void;
   onEdit: (book: ShelfItem, anchor: HTMLElement) => void;
@@ -22,8 +21,7 @@ interface Props {
 }
 
 /** A whole series, its books in order on cards all the same size. Opening one closes it. */
-export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdit, onKeep, onKeepAll, onClose }: Props) {
-  const grid = useRef<HTMLDivElement>(null);
+export function SeriesDialog({ series: s, authors, coversOnly, editingId, onOpen, onEdit, onKeep, onKeepAll, onClose }: Props) {
   const author = s.books.map((b) => authors.get(b.id)).find(Boolean) ?? cardAuthor(s.books[0].author).author;
   const n = s.books.length;
   const finished = finishedIn(s);
@@ -35,17 +33,15 @@ export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdi
         {/* No one's reading shows in someone's shared library. */}
         {onKeepAll ? <KeepSeries name={s.name} books={s.books} onKeepAll={onKeepAll} /> : <span>{finished === n ? 'All finished' : `${finished} finished`}</span>}
       </p>
-      <div ref={grid} className="sd-grid">
+      <div className="sd-grid">
         {s.books.map((b) => {
           const key = b.key ?? b.id;
           return (
-            <Tile
+            <CoverCard
               key={key}
               item={{ key, book: b, author: authors.get(b.id) }}
-              variant="cover"
+              words={!coversOnly}
               enter={false}
-              now={now}
-              radius="8px 18px 18px 8px"
               className="sd-tile"
               number={numberOf(s, b)}
               open={key === editingId}
@@ -56,7 +52,6 @@ export function SeriesDialog({ series: s, authors, now, editingId, onOpen, onEdi
           );
         })}
       </div>
-      <TitleHint root={grid} />
     </Modal>,
     document.body,
   );

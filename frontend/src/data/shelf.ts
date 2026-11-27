@@ -146,7 +146,10 @@ const setLib = (token: string, patch: Partial<SharedLibrary>) =>
 /** A library's books again, at most every 30 seconds unless asked to now. */
 export function refreshLibrary(token: string, now = false): Promise<void> {
   const busy = fetching.get(token);
-  if (busy || (!now && Date.now() - (fetched.get(token) ?? 0) < REFRESH_AFTER)) return busy ?? Promise.resolve();
+  // Asked for now, after a change: a fetch already going may have left before it, so one more follows.
+  if (busy && now) return busy.then(() => refreshLibrary(token, true));
+  if (busy) return busy;
+  if (!now && Date.now() - (fetched.get(token) ?? 0) < REFRESH_AFTER) return Promise.resolve();
   fetched.set(token, Date.now());
   const p = (async () => {
     try {

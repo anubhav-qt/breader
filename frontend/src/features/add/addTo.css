@@ -1,0 +1,30 @@
+/* Add to (AddTo.tsx): one ticked list of every library the reader may add to. */
+.at { display: flex; flex-direction: column; padding-bottom: 18px; }
+.at .modal-head { margin-bottom: 8px; }
+.at-what { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 0 0 8px; }
+.at-spines { display: flex; flex: none; }
+.at-spine { width: 22px; height: 32px; border-radius: 2px 5px 5px 2px; background: var(--bc); box-shadow: inset 0 0 0 1px var(--tile-border); }
+.at-spine + .at-spine { margin-left: -9px; }
+.at-what p { margin: 0; min-width: 0; padding-top: 0.15em; font: 700 26px/1 var(--read); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-list { display: grid; gap: 2px; margin: 0 -10px; overflow-y: auto; }
+.at-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border-radius: 12px; text-align: left; transition: background-color 140ms ease; }
+.at-row:hover { background: var(--fill); }
+.at-row[aria-busy="true"] { cursor: progress; }
+.at-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--fill); color: var(--ink-2); }
+.at-icon svg { width: 18px; height: 18px; }
+.at-name { min-width: 0; padding-top: 0.15em; font: 22px/1 var(--read); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-box { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; box-shadow: inset 0 0 0 1.5px var(--tile-border-hover); color: var(--canvas); transition: background-color 140ms ease; }
+.at-box svg { width: 15px; height: 15px; }
+.at-row[aria-checked="true"] .at-box, .at-row[aria-checked="mixed"] .at-box { background: var(--ink); box-shadow: none; }
+.at-row[aria-busy="true"] .at-box { opacity: 0.55; }
+.at-new { display: flex; gap: 6px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.at-new input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); font: var(--ui-w) 14px/1 var(--ui); color: var(--ink); outline: none; transition: border-color 140ms ease; }
+.at-new input:focus { border-color: var(--accent); }
+.at-new .btn { flex: none; }
+.at-error { margin: 8px 0 0; font: var(--ui-w) 12.5px/1.4 var(--ui); color: var(--danger); }
+.at-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+/* On a phone, a sheet from the bottom. */
+@media (max-width: 720px) {
+  .modal-root:has(> .at) { place-items: end stretch; padding: 0; }
+  .modal.at { width: 100% !important; max-height: 86dvh; border-radius: 22px 22px 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+}

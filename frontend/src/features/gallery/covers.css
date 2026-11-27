@@ -105,7 +105,8 @@
   margin-top: -0.1em;
   font-family: var(--read);
   font-weight: 700;
-  font-size: clamp(18px, 13.5cqw, 24px);
+  /* Small enough that a long word (Frankenstein, Extraordinary) fits a shelf's cover whole. */
+  font-size: clamp(16px, 12cqw, 24px);
   line-height: 1.15;
   /* A word wider than a small cover breaks at a syllable, with a hyphen. */
   -webkit-hyphens: auto;

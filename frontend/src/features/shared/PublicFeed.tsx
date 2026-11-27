@@ -24,13 +24,15 @@ interface Props {
   hidden: boolean;
   /** Opens a library from the feed, to look through it. */
   onLibrary: (token: string) => void;
+  /** One of a row's books picked: `from` is the row's library, by its name. */
+  onBook: (book: ShelfItem, rect: DOMRect, from: string) => void;
 }
 
 /**
  * The public feed: every library its owner made public, one row each with its name, its facts and
- * its covers on the shelf picked. Its name or any cover opens it.
+ * its covers on the shelf picked. Its name opens it; a cover opens that book's window, a series' stack the library.
  */
-export function PublicFeed({ category, coversOnly, now, hidden, onLibrary }: Props) {
+export function PublicFeed({ category, coversOnly, now, hidden, onLibrary, onBook }: Props) {
   const sharing = useShared();
   const [text, setText] = useState('');
   const [sort, setSort] = useState<FeedSort>('popular');
@@ -91,7 +93,7 @@ export function PublicFeed({ category, coversOnly, now, hidden, onLibrary }: Pro
           manga={category === 'manga'}
           coversOnly={coversOnly}
           onName={() => onLibrary(s.key)}
-          onOpen={() => onLibrary(s.key)}
+          onOpen={(b, rect) => onBook(b, rect, s.name)}
           onEdit={() => onLibrary(s.key)}
           onSeries={() => onLibrary(s.key)}
         />

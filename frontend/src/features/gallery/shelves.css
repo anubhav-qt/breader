@@ -124,9 +124,9 @@
 .shelf-row[data-start] { --fade-l: 0px; }
 .shelf-row[data-end] { --fade-r: 0px; }
 .shelf-row > .tile-slot:first-child { scroll-snap-align: start; }
-.shelf-tile { flex: none; width: var(--shelf-w); height: var(--shelf-h); scroll-snap-align: start; }
-/* A manga's cover in a row (the public feed's): as wide as a card, as tall as its cover. */
-.shelf-row > .cv { flex: none; width: calc(var(--shelf-w) * 0.8); scroll-snap-align: start; }
+/* Every card in a row is a cover (CoverCard), books and manga the same size. */
+.shelf-row > .cv { flex: none; width: var(--shelf-w); scroll-snap-align: start; }
+.shelf-row > .cv .cv-art { aspect-ratio: auto; height: var(--shelf-h); }
 @media (max-width: 720px) {
   .shelf-row { --shelf-w: 144px; --shelf-h: 200px; --fade-l: 24px; --fade-r: 24px; scroll-padding-inline: 20px; }
   .shelf-row[data-start] { --fade-l: 0px; }
@@ -140,7 +140,7 @@
 }
 
 /* A whole series as one card: the pages of the books behind it show at its top and side. */
-.tile-slot.is-stack { isolation: isolate; }
+.tile-slot.is-stack { isolation: isolate; border-radius: 6px 14px 14px 6px; }
 .tile-slot.is-stack::before, .tile-slot.is-stack::after {
   content: "";
   position: absolute;
@@ -156,12 +156,6 @@
 .tile-slot.is-stack::after { z-index: -2; transform: translate(10px, -10px); }
 .tile-slot.is-stack:hover::before { transform: translate(6px, -6px); }
 .tile-slot.is-stack:hover::after { transform: translate(12px, -12px); }
-/* No corner button on it to keep clear of. */
-.is-stack .tile-face > :first-child { padding-right: 0; }
-/* Narrow covers (a phone's shelves) leave the volume to the big number. */
-@container (max-width: 159px) {
-  .tile-cover .c-foot > :nth-child(2) { display: none; }
-}
 
 /* A series' dialog: its books in order, on cards all the same size */
 .sd { padding-bottom: 24px; }
@@ -183,4 +177,4 @@
   color: var(--ink-2);
 }
 .sd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); gap: 14px; }
-.sd-tile { aspect-ratio: 170 / 236; }
+.sd-tile .cv-art { aspect-ratio: 170 / 236; }

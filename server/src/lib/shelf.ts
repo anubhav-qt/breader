@@ -20,10 +20,11 @@ import { libraries, libraryGrants } from '../db/schema.ts';
  */
 
 /**
- * Item `s` shares its file in its own right: the owner's book, a copy read far enough to keep, or a
- * book a saved public library took in (copied_books), which it keeps whatever its original does.
+ * Item `s` shares its file in its own right: the owner's book, a copy read far enough to keep, a
+ * book a saved public library took in (copied_books), which it keeps whatever its original does, or
+ * one its uploader put there themselves (`from_uploader`, routes/shelf.ts /shared/add).
  */
-const source = (s: string) => sql.raw(`(${s}.origin IS NULL OR coalesce((
+const source = (s: string) => sql.raw(`(${s}.origin IS NULL OR ${s}.from_uploader OR coalesce((
   SELECT r.words_read FROM reading_states r WHERE r.library_id = ${s}.library_id AND r.book_id = ${s}.book_id
 ), 0) >= ${KEEP_WORDS} OR EXISTS (
   SELECT 1 FROM copied_books c WHERE c.copy_id = ${s}.library_id AND c.book_id = ${s}.book_id

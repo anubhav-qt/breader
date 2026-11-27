@@ -6,7 +6,7 @@ import type { BookEdit } from '../../books/types';
 import { BOOK_COLORS, colorVars, isPicked, rgbToHex } from '../../data/colors';
 import type { ShelfItem } from '../../data/useLibrary';
 import { springs } from '../../lib/springs';
-import { IconCheck, IconClose, IconList, IconStar, IconTrash } from '../../components/icons';
+import { IconCheck, IconClose, IconList, IconPlus, IconStar, IconTrash } from '../../components/icons';
 import { seriesKey, spellSeries, type SeriesName } from './series';
 import { SeriesField, type SeriesValue } from './SeriesField';
 import { genreIds, joinGenres } from '@breader/shared/genres';
@@ -30,8 +30,10 @@ interface Props {
   onChangeOther?: (book: ShelfItem, patch: BookEdit) => void;
   /** Absent for books in someone else's shared library: only they can take them out. */
   onRemove?: (fromKeyboard: boolean) => void;
-  /** Shares the book with everyone who has the reader's key, or stops. */
-  onShare?: (shared: boolean) => void;
+  /** The libraries the book is in besides the reader's own books, each a chip that opens Add to. */
+  libraries?: string[];
+  /** Opens Add to for the book. Absent for a book that can't go in a library. */
+  onAddTo?: () => void;
   /** Marks it read to the end, or takes that back. Absent for a shared book not started. */
   onFinish?: (finished: boolean) => void;
   /** A series from MangaDex: its chapters, who made them, and the language they're read in. */
@@ -79,7 +81,7 @@ function genreEdit(b: ShelfItem, genres: string): BookEdit | undefined {
  * recolour, share, let an AI read along, download a manga to read offline, mark finished,
  * favourite or remove.
  */
-export function EditPopover({ book, seriesNames, noSeries = false, anchor, others = [], onChange, onChangeOther, onRemove, onShare, onFinish, onChapters, canFirst = false, onClose }: Props) {
+export function EditPopover({ book, seriesNames, noSeries = false, anchor, others = [], onChange, onChangeOther, onRemove, libraries = [], onAddTo, onFinish, onChapters, canFirst = false, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // Followed once here, for the AI switch and the one under it; a manga has no AI.
   const progress = useAiProgress(book.id, !!book.ai && book.format !== 'CBZ');
@@ -276,11 +278,16 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
         <ExactCircle hex={shownHex} on={on < 0} onPick={(color) => onChange({ color })} />
       </div>
       <HexField hex={shownHex} onPick={(color) => onChange({ color })} />
-      {onShare && (
-        <div className="ep-share">
-          <span className="ep-label" id="ep-share">Share with your key</span>
-          <button type="button" className="switch" role="switch" aria-checked={!!book.shared} aria-labelledby="ep-share" onClick={() => onShare(!book.shared)} />
-        </div>
+      {onAddTo && (
+        <>
+          <div className="ep-label" id="ep-libs">Libraries</div>
+          <div className="ep-libs" role="group" aria-labelledby="ep-libs">
+            {libraries.map((name, i) => (
+              <button key={`${i}-${name}`} type="button" className="ep-chip" onClick={onAddTo}><span>{name}</span></button>
+            ))}
+            <button type="button" className="ep-chip is-go" onClick={onAddTo}><IconPlus /><span>Add to</span></button>
+          </div>
+        </>
       )}
       {/* A manga's pages are pictures: nothing for an AI to read along. */}
       {/* Once on, on for good: it can't be turned off. Then it says how far the AI has got. */}

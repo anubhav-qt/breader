@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { namesIn, seriesName, type AniCard, type AniListAbout, type AniRelation, type MangaChapter, type MangaFound, type MangaSeries, type SourceSeries } from '@breader/shared/manga';
-import { IconBack, IconCheck, IconOrder, IconOut } from '../../components/icons';
+import { IconBack, IconCheck, IconOrder, IconOut, IconPlus } from '../../components/icons';
 import { useLabels } from '../../data/labels';
 import { filledIn, laidOut, listOf, madeBy, pickChapters, remoteOf, startOf, type Fill } from '../../books/remote';
 import type { BookRecord, Position } from '../../books/types';
@@ -58,7 +58,8 @@ interface Props {
   /** The number of the chapter a series in My manga is at, the same on every site. */
   placeOf: (rec: BookRecord) => number | null;
   onRead: (about: About, picked: Picked, had: BookRecord | undefined, from: Position | undefined, rect: DOMRect | undefined) => Promise<void> | void;
-  onAdd: (about: About, picked: Picked) => Promise<void> | void;
+  /** The Add to list, for this series: every library it can go in, My manga one of them. */
+  onAddTo: (about: About, picked: Picked, had: BookRecord | undefined) => void;
   /** What its Back goes back to: Browse, My manga, or the series it was opened from. */
   from: string;
   /** Its AniList id, when it was picked from AniList: what's related to it and like it, at once. */
@@ -121,7 +122,7 @@ function startLang(found: MangaFound[], recordOf: Props['recordOf'], prefs: Mang
   return langs[0];
 }
 
-function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, from, al, onOpen, covered, onBack }: Props) {
+function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAddTo, from, al, onOpen, covered, onBack }: Props) {
   const labels = useLabels();
   const main = start[0];
   const pageRef = useRef<HTMLDivElement>(null);
@@ -218,8 +219,8 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, fro
   }, [alId, waitAbout, main.card.title, prefs.adult]);
 
   /**
-   * Adding a series takes as long as its cover does (half a minute from some sites), and it isn't
-   * "In My manga" until then, so the buttons wait for it rather than add it again.
+   * Reading a series not in My manga adds it first, which takes as long as its cover does (half a
+   * minute from some sites), so the buttons wait for it rather than add it again.
    */
   const once = (go: () => Promise<void> | void) => {
     if (busy) return;
@@ -233,6 +234,8 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, fro
     if (!had) had = recordOf(p.found.card.id);
   }
   const hadAt = had ? remoteOf(had.url) : null;
+  // Only in the reader's shared library, it isn't in My manga.
+  const inPersonal = !!had && !had.sharedOnly;
   let hadKey: string | null = null;
   if (hadAt && hadAt.kind === 'mangadex') hadKey = copyKey(hadAt.series, hadAt.group);
   else if (hadAt) hadKey = copyKey(hadAt.id, hadAt.group);
@@ -428,13 +431,8 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAdd, fro
           </div>
           <div className="mds-actions">
             <button type="button" className="btn btn-primary" disabled={!canRead || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, undefined, rect()))}>{readLabel}</button>
-            {had ? (
-              <span className="mds-in"><IconCheck /> In {labels.mine}</span>
-            ) : (
-              <button type="button" className="btn btn-quiet" disabled={!a || busy} onClick={() => a && once(() => onAdd(a, pickedNow))}>
-                {busy ? 'Adding…' : 'Add to library'}
-              </button>
-            )}
+            <button type="button" className="btn btn-quiet mds-add" disabled={!a} onClick={() => a && onAddTo(a, pickedNow, had)}><IconPlus /> Add to</button>
+            {inPersonal && <span className="mds-in"><IconCheck /> In {labels.mine}</span>}
           </div>
         </div>
 

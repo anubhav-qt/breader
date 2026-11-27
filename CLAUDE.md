@@ -62,7 +62,9 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   `manga/curate.ts`, filling in books `jobs/fill.ts`) ask Codex's `gpt-6.1-terra` at medium first,
   NVIDIA's Super VL as the backup for 10 minutes when Codex is down, on the ThinkPad only
   (`server/src/lib/tidier.ts`). On NVIDIA a low job has its thinking off.
-- Covers: a library's shelves show each book's cover alone, or its drawn card (`gallery/Tile.tsx`).
+- Covers: outside the books' bento, every book and manga is the same cover card (`gallery/CoverCard.tsx`):
+  a drawn one when it has no cover, buttons on top, how far and its name at the foot. Only covers
+  (Settings, on by default, this device) hides how far and the name, but for a drawn card's name.
   A series' stack shows the cover of the book it stands on (`nextIn`, `gallery/series.ts`): the one the
   reader is at, or the first in a shared library. Someone's shared covers load as their cards come near
   the screen (`useShelfCover`, `data/shelf.ts`), 4 at a time; a manga series' from its site, as in Browse.
@@ -93,6 +95,11 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   Saved again, the reader gets the copy they asked from back. Taken out of Public, every yes and ask on
   it ends; copies keep what they have, and only its key holders change it.
   Anyone who may change a library takes books out (`/v1/shared/remove`, Select then Remove).
+- Add to (`frontend/src/features/add/AddTo.tsx`, sums in `places.ts`): one ticked list of every library
+  the reader may change, opened from a card's ⋯ (Libraries), Select, the plus on someone else's card, or a manga's page
+  (`openSeriesAddTo`, App.tsx: a series not in My manga goes in as Personal is ticked).
+  A tick puts the books in at once, an untick takes them out. A reader's own unshared upload may go into
+  a library they may change (`library_items.from_uploader`, `/v1/shared/add`). A tick goes now or shows its error; an untick fetches the library first. A Public row's book cover opens its window (`features/shared/PublicBook.tsx`: Read, Add to, In Personal), a manga its chapters; Read makes a copy here, not shared.
 - Audiobooks are made on readers' devices only. The server never makes them.
 - Reading aloud and finding panels run on the reader's device when it can
   (`frontend/src/features/reader/able.ts`, checked as a book opens, nothing sent). Only a device too

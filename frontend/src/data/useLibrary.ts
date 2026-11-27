@@ -426,11 +426,11 @@ async function setCover(id: string, cover: Blob) {
 /**
  * Starting a book from someone's shared library (or adding it) puts a copy of it in this library,
  * pointing at the sharer's file, with its own place, colour and card, and shared here too until the
- * reader says otherwise. A copy of a copy goes by the first book, so a book is only ever in a
+ * reader says otherwise (not shared when Add to's Personal tick makes it). A copy of a copy goes by the first book, so a book is only ever in a
  * library once: starting it again, from anyone's library, finds the one here. A shared series from
  * a catalogue is read from there, as the sharer reads it, and found here however it came in.
  */
-async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
+async function startShelfBook(entry: BookRecord, shared = true): Promise<BookRecord> {
   const first = entry.origin ?? entry.id;
   const had = view.records.find((r) => r.id === first || r.origin === first);
   if (had) return had;
@@ -450,7 +450,7 @@ async function startShelfBook(entry: BookRecord): Promise<BookRecord> {
     format: entry.format,
     source,
     ...(series ? { url: entry.url } : {}),
-    shared: true,
+    shared,
     addedAt: now,
     words: entry.words,
     color: nextColor(),

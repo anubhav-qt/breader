@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { Modal } from '../../components/Modal';
 import { Logo } from '../../components/Logo';
-import { IconAddBook, IconBack, IconCaret, IconCheck, IconChevron, IconClose, IconDownload, IconGlobe, IconMore, IconPencil, IconPlus, IconSearch, IconSpeaker } from '../../components/icons';
+import { IconAddBook, IconBack, IconCaret, IconCheck, IconChevron, IconClose, IconDownload, IconGlobe, IconMore, IconPencil, IconPeople, IconPlus, IconSearch, IconSpeaker } from '../../components/icons';
 import { BOOK_COLORS, colorVars } from '../../data/colors';
 import { AppearancePanel, Segmented } from '../reader/Panels';
 import { DEFAULTS, THEMES, type MangaLayout, type ReaderSettings } from '../reader/settings';
@@ -19,6 +19,7 @@ import '../manga/manga.css';
 import '../../components/library-switch.css';
 import '../gallery/shelves.css';
 import '../shared/shared.css';
+import '../add/addTo.css';
 import '../../components/steps.css';
 import './demo.css';
 
@@ -48,7 +49,7 @@ const DEMOS: Record<DemoId, { title: string; steps: string[] }> = {
   },
   share: {
     title: 'Share',
-    steps: ['A book’s ⋯, then Share with your key.', 'Give your key to someone you trust (Settings, then Library key).', 'They paste it in Shared, and read your book.'],
+    steps: ['A book’s ⋯, then Add to, then Shared.', 'Give your key to someone you trust (Settings, then Library key).', 'They paste it in Shared, and read your book.'],
   },
   public: {
     title: 'Public',
@@ -567,8 +568,31 @@ function Popover({ narrow, title, color, children }: { narrow: boolean; title: s
   );
 }
 
+/** Add to (add/AddTo.tsx), small, where the popover was: the reader's libraries, ticked where the book is. */
+function AddToSheet({ narrow, shared }: { narrow: boolean; shared: boolean }) {
+  const rows = [
+    { name: 'Shared', icon: <IconPeople />, on: shared },
+    { name: 'Book club', icon: <IconPeople />, on: false },
+  ];
+  return (
+    <div className="ep dm-ep dm-at" style={{ left: narrow ? 160 : 196, top: narrow ? 70 : 92, width: 288 }}>
+      <div className="ep-head"><span className="ep-label">Add to</span><button type="button" className="ep-x"><IconClose /></button></div>
+      <div className="at-list">
+        {rows.map((r) => (
+          <button key={r.name} type="button" role="checkbox" aria-checked={r.on} className="at-row" tabIndex={-1}>
+            <span className="at-icon">{r.icon}</span>
+            <span className="at-name">{r.name}</span>
+            <span className="at-box">{r.on && <IconCheck />}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function useShareScene({ narrow }: { narrow: boolean }) {
   const [open, setOpen] = useState(false);
+  const [sheet, setSheet] = useState(false);
   const [shared, setShared] = useState(false);
   const [friend, setFriend] = useState<'none' | 'mine' | 'shelf'>('none');
   const [picking, setPicking] = useState(false);
@@ -577,11 +601,16 @@ function useShareScene({ narrow }: { narrow: boolean }) {
     <Library narrow={narrow}>
       <Card title="Pride and Prejudice" by="Jane Austen" mark="P" color="teal" foot="32%" box={box[0]} tools={<><button type="button" className="tile-ab"><IconDownload /></button><More /></>} />
       <Card title="Moby-Dick" by="Herman Melville" mark="M" color="ochre" foot="New" box={box[1]} tools={<><button type="button" className="tile-ab"><IconDownload /></button><More /></>} />
-      {open && (
+      {open && !sheet && (
         <Popover narrow={narrow} title="Pride and Prejudice" color="teal">
-          <div className="ep-share"><span className="ep-label">Share with your key</span><button type="button" className="switch" role="switch" aria-checked={shared} /></div>
+          <div className="ep-label">Libraries</div>
+          <div className="ep-libs">
+            {shared && <button type="button" className="ep-chip" tabIndex={-1}><span>Shared</span></button>}
+            <button type="button" className="ep-chip is-go" tabIndex={-1}><IconPlus /><span>Add to</span></button>
+          </div>
         </Popover>
       )}
+      {sheet && <AddToSheet narrow={narrow} shared={shared} />}
     </Library>
   );
   const theirs = (
@@ -597,10 +626,12 @@ function useShareScene({ narrow }: { narrow: boolean }) {
         {friend === 'none' ? mine : <div className="dm-friend">{theirs}<span className="dm-who">A friend’s Breader</span></div>}
       </>
     ),
-    start: () => { setOpen(false); setShared(false); setFriend('none'); setPicking(false); },
+    start: () => { setOpen(false); setSheet(false); setShared(false); setFriend('none'); setPicking(false); },
     beats: [
       { tap: '.tile-slot:first-child .tile-more', then: () => setOpen(true), wait: 800 },
-      { tap: '.ep-share .switch', then: () => setShared(true), wait: 1400 },
+      { tap: '.ep-chip.is-go', then: () => setSheet(true), wait: 700 },
+      { tap: '.dm-at .at-row', then: () => setShared(true), wait: 1000 },
+      { then: () => setSheet(false), wait: 1200 },
       { then: () => setFriend('mine'), wait: 900 },
       ...toHalf(narrow, 'shelf', setPicking, () => setFriend('shelf'), 2400),
     ] as Beat[],

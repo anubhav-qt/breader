@@ -46,9 +46,9 @@ export const FEATURES: Feature[] = [
   { id: 'edit', group: 'Your library', name: 'Edit a book', what: 'Its name, series, genres and colour. Mark it finished or a favourite, or remove it.', where: 'The ⋯ on its card, or right-click the card' },
   { id: 'any-colour', group: 'Your library', name: 'Any colour', what: 'Give a book any colour: tap the rainbow after the colours, or type or paste its code, like #2f6f8f.', where: 'The ⋯ on its card, under Colour', since: day(2026, 11, 9) },
   { id: 'series', group: 'Your library', name: 'Series', what: 'Books of a series sit together, in order. Breader guesses the series as you add a book.', where: 'A book’s ⋯, then Series' },
-  { id: 'select', group: 'Your library', name: 'Select', what: 'Pick many books to share, stop sharing or remove at once.', where: 'The ticked circle at the top', go: 'select' },
+  { id: 'select', group: 'Your library', name: 'Select', what: 'Pick many books to add to libraries or remove at once.', where: 'The ticked circle at the top', go: 'select' },
   { id: 'rename', group: 'Your library', name: 'Rename libraries', what: 'Call Personal and Shared what you like.', where: 'Settings, then Rename libraries' },
-  { id: 'covers', group: 'Your library', name: 'Only covers', what: 'Manga as their covers alone, without titles.', where: 'Settings, on the Manga shelf' },
+  { id: 'covers', group: 'Your library', name: 'Only covers', what: 'Books and manga as their covers alone. Turn it off to see each title and how far you are.', where: 'Settings' },
   { id: 'theme', group: 'Your library', name: 'Light or dark', what: 'The library light or dark. Books have their own themes in Aa.', where: 'The moon or sun at the top' },
 
   // Reading
@@ -91,12 +91,13 @@ export const FEATURES: Feature[] = [
   { id: 'offline', group: 'Manga', name: 'Download', what: 'Keep a whole series in this browser to read offline.', where: 'A manga’s ⋯, then Download' },
 
   // Sharing
-  { id: 'share', group: 'Sharing', name: 'Share a book', what: 'Anyone with your key can read it, and keep a copy.', where: 'A book’s ⋯, then Share with your key' },
+  { id: 'share', group: 'Sharing', name: 'Add to a library', what: 'Tick any library you may change to put a book in it, untick to take it out.', where: 'A book’s ⋯, then Libraries; on a manga’s page, Add to', since: day(2026, 11, 27) },
   { id: 'key', group: 'Sharing', name: 'Your key', what: 'Opens what you share. Give it only to people you trust.', where: 'Settings, then Library key', go: 'key' },
   { id: 'open-key', group: 'Sharing', name: 'Open someone’s library', what: 'Paste their key to read what they share.', where: 'Shared, then the arrow beside it', go: 'libraries' },
-  { id: 'keep', group: 'Sharing', name: 'Keep a shared book', what: 'Put a book someone shares in your own library.', where: 'The book with a plus, on its card' },
+  { id: 'keep', group: 'Sharing', name: 'Keep a shared book', what: 'Put a book someone shares in your own library, or in any other.', where: 'The plus on its card', since: day(2026, 11, 27) },
   { id: 'new-shared', group: 'Sharing', name: 'More shared libraries', what: 'Libraries only for sharing, each with a key of its own.', where: 'Shared, then the arrow, then New shared library', go: 'libraries' },
   { id: 'public-feed', group: 'Sharing', name: 'Public', what: 'Libraries anyone can find. Look through one, or save a copy of your own that takes in what its owner adds.', where: 'Public, beside Shared', since: day(2026, 11, 26) },
+  { id: 'public-book', group: 'Sharing', name: 'Read from Public', what: 'A book opens its page: read it, or add it to any library. A manga opens its chapters.', where: 'Public, any cover', since: day(2026, 11, 27) },
   { id: 'make-public', group: 'Sharing', name: 'Make a library public', what: 'Put it in Public for anyone to find. Off again, only its key opens it.', where: 'Shared, then the arrow, then the globe beside it', go: 'libraries', since: day(2026, 11, 26) },
   { id: 'rename-public', group: 'Sharing', name: 'Rename your library', what: 'One name for it everywhere: in Shared, in Public, and for everyone with its key.', where: 'Shared, then the arrow, then the pencil; or open it in Public and tap the pencil', go: 'libraries', since: day(2026, 11, 26) },
   { id: 'ask-change', group: 'Sharing', name: 'Ask to change the original', what: 'Ask the owner of a library you saved, with a note if you like. Once they say yes, you add and take out books in theirs too.', where: 'Shared, then the arrow, then the people icon on your copy', go: 'libraries', since: day(2026, 11, 26) },

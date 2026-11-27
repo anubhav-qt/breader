@@ -22,6 +22,7 @@ export const IconPagePanels = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}
 export const IconPage = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><path d="M7 3.5h7l4 4v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" /><path d="M14 3.5v4h4" /></svg>);
 export const IconClose = (p: P) => (<svg {...base} {...p}><path d="M6 6l12 12M18 6 6 18" /></svg>);
 export const IconCheck = (p: P) => (<svg {...base} strokeWidth={2.4} {...p}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>);
+export const IconDash = (p: P) => (<svg {...base} strokeWidth={2.4} {...p}><path d="M6.5 12h11" /></svg>);
 export const IconPlus = (p: P) => (<svg {...base} strokeWidth={2.3} {...p}><path d="M12 5v14M5 12h14" /></svg>);
 export const IconLock = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" /></svg>);
 export const IconPeople = (p: P) => (<svg {...base} strokeWidth={1.9} {...p}><circle cx="9" cy="8.5" r="3.3" /><path d="M3.5 19.5c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5" /><circle cx="16.8" cy="9.3" r="2.6" /><path d="M16.5 14.4c2.2.1 3.7 1.6 4.1 4.3" /></svg>);

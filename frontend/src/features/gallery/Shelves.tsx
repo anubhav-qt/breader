@@ -9,7 +9,6 @@ import { KeepSeries } from './KeepSeries';
 import { pickedOf } from './picking';
 import { finishedIn, type Series } from './series';
 import { VIEWS, byDate, byGenre, bySeries, isView, type Shelf, type View } from './shelving';
-import { Tile } from './Tile';
 import './shelves.css';
 
 /** Cards a row starts with, and adds as it nears its end; shelves the series and dates start with. */
@@ -40,13 +39,15 @@ interface Props {
   /** Someone's shared library: a series' shelf can put all its books in the reader's own. */
   onKeepAll?: (books: ShelfItem[], series: string) => void;
   onSeries: (s: Series) => void;
+  /** The covers without their titles and how far they're read (Settings, Only covers). */
+  coversOnly?: boolean;
 }
 
 /**
  * Below Recent, the whole library again: by genre, by series or by date, picked on the right of
  * the heading. Each shelf is a row that scrolls sideways.
  */
-export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries }: Props) {
+export function Shelves({ books, stacks, series, authors, place, initial, root, now, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries, coversOnly = false }: Props) {
   const key = `breader.view.${place}.v1`;
   const [chosen, setChosen] = useState<View | null>(() => {
     const v = readLocal<unknown>(key, null);
@@ -156,13 +157,14 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
           onKeep={onKeep}
           onKeepAll={onKeepAll}
           onSeries={onSeries}
+          coversOnly={coversOnly}
         />
       </motion.div>
     </section>
   );
 }
 
-type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'editingId' | 'picked' | 'onOpen' | 'onEdit' | 'onKeep' | 'onKeepAll' | 'onSeries'> & {
+type ListProps = Pick<Props, 'authors' | 'root' | 'now' | 'enter' | 'editingId' | 'picked' | 'onOpen' | 'onEdit' | 'onKeep' | 'onKeepAll' | 'onSeries' | 'coversOnly'> & {
   shelves: Shelf[];
   lazy: boolean;
 };
@@ -194,13 +196,12 @@ type RowProps = Omit<ListProps, 'shelves' | 'lazy' | 'root'> & {
   shelf: Shelf;
   /** What its name opens, where it isn't a series: a library in the public feed (features/shared/PublicFeed.tsx). */
   onName?: () => void;
-  /** Manga: each card is its cover (CoverCard), with its title on it unless `coversOnly`. */
+  /** Manga: how far each is read goes by chapter. */
   manga?: boolean;
-  coversOnly?: boolean;
 };
 
 /** One shelf: its name, how many, arrows, and its cards in a row that scrolls sideways. */
-export function Row({ shelf, authors, now, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries, onName, manga = false, coversOnly = false }: RowProps) {
+export function Row({ shelf, authors, enter, editingId, picked, onOpen, onEdit, onKeep, onKeepAll, onSeries, onName, manga = false, coversOnly = false }: RowProps) {
   const row = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(PAGE);
   const [ends, setEnds] = useState({ start: true, end: true });
@@ -270,32 +271,15 @@ export function Row({ shelf, authors, now, enter, editingId, picked, onOpen, onE
         <AnimatePresence mode="popLayout" initial={false}>
           {entries.map((e) => {
             const stack = e.stack;
-            if (manga) {
-              return (
-                <CoverCard
-                  key={e.key}
-                  item={{ key: e.key, book: e.book, author: authors.get(e.book.id) }}
-                  words={!coversOnly}
-                  enter={enter}
-                  picked={pickedOf(picked, [e.book])}
-                  layoutKey={layoutKey}
-                  onOpen={onOpen}
-                  onEdit={onEdit}
-                  onKeep={onKeep}
-                />
-              );
-            }
             return (
-              <Tile
+              <CoverCard
                 key={e.key}
                 item={{ key: e.key, book: e.book, author: authors.get(e.book.id) }}
-                variant="cover"
-                enter={enter}
-                now={now}
-                radius="8px 18px 18px 8px"
-                className="shelf-tile"
+                words={!coversOnly}
+                manga={manga}
                 number={e.number}
                 stack={stack && { name: stack.name, count: stack.books.length, finished: finishedIn(stack) }}
+                enter={enter}
                 open={!stack && (e.book.key ?? e.book.id) === editingId}
                 picked={pickedOf(picked, stack ? stack.books : [e.book])}
                 layoutKey={layoutKey}
