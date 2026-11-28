@@ -10,7 +10,7 @@ export interface Card { id: DemoId; line: string }
 
 export const BOOKS: Card[] = [
   { id: 'read', line: 'Read EPUB, PDF and more' },
-  { id: 'listen', line: 'Sixty voices read it aloud' },
+  { id: 'listen', line: 'Twenty-five voices read it aloud' },
   { id: 'audiobook', line: 'Turn any book into MP3' },
   { id: 'share', line: 'Share with people you trust' },
   { id: 'public', line: 'Find libraries others share' },

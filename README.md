@@ -27,9 +27,8 @@ Open [breader.site](https://breader.site), add a book, read. Nothing to install,
 ## Listening
 
 - **Voices that live on your device.** Tap play and it reads aloud, colouring each sentence as it goes. The voices run in your browser, so nothing is sent anywhere to be spoken, and they keep reading with the screen locked.
-- **Normal or Immersive.** Normal works on any phone or laptop. Immersive dims the page around the voice, with richer voices wherever your computer can run them.
+- **Normal or Immersive.** Normal works on any phone or laptop. Immersive dims the page around the voice, in the same voices.
 - **Say it your way.** Tap a word while it reads and tell it how that word sounds. It remembers, for you alone.
-- **Bring a voice.** Add your own Piper or Kokoro voice, and share it if you like.
 
 ## Manga
 

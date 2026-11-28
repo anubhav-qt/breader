@@ -24,7 +24,7 @@ A few things I cared about:
   window size or font.
 - Books start as outlines and fill with their own colour as you read. That is
   the whole progress UI.
-- Read aloud runs in your browser (Piper and Kokoro voices on onnxruntime-web),
+- Read aloud runs in your browser (Phonon voices, on WebAssembly),
   so the text is never sent anywhere to be spoken. A model marks who speaks
   each line, so characters can get their own voices.
 - Manga has its own shelf and reader. A small YOLO model I trained finds the

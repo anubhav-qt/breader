@@ -42,7 +42,7 @@ const DEMOS: Record<DemoId, { title: string; steps: string[] }> = {
   },
   listen: {
     title: 'Listen',
-    steps: ['Open a book.', 'Tap Listen at the bottom, then play.', 'Each sentence lights up as it’s read. The button beside Immersive picks from sixty voices.'],
+    steps: ['Open a book.', 'Tap Listen at the bottom, then play.', 'Each sentence lights up as it’s read. The button beside Immersive picks from twenty-five voices.'],
   },
   audiobook: {
     title: 'Audiobooks',
