@@ -36,7 +36,46 @@ const parts = (key: string) => {
   return [...MODEL.map((name) => files[name]), files[voiceFile(v)]];
 };
 
-export function makeFiles(dir: string) {
+/** A download that brings nothing for this long is dropped and tried again, so a stuck one never hangs. */
+export const STALL_MS = 30_000;
+
+/**
+ * Fetches `url` into the file `to`, checking it against `sha256`; `onBytes` hears each piece as it
+ * arrives. It gives up when nothing arrives for `stallMs`, waiting for the answer or mid-file.
+ */
+export async function download(url: string, to: string, sha256: string, onBytes: (n: number) => void, stallMs = STALL_MS) {
+  const stop = new AbortController();
+  let timer: NodeJS.Timeout | undefined;
+  const waitAgain = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => stop.abort(), stallMs);
+  };
+  waitAgain();
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: stop.signal });
+    if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);
+    const hash = createHash('sha256');
+    const count = new Transform({
+      transform(chunk: Buffer, _, done) {
+        hash.update(chunk);
+        onBytes(chunk.length);
+        waitAgain();
+        done(null, chunk);
+      },
+    });
+    const body = Readable.fromWeb(res.body as import('node:stream/web').ReadableStream);
+    await pipeline(body, count, createWriteStream(to), { signal: stop.signal });
+    const got = hash.digest('hex');
+    if (got !== sha256) throw new Error(`checksum ${got} is not ${sha256}`);
+  } catch (e) {
+    if (stop.signal.aborted) throw new Error(`nothing arrived for ${stallMs / 1000} s`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function makeFiles(dir: string, stallMs = STALL_MS) {
   /** Bytes arrived so far, by file. */
   const arrived = new Map<string, number>();
   const fetching = new Map<string, Promise<string>>();
@@ -63,20 +102,9 @@ export function makeFiles(dir: string) {
     const tmp = join(dir, `.${basename(to)}.${Math.random().toString(36).slice(2, 10)}.download`);
     for (let attempt = 1; ; attempt++) {
       arrived.set(to, 0);
+      const onBytes = (n: number) => arrived.set(to, (arrived.get(to) ?? 0) + n);
       try {
-        const res = await fetch((f.from ?? f.url)!, { redirect: 'follow' });
-        if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);
-        const hash = createHash('sha256');
-        const count = new Transform({
-          transform(chunk: Buffer, _, done) {
-            hash.update(chunk);
-            arrived.set(to, (arrived.get(to) ?? 0) + chunk.length);
-            done(null, chunk);
-          },
-        });
-        await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), count, createWriteStream(tmp));
-        const got = hash.digest('hex');
-        if (got !== f.sha256) throw new Error(`checksum ${got} is not ${f.sha256}`);
+        await download((f.from ?? f.url)!, tmp, f.sha256, onBytes, stallMs);
         await rename(tmp, to);
         return to;
       } catch (e) {

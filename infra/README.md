@@ -135,7 +135,8 @@ at the engine, so one reader can't hold up the rest, and past 24 sentences waiti
 Such a device reads only on the laptop, never itself mid-book (it couldn't keep up, and hasn't the
 voice): busy, the app asks again for up to a minute; away or off, reading stops and says so.
 Phonon downloads into the `voices` volume the first time it's asked for, about 70 MB, and each
-voice after it a few KB. The voices run in the engine (below), on one thread a worker, about 8
+voice after it a few KB. A file that brings nothing for 30 s is tried again, 3 times, then the
+reader sees an error (`STALL_MS`, `server/src/speech/files.ts`). The voices run in the engine (below), on one thread a worker, about 8
 times faster than it's said (an M-series Mac; the ThinkPad not measured yet). A sentence takes
 about half a second on the engine, and a reader's first one starts at once: one worker is always left for
 reading aloud.
