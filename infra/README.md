@@ -198,7 +198,15 @@ library's manga is kept on the SSD ahead of its readers too: every 15 minutes, e
 series, read most lately first, the chapter each is read to and the ten after it, one page at a
 time, the libraries taking turns a chapter each, and a series several read fetched once. Its reads
 don't count as a reader's, so a series only it has touched still looks unread. The status page shows it as **Manga on
-the SSD**; `MANGA_KEEP=true` or `false` turns it on or off elsewhere. Series for adults show only to readers who turn on
+the SSD**; `MANGA_KEEP=true` or `false` turns it on or off elsewhere. The ThinkPad also walks
+Browse's lists ever deeper whenever readers have been quiet 20 seconds (`server/src/manga/walk.ts`):
+each day 1,500 Popular, 1,500 Top rated, 1,000 Updated and 1,000 Trending, then 18+ the same, each
+series saved as its sheet asks for it, no pictures. Where it got to and what it saved are in
+`MANGA_ARCHIVE_DIR/walk` (`walk.json`, `walk-seen.txt`), so it never starts over. After the daily
+prefetch, the update pass fetches again what the sites updated since its last run. The status page
+shows them as **Manga walk** and **Manga updates**; `MANGA_WALK=true` or `false` turns both on or
+off elsewhere. An answer the store has lost but the archive kept is given at once, and fetched again
+behind the reader. Series for adults show only to readers who turn on
 **Show 18+**, and series tagged loli or shota never show. `MANGADEX=false` turns it all off.
 Render has it too, with Suwayomi's sources through the one on AWS (*Suwayomi on AWS for Render*),
 without the panel model: readers' devices find panels there, and panels kept serve all. It has no

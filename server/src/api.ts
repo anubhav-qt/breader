@@ -164,12 +164,19 @@ const prefetching = new AbortController();
 let prefetchAt: NodeJS.Timeout | undefined;
 // On the ThinkPad, the never ending manga walk (manga/walk.ts): its daily update pass runs after
 // the prefetch, and the walk goes on whenever readers are quiet and neither is running.
-let walk: Walk | null = null;
-if (manga && !light && archiveMb > 0 && (env.MANGA_WALK ?? onThinkPad(env))) {
-  walk = makeWalk(manga, { store: walkFiles(join(env.MANGA_ARCHIVE_DIR, 'walk')), quiet: () => readersQuiet() && !dailyRunning && !busy?.() });
-}
 /** The prefetch or the update pass is running: the walk waits. */
 let dailyRunning = false;
+/** Whether the walk may go on: readers quiet, the daily run done, and the server not busy. */
+const walkQuiet = () => {
+  if (dailyRunning) return false;
+  if (busy?.()) return false;
+  return readersQuiet();
+};
+let walk: Walk | null = null;
+if (manga && !light && archiveMb > 0 && (env.MANGA_WALK ?? onThinkPad(env))) {
+  const store = walkFiles(join(env.MANGA_ARCHIVE_DIR, 'walk'));
+  walk = makeWalk(manga, { store, quiet: walkQuiet });
+}
 let commands: NodeJS.Timeout | undefined;
 /** What the admin page may ask this process to run now, by command. */
 const runNow: Record<string, () => void> = {};
@@ -232,7 +239,7 @@ if (walk) {
   let failed = 0;
   const turn = async () => {
     try {
-      if (!readersQuiet() || dailyRunning) return 30_000;
+      if (!walkQuiet()) return 30_000;
       const r = await asJob(primary.pool, 'manga-walk', () => w.turn(prefetching.signal));
       // Switched off on the admin page.
       if (r === null) {
@@ -255,6 +262,8 @@ if (walk) {
     }
   };
   const again = (ms: number) => {
+    // Shutting down: no more turns.
+    if (prefetching.signal.aborted) return;
     walkAt = setTimeout(() => void turn().then(again), ms);
   };
   again(10 * 60_000);

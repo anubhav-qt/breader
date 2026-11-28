@@ -372,9 +372,10 @@ export function makeAniList(opts: AniListOptions): AniList {
         const media = (r.Page.media ?? []).filter((m) => !never(m));
         noteCovers(media);
         const items = ofKinds(media.map(cardOf), ask.kinds);
+        const more = !!r.Page.pageInfo?.hasNextPage;
         let next: number | null = null;
-        if (r.Page.pageInfo?.hasNextPage && ask.page < 100) next = ask.page + 1;
-        return { items, next };
+        if (more && ask.page < 100) next = ask.page + 1;
+        return { items, next, more };
       });
       // Kept or fetched, its series' names are known from now on.
       let from = (ask.page - 1) * PER_PAGE;

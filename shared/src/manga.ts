@@ -425,6 +425,8 @@ export interface AniListPage {
   items: AniCard[];
   /** The next page, or null at the end. */
   next: number | null;
+  /** AniList has pages after this one, past where Browse stops (the manga walk goes on). Left out by pages kept before. */
+  more?: boolean;
 }
 
 /** What AniList says of one series: what's before and after it and beside it, and what's like it. */

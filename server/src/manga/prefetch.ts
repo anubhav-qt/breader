@@ -77,9 +77,10 @@ async function list(manga: Manga, sort: MangaSort, kinds: MangaKind[], signal?: 
 
 /**
  * What a series' sheet asks for, its covers kept for freshFor (covers.ts); adult: as an 18+ reader's
- * sheet asks (the manga walk's 18+ lists). Returns how many places it's in, and how many of the asks failed.
+ * sheet asks (the manga walk's 18+ lists). Returns how many places it's in, how many of the asks failed,
+ * and whether the series itself was found (ok).
  */
-export async function sheet(manga: Manga, card: MangaFound[], freshFor: number, adult = false): Promise<{ places: number; failed: number }> {
+export async function sheet(manga: Manga, card: MangaFound[], freshFor: number, adult = false): Promise<{ places: number; failed: number; ok: boolean }> {
   let failed = 0;
   const step = async (what: () => Promise<unknown>) => {
     try {
@@ -92,6 +93,7 @@ export async function sheet(manga: Manga, card: MangaFound[], freshFor: number, 
   const main = card[0];
   if (main.kind === 'mangadex') await step(() => manga.series(main.card.id, adult));
   else await step(() => manga.sourceSeries(main.card.id, adult));
+  const ok = failed === 0;
 
   // The other places it's in.
   const places = [...card];
@@ -134,7 +136,7 @@ export async function sheet(manga: Manga, card: MangaFound[], freshFor: number, 
       await step(() => manga.copies(id, ''));
     }
   }
-  return { places: places.length, failed };
+  return { places: places.length, failed, ok };
 }
 
 /** Browse's first screens and their series, fetched ahead of readers. */

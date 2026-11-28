@@ -17,9 +17,10 @@ import { cardsOf, sheet, sleep } from './prefetch.ts';
  *
  * It never starts over: where each list got to, and every series saved, are kept on disk. A day's
  * share is the owner's (2026-11-28): 1,500 Popular, 1,500 Top rated, 1,000 Updated and 1,000
- * Trending, then 18+ and doujinshi in the same split, then on in that split until the next day.
- * Once a day, after the prefetch, the update pass reads the Updated lists from the top and fetches
- * their series again, down to where the last pass had got to, and a new day's share begins.
+ * Trending, then 18+ and doujinshi in the same split, then on in that split until the next day,
+ * which begins at 04:00 in India, as the prefetch does. Then, after the prefetch, the update pass
+ * reads the Updated lists from the top and fetches their series again, down to where the last pass
+ * had got to.
  */
 
 export const WALK_LISTS = ['popular', 'rated', 'latest', 'trending'] as const;
@@ -40,6 +41,18 @@ const BREATHER = 1_000;
 const REST = 3_600_000;
 /** The first update pass, with no last one to stop at, reads this many series of each Updated list: a day's share. */
 const FIRST_UPDATE = SHARE.latest;
+/** A series that couldn't be fetched is tried again this many times, its list resting between, then let go. */
+const TRIES = 3;
+/** An Updated list whose every place is late is asked again this many times in the update pass, so long apart. */
+const LATE_TRIES = 3;
+const LATE_WAIT = 5_000;
+/** The walk's day begins at 04:00 in India, 22:30 UTC, as the prefetch's (prefetch.ts). */
+const DAY_SHIFT = 90 * 60_000;
+
+/** The walk's day a moment is in. */
+export function walkDay(now = Date.now()): string {
+  return new Date(now + DAY_SHIFT).toISOString().slice(0, 10);
+}
 
 /** Where a list got to: the next AniList page, or the next lot of the sites' Updated list (null: from the top). */
 export interface Place {
@@ -47,9 +60,13 @@ export interface Place {
   next: string | null;
   /** Walked to its end: only the update pass reads it now. */
   end: boolean;
+  /** Times the series it's at couldn't be fetched, one after another. */
+  tries?: number;
 }
 
 export interface WalkState {
+  /** The day today's counts are of (walkDay). */
+  day?: string;
   /** Series saved since the day began, by list. */
   today: Partial<Record<WalkKey, number>>;
   at: Partial<Record<WalkKey, Place>>;
@@ -80,7 +97,7 @@ export interface Updated {
 export interface Walk {
   /** One page of the list most behind its share; null when every list is walked to its end. */
   turn(signal?: AbortSignal): Promise<Turned | null>;
-  /** The daily update pass, then a new day's share. */
+  /** The daily update pass. */
   update(signal?: AbortSignal): Promise<Updated>;
   /** Series saved since the day began, by list, and in all. */
   today(): Promise<{ lists: WalkState['today']; saved: number; ever: number }>;
@@ -91,6 +108,8 @@ export interface WalkOptions {
   /** Whether it may go on: readers quiet, nothing else running. Asked between series. */
   quiet?: () => boolean;
   breather?: number;
+  /** Between asks of a late Updated list in the update pass. Tests go faster. */
+  lateWait?: number;
 }
 
 const blank = (): WalkState => ({ today: {}, at: {}, updated: [] });
@@ -124,9 +143,35 @@ export function pick(state: WalkState, resting: (key: WalkKey) => boolean = () =
 /** The ids a site's series goes by, one per place it's in. */
 const idsOf = (card: MangaFound[]) => card.map((f) => f.card.id);
 
+/** A series couldn't be fetched: its list rests, and it's tried again later. */
+class TryLater extends Error {}
+
+/**
+ * Whether to let go of a series that couldn't be fetched, saving what it got, and go on: only once
+ * it's been tried TRIES times. Until then its list rests and comes back to it.
+ */
+function letGo(at: Place): boolean {
+  const tries = (at.tries ?? 0) + 1;
+  if (tries < TRIES) {
+    at.tries = tries;
+    return false;
+  }
+  at.tries = 0;
+  return true;
+}
+
+/** A new day: its counts start again. */
+function dayBegins(state: WalkState, now = Date.now()): void {
+  const day = walkDay(now);
+  if (state.day === day) return;
+  state.day = day;
+  state.today = {};
+}
+
 export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
   const quiet = opts.quiet ?? (() => true);
   const breather = opts.breather ?? BREATHER;
+  const lateWait = opts.lateWait ?? LATE_WAIT;
   let loaded: Promise<{ state: WalkState; seen: Set<string> }> | null = null;
   const load = () => {
     if (!loaded) loaded = opts.store.load();
@@ -143,7 +188,7 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
   }
 
   /** An AniList series: where it's read, its sheet there, and AniList's own page and cover. */
-  async function aniSeries(card: AniCard, freshFor: number, adult: boolean): Promise<{ ids: string[]; failed: number }> {
+  async function aniSeries(card: AniCard, freshFor: number, adult: boolean): Promise<{ ids: string[]; failed: number; ok: boolean }> {
     let failed = 0;
     const step = async <T>(what: () => Promise<T>): Promise<T | undefined> => {
       try {
@@ -156,14 +201,17 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
     };
     const ids = [`al:${card.id}`];
     await step(() => manga.anilist.about(card.id, adult));
-    const places = (await step(() => manga.aniFound(card.id, LANG, adult))) ?? [];
-    if (places.length > 0) {
+    const found = await step(() => manga.aniFound(card.id, LANG, adult));
+    if (found === undefined) return { ids, failed, ok: false };
+    let ok = true;
+    if (found.length > 0) {
       await step(() => manga.anilist.cover(card.id, 256));
-      const r = await sheet(manga, places, freshFor, adult);
+      const r = await sheet(manga, found, freshFor, adult);
       failed += r.failed;
-      ids.push(...idsOf(places));
+      ok = r.ok;
+      ids.push(...idsOf(found));
     }
-    return { ids, failed };
+    return { ids, failed, ok };
   }
 
   /** The next page of one of AniList's lists. */
@@ -172,9 +220,11 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
     const adult = shelfOf(key) === 'adult';
     const sort = listOf(key) as Exclude<WalkList, 'latest'>;
     const page = await manga.anilist.list({ sort, page: at.page, adult, adultOnly: adult, kinds: [...BROWSE_KINDS] });
-    // Past AniList's last page its pages come empty.
+    // Past AniList's last page its pages come empty. One with every series left out (kinds Browse
+    // hasn't) isn't the end while AniList says there's more.
     if (page.items.length === 0) {
-      at.end = true;
+      if (page.more) at.page += 1;
+      else at.end = true;
       return out;
     }
     let freshFor = FRESH_ANYWAY;
@@ -183,6 +233,8 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
       if (seen.has(`al:${card.id}`)) continue;
       if (signal?.aborted || !quiet()) return out;
       const r = await aniSeries(card, freshFor, adult);
+      if (!r.ok && !letGo(at)) throw new TryLater(`AniList’s ${card.id} couldn’t be fetched`);
+      at.tries = 0;
       await saved(seen, r.ids);
       out.saved += 1;
       out.failed += r.failed;
@@ -204,11 +256,13 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
     const adult = shelfOf(key) === 'adult';
     const r = await latest(adult, at.next);
     // Every place late: it's where it was, and is asked again another turn.
-    if (r.items.length === 0 && r.next === at.next) return out;
+    if (r.items.length === 0 && r.next !== null && r.next === at.next) return out;
     for (const card of cardsOf(r.items)) {
       if (idsOf(card).some((id) => seen.has(id))) continue;
       if (signal?.aborted || !quiet()) return out;
       const s = await sheet(manga, card, FRESH_FOR.latest ?? FRESH_ANYWAY, adult);
+      if (!s.ok && !letGo(at)) throw new TryLater(`${card[0].card.id} couldn’t be fetched`);
+      at.tries = 0;
       await saved(seen, idsOf(card));
       out.saved += 1;
       out.failed += s.failed;
@@ -216,7 +270,8 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
       await opts.store.save(state);
       await sleep(breather, signal);
     }
-    if (r.next === null) at.end = true;
+    // At its end, or a place stuck where it was, which another lot wouldn't move.
+    if (r.next === null || r.next === at.next) at.end = true;
     else at.next = r.next;
     return out;
   }
@@ -224,6 +279,7 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
   return {
     async turn(signal) {
       const { state, seen } = await load();
+      dayBegins(state);
       const key = pick(state, rests);
       if (!key) return null;
       let at = state.at[key];
@@ -240,6 +296,8 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
       } catch (err) {
         log.warn({ err, key }, 'a list couldn’t be walked just now');
         resting.set(key, Date.now() + REST);
+        // Its tries, kept for when it's back.
+        await opts.store.save(state).catch(() => {});
         return { key, saved: 0, failed: 1 };
       }
     },
@@ -255,6 +313,7 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
           const adult = shelf === 'adult';
           let next: string | null = null;
           let read = 0;
+          let late = 0;
           while (!signal?.aborted) {
             let r;
             try {
@@ -264,6 +323,14 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
               log.warn({ err, shelf }, 'an Updated list couldn’t be read for the update pass');
               break;
             }
+            // Every place late: asked again a few times before this list is left for the day.
+            if (r.items.length === 0 && r.next !== null && r.next === next) {
+              late += 1;
+              if (late > LATE_TRIES) break;
+              await sleep(lateWait, signal);
+              continue;
+            }
+            late = 0;
             const cards = cardsOf(r.items).filter((card) => !idsOf(card).some((id) => now.has(id)));
             // A lot all fetched last time: the rest of the list hasn't changed since.
             const old = cards.filter((card) => idsOf(card).some((id) => last.has(id)));
@@ -277,6 +344,7 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
               read += 1;
               await sleep(breather, signal);
             }
+            // At the end, or a place stuck where it was.
             if (r.next === null || r.next === next) break;
             if (last.size === 0 && read >= FIRST_UPDATE) break;
             next = r.next;
@@ -284,7 +352,6 @@ export function makeWalk(manga: Manga, opts: WalkOptions): Walk {
         }
         if (!signal?.aborted) {
           state.updated = [...now];
-          state.today = {};
           await opts.store.save(state);
         }
         out.minutes = Math.round((Date.now() - started) / 60_000);

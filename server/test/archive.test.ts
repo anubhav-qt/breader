@@ -66,6 +66,15 @@ describe('the archive', () => {
     await until(async () => (await archive.find('manga:v1:series', 's1'))?.v === 'newer');
   });
 
+  it('leaves out what holds only for one install of a site', async () => {
+    const memo = new Memo<number>(new MemoryStore(10), 'sw-local-series', 30 * 24 * HOUR, 30 * 24 * HOUR, false);
+    await memo.get('ref', async () => 12);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await archive.find('sw-local-series', 'ref')).toBeUndefined();
+    const after = new Memo<number>(new MemoryStore(10), 'sw-local-series', 30 * 24 * HOUR, 30 * 24 * HOUR, false);
+    expect(await after.get('ref', async () => 40)).toBe(40);
+  });
+
   it('leaves out answers that go stale in minutes', async () => {
     const memo = new Memo<string>(new MemoryStore(10), 'manga:v1:home', 60_000);
     await memo.get('c1', async () => 'https://uploads.example/at-home');

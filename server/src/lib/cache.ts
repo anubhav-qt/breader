@@ -229,11 +229,14 @@ export class Memo<T> {
   private readonly kind: string;
   private readonly ttl: number;
   private readonly keep: number;
-  constructor(store: Store, kind: string, ttl: number, keep = ttl) {
+  /** Kept for good in the archive: not for what holds only for one install of a site (Suwayomi's own ids). */
+  private readonly archived: boolean;
+  constructor(store: Store, kind: string, ttl: number, keep = ttl, archived = true) {
     this.store = store;
     this.kind = kind;
     this.ttl = ttl;
     this.keep = Math.max(ttl, keep);
+    this.archived = archived;
   }
 
   /** What's kept, or else make()'s answer, which is then kept. fresh: make()'s, whatever's kept. */
@@ -300,7 +303,7 @@ export class Memo<T> {
 
   /** What the archive kept for the key, for kinds worth keeping for good. */
   private async saved(key: string): Promise<{ at: number; v: unknown } | undefined> {
-    if (this.keep < ARCHIVE_PAST) return undefined;
+    if (!this.archived || this.keep < ARCHIVE_PAST) return undefined;
     return archive?.find(this.kind, key).catch(() => undefined);
   }
 
@@ -332,7 +335,7 @@ export class Memo<T> {
   }
 
   private archive(key: string, value: T) {
-    if (this.keep >= ARCHIVE_PAST) archive?.keep(this.kind, key, value);
+    if (this.archived && this.keep >= ARCHIVE_PAST) archive?.keep(this.kind, key, value);
   }
 
   /** at: when it was fetched, if not now (one read back from the archive). */

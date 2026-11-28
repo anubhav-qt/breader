@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { AniCard, AniListPage, MangaFound, MangaSearchResult } from '@breader/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Manga } from '../src/manga/index.ts';
-import { makeWalk, pick, readerAsked, readersQuiet, walkFiles, type WalkKey, type WalkState, type WalkStore } from '../src/manga/walk.ts';
+import { makeWalk, pick, readerAsked, readersQuiet, walkDay, walkFiles, type WalkKey, type WalkState, type WalkStore } from '../src/manga/walk.ts';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -13,7 +13,7 @@ afterEach(() => {
 const state = (today: Partial<Record<WalkKey, number>> = {}, ended: WalkKey[] = []): WalkState => {
   const at: WalkState['at'] = {};
   for (const k of ended) at[k] = { page: 1, next: null, end: true };
-  return { today, at, updated: [] };
+  return { day: walkDay(), today, at, updated: [] };
 };
 
 describe('which list the walk goes on with', () => {
@@ -127,7 +127,7 @@ describe('the manga walk', () => {
       'pages sw:2.2',
     ]);
     expect(store.seen).toEqual(['al:1', 'sw:1', 'al:2', 'sw:2']);
-    expect(store.state.at['all:popular']).toEqual({ page: 2, next: null, end: false });
+    expect(store.state.at['all:popular']).toMatchObject({ page: 2, next: null, end: false });
     expect(store.state.today['all:popular']).toBe(2);
     // Not read anywhere: AniList's page only, and saved, so it isn't asked again.
     asked.length = 0;
@@ -177,7 +177,7 @@ describe('the manga walk', () => {
     expect(await walk.turn()).toEqual({ key: 'all:latest', saved: 1, failed: 0 });
     expect(asked).toContain('series sw:n');
     expect(asked).not.toContain('series sw:a');
-    expect(store.state.at['all:latest']).toEqual({ page: 1, next: 'sw:1', end: false });
+    expect(store.state.at['all:latest']).toMatchObject({ page: 1, next: 'sw:1', end: false });
     await walk.turn();
     expect(store.state.at['all:latest']?.end).toBe(true);
     expect(asked.filter((a) => a.startsWith('latest'))).toEqual(['latest all ', 'latest all sw:1']);
@@ -210,6 +210,70 @@ describe('the manga walk', () => {
     expect(store.seen).toContain('al:1');
   });
 
+  it('tries a series that couldn’t be fetched again later, its list resting, and lets it go after three tries', async () => {
+    const { manga } = fakeManga();
+    vi.mocked(manga.aniFound).mockRejectedValue(new Error('Suwayomi is down'));
+    const store = memoryStore();
+    for (let i = 0; i < 2; i++) {
+      // A new start each time, so the list isn't resting.
+      expect(await makeWalk(manga, { store, breather: 0 }).turn()).toEqual({ key: 'all:popular', saved: 0, failed: 1 });
+      expect(store.seen).toEqual([]);
+      expect(store.state.at['all:popular']).toMatchObject({ page: 1, tries: i + 1 });
+    }
+    // The third time it's let go, saved as it is, and the next series is tried.
+    await makeWalk(manga, { store, breather: 0 }).turn();
+    expect(store.seen).toEqual(['al:1']);
+    expect(store.state.at['all:popular']?.tries).toBe(1);
+    expect(manga.aniFound.mock.calls.filter(([id]) => id === 1).length).toBe(3);
+  });
+
+  it('tries a site’s series that couldn’t be fetched again later too', async () => {
+    const { manga } = fakeManga();
+    vi.mocked(manga.sourceSeries).mockRejectedValue(new Error('down'));
+    const store = memoryStore();
+    store.state.today = { 'all:popular': 1_500, 'all:rated': 1_500, 'all:trending': 1_000 };
+    expect(await makeWalk(manga, { store, breather: 0 }).turn()).toEqual({ key: 'all:latest', saved: 0, failed: 1 });
+    expect(store.seen).toEqual([]);
+    expect(store.state.at['all:latest']).toMatchObject({ next: null, tries: 1 });
+  });
+
+  it('ends an Updated list that comes empty, and one stuck where it was', async () => {
+    const { manga } = fakeManga();
+    vi.mocked(manga.search).mockResolvedValue({ items: [], next: null });
+    const store = memoryStore();
+    store.state.today = { 'all:popular': 1_500, 'all:rated': 1_500, 'all:trending': 1_000 };
+    await makeWalk(manga, { store, breather: 0 }).turn();
+    expect(store.state.at['all:latest']?.end).toBe(true);
+
+    vi.mocked(manga.search).mockResolvedValue({ items: [sw('sw:a', 'Alpha')], next: 'sw:1' });
+    const stuck = memoryStore();
+    stuck.state.today = { 'all:popular': 1_500, 'all:rated': 1_500, 'all:trending': 1_000 };
+    stuck.state.at['all:latest'] = { page: 1, next: 'sw:1', end: false };
+    await makeWalk(manga, { store: stuck, breather: 0 }).turn();
+    expect(stuck.state.at['all:latest']?.end).toBe(true);
+  });
+
+  it('goes past an AniList page that came empty while AniList says there’s more', async () => {
+    const { manga } = fakeManga();
+    vi.mocked(manga.anilist.list).mockResolvedValueOnce({ items: [], next: null, more: true });
+    const store = memoryStore();
+    await makeWalk(manga, { store, breather: 0 }).turn();
+    expect(store.state.at['all:popular']).toMatchObject({ page: 2, end: false });
+  });
+
+  it('starts the day’s counts again at 04:00 in India', async () => {
+    expect(walkDay(Date.parse('2026-11-28T22:29:00Z'))).toBe('2026-11-28');
+    expect(walkDay(Date.parse('2026-11-28T22:30:00Z'))).toBe('2026-11-29');
+    const { manga } = fakeManga();
+    const store = memoryStore();
+    store.state.day = '2026-01-01';
+    store.state.today = { 'all:popular': 1_500, 'all:rated': 1_500, 'all:latest': 1_000, 'all:trending': 1_000 };
+    // Yesterday's shares met; today's not, so it's without 18+ again.
+    expect((await makeWalk(manga, { store, breather: 0 }).turn())?.key).toBe('all:popular');
+    expect(store.state.day).toBe(walkDay());
+    expect(store.state.today).toEqual({ 'all:popular': 2 });
+  });
+
   it('stops between series when told', async () => {
     const { manga } = fakeManga();
     const stop = new AbortController();
@@ -221,7 +285,7 @@ describe('the manga walk', () => {
 });
 
 describe('the daily update pass', () => {
-  it('fetches again what the sites updated, down to where the last pass got to, then starts a new day', async () => {
+  it('fetches again what the sites updated, down to where the last pass got to', async () => {
     const { manga, asked } = fakeManga();
     const store = memoryStore();
     store.state.today = { 'all:popular': 900 };
@@ -229,7 +293,8 @@ describe('the daily update pass', () => {
     const first = await walk.update();
     // 18+ has the same lots here: each series is fetched once.
     expect(first.series).toBe(3);
-    expect(store.state.today).toEqual({});
+    // The day's count is the walk's, not the pass's.
+    expect(store.state.today).toEqual({ 'all:popular': 900 });
     expect(store.state.updated.sort()).toEqual(['sw:a', 'sw:n', 'sw:o']);
 
     // The next day one more on top: it, and the lot it's in, then a lot all fetched last time ends it.
@@ -259,14 +324,40 @@ describe('the daily update pass', () => {
     expect(r.series).toBe(2_000);
   });
 
-  it('keeps the day’s count when it was stopped', async () => {
+  it('asks a late list again before leaving it for the day', async () => {
     const { manga } = fakeManga();
+    let lateLeft = 2;
+    vi.mocked(manga.search).mockImplementation(async (q) => {
+      if (q.q) return { items: [], next: null };
+      // Every place late at the top, twice, then there.
+      if (!q.next) return { items: [], next: 'sw:0' };
+      if (lateLeft > 0) {
+        lateLeft -= 1;
+        return { items: [], next: 'sw:0' };
+      }
+      return { items: [sw('sw:a', 'Alpha')], next: null };
+    });
+    const r = await makeWalk(manga, { store: memoryStore(), breather: 0, lateWait: 0 }).update();
+    expect(r.series).toBe(1);
+  });
+
+  it('leaves a list that stays late, and keeps what it had when it was stopped', async () => {
+    const { manga } = fakeManga();
+    vi.mocked(manga.search).mockImplementation(async (q) => {
+      if (q.q) return { items: [], next: null };
+      return { items: [], next: 'sw:0' };
+    });
     const store = memoryStore();
-    store.state.today = { 'all:popular': 900 };
+    const r = await makeWalk(manga, { store, breather: 0, lateWait: 0 }).update();
+    expect(r.series).toBe(0);
+    // Each list: the top, then four asks late.
+    expect(manga.search.mock.calls.filter(([q]) => !q.q).length).toBe(2 * 5);
+
+    store.state.updated = ['sw:y'];
     const stop = new AbortController();
     stop.abort();
-    await makeWalk(manga, { store, breather: 0 }).update(stop.signal);
-    expect(store.state.today).toEqual({ 'all:popular': 900 });
+    await makeWalk(fakeManga().manga, { store, breather: 0 }).update(stop.signal);
+    expect(store.state.updated).toEqual(['sw:y']);
   });
 });
 
@@ -295,7 +386,7 @@ describe('the walk’s files', () => {
 
       await writeFile(join(dir, 'walk', 'walk.json'), '{ broken');
       const broken = await walkFiles(join(dir, 'walk')).load();
-      expect(broken.state).toEqual(state());
+      expect(broken.state).toEqual({ today: {}, at: {}, updated: [] });
       expect(broken.seen.size).toBe(3);
     } finally {
       await rm(dir, { recursive: true, force: true });

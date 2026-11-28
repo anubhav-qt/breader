@@ -474,8 +474,9 @@ export function makeSuwayomi(opts: SuwayomiOptions): Suwayomi {
    * The numbers this Suwayomi has each series and chapter by, by their ids: kept in memory only, as
    * they're this Suwayomi's own, and asking it again costs nothing of the site.
    */
-  const localSeries = new Memo<number>(new MemoryStore(100_000), 'sw-local-series', 30 * DAY);
-  const localChapters = new Memo<number>(new MemoryStore(100_000), 'sw-local-chapter', 30 * DAY);
+  // Suwayomi's own ids: another install has others, so they're never kept for good (lib/archive.ts).
+  const localSeries = new Memo<number>(new MemoryStore(100_000), 'sw-local-series', 30 * DAY, 30 * DAY, false);
+  const localChapters = new Memo<number>(new MemoryStore(100_000), 'sw-local-chapter', 30 * DAY, 30 * DAY, false);
   /** Series being taken in, one at a time (bring()). */
   let bringing: Promise<unknown> = Promise.resolve();
 
