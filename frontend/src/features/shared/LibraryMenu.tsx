@@ -204,6 +204,22 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
           if (copy?.live) mayAsk = copy.asked !== 'asked' && copy.asked !== 'given';
           const asks = sharing.asks[which] ?? [];
           const waiting = asks.filter((a) => a.state === 'asked').length;
+          let size: string;
+          if (closed) {
+            size = 'its key has changed';
+          } else if (count === null) {
+            size = 'opening…';
+          } else if (count === 1) {
+            size = '1 book';
+          } else {
+            size = `${count} books`;
+          }
+          if (choosing && isDefault) size += ', opens first';
+          let facts = '';
+          if (isPublic(which)) facts += ', public';
+          if (copy?.asked === 'asked') facts += ', asked its owner';
+          if (copy?.grant) facts += ', can change the original';
+          if (waiting > 0) facts += `, ${waiting} asking`;
           return (
             <div key={which} className={`lm-row${on ? ' is-on' : ''}`}>
               {renaming === which ? (
@@ -225,13 +241,9 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
                 <button type="button" className="lm-pick" aria-current={on} onClick={() => { onShow(which); onClose(); }}>
                   <span className="lm-name">{name}</span>
                   <span className="lm-sub">
-                    {closed ? 'its key has changed' : count === null ? 'opening…' : `${count} ${count === 1 ? 'book' : 'books'}`}
-                    {choosing && isDefault ? ', opens first' : ''}
-                    {theirs && theirs !== name ? <>, “{theirs}” to its owner</> : null}
-                    {isPublic(which) ? ', public' : ''}
-                    {copy?.asked === 'asked' ? ', asked its owner' : ''}
-                    {copy?.grant ? ', can change the original' : ''}
-                    {waiting > 0 ? `, ${waiting} asking` : ''}
+                    <span>{size}</span>
+                    {theirs && theirs !== name ? <span>{`, “${theirs}” to its owner`}</span> : null}
+                    <span>{facts}</span>
                   </span>
                 </button>
               )}
@@ -360,7 +372,7 @@ export function LibraryMenu({ sharing, ownCount, onShow, onClose, say, focusKey 
       {making === null ? (
         <button type="button" className="lm-new" onClick={() => { setMaking(''); setError(null); }}>
           <IconPlus />
-          New shared library
+          <span>New shared library</span>
         </button>
       ) : (
         <form className="lm-add" onSubmit={(e) => void make(e)}>

@@ -81,7 +81,7 @@ export function KeyDialog({ libraryKey, fresh, onClose, onShared, onOpen, onLogi
             <div className="key-box">{libraryKey}</div>
             {status && <p className="add-local" role="status">{status}</p>}
             <div className="add-actions">
-              <button type="button" className="btn btn-quiet" onClick={() => void copy()}>{copied ? <><IconCheck /> Copied</> : 'Copy key'}</button>
+              <button type="button" className="btn btn-quiet" onClick={() => void copy()}>{copied ? <><IconCheck /><span> Copied</span></> : 'Copy key'}</button>
             </div>
           </>
         ) : null}

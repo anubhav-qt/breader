@@ -374,7 +374,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
     <section className="vs-step" aria-labelledby={`vs-step-${n}`}>
       <h3 className="vs-step-h" id={`vs-step-${n}`}>
         <span className="vs-step-n" aria-hidden="true">{n}</span>
-        {title}
+        <span>{title}</span>
       </h3>
       <div className="vs-step-b">{children}</div>
     </section>
@@ -389,7 +389,7 @@ function Pace({ bare = false }: { bare?: boolean }) {
       {!bare && <div className="clbl">Pace</div>}
       <div className="stp">
         <button type="button" aria-label="Slower" disabled={pace <= PACE.min} onClick={() => stepPace(-1)}>−</button>
-        <span className="stp-v" aria-live="polite">{pace} wpm</span>
+        <span className="stp-v" aria-live="polite">{`${pace} wpm`}</span>
         <button type="button" aria-label="Faster" disabled={pace >= PACE.max} onClick={() => stepPace(1)}>+</button>
       </div>
     </div>
@@ -438,7 +438,7 @@ function Music({ onLocked }: { onLocked?: () => void }) {
         <div className="clbl">Music volume</div>
         <div className="stp">
           <button type="button" aria-label="Quieter" disabled={musicVolume <= MUSIC_VOLUME.min} onClick={() => stepMusic(-1)}>−</button>
-          <span className="stp-v" aria-live="polite">{Math.round(musicVolume * 100)}%</span>
+          <span className="stp-v" aria-live="polite">{`${Math.round(musicVolume * 100)}%`}</span>
           <button type="button" aria-label="Louder" disabled={musicVolume >= MUSIC_VOLUME.max} onClick={() => stepMusic(1)}>+</button>
         </div>
       </div>
@@ -456,7 +456,7 @@ export function Progress({ loaded, total }: { loaded: number; total: number }) {
       <span className="vs-prog-dots" aria-hidden="true">
         {Array.from({ length: DOTS }, (_, i) => <i key={i} className={(i + 1) / DOTS <= f ? 'is-read' : i / DOTS < f ? 'is-now' : undefined} />)}
       </span>
-      <span className="vs-prog-n">{mb(loaded)} of {mb(total)}</span>
+      <span className="vs-prog-n">{`${mb(loaded)} of ${mb(total)}`}</span>
     </div>
   );
 }

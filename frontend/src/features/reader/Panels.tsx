@@ -11,6 +11,7 @@ import { usePanelModel } from './panelModel';
 import { panelsOnServer, refreshPanels, setPanelsOnServer, useServerPanels } from './serverPanels';
 import { checkDevice, useAble } from './able';
 import { FONTS, MANGA_WIDTHS, MEASURES, SIZE_MAX, SIZE_MIN, SPACING, THEMES, TWO_COLORS, WEIGHTS, measureOf, styleFor, useNarrowPortrait, type MangaDir, type PdfLook, type MangaLayout, type MangaLook, type ReaderSettings, type StyleSettings } from './settings';
+import type { Elements } from '../../lib/elements';
 
 /* Contents */
 
@@ -89,16 +90,16 @@ export function ContentsPanel({ book, title, loc, canRemove, onGo, onRemove }: C
       {remote && (
         <>
           {remote.page ? (
-            <a className="p-from" href={remote.page} target="_blank" rel="noopener noreferrer">From {remote.name}, made by its scanlation groups ↗</a>
+            <a className="p-from" href={remote.page} target="_blank" rel="noopener noreferrer">{`From ${remote.name}, made by its scanlation groups ↗`}</a>
           ) : (
-            <span className="p-from">From {remote.name}, made by its scanlation groups</span>
+            <span className="p-from">{`From ${remote.name}, made by its scanlation groups`}</span>
           )}
           <Offline remote={remote} at={section} {...offline} />
         </>
       )}
       <div className="p-bar"><i style={{ width: `${pct}%` }} /></div>
       <div className="p-meta">
-        <span>{pct}%</span>
+        <span>{`${pct}%`}</span>
         <span>{loc ? (loc.bookWordsLeft ? `${duration(minutesFor(loc.bookWordsLeft))} left` : 'Finished') : ''}</span>
       </div>
       <div className="p-list" ref={listRef}>
@@ -186,7 +187,7 @@ export function Segmented<T extends string | number>({ label, value, options, on
    * `muted`: not ready yet. It looks off, and a tap still reaches onChange, which says why. `line`: a
    * few words under the name on what it means.
    */
-  options: Array<{ v: T; label: string; content?: React.ReactNode; muted?: boolean; line?: string }>;
+  options: Array<{ v: T; label: string; content?: Elements; muted?: boolean; line?: string }>;
   onChange: (v: T) => void;
   /** Its label said already, by a heading above it: only screen readers hear it here. */
   bare?: boolean;
@@ -265,7 +266,7 @@ function ServerPanels({ inPanels }: { inPanels: boolean }) {
       {s.seated && !able.panels && <p className="p-note">Breader’s computer finds this manga’s panels, as this device can’t.</p>}
       {s.full && (
         <p className="p-note p-seats" aria-live="polite">
-          Breader’s computer is full: {s.used}/{s.seats} readers are using it. Panels come here once there’s room.
+          {`Breader’s computer is full: ${s.used}/${s.seats} readers are using it. Panels come here once there’s room.`}
         </p>
       )}
     </>
@@ -277,7 +278,7 @@ function ModelComing() {
   const m = usePanelModel();
   if (m.state === 'unfit') return null;
   if (m.state !== 'loading' || !m.size) return null;
-  return <p className="p-note" aria-live="polite">Fetching the panel model for this device: {Math.round(m.bytes / 1e6)} of {Math.round(m.size / 1e6)} MB.</p>;
+  return <p className="p-note" aria-live="polite">{`Fetching the panel model for this device: ${Math.round(m.bytes / 1e6)} of ${Math.round(m.size / 1e6)} MB.`}</p>;
 }
 
 /**
@@ -371,7 +372,7 @@ export function AppearancePanel({ settings, kind, update, two = false, manga, pd
                   style={{ fontFamily: f.family }}
                   onClick={() => set({ font: f.key })}
                 >
-                  {f.label}
+                  <span>{f.label}</span>
                   {f.note && <small>{f.note}</small>}
                 </button>
               ))}

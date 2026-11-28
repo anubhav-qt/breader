@@ -352,7 +352,7 @@ function Card({ at, area, onDone }: { at: Picked; area: RefObject<HTMLDivElement
         />
         <button type="button" className={`sa-hear${hearing ? ` is-${hearing}` : ''}`} onClick={() => void preview()} disabled={!say.trim()} aria-pressed={!!hearing}>
           <DotIcon rows={hearing === 'playing' ? STOP : PLAY} />
-          Preview
+          <span>Preview</span>
         </button>
       </div>
       <div className="sa-go">

@@ -13,6 +13,7 @@ import { HeadTips } from './Tip';
 import type { ChromeProps, PanelName } from './types';
 import { NotYet } from './VoiceSheet';
 import './play.css';
+import type { Elements } from '../../../lib/elements';
 
 /*
  * The play row, over the bottom line: play and pause, back and on a sentence, the voices, and
@@ -39,7 +40,7 @@ type Props = Pick<ChromeProps, 'book' | 'narration' | 'immersion' | 'transport' 
   /** Immersive's question, asked on the row in place of the player: where to begin, or the pace. */
   ask: ReactNode;
   /** A voice speaking now, for the character voices' speaker chip (design round). */
-  speaker?: ReactNode;
+  speaker?: Elements;
 };
 
 /** What Listen and Immersive start, once the mode they need has come in. */
@@ -401,7 +402,7 @@ function Ways<T extends string>({ label, now, options, onPick, className = '' }:
         {options.map((o) => (
           <button key={o.v} type="button" role="radio" aria-checked={now === o.v} className={now === o.v ? 'is-on' : ''} onClick={() => onPick(o.v)} data-tip={o.tip}>
             {icon(o.v)}
-            {o.label}
+            <span>{o.label}</span>
           </button>
         ))}
       </span>
@@ -424,7 +425,7 @@ function Ways<T extends string>({ label, now, options, onPick, className = '' }:
               {options.filter((o) => o.v !== current.v).map((o) => (
                 <button key={o.v} type="button" role="menuitem" onClick={() => choose(o.v)}>
                   {icon(o.v)}
-                  {o.label}
+                  <span>{o.label}</span>
                 </button>
               ))}
             </motion.span>
@@ -469,14 +470,14 @@ function Split({ mode, canImmerse, narration, immersion, loading, onListen, onLi
       {narration && (
         <button type="button" className={`pl-pill${listening ? ' is-on' : ''}`} onClick={onListen} data-tip="The voice reads the page as it is">
           <DotIcon rows={listenIcon} />
-          {listenWord}
+          <span>{listenWord}</span>
         </button>
       )}
       {canImmerse && (
         <span className={`pl-pill-wrap${immersion ? ' is-on' : ''}`}>
           <button type="button" className={`pl-pill is-light${immersion ? ' is-on' : ''}`} onClick={onLight} data-tip="The page dims, and the words light up as you read">
             <DotIcon rows={lightIcon} />
-            {lightWord}
+            <span>{lightWord}</span>
           </button>
           {immersion && (
             <button type="button" className="pl-pill-x" onClick={onLeave} aria-label="Leave Immersive" data-tip="Back to the page as it is">
@@ -649,9 +650,9 @@ function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voic
   narration: Props['narration'];
   immersion: Props['immersion'];
   panel: PanelName | null;
-  aloud: ReactNode;
-  voices: ReactNode;
-  speed: ReactNode;
+  aloud: Elements;
+  voices: Elements;
+  speed: Elements;
   onListen: () => void;
   onLight: () => void;
   onMode: (m: 'normal' | 'immersive') => void;
@@ -669,7 +670,7 @@ function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voic
       <>
         <button type="button" className="pl-word" onClick={bits.main.act} aria-label={bits.main.label}>
           <DotIcon rows={PAUSE} />
-          {word}
+          <span>{word}</span>
         </button>
         <Skips transport={bits.transport} />
         <Speed />
@@ -683,14 +684,14 @@ function Peek({ bits, mode, canImmerse, narration, immersion, panel, aloud, voic
         {narration && (
           <button type="button" className="pl-word" onClick={onListen} data-tip="The voice reads the page as it is">
             <DotIcon rows={PLAY} />
-            Listen
+            <span>Listen</span>
           </button>
         )}
         {canImmerse && narration && <span className="pl-sep" aria-hidden="true">·</span>}
         {canImmerse && (
           <button type="button" className={`pl-word${immersion ? ' is-on' : ''}`} onClick={onLight} data-tip="The page dims, and the words light up as you read">
             <DotIcon rows={LIGHT} />
-            {lightWord}
+            <span>{lightWord}</span>
           </button>
         )}
       </>

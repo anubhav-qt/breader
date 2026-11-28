@@ -56,7 +56,7 @@ export function Feedback({ onClose, onSent }: { onClose: () => void; onSent: () 
       <div className="fb-foot">
         {error ? <p className="fb-error" role="alert">{error}</p> : <p className="fb-note">Only what you write is sent.</p>}
         {length > FEEDBACK_CHARS * 0.8 && (
-          <span className={length > FEEDBACK_CHARS ? 'fb-count fb-over' : 'fb-count'}>{length} / {FEEDBACK_CHARS}</span>
+          <span className={length > FEEDBACK_CHARS ? 'fb-count fb-over' : 'fb-count'}>{`${length} / ${FEEDBACK_CHARS}`}</span>
         )}
       </div>
       <div className="fb-actions">

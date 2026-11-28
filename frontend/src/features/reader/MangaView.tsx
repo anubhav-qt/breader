@@ -825,7 +825,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     <span className="mg-wait" role="status">
       <span className="mg-wait-in">
         <Loader size="large" />
-        Loading page {i + 1}
+        <span>{`Loading page ${i + 1}`}</span>
       </span>
     </span>
   );
@@ -836,7 +836,7 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
     if (src === null) {
       return (
         <span className="mg-broken">
-          Page {i + 1} won’t open
+          <span>{`Page ${i + 1} won’t open`}</span>
           <button type="button" onClick={(e) => { e.stopPropagation(); retry(i); }}>Try again</button>
         </span>
       );
@@ -1115,10 +1115,10 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
   const moreAt = (
     <>
       {next && spread[spread.length - 1] >= total - 1 && (
-        <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>Carry on to {next.label} ›</button>
+        <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>{`Carry on to ${next.label} ›`}</button>
       )}
       {prev && spread[0] === 0 && !(next && spread[spread.length - 1] >= total - 1) && (
-        <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>‹ Back to {prev.label}</button>
+        <button type="button" className="mg-more" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>{`‹ Back to ${prev.label}`}</button>
       )}
     </>
   );
@@ -1159,12 +1159,12 @@ export const MangaView = forwardRef<ViewHandle, Props>(function MangaView({ book
             {colW > 0 && shownTo === total - 1 && bandsAt(total, tops[total - 1] + heights[total - 1] + (bands.get(total)?.length ?? 0) * BAND)}
             {colW > 0 && prev && shownFrom === 0 && (
               <div className="mg-band is-more" style={{ top: tops[0] - (bands.get(0)?.length ?? 0) * BAND - BAND, height: BAND }}>
-                <button type="button" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>‹ Back to {prev.label}</button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); reopen(prev.at); }}>{`‹ Back to ${prev.label}`}</button>
               </div>
             )}
             {colW > 0 && next && shownTo === total - 1 && (
               <div className="mg-band is-more" style={{ top: tops[total - 1] + heights[total - 1] + (bands.get(total)?.length ?? 0) * BAND, height: BAND }}>
-                <button type="button" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>Carry on to {next.label} ›</button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); reopen(next.at); }}>{`Carry on to ${next.label} ›`}</button>
               </div>
             )}
           </div>

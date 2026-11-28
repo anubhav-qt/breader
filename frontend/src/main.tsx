@@ -4,11 +4,14 @@ import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/global.css';
 import App from './App.tsx';
-import './lib/report';
+import { report } from './lib/report';
+import { forgiveMovedNodes } from './lib/translators';
 import { reloadOnStaleBuild } from './lib/stale-build';
 import { startPicking } from './lib/api';
 
 reloadOnStaleBuild();
+// A page translator moving a node React made never blanks the app (lib/translators.ts).
+forgiveMovedNodes(Node.prototype, report);
 // The server nearest this reader, timed now and every few minutes (lib/servers.ts).
 startPicking();
 

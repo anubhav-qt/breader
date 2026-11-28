@@ -96,7 +96,7 @@ export function AddVoice({ mode, onBusy, onDone }: { mode: Mode; onBusy: () => v
             <span className="clbl">Share with every reader</span>
             <button type="button" className="tg" role="switch" aria-checked={open} aria-label="Share with every reader" onClick={() => setOpen(!open)} disabled={!!step} />
           </div>
-          <p className="p-note vs-about">Listeners keep it after {KEEP_WORDS} words.</p>
+          <p className="p-note vs-about">{`Listeners keep it after ${KEEP_WORDS} words.`}</p>
         </>
       )}
       {error && <p className="p-note vs-err vs-about" role="alert">{error}</p>}

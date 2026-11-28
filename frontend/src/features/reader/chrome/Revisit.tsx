@@ -112,7 +112,7 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
       return (
         <p key={i} className="rv-text rv-did">
           {label && <span className="rv-ch">{chapterName(chapters, ch)}</span>}
-          {text}
+          <span>{text}</span>
         </p>
       );
     });
@@ -139,7 +139,7 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
         <div className="seg rv-tabs" role="tablist" aria-label="Notes">
           {TABS.map((t) => (
             <button key={t.v} type="button" role="tab" aria-selected={tab === t.v} className={tab === t.v ? 'is-on' : ''} onClick={() => setTab(t.v)}>
-              {t.label}
+              <span>{t.label}</span>
               <small>{lists[t.v].length}</small>
             </button>
           ))}
@@ -160,7 +160,7 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
             return (
               <div key={p.key} className="rv-item">
                 <div className="rv-name">{p.name}</div>
-                {p.also.length > 0 && <div className="rv-aka">Also {p.also.join(', ')}</div>}
+                {p.also.length > 0 && <div className="rv-aka">{`Also ${p.also.join(', ')}`}</div>}
                 {p.about && <p className="rv-text">{p.about}</p>}
                 {events(all ? p.did : last ? [last] : [])}
                 {p.did.length > 1 && (
@@ -175,20 +175,20 @@ export function RevisitWindow({ chapters, current, scope, load }: WindowProps) {
           lists.places.map((p) => (
             <div key={p.key} className="rv-item">
               <div className="rv-name">{p.name}</div>
-              {p.also.length > 0 && <div className="rv-aka">Also {p.also.join(', ')}</div>}
+              {p.also.length > 0 && <div className="rv-aka">{`Also ${p.also.join(', ')}`}</div>}
               {p.about && <p className="rv-text">{p.about}</p>}
               {events(p.did.slice(-1))}
-              {many && p.chapters > 1 && <div className="rv-aka">In {p.chapters} chapters</div>}
+              {many && p.chapters > 1 && <div className="rv-aka">{`In ${p.chapters} chapters`}</div>}
             </div>
           ))}
         {tab === 'terms' &&
           lists.terms.map((t) => (
             <div key={t.key} className="rv-item">
               <div className="rv-name rv-term">{t.name}</div>
-              {t.also.length > 0 && <div className="rv-aka">Also {t.also.join(', ')}</div>}
+              {t.also.length > 0 && <div className="rv-aka">{`Also ${t.also.join(', ')}`}</div>}
               <p className="rv-text">
                 {many && <span className="rv-ch">{chapterName(chapters, chapterOf(t.first[0]))}</span>}
-                {t.about}
+                <span>{t.about}</span>
               </p>
             </div>
           ))}

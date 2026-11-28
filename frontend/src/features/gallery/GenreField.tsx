@@ -192,7 +192,7 @@ function GenrePicker({ value, added, others, onPick, onSeries, onClose }: Omit<P
                   <span className="gp-name">{g.name}</span>
                   {theirs.includes(g.id) && <span className="gp-tag">{added!.label}</span>}
                 </span>
-                {n > 0 && <span className="gp-count" aria-label={`on ${n} of ${total} in the series`}>{n}/{total}</span>}
+                {n > 0 && <span className="gp-count" aria-label={`on ${n} of ${total} in the series`}>{`${n}/${total}`}</span>}
                 <span className="gp-dot" aria-hidden="true" />
               </button>,
               i === askAfter && ask && asked && (

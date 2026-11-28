@@ -2,13 +2,14 @@ import type { CSSProperties, ReactNode } from 'react';
 import { colorKeyFor } from '../data/colors';
 import { toneOf } from './format';
 import type { PartState } from './types';
+import type { Elements } from '../lib/elements';
 
 /* The pieces the admin page is built from, in Breader's own look. */
 
 const inkOf = (title: string) => `var(--bc-${colorKeyFor(title)}-ink)`;
 
 /** The small grey uppercase label over a section, as in the voice sheet. */
-export function Label({ children, side }: { children: ReactNode; side?: ReactNode }) {
+export function Label({ children, side }: { children: ReactNode; side?: Elements }) {
   return (
     <span className="adm-label">
       <span>{children}</span>

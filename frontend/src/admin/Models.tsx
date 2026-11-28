@@ -21,6 +21,15 @@ type Sort = 'fast' | 'start' | 'name' | 'new';
 type Show = 'up' | 'all';
 
 /** Every NVIDIA model, how each did in its checks, and the marker's first and second picked here. */
+/** How many models chat, of all NVIDIA lists, once the marker has said. */
+function countLine(ms: Marker['models']): string {
+  if (!ms) {
+    return 'The marker hasn’t said yet. ';
+  }
+  const chat = ms.models.filter(pickable).length;
+  return `${chat} that chat, of ${ms.models.length} NVIDIA lists. `;
+}
+
 export function ModelsDialog({ m, admin, onClose }: { m: Marker; admin: Admin; onClose: () => void }) {
   const [sort, setSort] = useState<Sort>('fast');
   const [show, setShow] = useState<Show>('up');
@@ -51,9 +60,8 @@ export function ModelsDialog({ m, admin, onClose }: { m: Marker; admin: Admin; o
       <div className="adm-mods">
         <div className="adm-mods-h">
           <p className="adm-dim">
-            {ms ? `${ms.models.filter(pickable).length} that chat, of ${ms.models.length} NVIDIA lists. ` : 'The marker hasn’t said yet. '}
-            {when}
-            {ms?.checking && <><br />Asking {modelName(ms.checking)} now…</>}
+            <span>{`${countLine(ms)}${when}`}</span>
+            {ms?.checking && <><br /><span>{`Asking ${modelName(ms.checking)} now…`}</span></>}
           </p>
           <button type="button" className="btn btn-quiet adm-small" disabled={!ms || !!ms.checking} onClick={() => admin.checkModels()}>
             Check all now
@@ -67,6 +75,14 @@ export function ModelsDialog({ m, admin, onClose }: { m: Marker; admin: Admin; o
         <ul className="adm-mods-l">
           {lines.map(({ x, s }) => {
             const bad = s.last && !s.last.ok;
+            let last = '';
+            if (s.last) {
+              last = ` · last ${ago(s.last.at)}`;
+            }
+            let why = '';
+            if (bad) {
+              why = `: ${s.last?.why}`;
+            }
             return (
               <li key={x.id} className={`adm-mod${x.id === first || x.id === second ? ' is-used' : ''}`}>
                 <div className="adm-mod-t">
@@ -81,9 +97,7 @@ export function ModelsDialog({ m, admin, onClose }: { m: Marker; admin: Admin; o
                   <span className="adm-dim adm-one">{x.id}</span>
                   {!x.noChat && (
                     <p className={bad ? 'adm-bad adm-one' : 'adm-dim'} title={bad ? s.last?.why : undefined}>
-                      {statsLine(s)}
-                      {s.last && ` · last ${ago(s.last.at)}`}
-                      {bad && `: ${s.last?.why}`}
+                      {`${statsLine(s)}${last}${why}`}
                     </p>
                   )}
                   {s.of > 0 && <Dots on={s.ok} of={s.of} bad={s.ok < s.of} label={`${modelName(x.id)}: answered ${s.ok} of ${s.of}`} />}
@@ -207,7 +221,7 @@ export function StagesDialog({ m, admin, book, onClose }: { m: Marker; admin: Ad
                     <optgroup label="NVIDIA">
                       <option value="nim:">First and second models</option>
                       {nim.map((x) => (
-                        <option key={x.id} value={`nim:${x.id}`}>{modelName(x.id)} · {statsLine(statsOf(x))}</option>
+                        <option key={x.id} value={`nim:${x.id}`}>{`${modelName(x.id)} · ${statsLine(statsOf(x))}`}</option>
                       ))}
                       {v.startsWith('nim:') && v !== 'nim:' && !nim.some((x) => `nim:${x.id}` === v) && <option value={v}>{modelName(v.slice(4))}</option>}
                     </optgroup>

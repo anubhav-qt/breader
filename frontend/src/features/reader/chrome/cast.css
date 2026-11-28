@@ -118,7 +118,7 @@
 .cs-board { gap: 12px; }
 .cs-group { display: grid; gap: 6px; }
 .cs-group-h { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px; }
-.cs-group-h span { font-size: 10px; color: var(--r-mu); }
+.cs-group-n { font-size: 10px; color: var(--r-mu); }
 .cs-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
 .cs-tile { display: flex; align-items: center; gap: 9px; padding: 6px 8px 6px 6px; border-radius: 10px; text-align: left; box-shadow: inset 0 0 0 1px var(--r-line); transition: background-color 140ms ease, box-shadow 140ms ease; }
 .cs-tile:hover { background: var(--r-fill); }

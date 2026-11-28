@@ -790,17 +790,18 @@ export const FlowView = forwardRef<ViewHandle, Props>(function FlowView({ book, 
       <div ref={viewRef} className="fv-view" onScroll={pagesMode ? undefined : onScroll}>
         {!pagesMode && section > 0 && (
           <div className="fv-prev">
-            <button type="button" className="btn btn-ghost" tabIndex={-1} onClick={() => goSection(section - 1, { kind: 'start' })}>‹ {book.sections[section - 1]?.title}</button>
+            <button type="button" className="btn btn-ghost" tabIndex={-1} onClick={() => goSection(section - 1, { kind: 'start' })}>{`‹ ${book.sections[section - 1]?.title}`}</button>
           </div>
         )}
-        <div ref={flowRef} className="fv-flow" onClick={onFlowClick} dangerouslySetInnerHTML={html} />
+        {/* A translator leaves the book's words as written: places, marks and voices count their letters. */}
+        <div ref={flowRef} className="fv-flow" translate="no" onClick={onFlowClick} dangerouslySetInnerHTML={html} />
         {!pagesMode && (
           <div className="fv-next">
             {section >= n - 1 ? (
               <span>The end</span>
             ) : (
               <button type="button" className="btn btn-quiet" tabIndex={-1} onClick={() => goSection(section + 1, { kind: 'start' })}>
-                Next: {book.sections[section + 1]?.title} ›
+                {`Next: ${book.sections[section + 1]?.title} ›`}
               </button>
             )}
           </div>

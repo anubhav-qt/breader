@@ -16,7 +16,7 @@ export function Accounts({ list, admin }: { list: AiAccount[]; admin: Admin }) {
   return (
     <section className="adm-card adm-accounts" aria-labelledby="adm-acc-h">
       <Label>AI accounts</Label>
-      <h2 id="adm-acc-h" className="adm-mid">{list.length} connected</h2>
+      <h2 id="adm-acc-h" className="adm-mid">{`${list.length} connected`}</h2>
       <div className="adm-accs">
         {list.map((a, i) => {
           const firstOfKind = list.findIndex((x) => x.kind === a.kind) === i;

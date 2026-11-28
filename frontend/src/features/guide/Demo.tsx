@@ -22,6 +22,7 @@ import '../shared/shared.css';
 import '../add/addTo.css';
 import '../../components/steps.css';
 import './demo.css';
+import type { Elements } from '../../lib/elements';
 
 /*
  * How one of the welcome screen's cards is done (Welcome.tsx): Breader itself, small, doing it by
@@ -163,7 +164,7 @@ function useLoop(screen: RefObject<HTMLDivElement | null>, finger: RefObject<HTM
 }
 
 /** The stage, and the screen in it at full size, scaled to fit. */
-function Stage({ id, narrow, screen, finger, children }: { id: DemoId; narrow: boolean; screen: RefObject<HTMLDivElement | null>; finger: RefObject<HTMLSpanElement | null>; children: ReactNode }) {
+function Stage({ id, narrow, screen, finger, children }: { id: DemoId; narrow: boolean; screen: RefObject<HTMLDivElement | null>; finger: RefObject<HTMLSpanElement | null>; children: Elements }) {
   const stage = useRef<HTMLDivElement>(null);
   const size = narrow ? NARROW : WIDE;
   useLayoutEffect(() => {
@@ -197,7 +198,7 @@ const LINES = [
 function Head({ label, aa, search = true }: { label: string; aa: boolean; search?: boolean }) {
   return (
     <div className="i3-head is-on">
-      <button type="button" className="i3-side">‹<span className="i3-back-word"> Library</span></button>
+      <button type="button" className="i3-side"><span>‹</span><span className="i3-back-word"> Library</span></button>
       <button type="button" className="i3-mid"><Typed text={label} /><span className="i3-caret">▾</span></button>
       <div className="i3-ends">
         {search && <button type="button" className="i3-side i3-icon"><DotIcon rows={SEARCH} /></button>}
@@ -237,7 +238,7 @@ function Play({ way, playing }: { way: Way; playing: boolean }) {
             {WAYS.map((w) => (
               <button key={w.v} type="button" className={`dm-way-${w.v}${way === w.v ? ' is-on' : ''}`}>
                 {w.v === 'immersive' && <DotIcon rows={LIGHT} />}
-                {w.label}
+                <span>{w.label}</span>
               </button>
             ))}
           </span>
@@ -293,7 +294,7 @@ function useDark() {
 const bookVars = (c: string, pw: number) => ({ '--book': `var(--bc-${c})`, '--book-ink': `var(--bc-${c}-ink)`, '--pw': `${pw}px` }) as CSSProperties;
 
 /** A book open in the reader: its page between the two lines, the play row, and a drop if open. */
-function Reader({ settings, narrow, aa, drop, play, lit = -1 }: { settings: ReaderSettings; narrow: boolean; aa: boolean; drop: ReactNode; play: ReactNode; lit?: number }) {
+function Reader({ settings, narrow, aa, drop, play, lit = -1 }: { settings: ReaderSettings; narrow: boolean; aa: boolean; drop: Elements; play: Elements; lit?: number }) {
   const s = settings[settings.style];
   const font = { dongle: 'var(--read)', libron: 'var(--libron)', oxanium: 'var(--oxanium)', literata: 'var(--serif)', garamond: 'var(--garamond)', atkinson: 'var(--atkinson)' }[s.font];
   return (
@@ -445,8 +446,8 @@ interface LibraryProps {
   /** On phones, the one button's list of the other two is open. */
   picking?: boolean;
   /** The dropdown under the button beside the switch, when it's open. */
-  menu?: ReactNode;
-  children: ReactNode;
+  menu?: Elements;
+  children: Elements;
 }
 
 function Library({ narrow, shelf = 'mine', manga = false, picking = false, menu = null, children }: LibraryProps) {
@@ -553,7 +554,7 @@ function useAudiobookScene({ narrow }: { narrow: boolean }) {
 }
 
 /** The ⋯ popover (gallery/EditPopover.tsx): the parts of it the demo is about. */
-function Popover({ narrow, title, color, children }: { narrow: boolean; title: string; color: string; children: ReactNode }) {
+function Popover({ narrow, title, color, children }: { narrow: boolean; title: string; color: string; children: Elements }) {
   return (
     <div className="ep dm-ep" style={{ left: narrow ? 160 : 196, top: narrow ? 70 : 92, width: 288 }}>
       <div className="ep-head"><span className="ep-label">Name</span><button type="button" className="ep-x"><IconClose /></button></div>
@@ -960,7 +961,7 @@ function useOfflineScene({ narrow }: { narrow: boolean }) {
     note = '12 chapters downloaded, 91 MB.';
     actions = <><button type="button" className="ep-mini is-quiet">Remove</button><button type="button" className="ep-mini">Get the rest</button></>;
   } else {
-    actions = <button type="button" className="ep-mini dm-dl"><IconDownload />Download</button>;
+    actions = <button type="button" className="ep-mini dm-dl"><IconDownload /><span>Download</span></button>;
   }
   const count = (n: number): Beat => ({ then: () => setState(n), wait: 260 });
   return {

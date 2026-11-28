@@ -9,6 +9,7 @@ import { Logo } from './Logo';
 import { ShelfSwitch } from './ShelfSwitch';
 import { ThemeToggle } from './ThemeToggle';
 import './header.css';
+import type { Elements } from '../lib/elements';
 
 /** browse: the Manga shelf's Browse (features/manga/Browse.tsx), opened from Add, not a tab. */
 export type Tab = 'mine' | 'shelf' | 'public' | 'browse';
@@ -42,13 +43,13 @@ interface Props {
   dark: boolean;
   onTheme: () => void;
   /** Settings: manga's covers on their own, the library key, and logging in or out. */
-  settings: ReactNode;
+  settings: Elements;
   /** Starts picking books to act on together, where the library showing has any: Select is greyed out where not. */
   onSelect?: () => void;
   /** An audiobook playing with its dialog closed: its play and pause, left of Select (features/audiobook). */
-  audiobook?: ReactNode;
+  audiobook?: Elements;
   /** While picking: the bar (BulkBar) that takes the place of books-or-manga and the + button. */
-  bulk?: ReactNode;
+  bulk?: Elements;
 }
 
 /** The shared ones' list opens from an arrow; on phones a pencil, as the button beside it has the arrow. */

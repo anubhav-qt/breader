@@ -84,8 +84,8 @@ export function SearchPanel({ book, chapters, read, onGo }: Props) {
             {chapters.length > 1 && <div className="fd-ch">{chapterName(chapters, g.ch)}</div>}
             {g.items.map((f) => (
               <button key={`${f.s.section}.${f.s.block}.${f.s.start}`} type="button" className="p-item fd-item" onClick={() => onGo(f)}>
-                <span className="fd-snip">{f.before}<b>{f.s.text}</b>{f.after}</span>
-                <span className="p-item-s">{Math.round(f.f * 100)}%</span>
+                <span className="fd-snip" translate="no"><span>{f.before}</span><b>{f.s.text}</b><span>{f.after}</span></span>
+                <span className="p-item-s">{`${Math.round(f.f * 100)}%`}</span>
               </button>
             ))}
           </div>

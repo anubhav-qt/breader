@@ -58,12 +58,12 @@ export function Guide({ seenAt, initial = '', go, onClose }: Props) {
       <li key={f.id} className="gd-item">
         <div className="gd-text">
           <b className="gd-name">
-            {f.name}
+            <span>{f.name}</span>
             {isNew && <span className="gd-new">New</span>}
           </b>
           <span className="gd-what">{f.what}</span>
           <span className="gd-where">
-            {f.where}
+            <span>{f.where}</span>
             {f.keys && <span className="gd-keys">{f.keys.map((k) => <kbd key={k}>{k}</kbd>)}</span>}
           </span>
         </div>

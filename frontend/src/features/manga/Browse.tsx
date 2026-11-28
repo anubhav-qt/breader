@@ -568,17 +568,17 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
               {KINDS.map((k) => (
                 <button key={k.v} type="button" className="mdx-dot" aria-pressed={kinds.includes(k.v)} title={k.about} onClick={() => flipKind(k.v)}>
                   <span className="mdx-led" />
-                  {k.label}
+                  <span>{k.label}</span>
                 </button>
               ))}
               <span className="mdx-rule" />
               <button type="button" className="mdx-dot" aria-pressed={prefs.doujinshi} disabled={!!aniSort} title={aniSort ? 'AniList’s lists have no doujinshi' : 'Doujinshi (fan-made works) and anthologies too'} onClick={() => set({ doujinshi: !prefs.doujinshi })}>
                 <span className="mdx-led" />
-                Doujin
+                <span>Doujin</span>
               </button>
               <button type="button" className="mdx-dot" aria-pressed={prefs.adult} title={prefs.adultOnly ? 'Series for adults only' : 'Series for adults too'} onClick={() => (prefs.adult ? set({ adult: false, adultOnly: false }) : setAsking18(true))}>
                 <span className="mdx-led" />
-                {prefs.adultOnly ? '18+ only' : '18+'}
+                <span>{prefs.adultOnly ? '18+ only' : '18+'}</span>
               </button>
             </div>
             <label className="mdx-lang">
@@ -595,10 +595,10 @@ export function Browse({ hidden, have, prefs, onPrefs, onPick }: Props) {
       {body}
 
       <p className="mdx-credit">
-        {aniSort && <>Lists from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a>, read from </>}
-        {!aniSort && q && <>Matches from <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a>, </>}
-        {!aniSort && !q && 'From '}
-        <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a> and Suwayomi’s sites.
+        {aniSort && <><span>Lists from </span><a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a><span>, read from </span></>}
+        {!aniSort && q && <><span>Matches from </span><a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a><span>, </span></>}
+        {!aniSort && !q && <span>From </span>}
+        <a href="https://mangadex.org" target="_blank" rel="noopener noreferrer">MangaDex</a><span> and Suwayomi’s sites.</span>
       </p>
 
       {createPortal(

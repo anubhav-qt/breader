@@ -82,7 +82,7 @@ function Row<T extends string>({ label, name, options, value, names, onPick }: {
 }) {
   return (
     <div className="dz-row">
-      <span className="dz-l">{label} <b>{name}</b></span>
+      <span className="dz-l"><span>{`${label} `}</span><b>{name}</b></span>
       <span className="dz-opts">
         {options.map((o) => (
           <button key={o} type="button" aria-pressed={value === o} onClick={() => onPick(o)} title={names[o]}>

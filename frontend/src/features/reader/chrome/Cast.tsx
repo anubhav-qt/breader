@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { BOOK_COLORS, type BookColor } from '../../../data/colors';
 import { springs } from '../../../lib/springs';
@@ -32,6 +32,7 @@ import { stopSample } from '../voice/speaker';
 import { BACK, PLAY, STOP } from './icons';
 import { CloseDots, DotIcon, Typed } from './parts';
 import './cast.css';
+import type { Elements } from '../../../lib/elements';
 
 /*
  * Character voices in the voice sheet, once picked over 1 voice or 2: who reads whom. Each design of
@@ -106,7 +107,7 @@ function HearButton({ playing, name, onClick }: { playing: boolean; name: string
 }
 
 /** Character voices, from the model picked: who's spoken up to where the reader is. `children`: the model toggle. */
-export function CastSection({ book, design, playing, engine, children }: { book: string; design: CastDesign; playing: boolean; engine: Engine; children: ReactNode }) {
+export function CastSection({ book, design, playing, engine, children }: { book: string; design: CastDesign; playing: boolean; engine: Engine; children: Elements }) {
   const state = useCast();
   const { people, asking } = useBookCast(book);
   let body: ReactNode;
@@ -138,7 +139,7 @@ export function CastSection({ book, design, playing, engine, children }: { book:
 }
 
 /** Auto's shape, for the cast and for 1 voice and 2: a face each, and another go, or a way `back`. */
-function Faces({ again, onAgain, back, children }: { again: string; onAgain: () => void; back?: { label: string; run: () => void }; children: ReactNode }) {
+function Faces({ again, onAgain, back, children }: { again: string; onAgain: () => void; back?: { label: string; run: () => void }; children: Elements }) {
   return (
     <div className="cs-auto">
       <div className="cs-faces">{children}</div>
@@ -157,7 +158,7 @@ function Faces({ again, onAgain, back, children }: { again: string; onAgain: () 
 }
 
 /** One face: who it reads, and in whose voice; a tap to hear it, or, with `open`, for their card. */
-function FaceButton({ face, name, voice, on, open, label, onClick }: { face: ReactNode; name: string; voice: string; on: boolean; open?: boolean; label: string; onClick: () => void }) {
+function FaceButton({ face, name, voice, on, open, label, onClick }: { face: Elements; name: string; voice: string; on: boolean; open?: boolean; label: string; onClick: () => void }) {
   return (
     <button type="button" className={`cs-face-b${on ? ' is-on' : ''}`} onClick={onClick} aria-label={label} title={label} aria-expanded={open}>
       {face}
@@ -192,7 +193,7 @@ function Auto({ book, cast, canGoBack }: { book: string; cast: Cast[]; canGoBack
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [shown]);
-  const faces: ReactNode[] = cast.map((x) => (
+  const faces: ReactElement[] = cast.map((x) => (
     <FaceButton
       key={x.c.id}
       face={<Face c={x.c} color={x.color} />}
@@ -244,16 +245,16 @@ function Card({ book, who, cast, on, hear, onClose }: {
         <Face c={who.c} color={who.color} size="l" />
         <span className="cs-card-t">
           <b>{name}</b>
-          <span>{KIND_NAME[who.c.kind]} · {many(who.c.lines, 'line', 'lines')}</span>
+          <span>{`${KIND_NAME[who.c.kind]} · ${many(who.c.lines, 'line', 'lines')}`}</span>
         </span>
         <CloseDots onClick={onClose} />
       </div>
 
       <div className="cs-card-s">
         <div className="clbl cs-card-l">
-          Voice
+          <span>Voice</span>
           <span className="cs-card-now">
-            {who.v.name}
+            <span>{who.v.name}</span>
             <HearButton playing={on === who.c.id} name={who.v.name} onClick={() => hear(who.c.id, who.v)} />
           </span>
         </div>
@@ -297,7 +298,7 @@ function Card({ book, who, cast, on, hear, onClose }: {
 
       <div className="cs-card-s">
         <div className="clbl cs-card-l">
-          Colour
+          <span>Colour</span>
           <span className="cs-card-now">{who.color ? colorName(who.color) : KIND_COLOR[who.c.kind]}</span>
         </div>
         {colorSwaps.length > 0 && (
@@ -338,7 +339,7 @@ function Who({ kind, text }: { kind: 'all' | 'F' | 'M'; text: string }) {
 }
 
 /** 1 voice, as Auto draws the cast: one face, everyone's. `children`: the model toggle and its voices. */
-export function OneVoice({ v, hearing, onHear, onAgain, children }: { v: VoiceInfo; hearing: boolean; onHear: () => void; onAgain: () => void; children: ReactNode }) {
+export function OneVoice({ v, hearing, onHear, onAgain, children }: { v: VoiceInfo; hearing: boolean; onHear: () => void; onAgain: () => void; children: Elements }) {
   return (
     <div className="cs">
       <Faces again="Another voice" onAgain={onAgain}>
@@ -357,7 +358,7 @@ export function TwoVoices({ her, his, hearing, onHear, onAgain, children }: {
   hearing: string | null;
   onHear: (v: VoiceInfo) => void;
   onAgain: () => void;
-  children: ReactNode;
+  children: Elements;
 }) {
   return (
     <div className="cs">
@@ -413,7 +414,7 @@ export function VoiceFaces({ voices, lit, onPick }: { voices: VoiceInfo[]; lit: 
     </div>
     {more && (
       <button type="button" className={`cs-more${all ? ' is-open' : ''}`} aria-expanded={all} onClick={() => setAll(!all)}>
-        {all ? 'Fewer voices' : `All ${voices.length} voices`}
+        <span>{all ? 'Fewer voices' : `All ${voices.length} voices`}</span>
         <span className="cs-more-i" aria-hidden="true">▾</span>
       </button>
     )}
@@ -431,7 +432,7 @@ function List({ book, cast, engine }: { book: string; cast: Cast[]; engine: Engi
           <Face c={x.c} color={x.color} size="s" />
           <span className="cs-who">
             <b>{x.c.name}</b>
-            <span>{KIND_NAME[x.c.kind]} · {many(x.c.lines, 'line', 'lines')}</span>
+            <span>{`${KIND_NAME[x.c.kind]} · ${many(x.c.lines, 'line', 'lines')}`}</span>
           </span>
           <label className="cs-pick">
             <span className="sr-only">{`${x.c.name}’s voice`}</span>
@@ -457,8 +458,8 @@ function Board({ book, cast, engine }: { book: string; cast: Cast[]; engine: Eng
       {groups.map((g) => (
         <div key={g.k} className="cs-group">
           <div className="clbl cs-group-h">
-            {KIND_PLURAL[g.k]}
-            <span>{voicesOf(g.k, engine).length} voices</span>
+            <span>{KIND_PLURAL[g.k]}</span>
+            <span className="cs-group-n">{`${voicesOf(g.k, engine).length} voices`}</span>
           </div>
           <div className="cs-tiles">
             {g.people.map((x) => (
@@ -515,7 +516,7 @@ function Speaking({ cast, playing }: { cast: Cast[]; playing: boolean }) {
           <span className="cs-now-t">
             <span className="cs-now-w">{playing ? 'Speaking now' : 'First to speak'}</span>
             <b><Typed text={now.c.name} /></b>
-            <span>{KIND_NAME[now.c.kind]} · read by {now.v.name}</span>
+            <span>{`${KIND_NAME[now.c.kind]} · read by ${now.v.name}`}</span>
           </span>
           <span className="cs-now-bars" aria-hidden="true"><i /><i /><i /></span>
         </div>

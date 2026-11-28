@@ -124,10 +124,10 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
       <div className="i3-start" role="group" aria-label="Where to begin">
         <button type="button" className="i3-begin" onClick={immersion.begun ? immersion.carryOn : immersion.fromTop}>
           <DotIcon rows={PLAY} />
-          {immersion.begun ? 'Continue' : 'From the top'}
+          <span>{immersion.begun ? 'Continue' : 'From the top'}</span>
         </button>
         <button type="button" className={`i3-para${panel === 'paras' ? ' is-open' : ''}`} onClick={() => toggle('paras')} aria-label="Pick a paragraph" aria-expanded={panel === 'paras'} aria-haspopup="dialog">
-          ¶ {immersion.nowAt ? pad2(immersion.nowAt) : '--'}
+          <span>{`¶ ${immersion.nowAt ? pad2(immersion.nowAt) : '--'}`}</span>
           <span className="i3-caret" aria-hidden="true">▾</span>
         </button>
         <button type="button" className="i3-pace-b" onClick={immersion.cancel} aria-label="Not now">
@@ -158,7 +158,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
   return (
     <>
       <div ref={headRef} className={`i3-head${head || panel ? ' is-on' : ''}`} onPointerEnter={() => setHead(true)} onPointerLeave={() => setHead(false)}>
-        <button type="button" className="i3-side" onClick={onBack} aria-label="Back to library" data-tip="Back to your books">‹<span className="i3-back-word"> Library</span></button>
+        <button type="button" className="i3-side" onClick={onBack} aria-label="Back to library" data-tip="Back to your books"><span>‹</span><span className="i3-back-word"> Library</span></button>
         <button type="button" className={`i3-mid${panel === 'toc' ? ' is-open' : ''}`} onClick={() => toggle('toc')} aria-label={`Contents. ${label}`} aria-expanded={panel === 'toc'} data-tip="The chapters, to jump to one">
           <Typed text={label} />
           <span className="i3-caret" aria-hidden="true">▾</span>
@@ -182,7 +182,7 @@ export function InstrumentChrome({ book, bookId, title, loc, chapters, current, 
           <span className="i3-read"><Digits value={Math.floor(progress * 100)} width={3} /><small>%</small></span>
           {canRevisit && (
             <button type="button" className={`i3-rv${panel === 'revisit' || panel === 'recap' ? ' is-open' : ''}`} onClick={() => toggle('revisit')} aria-expanded={panel === 'revisit'} aria-haspopup="dialog">
-              Revisit<span className="i3-caret" aria-hidden="true">▴</span>
+              <span>Revisit</span><span className="i3-caret" aria-hidden="true">▴</span>
             </button>
           )}
         </span>
@@ -411,7 +411,7 @@ function ParagraphsPanel({ list, now, onPick }: { list: Paragraph[]; now?: numbe
           />
           <button type="button" className="sa-hear" onClick={go} disabled={!hit}>
             <DotIcon rows={PLAY} />
-            Go
+            <span>Go</span>
           </button>
         </div>
       </div>
@@ -441,7 +441,7 @@ function PaceSetter({ onKeep }: { onKeep: () => void }) {
       </button>
       <button type="button" className="i3-pace-keep" onClick={onKeep}>
         <DotIcon rows={CHECK} />
-        Keep
+        <span>Keep</span>
       </button>
     </div>
   );

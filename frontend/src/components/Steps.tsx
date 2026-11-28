@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import './steps.css';
+import type { Elements } from '../lib/elements';
 
 /*
  * The layout for dialogs that ask a few things in order, as the audiobook's does: the content on
@@ -11,7 +12,7 @@ import './steps.css';
 export function Step({ n, title, id, children, group = true }: { n: number; title: string; id?: string; children: ReactNode; group?: boolean }) {
   return (
     <section className="step">
-      <h3 className="step-h" id={id}><span className="step-n" aria-hidden="true">{n}</span>{title}</h3>
+      <h3 className="step-h" id={id}><span className="step-n" aria-hidden="true">{n}</span><span>{title}</span></h3>
       <div className="step-b" role={group ? 'radiogroup' : undefined} aria-label={group ? title : undefined}>{children}</div>
     </section>
   );
@@ -27,7 +28,7 @@ export function Choice({ on = false, off, name, aside, line, icon, radio = true,
   name: string;
   aside?: string;
   line?: string;
-  icon?: ReactNode;
+  icon?: Elements;
   radio?: boolean;
   onPick: () => void;
 }) {

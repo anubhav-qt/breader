@@ -125,7 +125,7 @@ export function Shelves({ books, stacks, series, authors, place, initial, root, 
               tabIndex={view === v.id ? 0 : -1}
               onClick={() => pick(v.id)}
             >
-              {v.label}
+              <span>{v.label}</span>
               {view === v.id && <motion.span className="view-line" layoutId={`view-line-${place}`} transition={springs.snappy} />}
             </button>
           ))}

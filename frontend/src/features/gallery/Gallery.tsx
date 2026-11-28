@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { BookEdit } from '../../books/types';
 import { canRemove, canShare } from '../../data/library';
@@ -15,6 +15,7 @@ import type { View } from './shelving';
 import { TitleHint } from './TitleHint';
 import type { GalleryItem } from './types';
 import './gallery.css';
+import type { Elements } from '../../lib/elements';
 
 /** A book's edit popover comes in a piece of its own, fetched once the app is idle (App's loadSoon). */
 const EditPopover = lazy(() => import('./EditPopover').then((m) => ({ default: m.EditPopover })));
@@ -54,13 +55,13 @@ interface Props {
   /** A series from MangaDex: its page, for its chapters and their language. */
   onChapters?: (book: ShelfItem) => void;
   /** What an empty library says, in place of its Add a book or Add a manga button. */
-  empty?: ReactNode;
+  empty?: Elements;
   /** Picking books to favourite or remove together: the ones ticked. Absent while not picking. */
   picked?: ReadonlySet<string>;
   /** While picking: ticks these books, or takes the tick off when they all have one. */
   onPick?: (books: ShelfItem[]) => void;
   /** Above the books, scrolling with them: a library opened from the public feed's name and Save. */
-  head?: ReactNode;
+  head?: Elements;
 }
 
 /**
@@ -137,7 +138,7 @@ export function Gallery({ books, seriesNames, place, view, manga = false, covers
       <div {...panel} className="gallery is-empty">
         {empty ?? (
           <button type="button" className="btn btn-primary gallery-add" onClick={onAdd}>
-            <IconPlus /> {manga ? 'Add a manga' : 'Add a book'}
+            <IconPlus /><span>{` ${manga ? 'Add a manga' : 'Add a book'}`}</span>
           </button>
         )}
       </div>

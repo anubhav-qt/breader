@@ -15,6 +15,7 @@ import { TASK_NAMES, type Admin, type Link, type Snapshot } from './types';
 import '../components/header.css';
 import '../components/preview-bar.css';
 import './admin.css';
+import type { Elements } from '../lib/elements';
 
 /*
  * The admin page, in Breader's own look, on one screen: what needs doing across the top, each with
@@ -118,7 +119,7 @@ function Header({ link, view }: { link: Link | null; view?: { value: View; onCha
         <div className="hdr-actions">
           <span className={`adm-live${link === 'live' ? ' is-on' : ''}`} title="Changes arrive as they happen">
             <i aria-hidden="true" />
-            {link === 'live' ? 'Live' : 'Connecting'}
+            <span>{link === 'live' ? 'Live' : 'Connecting'}</span>
           </span>
         </div>
       )}
@@ -127,7 +128,7 @@ function Header({ link, view }: { link: Link | null; view?: { value: View; onCha
 }
 
 /** Everything the server pushes, kept current for as long as the page is open. */
-function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => void; children?: ReactNode }) {
+function Board({ admin, onDenied, children }: { admin: Admin; onDenied?: () => void; children?: Elements }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [link, setLink] = useState<Link>('connecting');
   const [error, setError] = useState<{ text: string } | null>(null);

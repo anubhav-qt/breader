@@ -130,7 +130,7 @@ export function Download({ book }: { book: ShelfItem }) {
     );
   } else {
     if (full) note = 'This device is out of room to download it.';
-    actions = <button type="button" className="ep-mini" onClick={() => void ask()}><IconDownload />Download</button>;
+    actions = <button type="button" className="ep-mini" onClick={() => void ask()}><IconDownload /><span>Download</span></button>;
   }
 
   return (

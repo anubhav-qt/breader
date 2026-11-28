@@ -21,7 +21,7 @@ export function RemoveDialog({ title, count = 1, from, manga = false, onChoose, 
     return (
       <Modal title={`Remove from your ${noun}`} onClose={onClose} width={420}>
         <div className="rm">
-          <p className="rm-ask">{count} of the {noun} you picked are in your shared library too. Stop sharing them as well?</p>
+          <p className="rm-ask">{`${count} of the ${noun} you picked are in your shared library too. Stop sharing them as well?`}</p>
           <div className="rm-actions">
             <button type="button" className="btn btn-quiet" onClick={() => onChoose(false)}>Keep them shared</button>
             <button type="button" className="btn btn-danger" onClick={() => onChoose(true)}>Remove from both</button>
@@ -34,7 +34,7 @@ export function RemoveDialog({ title, count = 1, from, manga = false, onChoose, 
     <Modal title={mine ? `Remove from your ${noun}` : 'Stop sharing it'} onClose={onClose} width={420}>
       <div className="rm">
         <p className="rm-ask">
-          “{title}” is {mine ? 'in your shared library' : `in your ${noun}`} too. {mine ? 'Stop sharing it as well?' : 'Remove it from there as well?'}
+          {`“${title}” is ${mine ? 'in your shared library' : `in your ${noun}`} too. ${mine ? 'Stop sharing it as well?' : 'Remove it from there as well?'}`}
         </p>
         <div className="rm-actions">
           <button type="button" className="btn btn-quiet" onClick={() => onChoose(false)}>{mine ? 'Keep it shared' : `Keep it in my ${noun}`}</button>

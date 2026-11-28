@@ -35,11 +35,11 @@ export function FreshKey({ libraryKey, title, count = 1, onLogin, onDone }: Prop
 
   return (
     <>
-      <p className="add-keynote">{added}Keep this key safe: it can’t be recovered.</p>
+      <p className="add-keynote">{`${added}Keep this key safe: it can’t be recovered.`}</p>
       <div className="key-box">{libraryKey}</div>
       <div className="add-actions key-actions">
         <button type="button" className="btn btn-quiet" onClick={() => void copy()}>
-          {copied ? <><IconCheck /> Copied</> : 'Copy key'}
+          {copied ? <><IconCheck /><span> Copied</span></> : 'Copy key'}
         </button>
         {onLogin && <button type="button" className="btn btn-ghost" onClick={onLogin}>Log in</button>}
         <button type="button" className="btn btn-primary" onClick={onDone}>Use this key</button>

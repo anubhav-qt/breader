@@ -53,8 +53,8 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
       <div className="adm-card-h">
         <div className="adm-card-t">
           <Label>AI marker</Label>
-          <h2 id="adm-marker-h" className="adm-big">{m.finished} of {m.books} books done</h2>
-          <p className="adm-sub">{m.working.length} working · {m.queue.length} waiting</p>
+          <h2 id="adm-marker-h" className="adm-big">{`${m.finished} of ${m.books} books done`}</h2>
+          <p className="adm-sub">{`${m.working.length} working · ${m.queue.length} waiting`}</p>
         </div>
         <div className="adm-card-acts">
           <span className={`adm-run${paused ? ' is-paused' : ''}`}>
@@ -131,6 +131,26 @@ export function MarkerCard({ m, admin }: { m: Marker; admin: Admin }) {
   );
 }
 
+/** The step being worked on, in one line: how long, the model, the account, the calls in flight. */
+function nowLine(w: Working, paused: boolean): string {
+  const parts: string[] = [];
+  if (paused) {
+    parts.push('Paused');
+  } else {
+    parts.push(span((Date.now() - new Date(w.stepSince).getTime()) / 1000));
+  }
+  if (w.model) {
+    parts.push(modelName(w.model));
+  }
+  if (w.account) {
+    parts.push(w.account);
+  }
+  if (w.calls > 0 && !paused) {
+    parts.push(`${w.calls} in flight`);
+  }
+  return parts.join(' · ');
+}
+
 /** A book being worked on: one line, and opened, every step of its task. */
 function WorkingBook({ w, paused, open, onOpen, onStages, own, admin }: { w: Working; paused: boolean; open: boolean; onOpen: () => void; onStages: () => void; own: boolean; admin: Admin }) {
   const all = stepsFor(w);
@@ -151,10 +171,10 @@ function WorkingBook({ w, paused, open, onOpen, onStages, own, admin }: { w: Wor
         <Monogram title={w.title} />
         <span className="adm-work-t">
           <b>{w.title}</b>
-          <span>{TASK_NAMES[w.task]} · {where}</span>
+          <span>{`${TASK_NAMES[w.task]} · ${where}`}</span>
           <Percent value={percent} tone={tone} label={`${w.title}: ${percent}%`} />
         </span>
-        <span className="adm-pct">{percent}%</span>
+        <span className="adm-pct">{`${percent}%`}</span>
       </button>
       <AnimatePresence initial={false}>
         {open && (
@@ -177,19 +197,16 @@ function WorkingBook({ w, paused, open, onOpen, onStages, own, admin }: { w: Wor
                         {state === 'now' && (
                           <div className="adm-now">
                             <p className="adm-meta">
-                              {paused ? 'Paused' : span((Date.now() - new Date(w.stepSince).getTime()) / 1000)}
-                              {w.model && ` · ${modelName(w.model)}`}
-                              {w.account && ` · ${w.account}`}
-                              {w.calls > 0 && !paused && ` · ${w.calls} in flight`}
+                              {nowLine(w, paused)}
                             </p>
                             {w.parts.length > 0 && (
                               <>
                                 <PartDots parts={w.parts} tone={tone} />
                                 <p className="adm-key">
-                                  <span><i className="is-done" />done</span>
-                                  <span><i className="is-now" />now</span>
-                                  {w.task === 'marks' && <span><i className="is-backup" />backup model</span>}
-                                  <span><i className="is-wait" />to do</span>
+                                  <span><i className="is-done" /><span>done</span></span>
+                                  <span><i className="is-now" /><span>now</span></span>
+                                  {w.task === 'marks' && <span><i className="is-backup" /><span>backup model</span></span>}
+                                  <span><i className="is-wait" /><span>to do</span></span>
                                 </p>
                               </>
                             )}
@@ -243,7 +260,7 @@ function QueueRow({ q, first, off, own, onStages, admin }: { q: Waiting; first: 
         {why && <p className="adm-dim">{why}</p>}
         {q.failed && (
           <p className="adm-bad adm-one" title={q.failed.why}>
-            Failed ×{q.failed.times} · again {until(q.failed.next)} · {q.failed.why}
+            {`Failed ×${q.failed.times} · again ${until(q.failed.next)} · ${q.failed.why}`}
           </p>
         )}
       </div>
@@ -313,7 +330,7 @@ function ModelPick({ label, value, models, onChange }: { label: string; value: s
     <select className="adm-pick" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
       {!known && <option value={value}>{modelName(value)}</option>}
       {lines.map((x) => (
-        <option key={x.id} value={x.id}>{modelName(x.id)} · {statsLine(statsOf(x))}</option>
+        <option key={x.id} value={x.id}>{`${modelName(x.id)} · ${statsLine(statsOf(x))}`}</option>
       ))}
     </select>
   );

@@ -185,7 +185,7 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
                 <>
                   <div className="add-or">or</div>
                   <button type="button" className="add-row" onClick={() => setStep({ kind: 'paste' })}>
-                    <IconPaste /> Paste text
+                    <IconPaste /><span> Paste text</span>
                   </button>
                 </>
               )}
@@ -208,7 +208,7 @@ export function AddBook({ initialFile, initialMode, manga = false, hasKey, nextC
           {step.kind === 'reading' && (
             <div className="add-busy">
               <Loader />
-              <span>Reading {step.name}…</span>
+              <span>{`Reading ${step.name}…`}</span>
             </div>
           )}
 

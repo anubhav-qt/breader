@@ -89,7 +89,7 @@ export function LibraryPick({ category, tab, counts, labels, onTab }: Props) {
             {others.map((h) => (
               <button key={h} type="button" role="menuitem" className="lpk-item" onClick={() => pick(h)}>
                 <span className="lpk-name">{nameOf(h, labels)}</span>
-                <span className="sr-only">, {countFor(h, counts[h], category)}</span>
+                <span className="sr-only">{`, ${countFor(h, counts[h], category)}`}</span>
               </button>
             ))}
           </motion.div>

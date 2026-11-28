@@ -65,6 +65,14 @@ const GoogleG = () => (
   </svg>
 );
 
+/** The line on books this browser has that the account hasn't. */
+function booksHere(books: number): string {
+  if (books === 1) {
+    return 'This browser has a book that isn’t in your account yet.';
+  }
+  return `This browser has ${books} books that aren’t in your account yet.`;
+}
+
 export function LoginDialog({ start, google, ready, localKey, enter, onDone, onClose }: Props) {
   const [step, setStep] = useState<Step>(start);
   const [email, setEmail] = useState('');
@@ -155,7 +163,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
               {google && (step.mode === 'login' || step.mode === 'signup') && (
                 <>
                   <button type="button" className="btn btn-quiet login-google" disabled={busy} onClick={google_}>
-                    <GoogleG /> Continue with Google
+                    <GoogleG /><span> Continue with Google</span>
                   </button>
                   <div className="add-or">or</div>
                 </>
@@ -202,10 +210,10 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
                 {busy ? 'One moment…' : { login: 'Log in', signup: 'Create account', forgot: 'Send link', reset: 'Save password' }[step.mode]}
               </button>
               {step.mode === 'login' && (
-                <p className="login-switch">New here? <button type="button" className="login-link" onClick={() => go({ mode: 'signup' })}>Create an account</button></p>
+                <p className="login-switch"><span>New here? </span><button type="button" className="login-link" onClick={() => go({ mode: 'signup' })}>Create an account</button></p>
               )}
               {step.mode === 'signup' && (
-                <p className="login-switch">Have an account? <button type="button" className="login-link" onClick={() => go({ mode: 'login' })}>Log in</button></p>
+                <p className="login-switch"><span>Have an account? </span><button type="button" className="login-link" onClick={() => go({ mode: 'login' })}>Log in</button></p>
               )}
               {step.mode === 'forgot' && (
                 <p className="login-switch"><button type="button" className="login-link" onClick={() => go({ mode: 'login' })}>Back to log in</button></p>
@@ -215,7 +223,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
 
           {step.mode === 'sent' && (
             <>
-              <p className="add-keynote">If {step.email} has an account, a link is on its way.</p>
+              <p className="add-keynote">{`If ${step.email} has an account, a link is on its way.`}</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
               </div>
@@ -232,18 +240,18 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
           {step.mode === 'choose' && (
             <>
               <p className="add-keynote">
-                This browser has {step.books === 1 ? 'a book' : `${step.books} books`} that {step.books === 1 ? 'isn’t' : 'aren’t'} in your account yet.
+                {booksHere(step.books)}
               </p>
               <div className="add-choices">
                 <button type="button" className="add-choice" onClick={() => go({ mode: 'entering', claim: true })}>
                   <IconUpload />
-                  <span><b>Move {step.books === 1 ? 'it' : 'them'} to my account</b><span>Your account keeps them from now on, with your other books.</span></span>
+                  <span><b>{`Move ${step.books === 1 ? 'it' : 'them'} to my account`}</b><span>Your account keeps them from now on, with your other books.</span></span>
                   <IconChevron className="add-go" />
                 </button>
                 <button type="button" className="add-choice" onClick={() => go({ mode: 'entering', claim: false })}>
                   <IconKey />
                   <span>
-                    <b>Keep {step.books === 1 ? 'it' : 'them'} separate</b>
+                    <b>{`Keep ${step.books === 1 ? 'it' : 'them'} separate`}</b>
                     <span>{localKey ? `Only the key ${localKey} opens ${step.books === 1 ? 'it' : 'them'}. Copy it first if you haven’t kept it.` : 'They stay in their own library.'}</span>
                   </span>
                   <IconChevron className="add-go" />
@@ -254,7 +262,7 @@ export function LoginDialog({ start, google, ready, localKey, enter, onDone, onC
 
           {step.mode === 'failed' && (
             <>
-              <p className="add-keynote">Couldn’t open your library. {step.message}</p>
+              <p className="add-keynote">{`Couldn’t open your library. ${step.message}`}</p>
               <div className="add-actions">
                 <button type="button" className="btn btn-ghost" onClick={onClose}>Not now</button>
                 <button type="button" className="btn btn-primary" onClick={() => go({ mode: 'entering' })}>Try again</button>

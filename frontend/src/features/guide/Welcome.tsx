@@ -49,7 +49,7 @@ function Cards({ list, actOf }: { list: Card[]; actOf: (id: DemoId) => Act }) {
 function GuideLink({ label, onGuide }: { label: string; onGuide: () => void }) {
   return (
     <button type="button" className="wl-guide" onClick={onGuide}>
-      {label}
+      <span>{label}</span>
       <IconChevron />
     </button>
   );
@@ -78,8 +78,8 @@ export function WelcomeBooks({ onAdd, onPaste, onPublic, onGuide }: { onAdd: () 
     <div className="wl">
       <h1 className="wl-h">Start with a book</h1>
       <div className="wl-acts">
-        <button type="button" className="btn btn-primary wl-main" onClick={onAdd}><IconPlus /> Add a book</button>
-        <button type="button" className="btn btn-quiet wl-second" onClick={onPaste}><IconPaste /> Paste text</button>
+        <button type="button" className="btn btn-primary wl-main" onClick={onAdd}><IconPlus /><span> Add a book</span></button>
+        <button type="button" className="btn btn-quiet wl-second" onClick={onPaste}><IconPaste /><span> Paste text</span></button>
       </div>
       {mouse && <span className="wl-note">or drop files anywhere here</span>}
       <Cards list={BOOKS} actOf={(id) => booksAct(id, { onAdd, onPaste, onPublic })} />
@@ -94,8 +94,8 @@ export function WelcomeManga({ onBrowse, onAdd, onPublic, onGuide }: { onBrowse:
     <div className="wl">
       <h1 className="wl-h">Start with a manga</h1>
       <div className="wl-acts">
-        {onBrowse && <button type="button" className="btn btn-primary wl-main" onClick={onBrowse}><IconSearch /> Find manga</button>}
-        <button type="button" className={`btn ${onBrowse ? 'btn-quiet wl-second' : 'btn-primary wl-main'}`} onClick={onAdd}><IconPlus /> Add CBZ files</button>
+        {onBrowse && <button type="button" className="btn btn-primary wl-main" onClick={onBrowse}><IconSearch /><span> Find manga</span></button>}
+        <button type="button" className={`btn ${onBrowse ? 'btn-quiet wl-second' : 'btn-primary wl-main'}`} onClick={onAdd}><IconPlus /><span> Add CBZ files</span></button>
       </div>
       {!onBrowse && <span className="wl-note">Breader’s computer can’t look for manga right now.</span>}
       <Cards list={MANGA} actOf={(id) => mangaAct(id, { onBrowse, onAdd, onPublic })} />
@@ -110,10 +110,10 @@ export function WelcomeShared({ manga, onShare, onOpen, onGuide }: { manga: bool
     <div className="wl">
       <h1 className="wl-h">Share with people you trust</h1>
       <p className="wl-p">
-        {manga ? 'Manga' : 'Books'} you share show here. Anyone with your key can read them and keep a copy. Share one you have from its ⋯.
+        {`${manga ? 'Manga' : 'Books'} you share show here. Anyone with your key can read them and keep a copy. Share one you have from its ⋯.`}
       </p>
       <div className="wl-acts">
-        <button type="button" className="btn btn-primary wl-main" onClick={onShare}><IconPlus /> {manga ? 'Share a manga' : 'Share a book'}</button>
+        <button type="button" className="btn btn-primary wl-main" onClick={onShare}><IconPlus /><span>{` ${manga ? 'Share a manga' : 'Share a book'}`}</span></button>
         <button type="button" className="btn btn-quiet wl-second" onClick={onOpen}>Open someone’s library</button>
       </div>
       <GuideLink label="More about sharing" onGuide={onGuide} />

@@ -60,7 +60,7 @@ export function LibrarySwitch({ category, tab, counts, labels, onTab }: Props) {
           {tab === t && <motion.span className="lsw-on" layoutId="lsw-on" transition={springs.snappy} />}
           {t === 'shelf' && <span className="sr-only">Shared library: </span>}
           <span className="lsw-name">{nameOf(t, labels)}</span>
-          <span className="sr-only">, {countFor(t, counts[t], category)}</span>
+          <span className="sr-only">{`, ${countFor(t, counts[t], category)}`}</span>
         </button>
       ))}
     </div>

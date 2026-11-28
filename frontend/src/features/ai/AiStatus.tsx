@@ -40,7 +40,7 @@ export function Tiles({ p, compact = false }: { p: AiProgress; compact?: boolean
               <b>{FEATURE[f].name}</b>
               {!compact && <span className="ai-tile-a">{FEATURE[f].about}</span>}
             </span>
-            <span className="ai-tile-s">{state === 'ready' && <DotIcon rows={CHECK} />}{word}</span>
+            <span className="ai-tile-s">{state === 'ready' && <DotIcon rows={CHECK} />}<span>{word}</span></span>
           </li>
         );
       })}
@@ -124,7 +124,7 @@ export function Steps({ p }: { p: AiProgress }) {
                   {s.unlocks.map((f) => (
                     <span key={f} className={`ai-chip is-${p.stage === 'off' ? 'off' : p.features[f]}`}>
                       <DotIcon rows={FEATURE_ICON[f]} />
-                      {FEATURE[f].name}
+                      <span>{FEATURE[f].name}</span>
                     </span>
                   ))}
                 </span>

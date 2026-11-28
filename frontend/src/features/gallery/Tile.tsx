@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type Ref } from 'react';
 import { animate, motion, useMotionValue } from 'motion/react';
 import { useShelfCover } from '../../data/shelf';
 import type { ShelfItem } from '../../data/useLibrary';
@@ -183,7 +183,7 @@ const join = (...parts: Array<string | false | undefined | 0>) => parts.filter(B
  * a cover, real or drawn, the text is a column that ends on the line where the reader stopped (the
  * opening line for a new book); CSS hides it on cards too narrow or short for it.
  */
-function Face({ book: b, variant, now, author, beside, manga }: { book: ShelfItem; variant: Variant; now: number; author?: string; beside: boolean; manga: boolean }): ReactNode {
+function Face({ book: b, variant, now, author, beside, manga }: { book: ShelfItem; variant: Variant; now: number; author?: string; beside: boolean; manga: boolean }): ReactElement {
   const n = cardNames(b, author);
   const vol = n.vol;
   // A manga series says how far by its chapter, and opens at it.
@@ -227,7 +227,7 @@ function Face({ book: b, variant, now, author, beside, manga }: { book: ShelfIte
         ) : (
           <span>{shortProgress(b)}</span>
         )}
-        {vol ? <span>Vol. {vol}</span> : null}
+        {vol ? <span>{`Vol. ${vol}`}</span> : null}
       </span>
     </>
   );

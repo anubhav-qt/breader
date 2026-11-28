@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { BookRecord } from '../../books/types';
 import { saveFile } from '../../books/exportManga';
 import { Modal } from '../../components/Modal';
@@ -15,6 +15,7 @@ import { ENGINES } from './made';
 import { useAudiobookKeys } from './keys';
 import * as player from './player';
 
+import type { Elements } from '../../lib/elements';
 /*
  * A book's audiobook dialog, opened from its card's button (Audiobook.tsx). Not made yet, it asks
  * which voice and how fast to make it on this device; while it's made, how far it's got, and once
@@ -69,13 +70,13 @@ export function AudiobookDialog({ book, listen: listenIn, onClose }: { book: Boo
 
   return (
     <Modal title="Audiobook" onClose={onClose} width={520} className="ab is-centered">
-      <p className="ab-book">{book.title}{book.author ? <span> · {book.author}</span> : null}</p>
+      <p className="ab-book"><span>{book.title}</span>{book.author ? <span>{` · ${book.author}`}</span> : null}</p>
       {view.kind === 'make' && (
         <MakeView book={book} fixed={view.engine} ab={ab} onStarted={(engine) => setView({ kind: 'progress', engine })} onBack={back} />
       )}
       {view.kind === 'progress' && (
         <div className="ab-progress">
-          <p className="ab-now"><b>{NAME[view.engine]}</b> · {voiceByKey(ab![view.engine]!.voice)?.name ?? 'its voice'}</p>
+          <p className="ab-now"><b>{NAME[view.engine]}</b><span>{` · ${voiceByKey(ab![view.engine]!.voice)?.name ?? 'its voice'}`}</span></p>
           <Making
             book={book}
             engine={view.engine}
@@ -149,7 +150,7 @@ function MakeView({ book, fixed, ab, onStarted, onBack }: {
   return (
     <div className="ab-make">
       {m ? (
-        <p className="ab-now"><b>{NAME[engine]}</b> · {voice?.name} · carries on from {Math.round((1 - left) * 100)}%</p>
+        <p className="ab-now"><b>{NAME[engine]}</b><span>{` · ${voice?.name ?? ''} · carries on from ${Math.round((1 - left) * 100)}%`}</span></p>
       ) : (
         <Step n={1} title="Voice">
           {ENGINES.map((e) => (
@@ -193,9 +194,9 @@ function Making({ book, engine, m, first, onCarryOn, lead, children }: {
   first?: boolean;
   onCarryOn: () => void;
   /** The main button, on a line of its own above the others. */
-  lead?: ReactNode;
+  lead?: Elements;
   /** More buttons, before Remove. */
-  children?: ReactNode;
+  children?: Elements;
 }) {
   const stage = useStage(book.id, engine);
   const p = m.done / m.total;

@@ -410,7 +410,7 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAddTo, f
       transition={springs.snappy}
     >
       <header className={`mdp-bar${scrolled ? ' is-scrolled' : ''}`}>
-        <button type="button" className="mdp-back" onClick={onBack}><IconBack /> {from}</button>
+        <button type="button" className="mdp-back" onClick={onBack}><IconBack /><span>{` ${from}`}</span></button>
         <span className="mdp-name" aria-hidden="true">{main.card.title}</span>
       </header>
       <div className="mdp-in">
@@ -431,15 +431,15 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAddTo, f
           </div>
           <div className="mds-actions">
             <button type="button" className="btn btn-primary" disabled={!canRead || busy} onClick={() => a && once(() => onRead(a, pickedNow, had, undefined, rect()))}>{readLabel}</button>
-            <button type="button" className="btn btn-quiet mds-add" disabled={!a} onClick={() => a && onAddTo(a, pickedNow, had)}><IconPlus /> Add to</button>
-            {inPersonal && <span className="mds-in"><IconCheck /> In {labels.mine}</span>}
+            <button type="button" className="btn btn-quiet mds-add" disabled={!a} onClick={() => a && onAddTo(a, pickedNow, had)}><IconPlus /><span> Add to</span></button>
+            {inPersonal && <span className="mds-in"><IconCheck /><span>{` In ${labels.mine}`}</span></span>}
           </div>
         </div>
 
         <section className="mdc" aria-label="Where it’s read from">
           <div className="mds-ch-head">
             <span>From Breader</span>
-            {!settled && <span className="mdc-note"><Loader /> Finding the best of each chapter</span>}
+            {!settled && <span className="mdc-note"><Loader /><span> Finding the best of each chapter</span></span>}
             {copiesNote && <span className="mdc-note">{copiesNote}</span>}
           </div>
         </section>
@@ -457,11 +457,11 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAddTo, f
         <div className="mds-ch-head is-chapters">
           <span>{count}</span>
           <span className="mds-ch-tools">
-            {hereAt >= 0 && <button type="button" className="mds-here" onClick={toHere}>You’re on Ch. {here}</button>}
+            {hereAt >= 0 && <button type="button" className="mds-here" onClick={toHere}>{`You’re on Ch. ${here ?? ''}`}</button>}
             {chapters.length > 1 && (
               <button type="button" className="mds-order" onClick={flipOrder} title={newest ? 'Show the first chapter first' : 'Show the latest chapter first'}>
                 <IconOrder />
-                {newest ? 'Newest first' : 'Oldest first'}
+                <span>{newest ? 'Newest first' : 'Oldest first'}</span>
               </button>
             )}
             {shown.kind === 'mangadex' && (
@@ -474,7 +474,7 @@ function SeriesPage({ found: start, prefs, recordOf, placeOf, onRead, onAddTo, f
             )}
           </span>
         </div>
-        {list.state === 'loading' && <p className="mds-wait"><Loader /> Finding its chapters…</p>}
+        {list.state === 'loading' && <p className="mds-wait"><Loader /><span> Finding its chapters…</span></p>}
         {list.state === 'error' && <p className="mds-error">{list.message}</p>}
         {chapters.length > 0 && (
           <ol className="mds-chapters">
@@ -557,7 +557,7 @@ function Related({ about, prefs, onOpen }: { about: AniListAbout; prefs: Props['
           {row(similar, () => undefined)}
         </section>
       )}
-      <p className="mds-credit">Related and similar series from <a href={`https://anilist.co/manga/${about.id}`} target="_blank" rel="noopener noreferrer">AniList</a>.</p>
+      <p className="mds-credit"><span>Related and similar series from </span><a href={`https://anilist.co/manga/${about.id}`} target="_blank" rel="noopener noreferrer">AniList</a><span>.</span></p>
     </>
   );
 }
@@ -570,7 +570,7 @@ function Links({ about }: { about: About | null }) {
     if (!s.link) return null;
     return (
       <div className="mds-links">
-        <a className="btn btn-quiet" href={s.link} target="_blank" rel="noopener noreferrer"><IconOut /> {s.source}</a>
+        <a className="btn btn-quiet" href={s.link} target="_blank" rel="noopener noreferrer"><IconOut /><span>{` ${s.source}`}</span></a>
       </div>
     );
   }
@@ -580,9 +580,9 @@ function Links({ about }: { about: About | null }) {
   return (
     <div className="mds-links">
       {official.map((l) => (
-        <a key={l.url} className="btn btn-quiet" href={l.url} target="_blank" rel="noopener noreferrer"><IconOut /> {l.label}</a>
+        <a key={l.url} className="btn btn-quiet" href={l.url} target="_blank" rel="noopener noreferrer"><IconOut /><span>{` ${l.label}`}</span></a>
       ))}
-      <a className="btn btn-ghost" href={s.page} target="_blank" rel="noopener noreferrer"><IconOut /> MangaDex</a>
+      <a className="btn btn-ghost" href={s.page} target="_blank" rel="noopener noreferrer"><IconOut /><span> MangaDex</span></a>
       {others.map((l) => (
         <a key={l.url} className="mds-link" href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a>
       ))}

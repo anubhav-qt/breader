@@ -19,7 +19,7 @@ export function OpeningBack({ onBack }: Props) {
   };
   return (
     <button type="button" className="opening-back" onClick={leave} disabled={used}>
-      <IconBack /> Back
+      <IconBack /><span> Back</span>
     </button>
   );
 }

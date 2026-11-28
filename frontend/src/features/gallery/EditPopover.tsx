@@ -311,7 +311,7 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
         {onChapters && (
           <button type="button" className="ep-act" title="Its chapters, and the language they’re read in" onClick={onChapters}>
             <IconList />
-            Chapters
+            <span>Chapters</span>
           </button>
         )}
         {onFinish && (
@@ -324,7 +324,7 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
             onClick={() => onFinish(!finished)}
           >
             <IconCheck />
-            {finished ? 'Finished' : 'Mark as finished'}
+            <span>{finished ? 'Finished' : 'Mark as finished'}</span>
           </button>
         )}
         <button
@@ -335,7 +335,7 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
           onClick={() => onChange({ favorite: !book.favorite })}
         >
           <IconStar />
-          {book.favorite ? 'Favourited' : 'Favourite'}
+          <span>{book.favorite ? 'Favourited' : 'Favourite'}</span>
         </button>
         {onRemove && (
           <button
@@ -345,7 +345,7 @@ export function EditPopover({ book, seriesNames, noSeries = false, anchor, other
             onClick={(e) => { removing.current = true; onRemove(e.detail === 0); }}
           >
             <IconTrash />
-            Remove
+            <span>Remove</span>
           </button>
         )}
       </div>

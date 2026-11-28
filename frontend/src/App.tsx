@@ -55,6 +55,7 @@ import { readLocal, writeLocal } from './lib/store';
 import './app.css';
 import { Loader } from './components/Loader';
 import { OpeningBack } from './components/OpeningBack';
+import type { Elements } from './lib/elements';
 
 /** The library; a book open (#/read/<id>); or a series' page (#/manga/<id>, by the id of the place it was picked in). */
 type Route = { name: 'library' } | { name: 'read'; id: string } | { name: 'series'; id: string };
@@ -1632,7 +1633,7 @@ export default function App() {
     if (others?.state === 'closed') {
       return (
         <div className="gallery-empty">
-          <p>This key doesn’t open {libraryName(sharing, showing)} any more.</p>
+          <p>{`This key doesn’t open ${libraryName(sharing, showing)} any more.`}</p>
         </div>
       );
     }
@@ -1650,7 +1651,7 @@ export default function App() {
   /** An empty library's Add a book opens Add book; its Add a manga opens Browse, where the laptop has anywhere to look. */
   const addTo = (c: Category) => (c === 'manga' ? () => setTab('browse') : () => setAdding({ mode: 'file' }));
   /** An empty library: what it's for and how to fill it (features/guide/Welcome.tsx); someone else's says why it's empty. */
-  const emptyOf = (c: Category, t: 'mine' | 'shelf'): ReactNode => {
+  const emptyOf = (c: Category, t: 'mine' | 'shelf'): Elements => {
     if (t === 'shelf') {
       if (showing !== 'own') return emptyShelf();
       return <WelcomeShared manga={c === 'manga'} onShare={addTo(c)} onOpen={() => setLibrariesOpen('key')} onGuide={() => openGuide('sharing')} />;
@@ -1801,7 +1802,7 @@ export default function App() {
 
       {shown && shownRec && (
         <div className={`rd-host${leaving ? ' is-leaving' : ''}`} ref={hostRef}>
-          <Suspense fallback={<div className="loading"><Loader /> Opening…</div>}>
+          <Suspense fallback={<div className="loading"><Loader /><span> Opening…</span></div>}>
           <Reader
             key={shown.id}
             record={shownRec}
@@ -1829,7 +1830,7 @@ export default function App() {
       {route.name === 'read' && !reading && !opening && (
         <div className="loading">
           <OpeningBack onBack={leaveLoading} />
-          <Loader /> Opening…
+          <Loader /><span> Opening…</span>
         </div>
       )}
 
@@ -1852,7 +1853,7 @@ export default function App() {
             {loaded?.id !== opening.id && (
               <>
                 <OpeningBack onBack={stopOpening} />
-                <span className="opening-note"><Loader /> Opening…</span>
+                <span className="opening-note"><Loader /><span> Opening…</span></span>
               </>
             )}
           </motion.div>

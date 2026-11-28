@@ -252,7 +252,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView({ book, la
       {layout === 'pages' ? (
         <>
           <div ref={pageRef} className="pdf-page"><canvas ref={canvasRef} /><canvas ref={picsRef} className="pdf-pics" /></div>
-          <div className="fv-folio">{page + 1} of {total}</div>
+          <div className="fv-folio">{`${page + 1} of ${total}`}</div>
           <button type="button" tabIndex={-1} className="fv-zone is-prev" aria-label="Previous page" onClick={() => goTo(page - 1)}><span>‹</span></button>
           <button type="button" tabIndex={-1} className="fv-zone is-next" aria-label="Next page" onClick={() => goTo(page + 1)}><span>›</span></button>
         </>

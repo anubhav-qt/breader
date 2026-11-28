@@ -157,4 +157,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   A note's `demo` adds See how, the start page's video for it (`guide/Demo.tsx`).
 - Never print `infra/.env` or any secret.
 - Commits: one line, `type: message`. No em dashes. No Claude attribution.
+- Readers translate the app in their browser. Text in JSX sits alone in its element as one string
+  (`<span>Save</span>` beside an icon, `` {`Pages: ${n}`} ``), slots beside other things take
+  `Elements` (`lib/elements.ts`); `src/translatable.test.ts` checks it. `lib/translators.ts` keeps
+  the app up if a translator moves a node anyway, and reports each place once. Book text is `translate="no"`.
 - Keep this file, `infra/README.md` and the ADRs in step with every change.

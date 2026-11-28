@@ -20,7 +20,7 @@ export function KeepSeries({ name, books, onKeepAll }: Props) {
   if (!left.length) {
     return (
       <span className="keep-series is-done">
-        <IconCheck aria-hidden="true" /> In {labels.mine}
+        <IconCheck aria-hidden="true" /><span>{` In ${labels.mine}`}</span>
       </span>
     );
   }
@@ -34,7 +34,7 @@ export function KeepSeries({ name, books, onKeepAll }: Props) {
       aria-label={`${label} of ${name} to ${labels.mine}`}
       onClick={() => onKeepAll(left, name)}
     >
-      <IconAddBook aria-hidden="true" /> {label}
+      <IconAddBook aria-hidden="true" /><span>{` ${label}`}</span>
     </button>
   );
 }

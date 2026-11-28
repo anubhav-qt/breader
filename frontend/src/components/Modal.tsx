@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { springs } from '../lib/springs';
 import { IconClose } from './icons';
 import { wrapTab } from './tabWrap';
 import './modal.css';
+import type { Elements } from '../lib/elements';
 
 interface Props {
   title: string;
   onClose: () => void;
-  children: ReactNode;
+  children: Elements;
   width?: number;
   className?: string;
 }

@@ -157,19 +157,19 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
             {message && <p className="acct-message" role="status">{message}</p>}
             {user && <div className="acct-sep" />}
             <button type="button" className="acct-item" onClick={() => leaveFor(onGuide)}>
-              <IconList /> Guide
-              {news > 0 ? <span className="acct-new">{news} new</span> : <kbd className="acct-kbd" aria-hidden="true">?</kbd>}
+              <IconList /><span> Guide</span>
+              {news > 0 ? <span className="acct-new">{`${news} new`}</span> : <kbd className="acct-kbd" aria-hidden="true">?</kbd>}
             </button>
             {/* Stays open, so the covers can be seen changing behind it. */}
             {coversOnly !== undefined && (
               <button type="button" role="switch" aria-checked={coversOnly} className="acct-item acct-toggle" onClick={onCoversOnly}>
-                <IconEye /> Only covers
+                <IconEye /><span> Only covers</span>
                 <span className="switch" aria-hidden="true" />
               </button>
             )}
             {rater && (
               <button type="button" role="switch" aria-checked={voting} className="acct-item acct-toggle" onClick={() => setVoting(!voting)}>
-                <IconThumb /> Panel votes
+                <IconThumb /><span> Panel votes</span>
                 <span className="switch" aria-hidden="true" />
               </button>
             )}
@@ -177,14 +177,14 @@ export function SettingsMenu({ account, onLogin, onLogOut, onKey, coversOnly, on
               <LibraryNames />
             ) : (
               <button type="button" className="acct-item" onClick={() => setNaming(true)}>
-                <IconPencil /> Rename libraries
+                <IconPencil /><span> Rename libraries</span>
               </button>
             )}
             <button type="button" className="acct-item" onClick={() => leaveFor(onKey)}>
-              <IconKey /> Library key
+              <IconKey /><span> Library key</span>
             </button>
             <button type="button" className="acct-item" onClick={() => leaveFor(onFeedback)}>
-              <IconChat /> Request a feature / Feedback
+              <IconChat /><span> Request a feature / Feedback</span>
             </button>
             {ending}
           </motion.div>

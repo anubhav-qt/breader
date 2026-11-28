@@ -122,7 +122,7 @@ function Row({ f, busy, onWorking, onDone }: { f: FeedbackItem; busy: boolean; o
         <span className={`adm-fb-kind is-${f.kind}`}>{f.kind === 'feature' ? 'Feature' : 'Feedback'}</span>
         <span>{ago(new Date(f.at).toISOString())}</span>
         <span title={f.library ?? undefined}>{f.library ? `library ${f.library.slice(0, 8)}` : 'no library'}</span>
-        {f.release && <span title={f.release}>build {f.release.slice(0, 7)}</span>}
+        {f.release && <span title={f.release}>{`build ${f.release.slice(0, 7)}`}</span>}
         {f.toldWorking && <span>told working</span>}
         {f.toldDone && <span>told done</span>}
       </div>

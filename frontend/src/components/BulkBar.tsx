@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react';
 import { IconSelect } from './icons';
 import './library-switch.css';
+import type { Elements } from '../lib/elements';
 
 /** Something to do with every book picked. */
 export interface BulkAction {
   key: string;
   label: string;
   /** Shown in place of the word, which is left for screen readers and the tooltip. */
-  icon: ReactNode;
+  icon: Elements;
   danger?: boolean;
   disabled?: boolean;
   run: (fromKeyboard: boolean) => void;
@@ -41,7 +41,7 @@ export function BulkBar({ count, all, onAll, actions, onDone }: Props) {
           <IconSelect />
           <span className="ls-act-label">{allLabel}</span>
         </button>
-        <span className="ls-picked" role="status">{count} picked</span>
+        <span className="ls-picked" role="status">{`${count} picked`}</span>
         {actions.map((a) => (
           <button
             key={a.key}

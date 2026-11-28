@@ -88,8 +88,8 @@ export function PublicBook({ book: b, from, mine, personal, onRead, onAddTo, onC
         </div>
         <div className="mds-actions">
           <button type="button" className="btn btn-primary" onClick={read}>{readLabel}</button>
-          <button type="button" className="btn btn-quiet" onClick={onAddTo}><IconPlus /> Add to</button>
-          {inPersonal && <span className="mds-in"><IconCheck /> In {personal}</span>}
+          <button type="button" className="btn btn-quiet" onClick={onAddTo}><IconPlus /><span> Add to</span></button>
+          {inPersonal && <span className="mds-in"><IconCheck /><span>{` In ${personal}`}</span></span>}
         </div>
       </div>
     </Modal>

@@ -14,10 +14,10 @@ export function ChapterBack({ here, mark, onKeep, onBack, onClose }: Props) {
   return (
     <Modal title="Save progress here?" onClose={onClose} width={380}>
       <div className="cb">
-        <p className="cb-ask">You last read up to {mark}.</p>
+        <p className="cb-ask">{`You last read up to ${mark}.`}</p>
         <div className="cb-actions">
-          <button type="button" className="btn btn-quiet" onClick={onKeep}><span>Save {here}</span></button>
-          <button type="button" className="btn btn-primary" onClick={onBack}><span>Go to {mark}</span></button>
+          <button type="button" className="btn btn-quiet" onClick={onKeep}><span>{`Save ${here}`}</span></button>
+          <button type="button" className="btn btn-primary" onClick={onBack}><span>{`Go to ${mark}`}</span></button>
         </div>
       </div>
     </Modal>

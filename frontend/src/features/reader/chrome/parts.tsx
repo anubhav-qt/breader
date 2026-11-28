@@ -34,7 +34,7 @@ export function Typed({ text, className = '' }: { text: string; className?: stri
 
 /** The hover label on a progress track: the chapter's number, title and length. */
 export function ChapterLabel({ chapters, i, f }: { chapters: Chapter[]; i: number; f: number }) {
-  if (chapters.length < 3) return <span className="lbl"><b>{Math.round(f * 100)}%</b></span>;
+  if (chapters.length < 3) return <span className="lbl"><b>{`${Math.round(f * 100)}%`}</b></span>;
   const c = chapters[i];
   return (
     <span className="lbl">
