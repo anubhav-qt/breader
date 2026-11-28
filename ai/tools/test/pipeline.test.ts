@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -21,7 +21,7 @@ process.env.AI_WORK = join(work, 'work');
 process.env.AI_OUT = join(work, 'out');
 const { Balancer } = await import('../balancer.ts');
 const { castPass } = await import('../cast.ts');
-const { addSeriesVoices, seriesVoices, voiceProblems, withRandomVoices } = await import('../casting.ts');
+const { addSeriesVoices, castVoices, seriesVoices, voiceProblems, withRandomVoices } = await import('../casting.ts');
 type Voices = import('../casting.ts').Voices;
 const { builtInVoice } = await import('../../../shared/src/voices.ts');
 /** Someone's Phonon voice's id, or '' for none. */
@@ -136,11 +136,34 @@ test('then marked and packed into a file the server takes', async () => {
   assert.equal(needs(b, new Map([[sha256, { made: f.made, by: f.by, notes: 0 }]])), 'notes');
 });
 
-test('a wrong answer sends the next try at the voices to Codex first', () => {
+test('the voices came from the first model, right on its second try', () => {
   const lines = readFileSync(join(WORK, '_calls.jsonl'), 'utf8').trim().split('\n');
   const voices = lines.map((l) => JSON.parse(l)).filter((c) => c.book === b.key && c.cast === 'voices');
-  const tries = voices.map((c) => `${c.try} ${c.codexFirst === true}`);
-  assert.deepEqual(tries, ['1 false', '2 true']);
+  assert.deepEqual(voices.map((c) => `${c.try} ${c.lead ?? 'first'}`), ['1 first', '2 first']);
+});
+
+test('wrong answers about the voices go to the first model 3 times, the second twice, then Codex', async () => {
+  const { book } = await startBook(b, bytes);
+  const file = join(bookDir(b.key), 'cast.json');
+  const before = readFileSync(file, 'utf8');
+  const cast = readJson<{ people: Array<{ id: string; voice?: unknown }> }>(file);
+  const elena = cast.people.find((p) => p.id === 'elena');
+  assert.ok(elena);
+  delete elena.voice;
+  writeFileSync(file, JSON.stringify(cast));
+  const leads: string[] = [];
+  const wrong = {
+    async chat(_request: unknown, label: Record<string, unknown>) {
+      leads.push(String(label.lead ?? 'first'));
+      return { reply: { text: 'voice elena miles', secs: 1 }, rung: { name: 'any' } };
+    },
+  };
+  try {
+    await assert.rejects(castVoices(book, wrong as unknown as InstanceType<typeof Balancer>), /still have no voices after 6 tries/);
+  } finally {
+    writeFileSync(file, before);
+  }
+  assert.deepEqual(leads, ['first', 'first', 'first', 'second', 'second', 'codex']);
 });
 
 test('then notes, merged into the server’s file with anyone they added to the cast', async () => {

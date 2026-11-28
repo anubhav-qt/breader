@@ -13,8 +13,8 @@ import { validate, type Cast } from './validate.ts';
  * (shared/src/voices.ts, ADR 0005): a reader's voice, or one of the character voices (a wizard, an
  * ogre, a snow queen…) for someone who suits one. A model that knows the book picks them, the
  * first model, then the second, then Codex as wrong answers add up (LEADS): it gets research.md,
- * everyone with their role and how many lines they have, and what each voice sounds like and who it suits. markBook runs it once the marks are settled,
- * and a book isn't packed until everyone but the generic speakers has a voice. A later volume of a
+ * everyone with their role and how many lines they have, and what each voice sounds like and who
+ * it suits. markBook runs it once the marks are settled, and a book isn't packed until everyone but the generic speakers has a voice. A later volume of a
  * series starts with the earlier one's cast (fetch.ts), voices and all, so only the people new to
  * it are picked for. Books marked before there were voices get theirs at random (withRandomVoices),
  * from the marker, which also keeps everyone's voices the same through a series (seriesVoices).
@@ -35,7 +35,7 @@ export const phononOf = (v: AnyVoices | undefined): Voices | undefined => (v && 
  * voice, or given one that doesn't suit them): the first model three times, the second twice, then
  * Codex once (`lead`, balancer.ts). Each still falls back to the others when it can't answer.
  */
-export const LEADS = ['first', 'first', 'first', 'second', 'second', 'codex'] as const;
+const LEADS = ['first', 'first', 'first', 'second', 'second', 'codex'] as const;
 const TRIES = LEADS.length;
 
 const WHO: Record<'F' | 'M', string> = { F: 'woman', M: 'man' };

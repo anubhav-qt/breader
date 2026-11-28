@@ -64,8 +64,10 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   Ultra (the admin picks per stage, NVIDIA only). Codex (`gpt-6.1-terra` at medium, through the
   worker's CLIProxyAPI, `ai/tools/proxy.ts`) is the backup: once every NVIDIA model is down it
   keeps the calls 10 minutes, then NVIDIA is asked again (`ai/tools/backup.ts`, `balancer.ts`,
-  `harness.ts`). Codex leads two stages, NVIDIA behind it: gathering a soundtrack and
-  casting the voices (`CODEX_STAGES`, `shared/src/admin.ts`), and any casting try after a wrong answer (`codexFirst`); downloading the tracks is code. NVIDIA searches the web
+  `harness.ts`). Codex leads gathering a soundtrack, NVIDIA behind it
+  (`CODEX_STAGES`, `shared/src/admin.ts`); downloading the tracks is code. Casting the voices tries
+  the first model 3 times, the second twice, then Codex (`LEADS`, `ai/tools/casting.ts`).
+  A first and second saved before 2026-11-28 reset to Super VL, then Ultra (`MODELS_ROUND`). NVIDIA searches the web
   through SearXNG (`SEARXNG_URL`), Codex with its own `web_search` on `/v1/responses`
   (`ai/tools/web.ts`). Plan and decisions: `docs/codex-plan.md`.
 - The server's small jobs (joining a search's copies `manga/same.ts`, checking Browse's tabs

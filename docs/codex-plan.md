@@ -84,6 +84,10 @@ Status: steps 1 to 4 built on branch `feat/codex`, not shipped. Written 2026-11-
     searches go the same way. A stage pick on the admin page still goes ahead of Codex.
 13. Decided 2026-11-28 (ADR 0005): casting the voices (`marks.voices`) asks Codex first too, NVIDIA
     behind it, the same way (`CODEX_STAGES`; `codexAhead` in `ai/tools/balancer.ts`).
-14. Decided 2026-11-28: once a casting answer is wrong (someone left without a voice or given one
-    that doesn't suit them), the tries left ask Codex first, NVIDIA behind it, even over a stage
-    pick (`codexFirst` label, `ai/tools/casting.ts`, `balancer.ts`).
+14. Decided 2026-11-28, replacing 13: casting the voices is NVIDIA's again. Each wrong answer
+    (someone left without a voice, or given one that doesn't suit them) is tried again: the first
+    model three times, the second twice, then Codex once (`LEADS`, `ai/tools/casting.ts`; `lead`
+    in `balancer.ts`).
+15. Decided 2026-11-28: Super VL first, Ultra second by default. A pair saved before that (the old
+    `nemotron` pick read as Ultra first) is dropped, so the defaults take over (`MODELS_ROUND`,
+    `shared/src/admin.ts`). Codex stays out of the stage picker: it is only the backup.

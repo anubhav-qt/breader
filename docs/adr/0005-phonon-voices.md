@@ -11,8 +11,8 @@
 - Uploading voices goes. Old uploads stop showing; their rows and files stay (migrations only add).
 - Voices: Phonon's 37 English ones (`gradium/phonon-voices`, Apache-2.0). The voice list shows
   the 25 everyday readers; the 12 character voices (wizard, ogre, snow queen…) are for the AI cast only.
-- Codex picks each person's voice (`marks.voices` joins `CODEX_STAGES`, `codexAhead` in
-  `ai/tools/balancer.ts`), NVIDIA behind it.
+- NVIDIA picks each person's voice: the first model three tries, the second two, then Codex once
+  (`LEADS`, `ai/tools/casting.ts`; `lead` in `ai/tools/balancer.ts`). Changed 2026-11-28 from Codex first.
 - Read on server stays, on Phonon, for devices too slow to read themselves.
 
 ## How it runs
@@ -43,7 +43,7 @@
 - The server's voice list is all 37; the app offers the 25 readers there, the cast the rest.
 - Old picks (`piper:…`, `kokoro:…`) map to the nearest Phonon voice by gender and accent, once.
 - Books cast before: their old `{piper, kokoro}` voices stay in `cast.json`, unused, until the
-  marker runs `marks.voices` again and Codex gives them a Phonon one. The random fill never
+  marker runs `marks.voices` again and a model gives them a Phonon one. The random fill never
   overwrites them. Until then the app voices them by gender, kept the same through a series.
 - Audiobooks made with Piper or Kokoro stay listenable (`AUDIOBOOK_ENGINES` keeps both names);
   only Phonon makes new ones (`MAKER`): an old one has no Carry on, and offers Add Phonon.
