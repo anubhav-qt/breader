@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { makeApp } from './app.ts';
 import { makeAuth } from './auth.ts';
@@ -9,7 +10,7 @@ import { pruneStaleFeed } from './jobs/chores.ts';
 import { fillBlanks } from './jobs/fill.ts';
 import { checkCovers } from './jobs/covers.ts';
 import { due, recordError, recordOk } from './jobs/runs.ts';
-import { asJob, runKind, takeCommands } from './lib/admin.ts';
+import { asJob, readAdminState, runKind, takeCommands } from './lib/admin.ts';
 import { Archive } from './lib/archive.ts';
 import { r2Answers } from './lib/answers.ts';
 import { archiveTo, connectRedis, memoryRoom, near, type Redis, type Store } from './lib/cache.ts';
@@ -28,6 +29,7 @@ import { makePool as makeStoragePool, poolMembers, type Pool } from './manga/poo
 import { makeUploads, type Uploads } from './manga/uploads.ts';
 import { makeKeeper } from './manga/keeper.ts';
 import { prefetch, untilPrefetch } from './manga/prefetch.ts';
+import { makeWalk, readersQuiet, walkFiles, type Walk } from './manga/walk.ts';
 import { makeSame, pgGroups } from './manga/same.ts';
 import { makeEngine } from './engine/index.ts';
 import { makePanels } from './panels/index.ts';
@@ -160,6 +162,14 @@ if (manga) {
 // and covers at once is more than its memory holds, and a restart there loses them anyway.
 const prefetching = new AbortController();
 let prefetchAt: NodeJS.Timeout | undefined;
+// On the ThinkPad, the never ending manga walk (manga/walk.ts): its daily update pass runs after
+// the prefetch, and the walk goes on whenever readers are quiet and neither is running.
+let walk: Walk | null = null;
+if (manga && !light && archiveMb > 0 && (env.MANGA_WALK ?? onThinkPad(env))) {
+  walk = makeWalk(manga, { store: walkFiles(join(env.MANGA_ARCHIVE_DIR, 'walk')), quiet: () => readersQuiet() && !dailyRunning && !busy?.() });
+}
+/** The prefetch or the update pass is running: the walk waits. */
+let dailyRunning = false;
 let commands: NodeJS.Timeout | undefined;
 /** What the admin page may ask this process to run now, by command. */
 const runNow: Record<string, () => void> = {};
@@ -169,17 +179,23 @@ if (manga && !light) {
   const run = async (now = false) => {
     if (running) return;
     running = true;
+    dailyRunning = true;
     try {
       const r = await asJob(primary.pool, 'manga-prefetch', () => prefetch(manga, prefetching.signal), { evenIfOff: now });
-      if (!r) return;
-      log.info(r, 'prefetched Browse’s first screens');
-      if (!prefetching.signal.aborted) await recordOk(primary.pool, 'manga-prefetch', r);
+      if (r) {
+        log.info(r, 'prefetched Browse’s first screens');
+        if (!prefetching.signal.aborted) await recordOk(primary.pool, 'manga-prefetch', r);
+      }
     } catch (err) {
       log.error({ err }, 'manga prefetch failed');
       report(err, { job: 'manga-prefetch' });
       await recordError(primary.pool, 'manga-prefetch', err).catch(() => {});
+    }
+    try {
+      if (walk && !prefetching.signal.aborted) await updatePass(walk, now);
     } finally {
       running = false;
+      dailyRunning = false;
     }
   };
   const daily = () => {
@@ -191,6 +207,58 @@ if (manga && !light) {
   }, 5 * 60_000);
   prefetching.signal.addEventListener('abort', () => clearTimeout(soon));
   runNow[runKind('manga-prefetch')] = () => void run(true);
+}
+
+/** The walk's daily update pass, after the prefetch (manga/walk.ts). */
+async function updatePass(w: Walk, now: boolean) {
+  try {
+    const r = await asJob(primary.pool, 'manga-update', () => w.update(prefetching.signal), { evenIfOff: now });
+    if (!r) return;
+    log.info(r, 'fetched again the series the sites updated');
+    if (!prefetching.signal.aborted) await recordOk(primary.pool, 'manga-update', r);
+  } catch (err) {
+    log.error({ err }, 'the manga update pass failed');
+    report(err, { job: 'manga-update' });
+    await recordError(primary.pool, 'manga-update', err).catch(() => {});
+  }
+}
+
+// The walk itself: a page of a list a turn, between turns a look whether readers are quiet and
+// whether the admin page switched it off. Its job_runs detail is the day's count, by list.
+let walkAt: NodeJS.Timeout | undefined;
+if (walk) {
+  const w = walk;
+  const started = Date.now();
+  let failed = 0;
+  const turn = async () => {
+    try {
+      if (!readersQuiet() || dailyRunning) return 30_000;
+      const r = await asJob(primary.pool, 'manga-walk', () => w.turn(prefetching.signal));
+      // Switched off on the admin page.
+      if (r === null) {
+        const off = await readAdminState(primary.pool).then((s) => s.jobsOff.includes('manga-walk'), () => false);
+        if (off) return 5 * 60_000;
+        // Every list walked to its end: only the update pass is left.
+        return 60 * 60_000;
+      }
+      failed += r.failed;
+      const today = await w.today();
+      if (!prefetching.signal.aborted) await recordOk(primary.pool, 'manga-walk', { ...today, failed, hours: Math.round((Date.now() - started) / 3_600_000) });
+      // Nothing saved (a page all saved before, or every site late): a moment before the next.
+      if (r.saved === 0) return 5_000;
+      return 0;
+    } catch (err) {
+      log.error({ err }, 'the manga walk failed');
+      report(err, { job: 'manga-walk' });
+      await recordError(primary.pool, 'manga-walk', err).catch(() => {});
+      return 5 * 60_000;
+    }
+  };
+  const again = (ms: number) => {
+    walkAt = setTimeout(() => void turn().then(again), ms);
+  };
+  again(10 * 60_000);
+  runNow[runKind('manga-update')] = () => void updatePass(w, true);
 }
 
 // On the ThinkPad, every library's manga is kept on its SSD ahead of its readers (manga/keeper.ts):
@@ -309,6 +377,7 @@ const stop = () => {
   clearInterval(warming);
   clearTimeout(prefetchAt);
   clearTimeout(keepAt);
+  clearTimeout(walkAt);
   clearTimeout(fillAt);
   clearTimeout(coversAt);
   clearInterval(commands);

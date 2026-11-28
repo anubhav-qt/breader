@@ -126,6 +126,8 @@ const JOBS: Record<string, { name: string; about: string }> = {
   'storage-check': { name: 'R2 check', about: 'Once a day, puts back any file missing from R2, from the ThinkPad’s copy.' },
   'extensions': { name: 'Manga extensions', about: 'Once a day, updates the manga sites’ extensions to their newest versions.' },
   'manga-prefetch': { name: 'Manga prefetch', about: 'At 4 am, fetches Browse’s lists ahead, so they open at once.' },
+  'manga-update': { name: 'Manga updates', about: 'After the prefetch, fetches again every series the sites updated since the last time, then starts a new day of the walk.' },
+  'manga-walk': { name: 'Manga walk', about: 'Whenever readers are quiet, saves more series on the ThinkPad, deeper each day: 1,500 Popular, 1,500 Top rated, 1,000 Updated, 1,000 Trending, then 18+ the same. Pictures only once someone reads it.' },
   'ai-fill': { name: 'AI fills blanks', about: 'Every 30 minutes, Codex’s Terra, or NVIDIA when Codex is down, fills in the genres, authors and series nobody gave a book or manga, once per book.' },
   'ai-covers': { name: 'AI checks covers', about: 'Every 30 minutes, Codex’s Terra, or NVIDIA when Codex is down, looks at each book’s cover once and says if it’s really that book’s cover. Until it says yes, the book shows its drawn card. Not manga.' },
   'manga-keep': { name: 'Manga on the SSD', about: 'Every 15 minutes, keeps each library’s manga on the ThinkPad’s SSD: the chapter each is read to and the next ten, 25 for its 2 latest, which go in R2 too.' },

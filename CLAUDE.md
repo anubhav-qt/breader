@@ -34,6 +34,12 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   read to and 25 after it, put by the ThinkPad's keeper (`server/src/manga/cloud.ts`, ADR 0003,
   `docs/adr/0003-pages-in-r2.md`). The app reads pages there first (`frontend/src/lib/cloud.ts`),
   and a MangaFire series' list too while home is away. Free only: under 9 GB, 900,000 writes a month.
+- The manga walk (`server/src/manga/walk.ts`, ThinkPad only, `MANGA_WALK`): whenever readers are quiet,
+  it saves more series deeper in Browse's lists, never starting over (its place in `MANGA_ARCHIVE_DIR/walk`).
+  A day: 1,500 Popular, 1,500 Top rated, 1,000 Updated, 1,000 Trending, then 18+ the same. Each as its
+  sheet asks (`sheet`, `prefetch.ts`), AniList's page too; no pictures until read. After the 04:00
+  prefetch the update pass (`manga-update`) fetches again what the sites updated. A Memo answer gone
+  from the store but in the archive is given at once and fetched again behind (`lib/cache.ts`).
 - The ThinkPad's voices and panel model run in the `engine` service (ADR 0002,
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.

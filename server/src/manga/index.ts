@@ -107,7 +107,7 @@ const ANI_WARM_AT_ONCE = 3;
 const ANI_WARM_LIGHT_PAGES = 2;
 const ANI_WARM_LIGHT_KIND_PAGES = 1;
 /** The kinds Browse offers (Comics isn't), as it asks AniList for them. */
-const BROWSE_KINDS: readonly MangaKind[] = ['manga', 'manhwa', 'manhua'];
+export const BROWSE_KINDS: readonly MangaKind[] = ['manga', 'manhwa', 'manhua'];
 
 export function makeManga(opts: MangaOptions): Manga {
   const disk = new Disk(opts.dir, opts.cacheBytes, pictureType, opts.archive?.pages ?? null);

@@ -7,6 +7,7 @@ import { ApiError, parse } from '../lib/errors.ts';
 import { log } from '../log.ts';
 import type { Cover } from '../manga/covers.ts';
 import type { Picture } from '../manga/disk.ts';
+import { readerAsked } from '../manga/walk.ts';
 
 /** How long Cloudflare and the browser keep a page, in seconds: its address always means the same picture. */
 export const PAGE_KEPT = 30 * 24 * 3600;
@@ -29,6 +30,8 @@ export function mangaRoutes(deps: Deps) {
 
   r.use('/manga/*', async (_c, next) => {
     if (!manga) throw new ApiError(503, 'manga_off', 'Manga isn’t on, on this server.');
+    // A reader is here: the manga walk waits until they're quiet (manga/walk.ts).
+    readerAsked();
     await next();
   });
 

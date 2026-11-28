@@ -175,6 +175,8 @@ function statusFor(scene: Scene): Status {
       job('storage-check', 40 * 60),
       job('extensions', 9 * 3600),
       job('manga-prefetch', 20 * 60),
+      job('manga-update', 18 * 60),
+      job('manga-walk', 2 * 60),
       job('manga-keep', 10 * 60),
       job('ai-fill', 30 * 60),
       job('ai-covers', 30 * 60),

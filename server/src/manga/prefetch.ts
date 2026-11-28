@@ -40,14 +40,14 @@ export interface Prefetched {
   minutes: number;
 }
 
-const sleep = (ms: number, signal?: AbortSignal) =>
+export const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((done) => {
     const t = setTimeout(done, ms);
     signal?.addEventListener('abort', () => { clearTimeout(t); done(); }, { once: true });
   });
 
 /** What a search found, as Browse's cards: each series with every place it was found in. */
-function cardsOf(items: MangaFound[]): MangaFound[][] {
+export function cardsOf(items: MangaFound[]): MangaFound[][] {
   const cards: MangaFound[][] = [];
   for (const f of items) {
     const card = cards.find((c) => sameSeries(c, f));
@@ -76,10 +76,10 @@ async function list(manga: Manga, sort: MangaSort, kinds: MangaKind[], signal?: 
 
 
 /**
- * What a series' sheet asks for, its covers kept for freshFor (covers.ts). Returns how many places
- * it's in, and how many of the asks failed.
+ * What a series' sheet asks for, its covers kept for freshFor (covers.ts); adult: as an 18+ reader's
+ * sheet asks (the manga walk's 18+ lists). Returns how many places it's in, and how many of the asks failed.
  */
-async function sheet(manga: Manga, card: MangaFound[], freshFor: number): Promise<{ places: number; failed: number }> {
+export async function sheet(manga: Manga, card: MangaFound[], freshFor: number, adult = false): Promise<{ places: number; failed: number }> {
   let failed = 0;
   const step = async (what: () => Promise<unknown>) => {
     try {
@@ -90,8 +90,8 @@ async function sheet(manga: Manga, card: MangaFound[], freshFor: number): Promis
     }
   };
   const main = card[0];
-  if (main.kind === 'mangadex') await step(() => manga.series(main.card.id, false));
-  else await step(() => manga.sourceSeries(main.card.id, false));
+  if (main.kind === 'mangadex') await step(() => manga.series(main.card.id, adult));
+  else await step(() => manga.sourceSeries(main.card.id, adult));
 
   // The other places it's in.
   const places = [...card];
@@ -100,7 +100,7 @@ async function sheet(manga: Manga, card: MangaFound[], freshFor: number): Promis
   for (let lot = 0; lot < PLACE_LOTS; lot++) {
     let r;
     try {
-      r = await manga.search({ q: main.card.title, lang: LANG, doujinshi: true, names: names.length > 0 ? names : undefined, next });
+      r = await manga.search({ q: main.card.title, lang: LANG, adult, doujinshi: true, names: names.length > 0 ? names : undefined, next });
     } catch (err) {
       failed += 1;
       log.debug({ err }, 'a prefetch step failed');

@@ -217,7 +217,9 @@ export function freshly<T>(fn: () => Promise<T>): Promise<T> {
  * time. In Redis a key reads breader:<kind>:<key>.
  *
  * With `keep` longer than `ttl`, an answer past its time is kept on until `keep` and still given
- * straight away, while it's fetched again behind it: no one waits for what was asked lately.
+ * straight away, while it's fetched again behind it: no one waits for what was asked lately. One
+ * gone from the store but in the archive (lib/archive.ts) is given straight away the same way, so
+ * what the manga walk saved (manga/walk.ts) opens at once however long ago it was.
  */
 export class Memo<T> {
   private going = new Map<string, { value: Promise<T>; fresh: boolean }>();
@@ -283,8 +285,23 @@ export class Memo<T> {
         this.refresh(key, make);
         return value;
       }
+      // Gone from the store but kept for good: given at once too, and fetched again behind it.
+      if (!sure.getStore()) {
+        const saved = await this.saved(key);
+        if (saved) {
+          void this.put(key, saved.v as T, saved.at).catch(() => {});
+          if (Date.now() - saved.at > this.ttl) this.refresh(key, make);
+          return saved.v as T;
+        }
+      }
     }
     return this.fetch(key, make);
+  }
+
+  /** What the archive kept for the key, for kinds worth keeping for good. */
+  private async saved(key: string): Promise<{ at: number; v: unknown } | undefined> {
+    if (this.keep < ARCHIVE_PAST) return undefined;
+    return archive?.find(this.kind, key).catch(() => undefined);
   }
 
   /** Fetches an answer again behind what's kept, once however many find it past its time. */
@@ -305,7 +322,7 @@ export class Memo<T> {
     try {
       value = await make();
     } catch (err) {
-      const kept = this.keep >= ARCHIVE_PAST ? await archive?.find(this.kind, key).catch(() => undefined) : undefined;
+      const kept = await this.saved(key);
       if (kept) return kept.v as T;
       throw err;
     }
@@ -318,8 +335,9 @@ export class Memo<T> {
     if (this.keep >= ARCHIVE_PAST) archive?.keep(this.kind, key, value);
   }
 
-  private put(key: string, value: T): Promise<void> {
-    if (this.keep > this.ttl) return this.store.set(this.name(key), { '@at': Date.now(), v: value } satisfies Aged, this.keep);
+  /** at: when it was fetched, if not now (one read back from the archive). */
+  private put(key: string, value: T, at = Date.now()): Promise<void> {
+    if (this.keep > this.ttl) return this.store.set(this.name(key), { '@at': at, v: value } satisfies Aged, this.keep);
     return this.store.set(this.name(key), value, this.ttl);
   }
 

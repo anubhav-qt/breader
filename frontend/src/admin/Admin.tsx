@@ -273,7 +273,7 @@ function needsOf(s: Snapshot, admin: Admin, go: Go): Need[] {
 
 const JOB_NAMES: Record<string, string> = {
   'backup': 'Nightly backup', 'restore-drill': 'Restore test', 'clean-up': 'Clean-up', 'storage-check': 'R2 check',
-  'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'manga-keep': 'Manga on the SSD', 'ai-fill': 'AI fills blanks', 'ai-covers': 'AI checks covers', 'yt-dlp': 'yt-dlp update',
+  'extensions': 'Manga extensions', 'manga-prefetch': 'Manga prefetch', 'manga-update': 'Manga updates', 'manga-walk': 'Manga walk', 'manga-keep': 'Manga on the SSD', 'ai-fill': 'AI fills blanks', 'ai-covers': 'AI checks covers', 'yt-dlp': 'yt-dlp update',
 };
 
 /** What needs doing, at the top of the page; nothing at all when nothing does. */

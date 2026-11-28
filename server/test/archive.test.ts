@@ -1,9 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Archive } from '../src/lib/archive.ts';
-import { archiveTo, Memo, MemoryStore } from '../src/lib/cache.ts';
+import { archiveTo, freshly, Memo, MemoryStore } from '../src/lib/cache.ts';
 import { Disk } from '../src/manga/disk.ts';
 
 const HOUR = 3_600_000;
@@ -20,6 +20,7 @@ beforeEach(async () => {
   archiveTo(archive);
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   archiveTo(null);
   await rm(dir, { recursive: true, force: true });
 });
@@ -37,6 +38,32 @@ describe('the archive', () => {
     };
     expect(await after.get('30656', down)).toEqual({ title: 'Vagabond' });
     await expect(after.get('1', down)).rejects.toThrow('AniList is down');
+  });
+
+  it('gives a saved answer at once when the store has lost it, and fetches it again behind', async () => {
+    const t = { now: 1_000_000 };
+    vi.spyOn(Date, 'now').mockImplementation(() => t.now);
+    const kept = () => new Memo<string>(new MemoryStore(10), 'manga:v1:series', HOUR, 24 * HOUR);
+    await kept().get('s1', async () => 'old');
+    await until(async () => (await archive.find('manga:v1:series', 's1')) !== undefined);
+
+    // Within its time: given, nothing asked.
+    const make = vi.fn(async () => 'new');
+    const within = kept();
+    expect(await within.get('s1', make)).toBe('old');
+    expect(make).not.toHaveBeenCalled();
+    expect(await within.peek('s1')).toBe('old');
+
+    // Past its time, even past keeping: given at once all the same, and fetched again behind it.
+    t.now += 48 * HOUR;
+    const past = kept();
+    expect(await past.get('s1', make)).toBe('old');
+    await until(async () => (await past.peek('s1')) === 'new');
+    expect(make).toHaveBeenCalledTimes(1);
+
+    // In freshly() (the prefetch, the update pass) it's fetched and waited for.
+    expect(await freshly(() => kept().get('s1', async () => 'newer'))).toBe('newer');
+    await until(async () => (await archive.find('manga:v1:series', 's1'))?.v === 'newer');
   });
 
   it('leaves out answers that go stale in minutes', async () => {

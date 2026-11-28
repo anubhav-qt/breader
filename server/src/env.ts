@@ -165,6 +165,11 @@ const Env = z.object({
    */
   MANGA_KEEP: bool.optional(),
   /**
+   * The never ending manga walk and its daily update pass (manga/walk.ts): series saved ahead of
+   * readers, deeper each day, in MANGA_ARCHIVE_DIR. On by default on the ThinkPad only.
+   */
+  MANGA_WALK: bool.optional(),
+  /**
    * The storage pool (manga/pool.ts, ADR 0004): readers' chapters in several free buckets, the home
    * first (R2), comma separated. Each bucket's settings are POOL_<NAME>_ENDPOINT, _REGION, _BUCKET,
    * _KEY_ID, _SECRET, _PUBLIC_URL, _MB (its room, every other bucket on its account included),
