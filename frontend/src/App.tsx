@@ -54,6 +54,7 @@ import { springs } from './lib/springs';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
 import { Loader } from './components/Loader';
+import { OpeningBack } from './components/OpeningBack';
 
 /** The library; a book open (#/read/<id>); or a series' page (#/manga/<id>, by the id of the place it was picked in). */
 type Route = { name: 'library' } | { name: 'read'; id: string } | { name: 'series'; id: string };
@@ -412,6 +413,8 @@ export default function App() {
   const [loaded, setLoaded] = useState<{ id: string; book: LoadedBook } | null>(null);
   const openAnimDone = useRef(false);
   const loadedId = useRef<string | null>(null);
+  /** Goes up each time the reader steps back from a book still opening, so that load is dropped when it comes. */
+  const openRun = useRef(0);
   const toastId = useRef(0);
 
   const say = useCallback((text: string, more?: Omit<ToastMessage, 'id' | 'text'>) => {
@@ -669,12 +672,15 @@ export default function App() {
   const startLoad = useCallback(async (id: string, given?: BookRecord, at?: Position) => {
     const rec = given ?? recordById.get(id);
     if (!rec) return null;
+    const run = openRun.current;
     // What this device can do itself, reading aloud and finding panels, checked while the book loads (reader/able.ts).
     void checkDevice();
     try {
       if (rec.source === 'remote') await ensureKey();
       // A series from a Suwayomi source opens a few chapters around its place.
       const book = await loadRecord(rec, at ?? lib.reads[id]?.pos);
+      // The reader went back while it was opening: nothing more to do with it.
+      if (run !== openRun.current) return null;
       loadedId.current = id;
       setLoaded({ id, book });
       // Its own shelf is the one to go back to, opened from a link or not.
@@ -686,6 +692,7 @@ export default function App() {
       return book;
     } catch (e) {
       console.error(e);
+      if (run !== openRun.current) return null;
       let text = 'Couldn’t open this book.';
       if (e instanceof Error) text = e.message;
       // A manga's site may be down or gone: its sheet lists its other copies.
@@ -695,9 +702,28 @@ export default function App() {
     }
   }, [recordById, lib, say, chaptersOf, ensureKey]);
 
-  const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect, given?: BookRecord) => {
+  /** The reader grows out of the card while the book loads, and takes over once both are done. */
+  const growOpen = useCallback((rec: BookRecord, rect: DOMRect, at?: Position) => {
     openAnimDone.current = false;
     loadedId.current = null;
+    const run = openRun.current;
+    setOpening({ id: rec.id, rect });
+    void startLoad(rec.id, rec, at).then((b) => {
+      // Gone back from: another book may be opening by now, and this one has no say over it.
+      if (run !== openRun.current) return;
+      if (!b) setOpening(null);
+      else if (openAnimDone.current) finishOpen(rec.id);
+    });
+  }, [startLoad, finishOpen]);
+
+  /** Back from a book still opening: it stops, and the reader stays where they were. */
+  const stopOpening = useCallback(() => {
+    openRun.current += 1;
+    setOpening(null);
+    setStartAt(null);
+  }, []);
+
+  const onOpen = useCallback(async (book: ShelfItem, rect: DOMRect, given?: BookRecord) => {
     // A shared book this reader hasn't started joins their library as they open it. Its copy needs
     // a key to reach the server: that's where its AI switch comes on, when the sharer's file has
     // been read, and where its voices, music and notes are fetched from.
@@ -717,12 +743,8 @@ export default function App() {
     if (!rec) return;
     // One taken out of My books comes back in once it's being read again.
     if (rec.sharedOnly) lib.setSharedOnly(rec.id, false);
-    setOpening({ id: rec.id, rect });
-    void startLoad(rec.id, rec).then((b) => {
-      if (!b) setOpening(null);
-      else if (openAnimDone.current) finishOpen(rec.id);
-    });
-  }, [recordById, lib, startLoad, finishOpen, ensureKey]);
+    growOpen(rec, rect);
+  }, [recordById, lib, growOpen, ensureKey]);
 
   /**
    * Renaming, recolouring or favouring a shared book adds it to the reader's library first. Turning
@@ -746,6 +768,12 @@ export default function App() {
     else goBack({ name: 'library' }, null);
     setStartAt(null);
   }, [route, sheet, goBack]);
+
+  /** Back from a book opened by its address, still loading: that load is dropped when it comes. */
+  const leaveLoading = useCallback(() => {
+    openRun.current += 1;
+    back();
+  }, [back]);
 
   // A series' page opened from its address alone, with nothing kept in the history (a link, say): from
   // its card in My manga, or the library when it isn't in it.
@@ -825,14 +853,8 @@ export default function App() {
     if (!rec) rec = await addSeries(about, url);
     const id = rec.id;
     setStartAt(from ? { id, pos: from } : null);
-    openAnimDone.current = false;
-    loadedId.current = null;
-    setOpening({ id, rect: rect ?? new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2 - 85, 120, 170) });
-    void startLoad(id, rec, from).then((b) => {
-      if (!b) setOpening(null);
-      else if (openAnimDone.current) finishOpen(id);
-    });
-  }, [lib, addSeries, startLoad, finishOpen]);
+    growOpen(rec, rect ?? new DOMRect(window.innerWidth / 2 - 60, window.innerHeight / 2 - 85, 120, 170), from);
+  }, [lib, addSeries, growOpen]);
 
   /**
    * Where a book being added goes: Personal or a shared library. Always asked for a series; for a
@@ -1805,7 +1827,10 @@ export default function App() {
         </div>
       )}
       {route.name === 'read' && !reading && !opening && (
-        <div className="loading"><Loader /> Opening…</div>
+        <div className="loading">
+          <OpeningBack onBack={leaveLoading} />
+          <Loader /> Opening…
+        </div>
       )}
 
       <AnimatePresence>
@@ -1824,7 +1849,12 @@ export default function App() {
               if (loadedId.current === opening.id) finishOpen(opening.id);
             }}
           >
-            {loaded?.id !== opening.id && <span className="opening-note"><Loader /> Opening…</span>}
+            {loaded?.id !== opening.id && (
+              <>
+                <OpeningBack onBack={stopOpening} />
+                <span className="opening-note"><Loader /> Opening…</span>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
