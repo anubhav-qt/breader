@@ -30,6 +30,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   manga's answers kept in R2 under `answers/` so a restart reads them back (`server/src/lib/answers.ts`).
 - The app knows every server (`VITE_API_SERVERS`, home first), times their `/health` and picks
   (`frontend/src/lib/servers.ts`, `frontend/src/lib/api.ts`); timeouts and gateway errors move to the next.
+- A piece of the app that fails to load (an old build's file, a dropped connection) reloads the page,
+  once a minute at most, and only then goes to Sentry (`frontend/src/lib/stale-build.ts`).
 - Each library's 2 comics read most lately go in the public R2 bucket `breader-pages`, the chapter
   read to and 25 after it, put by the ThinkPad's keeper (`server/src/manga/cloud.ts`, ADR 0003,
   `docs/adr/0003-pages-in-r2.md`). The app reads pages there first (`frontend/src/lib/cloud.ts`),

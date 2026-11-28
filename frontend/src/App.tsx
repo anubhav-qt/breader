@@ -51,6 +51,7 @@ import { api, ApiError } from './lib/api';
 import { newId, newLibraryKey } from './lib/key';
 import { genreOf, mangadex, readMangaPrefs, sources, type MangaPrefs } from './lib/mangadex';
 import { springs } from './lib/springs';
+import { reloadsForPiece } from './lib/stale-build';
 import { readLocal, writeLocal } from './lib/store';
 import './app.css';
 import { Loader } from './components/Loader';
@@ -694,6 +695,8 @@ export default function App() {
     } catch (e) {
       console.error(e);
       if (run !== openRun.current) return null;
+      // Its format's reader couldn't be fetched: the page reloads onto a build that has it (lib/stale-build.ts).
+      if (reloadsForPiece(e)) return null;
       let text = 'Couldn’t open this book.';
       if (e instanceof Error) text = e.message;
       // A manga's site may be down or gone: its sheet lists its other copies.

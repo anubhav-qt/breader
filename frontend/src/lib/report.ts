@@ -1,4 +1,5 @@
 import { makeReporter, type Reporter } from '@breader/shared/report';
+import { reloadsForPiece } from './stale-build';
 
 /*
  * The app's errors go to Sentry when the build sets VITE_SENTRY_DSN (Cloudflare Pages does, see
@@ -16,8 +17,15 @@ if (dsn) {
       release: import.meta.env.VITE_RELEASE,
       environment: import.meta.env.MODE,
     });
-    window.addEventListener('error', (e) => report(e.error ?? e.message));
-    window.addEventListener('unhandledrejection', (e) => report(e.reason));
+    // A piece of the app that couldn't be fetched reloads instead, and is only sent if it can't.
+    window.addEventListener('error', (e) => {
+      if (reloadsForPiece(e.error)) return;
+      report(e.error ?? e.message);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      if (reloadsForPiece(e.reason)) return;
+      report(e.reason);
+    });
   } catch {
     reporter = null;
   }
