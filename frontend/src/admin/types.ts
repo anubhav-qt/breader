@@ -35,7 +35,7 @@ export const STEPS: Record<Task, Step[]> = {
     { key: 'check', name: 'Checking the marks', about: 'Looks for lines with no speaker or the wrong one, and fixes them, a round at a time.' },
     { key: 'redo', name: 'Marking again what the backup model did', about: 'The parts the second model marked go to the first again, so the whole book is marked the same way.', parts: true },
     { key: 'settle', name: 'Settling unsure lines', about: 'Lines the two models read differently are asked about twice more, and the answer that agrees wins.' },
-    { key: 'voices', name: 'Casting the voices', about: 'Everyone gets a voice of each model, the same one they had in the series’ earlier books.' },
+    { key: 'voices', name: 'Casting the voices', about: 'Everyone gets a voice, the same one they had in the series’ earlier books.' },
     { key: 'save', name: 'Saving', about: 'Packs the marks and puts them on the server, where readers’ phones fetch them.' },
   ],
   music: [

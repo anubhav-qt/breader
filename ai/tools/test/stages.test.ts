@@ -84,16 +84,22 @@ test('the balancer asks the stage’s pick first, the usual models behind it', a
 const SUPER = 'nvidia/nemotron-3.5-super-vl-120b-a12b';
 const ULTRA = 'nvidia/nemotron-3-ultra-550b-a55b';
 
-test('settings from before keep working: Kimi K3 and K2.6 are retired, so their picks move to Super VL', () => {
-  const k3 = adminStateOf({ marker: { first: 'kimi-k3' } }).marker;
-  assert.deepEqual({ first: k3.first, second: k3.second }, { first: SUPER, second: ULTRA });
-  const old = adminStateOf({ marker: { first: 'nemotron', paused: true } }).marker;
-  assert.deepEqual({ first: old.first, second: old.second, paused: old.paused }, { first: ULTRA, second: SUPER, paused: true });
-  const k26 = adminStateOf({ marker: { first: 'moonshotai/kimi-k2.6', second: ULTRA } }).marker;
-  assert.deepEqual({ first: k26.first, second: k26.second }, { first: SUPER, second: ULTRA });
-  const both = adminStateOf({ marker: { first: SUPER, second: 'moonshotai/kimi-k2.6' } }).marker;
-  assert.deepEqual({ first: both.first, second: both.second }, { first: SUPER, second: ULTRA }, 'never the same model twice');
+test('a first and second saved before Super VL led go back to Super VL first, Ultra second', () => {
+  const old = adminStateOf({ marker: { first: ULTRA, second: SUPER, paused: true } }).marker;
+  assert.deepEqual({ first: old.first, second: old.second, paused: old.paused }, { first: SUPER, second: ULTRA, paused: true }, 'the rest is kept');
+  const named = adminStateOf({ marker: { first: 'nemotron' } }).marker;
+  assert.deepEqual({ first: named.first, second: named.second }, { first: SUPER, second: ULTRA });
   assert.deepEqual(adminStateOf({}).marker.first, SUPER, 'Super VL first by default');
+});
+
+test('a pair picked since is kept, with a model NVIDIA retired swapped for Super VL', () => {
+  const round = adminStateOf({}).marker.modelsRound;
+  const picked = adminStateOf({ marker: { first: ULTRA, second: SUPER, modelsRound: round } }).marker;
+  assert.deepEqual({ first: picked.first, second: picked.second }, { first: ULTRA, second: SUPER });
+  const k26 = adminStateOf({ marker: { first: 'moonshotai/kimi-k2.6', second: ULTRA, modelsRound: round } }).marker;
+  assert.deepEqual({ first: k26.first, second: k26.second }, { first: SUPER, second: ULTRA });
+  const both = adminStateOf({ marker: { first: SUPER, second: 'moonshotai/kimi-k2.6', modelsRound: round } }).marker;
+  assert.deepEqual({ first: both.first, second: both.second }, { first: SUPER, second: ULTRA }, 'never the same model twice');
 });
 
 test('Gemini picks from before are dropped, NVIDIA’s kept', () => {

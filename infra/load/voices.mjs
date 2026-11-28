@@ -20,7 +20,7 @@ const args = {
   base: 'http://localhost:8797',
   origin: 'http://localhost:5173',
   live: 1,
-  voice: 'piper:kristin',
+  voice: 'phonon:everly',
   passage: 8,
   panels: 0,
   pageMs: 2_000,
@@ -111,7 +111,7 @@ function sentence() {
 async function say(c) {
   const t = Date.now();
   try {
-    const res = await ask(c, 'POST', '/v1/speech/say', { voice: args.voice, text: sentence(), speed: 1 });
+    const res = await ask(c, 'POST', '/v1/speech/say', { voice: args.voice, text: sentence() });
     const took = Date.now() - t;
     if (!res.ok) {
       count(seen.sayErr, res.status);

@@ -532,7 +532,8 @@ export type SpeechReady = z.infer<typeof SpeechReady>;
 export const SpeechRequest = z.object({
   voice: SpeechVoice,
   text: z.string().min(1).max(SPEECH_CHARS),
-  speed: z.number().min(0.5).max(2.5),
+  /** From apps before ADR 0005, which had the voice read at a speed: it's read at 1x now. */
+  speed: z.number().min(0.5).max(2.5).optional(),
 });
 export type SpeechRequest = z.infer<typeof SpeechRequest>;
 

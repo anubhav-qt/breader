@@ -282,7 +282,7 @@ function Card({ book, who, cast, on, hear, onClose }: {
                 const key = `${who.c.id}:${v.key}`;
                 return (
                   <span key={v.key} className="cs-chip">
-                    <button type="button" onClick={() => pickVoice(book, who.c.id, v.key)} aria-label={`Read ${name} in ${v.name}`} title={`${v.name}, ${v.accent}`}>{v.name}</button>
+                    <button type="button" onClick={() => pickVoice(book, who.c.id, v.key)} aria-label={`Read ${name} in ${v.name}`} title={[v.name, v.accent].filter(Boolean).join(', ')}>{v.name}</button>
                     <button type="button" className="cs-chip-hear" onClick={() => hear(key, v)} aria-label={on === key ? `Stop ${v.name}` : `Hear ${v.name}`}>
                       <DotIcon rows={on === key ? STOP : PLAY} />
                     </button>
@@ -401,8 +401,8 @@ export function VoiceFaces({ voices, lit, onPick }: { voices: VoiceInfo[]; lit: 
     <>
     <div className="cs-faces" role="group" aria-label="Voices">
       {shown.map((v) => {
-        let about = `${v.name}, a ${v.gender === 'F' ? 'woman' : 'man'}’s voice, ${v.accent}`;
-        if (v.blend) about += `, ${v.blend[0]} and ${v.blend[1]} blended`;
+        let about = `${v.name}, a ${v.gender === 'F' ? 'woman' : 'man'}’s voice`;
+        if (v.accent) about += `, ${v.accent}`;
         return (
           <button key={v.key} type="button" className={`cs-face-b${lit(v) ? ' is-on' : ''}`} aria-pressed={lit(v)} aria-label={about} title={about} onClick={() => onPick(v)}>
             <span className={`cs-face is-${v.gender ?? 'all'} is-m`} aria-hidden="true">{initials(v.name)}</span>

@@ -129,7 +129,7 @@ Voice marks go to the client for playback, but are never shown in the UI.
 6. **2 voices:**
    - Unmute 2 in `COUNTS` when the book has voice marks, and keep `TwoVoicesSoon` for books without.
    - In 2 voices mode, list the voices in Female and Male groups, and the reader picks exactly one of each, in Normal and in Immersive.
-   - Built-in voices per mode are 3 F and 2 M:
+   - Built-in voices per mode are 3 F and 2 M (before ADR 0005; one Phonon model now, `docs/adr/0005-phonon-voices.md`):
      - Piper: Kristin F, Norman M, Cori F, Northern English male M, Linda F.
      - Kokoro: Heart F, Michael M, Emma F, George M, Bella F.
    - Playback splits sentences at span edges, so each piece is read by its voice.

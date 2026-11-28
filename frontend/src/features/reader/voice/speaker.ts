@@ -1,18 +1,17 @@
 import { useSyncExternalStore } from 'react';
-import { api } from '../../../lib/api';
-import { engineFiles, filesOf, noGpu, weight, type Engine, type VoiceInfo } from './catalog';
-import { onServer, startingHeavy } from './prefs';
+import { engineFiles, voiceWant, weight, type VoiceInfo } from './catalog';
+import { onServer } from './prefs';
 import { readyOnServer, sayOnServer } from './server';
-import { has, hosted, type Want } from './store';
+import { has, type Want } from './store';
 import type { Reply, Request } from './tts.worker';
 
 /*
- * The page's side of speech: a worker per engine (tts.worker.ts), or the server's voice
+ * The page's side of speech: the engine's worker (tts.worker.ts), or the server's voice
  * (server.ts), what's loading and how far it's got, and playing what comes back.
  *
- * A worker holds a lot while it runs (about 300 MB for a Normal voice, 760 MB and the graphics
- * chip's memory for a heavy one), so it holds one voice at a time (two for 2 voices), and goes
- * when the book closes or nothing has been said for five minutes. Starting again takes a second or two, from the cache.
+ * The worker holds about 400 MB while it runs, the model for every voice, and each voice it has
+ * loaded (a quarter of a megabyte each). It goes when the book closes or nothing has been said for
+ * five minutes. Starting again takes a moment, from the cache.
  */
 
 export interface Clip {
@@ -28,8 +27,6 @@ export interface LoadState {
   loaded: number;
   total: number;
   error: string | null;
-  /** The error is this browser lacking what Immersive needs. */
-  gpu?: boolean;
 }
 
 let loadState: LoadState = { key: null, loaded: 0, total: 0, error: null };
@@ -39,9 +36,11 @@ const setLoad = (s: Partial<LoadState>) => {
   loadSubs.forEach((f) => f());
 };
 /** Reading aloud stopped over something other than loading: the voice sheet says what. Null clears it. */
-export const failed = (error: string | null) => setLoad({ key: null, error, gpu: false });
+export const failed = (error: string | null) => setLoad({ key: null, error });
 /** Reading aloud starts again: what went wrong last time no longer applies. */
-export const retry = () => { if (loadState.error && loadState.key === null) setLoad({ error: null, gpu: false }); };
+export function retry() {
+  if (loadState.error && loadState.key === null) setLoad({ error: null });
+}
 export const useLoadState = () => useSyncExternalStore(
   (f) => { loadSubs.add(f); return () => { loadSubs.delete(f); }; },
   () => loadState,
@@ -52,7 +51,7 @@ export const useLoadState = () => useSyncExternalStore(
 interface Pending {
   type: Request['type'];
   resolve: (r: Extract<Reply, { ok: true }>) => void;
-  reject: (e: Error & { gpu?: boolean }) => void;
+  reject: (e: Error) => void;
   onBytes?: (name: string, n: number) => void;
 }
 
@@ -68,10 +67,13 @@ class Runner {
       const r = e.data;
       const p = this.pending.get(r.id);
       if (!p) return;
-      if ('progress' in r) { p.onBytes?.(r.progress.name, r.progress.bytes); return; }
+      if ('progress' in r) {
+        p.onBytes?.(r.progress.name, r.progress.bytes);
+        return;
+      }
       this.pending.delete(r.id);
       if (r.ok) p.resolve(r);
-      else p.reject(Object.assign(new Error(r.error), { gpu: r.gpu }));
+      else p.reject(new Error(r.error));
     };
     this.worker.onerror = (e) => {
       for (const p of this.pending.values()) p.reject(new Error(e.message || 'The voice engine stopped.'));
@@ -90,7 +92,9 @@ class Runner {
 
   /** Downloading or loading a voice. Sentences being made ahead can be let go. */
   get loading() {
-    for (const p of this.pending.values()) if (p.type === 'start' || p.type === 'voice') return true;
+    for (const p of this.pending.values()) {
+      if (p.type === 'start' || p.type === 'voice') return true;
+    }
     return false;
   }
 
@@ -101,9 +105,10 @@ class Runner {
   }
 }
 
-const runners: Partial<Record<Engine, Runner>> = {};
+/** The reader's engine. */
+let reader: Runner | null = null;
 
-/** Unused this long, the engines go. */
+/** Unused this long, the engine goes. */
 const IDLE_MS = 5 * 60_000;
 let idleTimer = 0;
 function idle() {
@@ -112,37 +117,32 @@ function idle() {
   idleTimer = window.setTimeout(release, IDLE_MS);
 }
 
-/** Lets the engines go, with everything they hold, unless one is still loading a voice. */
+/** Lets the engine go, with everything it holds, unless it's still loading a voice. */
 export function release() {
-  for (const k of Object.keys(runners) as Engine[]) {
-    if (runners[k]!.loading) { idle(); continue; }
-    runners[k]!.stop();
-    delete runners[k];
+  if (!reader) return;
+  if (reader.loading) {
+    idle();
+    return;
   }
+  reader.stop();
+  reader = null;
 }
 
-/** One engine runs at a time: its models are big. */
-function runner(e: Engine) {
-  for (const k of Object.keys(runners) as Engine[]) {
-    if (k !== e) { runners[k]!.stop(); delete runners[k]; }
-  }
-  return (runners[e] ??= new Runner());
-}
-
-/** An uploaded voice's files come through a signed link, fetched only when they aren't cached. */
-async function linked(w: Want | undefined, fileId: string | null | undefined): Promise<Want | undefined> {
-  if (!w || !fileId || (await has(w))) return w;
-  const { url } = await api.get<{ url: string }>(`/v1/voices/files/${encodeURIComponent(fileId)}/link`);
-  return { ...w, from: [url] };
+/** Everything a voice needs that isn't loaded yet: the engine's files the first time, and its own. */
+function wantsOf(v: VoiceInfo, started: boolean): Want[] {
+  const out: Want[] = [];
+  if (!started) out.push(...Object.values(engineFiles()));
+  out.push(voiceWant(v));
+  return out;
 }
 
 /** Everything this voice still has to download, and roughly how many bytes that is. None for the server's. */
 export async function missing(v: VoiceInfo) {
   if (onServer()) return { files: [] as Want[], bytes: 0 };
-  const f = filesOf(v);
-  const all = [...engineFiles(v.engine), f.model, f.config, f.pack, f.mix].filter((w): w is Want => !!w);
   const out: Want[] = [];
-  for (const w of all) if (!(await has(w))) out.push(w);
+  for (const w of wantsOf(v, false)) {
+    if (!(await has(w))) out.push(w);
+  }
   return { files: out, bytes: weight(out) };
 }
 
@@ -155,49 +155,40 @@ export async function missingAll(vs: VoiceInfo[]) {
   return weight([...files.values()]);
 }
 
-/**
- * Starts the voice's engine and loads the voice, showing progress while files arrive. Other
- * voices go, but those in `keep`: 2 voices keeps its other one.
- */
-export function prepare(v: VoiceInfo, keep: string[] = []): Promise<void> {
-  return onServer() ? prepareOnServer(v) : prepareHere(v, keep);
+/** Starts the engine and loads the voice, showing progress while files arrive. */
+export function prepare(v: VoiceInfo): Promise<void> {
+  if (onServer()) return prepareOnServer(v);
+  return prepareHere(v);
 }
 
 /** Loads the voice in this device's engine, whatever the server switch says. */
-function prepareHere(v: VoiceInfo, keep: string[]): Promise<void> {
-  const r = runner(v.engine);
+function prepareHere(v: VoiceInfo): Promise<void> {
+  reader ??= new Runner();
+  const r = reader;
   const ready = r.voices.get(v.key);
   if (ready) return ready;
-  // One voice at a time (two for 2 voices): another one loaded alongside would need its room too.
-  for (const k of r.voices.keys()) {
-    if (keep.includes(k)) continue;
-    r.voices.delete(k);
-    void r.call({ type: 'forget', key: k }).catch(() => {});
-  }
   const p = (async () => {
-    const f = filesOf(v);
-    const wants = [...(r.started ? [] : engineFiles(v.engine)), f.model, f.config, f.pack, f.mix].filter((w): w is Want => !!w);
+    const wants = wantsOf(v, !!r.started);
     const total = wants.reduce((n, w) => n + w.size, 0);
     let loaded = 0;
-    setLoad({ key: v.key, loaded: 0, total, error: null, gpu: false });
+    setLoad({ key: v.key, loaded: 0, total, error: null });
     const onBytes = (_: string, n: number) => {
       loaded += n;
       setLoad({ loaded: Math.min(loaded, total) });
     };
     try {
-      if (!(await Promise.all(wants.map(has))).every(Boolean)) void navigator.storage?.persist?.().catch(() => {});
-      if (v.engine === 'kokoro') startingHeavy(v.key);
+      const cached = await Promise.all(wants.map(has));
+      if (!cached.every(Boolean)) void navigator.storage?.persist?.().catch(() => {});
       await loadInto(r, v, onBytes);
       setLoad({ key: null, loaded: total });
-      if (v.engine === 'kokoro') startingHeavy(null);
     } catch (e) {
-      if (v.engine === 'kokoro') startingHeavy(null);
       r.voices.delete(v.key);
-      const err = e as Error & { gpu?: boolean };
-      setLoad({ key: null, error: err.message, gpu: !!err.gpu });
-      if (err.gpu) noGpu();
+      setLoad({ key: null, error: (e as Error).message });
       // A failed start leaves the worker unusable; the next try gets a fresh one.
-      if (runners[v.engine] === r) { r.stop(); delete runners[v.engine]; }
+      if (reader === r) {
+        r.stop();
+        reader = null;
+      }
       throw e;
     }
   })();
@@ -207,20 +198,9 @@ function prepareHere(v: VoiceInfo, keep: string[]): Promise<void> {
 
 /** Starts the engine, if it hasn't, and loads the voice into it. */
 async function loadInto(r: Runner, v: VoiceInfo, onBytes?: Pending['onBytes']) {
-  const f = filesOf(v);
-  r.started ??= r.call({ type: 'start', engine: v.engine }, onBytes).then(() => undefined);
+  r.started ??= r.call({ type: 'start', files: engineFiles() }, onBytes).then(() => undefined);
   await r.started;
-  const u = v.upload;
-  await r.call({
-    type: 'voice',
-    key: v.key,
-    model: await linked(f.model, u?.fileId),
-    config: await linked(f.config, u?.configId),
-    pack: await linked(f.pack, u?.fileId),
-    mix: f.mix,
-    speaker: f.speaker,
-    british: v.british,
-  }, onBytes);
+  await r.call({ type: 'voice', key: v.key, file: voiceWant(v) }, onBytes);
 }
 
 /*
@@ -228,7 +208,7 @@ async function loadInto(r: Runner, v: VoiceInfo, onBytes?: Pending['onBytes']) {
  * reader's, so reading aloud, or anything else, meanwhile doesn't stop them: one, or several side
  * by side (lanes), each making its own paragraphs. They go when the last book is made.
  */
-let forBooks: { engine: Engine; key: string; lanes: Runner[] } | null = null;
+let forBooks: { key: string; lanes: Runner[] } | null = null;
 
 /**
  * Readies `v` in up to `lanes` engines for an audiobook and says how many are ready. The first
@@ -236,22 +216,26 @@ let forBooks: { engine: Engine; key: string; lanes: Runner[] } | null = null;
  * cache. One that can't start (out of memory, say) is left out, unless it's the first.
  */
 export async function bookVoices(v: VoiceInfo, lanes: number, onLoading?: (loaded: number, total: number) => void): Promise<number> {
-  if (forBooks && (forBooks.engine !== v.engine || forBooks.key !== v.key)) releaseBookVoice();
-  const b = (forBooks ??= { engine: v.engine, key: v.key, lanes: [] });
+  if (forBooks && forBooks.key !== v.key) releaseBookVoice();
+  const b = (forBooks ??= { key: v.key, lanes: [] });
   if (!b.lanes.length) {
     const r = new Runner();
-    const f = filesOf(v);
-    const wants = [...engineFiles(v.engine), f.model, f.config, f.pack, f.mix].filter((w): w is Want => !!w);
-    const total = wants.reduce((n, w) => n + w.size, 0);
+    const total = wantsOf(v, false).reduce((n, w) => n + w.size, 0);
     let loaded = 0;
     try {
-      await loadInto(r, v, (_, n) => { loaded += n; onLoading?.(Math.min(loaded, total), total); });
+      await loadInto(r, v, (_, n) => {
+        loaded += n;
+        onLoading?.(Math.min(loaded, total), total);
+      });
     } catch (e) {
       r.stop();
       if (forBooks === b) forBooks = null;
       throw e;
     }
-    if (forBooks !== b) { r.stop(); throw new Error('Stopped'); }
+    if (forBooks !== b) {
+      r.stop();
+      throw new Error('Stopped');
+    }
     b.lanes.push(r);
   }
   const more = Array.from({ length: Math.max(0, lanes - b.lanes.length) }, () => new Runner());
@@ -270,7 +254,7 @@ export async function bookVoices(v: VoiceInfo, lanes: number, onLoading?: (loade
 export async function synthForBook(v: VoiceInfo, text: string, lane = 0): Promise<Clip> {
   const r = forBooks?.key === v.key ? forBooks.lanes[lane] : undefined;
   if (!r) throw new Error('Stopped');
-  const res = await r.call({ type: 'say', key: v.key, text, speed: 1 });
+  const res = await r.call({ type: 'say', key: v.key, text });
   return { audio: res.audio!, rate: res.rate! };
 }
 
@@ -287,17 +271,15 @@ const onServerReady = new Map<string, Promise<void>>();
 function prepareOnServer(v: VoiceInfo): Promise<void> {
   const ready = onServerReady.get(v.key);
   if (ready) return ready;
-  // What the server fetches the first time, as a guess until it says: the heavy voices' model too.
-  const f = filesOf(v);
-  const total = [v.engine === 'kokoro' ? hosted('kokoro') : undefined, f.model, f.config, f.pack, f.mix].reduce((n, w) => n + (w?.size ?? 0), 0);
   const p = (async () => {
-    setLoad({ key: v.key, loaded: 0, total, error: null, gpu: false });
+    // A guess at what the server fetches the first time, until it says.
+    setLoad({ key: v.key, loaded: 0, total: voiceWant(v).size, error: null });
     try {
       await readyOnServer(v, (loaded, total) => setLoad({ loaded, total }));
       setLoad({ key: null });
     } catch (e) {
       onServerReady.delete(v.key);
-      setLoad({ key: null, error: (e as Error).message, gpu: false });
+      setLoad({ key: null, error: (e as Error).message });
       throw e;
     }
   })();
@@ -305,22 +287,15 @@ function prepareOnServer(v: VoiceInfo): Promise<void> {
   return p;
 }
 
-export async function synth(v: VoiceInfo, text: string, speed: number, keep: string[] = []): Promise<Clip> {
-  if (onServer()) return sayOnServer(v, text, speed);
-  await prepareHere(v, keep);
+/** A sentence's sound, at the voice's own pace: play() makes it faster or slower. */
+export async function synth(v: VoiceInfo, text: string): Promise<Clip> {
+  if (onServer()) return sayOnServer(v, text);
+  await prepareHere(v);
   // Not a new engine: this one was let go while the voice was being readied.
-  const r = runners[v.engine];
+  const r = reader;
   if (!r) throw new Error('Stopped');
-  const res = await r.call({ type: 'say', key: v.key, text, speed });
+  const res = await r.call({ type: 'say', key: v.key, text });
   return { audio: res.audio!, rate: res.rate! };
-}
-
-/** Unloads a voice from its engine. */
-export async function drop(v: VoiceInfo) {
-  const r = runners[v.engine];
-  if (!r) return;
-  r.voices.delete(v.key);
-  await r.call({ type: 'forget', key: v.key }).catch(() => {});
 }
 
 /* Playing */
@@ -371,10 +346,10 @@ export function wav(samples: Float32Array, rate: number, lead = 0): Blob {
  * A new sound can take a moment to be heard: a phone or Safari starting it, a speaker coming back
  * up after the gap between two sentences. Chrome hands its speaker every sample, so it happens
  * after the browser, and whatever didn't make it was the sentence's first sound. The voices leave
- * quiet in front of it, but never the same: Kokoro about 300 ms at 1x and 210 at 1.88x (320 wpm),
- * where the first sound went missing; Normal's voices anything up to 700 ms. So at every speed, in
- * every voice, a sentence starts exactly this long before its first sound: quiet added in front
- * when it has less, taken off when it has more.
+ * quiet in front of it, but never the same, and played faster that quiet gets shorter (the old
+ * voices lost their first sound at 210 ms). So at every speed, in every voice, a sentence starts
+ * exactly this long before its first sound, as heard: quiet added in front when it has less, taken
+ * off when it has more.
  */
 const LEAD = 0.35;
 
@@ -385,19 +360,20 @@ const LEAD = 0.35;
 const AFTER = 0.06;
 
 /**
- * A sentence's sound as it's played, LEAD before its first sound, and where the clip's own first
- * sample falls in it (`shift`, in samples: less than nothing when quiet came off the front).
+ * A sentence's sound as it's played at `speed`, LEAD before its first sound as heard, and where the
+ * clip's own first sample falls in it (`shift`, in samples: less than nothing when quiet came off
+ * the front).
  */
-export function framed(clip: Clip) {
+export function framed(clip: Clip, speed = 1) {
   const { audio: x, rate } = clip;
-  const want = Math.round(LEAD * rate);
+  const want = Math.round(LEAD * speed * rate);
   let own = 0;
   while (own < x.length && Math.abs(x[own]) < 0.01) own++;
   let after = 0;
   while (after < x.length - own && Math.abs(x[x.length - 1 - after]) < 0.01) after++;
   const lead = Math.max(0, want - own);
   const from = Math.max(0, own - want);
-  const to = x.length - Math.min(lead, Math.max(0, after - Math.round(AFTER * rate)));
+  const to = x.length - Math.min(lead, Math.max(0, after - Math.round(AFTER * speed * rate)));
   return { blob: wav(x.subarray(from, to), rate, lead), shift: lead - from };
 }
 
@@ -489,15 +465,22 @@ export interface Playing {
   stop: () => void;
 }
 
-/** Plays a sentence's sound. `volume` below 1 is a fade (ignored by iPhones, which keep their own). */
-export function play(clip: Clip, volume = 1): Playing {
+/**
+ * Plays a sentence's sound at `speed` (1 is the voice's own pace), its pitch kept. `volume` below 1
+ * is a fade (ignored by iPhones, which keep their own).
+ */
+export function play(clip: Clip, volume = 1, speed = 1): Playing {
   const a = audio();
-  const { blob, shift } = framed(clip);
+  const { blob, shift } = framed(clip, speed);
   const url = URL.createObjectURL(blob);
   const length = clip.audio.length / clip.rate;
   let stopped = false;
   let started = false;
   a.src = url;
+  // A new source starts at the default rate, so both are set.
+  a.preservesPitch = true;
+  a.defaultPlaybackRate = speed;
+  a.playbackRate = speed;
   a.volume = volume * loudness.volume;
   a.muted = loudness.muted;
   current = { clip, a, shift, fade: volume };
@@ -533,7 +516,7 @@ export function play(clip: Clip, volume = 1): Playing {
   return out;
 }
 
-/** Plays a voice's sample line from a URL (bundled clips, uploaded samples). */
+/** Plays a voice's sample line from a URL (a bundled clip). */
 let sampleAudio: HTMLAudioElement | null = null;
 export function playSample(url: string) {
   sampleAudio?.pause();

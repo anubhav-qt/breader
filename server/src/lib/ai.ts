@@ -96,6 +96,12 @@ export function revisitFor(f: Pick<AiFile, 'made' | 'revisit'>, p: AiAt | null):
 
 type Voices = AiFile['voices'];
 
+/** Someone's Phonon voice, or null for none or one from before ADR 0005. */
+function phononOf(voice: Voices['cast'][number]['voice']): { phonon: string } | null {
+  if (!voice || !('phonon' in voice)) return null;
+  return { phonon: voice.phonon };
+}
+
 /** How someone in the cast sounds at a paragraph, going by the reveals before it. */
 function soundAt(c: Voices['cast'][number], p: AiAt): AiGender {
   let g = c.g;
@@ -151,11 +157,12 @@ export function voicesFor(f: Pick<AiFile, 'made' | 'sections' | 'voices'>): AiVo
     const prev = tellers.at(-1);
     if (!prev || prev[2] !== k) tellers.push([s, b, k]);
   }
-  const picks: Array<[number, string, string]> = [];
+  const picks: Array<[number, string]> = [];
   const ids: Array<[number, string]> = [];
   for (const [i, c] of v.cast.entries()) {
     if (keyOf(i) < 0) continue;
-    if (c.voice) picks.push([i, c.voice.piper, c.voice.kokoro]);
+    // A voice from before ADR 0005 (Piper's and Kokoro's) isn't one the app has: no pick.
+    if (c.voice && 'phonon' in c.voice) picks.push([i, c.voice.phonon]);
     ids.push([i, seriesId(c.id)]);
   }
   return { made: f.made, sections: f.sections, narration: tidy, spans, who, tellers, picks, ids };
@@ -207,7 +214,7 @@ export function castFor(f: { made: string; voices: Voices; people: AiEntry[] }, 
     let g = c.g;
     const change = latest(c.changes ?? [], p);
     if (change) g = change[2];
-    people.push({ key, id: seriesId(c.id), name, g, lines: said.get(key) ?? 0, voice: c.voice ?? null });
+    people.push({ key, id: seriesId(c.id), name, g, lines: said.get(key) ?? 0, voice: phononOf(c.voice) });
   }
   people.sort((a, b) => b.lines - a.lines || before(met.get(a.key)!, met.get(b.key)!));
   return { made: f.made, upTo: p, people };

@@ -2,9 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { parentPort, workerData } from 'node:worker_threads';
 import { Mp3Encoder } from '@breezystack/lamejs';
 import * as ort from 'onnxruntime-node';
-import { piperInput, type PiperConfig } from '@breader/shared/speech';
+import { Phonon, PHONON_RATE } from '@breader/shared/speech';
 import { findPanels, takesOf } from '@breader/shared/panels';
-import type { VoiceFiles } from '../speech/files.ts';
+import { SPEECH_MODEL, type VoiceFiles } from '../speech/files.ts';
 import { PANELS } from './models.ts';
 
 /*
@@ -12,21 +12,22 @@ import { PANELS } from './models.ts';
  * any model job it's given, one at a time, as ONNX Runtime's native run holds its thread till it's
  * done. It holds the models its jobs needed until the engine (scheduler.ts) tells it to let go.
  *
- * Voices: the same engine and text-to-sounds steps as the voices in the browser (frontend
+ * Voices: Phonon (ADR 0005), the same model and code as in the browser (shared speech.ts, frontend
  * voice/tts.worker.ts), so a voice sounds alike either way, answered as MP3 (about a seventh of the
- * raw sound's bytes) for phones on mobile data. Panels: the panel model trained on the owner's
- * labels (ai/panels), on a page's pixels as the API opened them (serve.ts), fitted and read as the
- * labeller's guesser does (shared findPanels).
+ * raw sound's bytes) for phones on mobile data. Its WebAssembly runs on one thread whatever the
+ * worker's `threads`. Panels: the panel model trained on the owner's labels (ai/panels), on a page's
+ * pixels as the API opened them (serve.ts), fitted and read as the labeller's guesser does (shared
+ * findPanels).
  *
- * Measured on a Ryzen 7 9800X3D, 2 threads: a Piper sentence about 90 ms, a panel window about
- * 110 ms. Held: a Piper voice about 250 MB, the panel model about 500 MB. The heavy voices (Kokoro)
- * run on devices only.
+ * Measured on a Ryzen 7 9800X3D, 2 threads: a panel window about 110 ms, the panel model held about
+ * 500 MB. Phonon on an M-series Mac: 8.5 times faster than speech, about 380 MB (models.ts); not
+ * measured on the laptop yet.
  */
 
-/** Voices name their model by `key` (models.ts), which may speak for several of them. */
+/** Every voice is Phonon's (SPEECH_MODEL, models.ts): one model, each voice a file loaded into it. */
 export type Body =
-  | { type: 'load'; key: string; files: VoiceFiles }
-  | { type: 'say'; key: string; files: VoiceFiles; text: string; speed: number }
+  | { type: 'load'; voice: string; files: VoiceFiles }
+  | { type: 'say'; voice: string; files: VoiceFiles; text: string }
   /** A page's panels, from its pixels, red first, three to each. */
   /** A page's pixels, and the model's round: a round says how its pages are read (shared takesOf). */
   | { type: 'panels'; model: string; round: number; w: number; h: number; px: Uint8Array };
@@ -42,6 +43,8 @@ export interface Answer {
   mp3?: Uint8Array;
   samples?: number;
   rate?: number;
+  /** How long Phonon took to say it, in milliseconds: the engine's speed (serve.ts). */
+  ms?: number;
   panels?: Array<Array<[number, number]>>;
   sure?: number[];
   /** The page's size, with its panels. */
@@ -57,7 +60,8 @@ const KBPS = 48;
 const { threads } = workerData as { threads: number };
 
 const sessions = new Map<string, Promise<ort.InferenceSession>>();
-const configs = new Map<string, Promise<PiperConfig>>();
+/** Phonon, once a voice was wanted, for the rest of this worker's life. */
+let phonon: Promise<Phonon> | null = null;
 
 const open = (key: string, file: string) => {
   let s = sessions.get(key);
@@ -78,42 +82,40 @@ const open = (key: string, file: string) => {
 
 async function drop(keys: string[]) {
   for (const key of keys) {
+    // Phonon's memory goes only with this thread, so the pool ends the worker instead (serve.ts).
+    if (key === SPEECH_MODEL) continue;
     const s = sessions.get(key);
     sessions.delete(key);
-    configs.delete(key);
     await s?.then((x) => x.release()).catch(() => {});
   }
 }
 
-function piperConfig(key: string, files: VoiceFiles) {
-  let c = configs.get(key);
-  if (!c) {
-    c = readFile(files.config, 'utf8').then((t) => JSON.parse(t) as PiperConfig);
-    configs.set(key, c);
-    c.catch(() => configs.delete(key));
+/** Phonon started from its files, once. */
+function phononFrom(files: VoiceFiles) {
+  if (!phonon) {
+    const p = (async () => {
+      const [wasm, model, tokenizer, config] = await Promise.all([files.wasm, files.model, files.tokenizer, files.config].map((f) => readFile(f)));
+      return Phonon.load({ wasm, model, tokenizer, config });
+    })();
+    phonon = p;
+    // One that failed to start is tried afresh next time.
+    p.catch(() => {
+      if (phonon === p) phonon = null;
+    });
   }
-  return c;
+  return phonon;
 }
 
-async function load(key: string, files: VoiceFiles) {
-  await open(key, files.model);
-  await piperConfig(key, files);
+/** Phonon, with this voice loaded into it. */
+async function load(voice: string, files: VoiceFiles) {
+  const p = await phononFrom(files);
+  if (!p.hasVoice(voice)) p.addVoice(voice, await readFile(files.voice));
+  return p;
 }
 
-const int64 = (ids: number[]) => BigInt64Array.from(ids, (n) => BigInt(n));
-
-async function sound(key: string, files: VoiceFiles, text: string, speed: number): Promise<{ audio: Float32Array; rate: number }> {
-  const s = await open(key, files.model);
-  const config = await piperConfig(key, files);
-  const { ids, scales, speakers } = await piperInput(text, config, speed);
-  const feeds: Record<string, ort.Tensor> = {
-    input: new ort.Tensor('int64', int64(ids), [1, ids.length]),
-    input_lengths: new ort.Tensor('int64', int64([ids.length]), [1]),
-    scales: new ort.Tensor('float32', new Float32Array(scales), [3]),
-  };
-  if (speakers > 1) feeds.sid = new ort.Tensor('int64', int64([files.speaker ?? 0]), [1]);
-  const out = await s.run(feeds);
-  return { audio: (out[s.outputNames[0]] as ort.Tensor).data as Float32Array, rate: config.audio.sample_rate };
+async function sound(voice: string, files: VoiceFiles, text: string): Promise<{ audio: Float32Array; rate: number }> {
+  const p = await load(voice, files);
+  return { audio: await p.say(voice, text), rate: PHONON_RATE };
 }
 
 function mp3(audio: Float32Array, rate: number) {
@@ -146,11 +148,15 @@ async function panels(b: Extract<Body, { type: 'panels' }>) {
 async function handle(b: Body): Promise<Answer> {
   switch (b.type) {
     case 'load':
-      await load(b.key, b.files);
+      await load(b.voice, b.files);
       return {};
     case 'say': {
-      const { audio, rate } = await sound(b.key, b.files, b.text, b.speed);
-      return { mp3: mp3(audio, rate), samples: audio.length, rate };
+      // Loaded first, so the time is the sentence's alone.
+      await load(b.voice, b.files);
+      const began = performance.now();
+      const { audio, rate } = await sound(b.voice, b.files, b.text);
+      const ms = performance.now() - began;
+      return { mp3: mp3(audio, rate), samples: audio.length, rate, ms };
     }
     case 'panels':
       return await panels(b);

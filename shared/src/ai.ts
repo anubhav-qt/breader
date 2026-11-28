@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRACK_ID } from './music.ts';
-import { builtInVoice, VOICE_MODELS } from './voices.ts';
+import { builtInVoice } from './voices.ts';
 
 /*
  * What an AI made from one book file, read through once offline (ai/procedure.md): Revisit notes
@@ -80,10 +80,14 @@ export const AiFile = z.strictObject({
       /** How they sound from a reveal on. */
       changes: z.array(z.tuple([N, N, AiGender])).optional(),
       /**
-       * Their own voice in each model, by its id there (shared/src/voices.ts): picked by the marker
-       * for the book, or at random for a book it marked before it picked them.
+       * Their own voice, by its id in Phonon (shared/src/voices.ts): picked by the marker for the
+       * book, or at random for a book it marked before it picked them. Books cast before ADR 0005
+       * have Piper's and Kokoro's instead, unused, until the marker casts them again.
        */
-      voice: z.strictObject({ piper: z.string(), kokoro: z.string() }).optional(),
+      voice: z.union([
+        z.strictObject({ phonon: z.string() }),
+        z.strictObject({ piper: z.string(), kokoro: z.string() }),
+      ]).optional(),
     })),
     /** From each paragraph on: the narrator (a cast index, or -1 for third person) and whose eyes (-1 for nobody's). */
     narration: z.array(z.tuple([N, N, z.number().int().min(-1), z.number().int().min(-1)])),
@@ -133,12 +137,10 @@ export function aiProblems(f: AiFile): string[] {
   const cast = f.voices.cast.length;
   for (const [i, c] of f.voices.cast.entries()) {
     for (const [s, b] of c.changes ?? []) if (!real(s, b)) out.push(`cast ${i}: changes at ${where(s, b)}, which isn’t a paragraph`);
-    if (!c.voice) continue;
-    for (const model of VOICE_MODELS) {
-      const v = builtInVoice(model, c.voice[model]);
-      if (!v) out.push(`cast ${i}: ${c.voice[model]} isn’t one of ${model}’s voices`);
-      else if (c.g !== 'N' && v.gender !== c.g) out.push(`cast ${i}: ${model}’s ${c.voice[model]} isn’t a ${c.g === 'F' ? 'woman' : 'man'}’s voice`);
-    }
+    if (!c.voice || !('phonon' in c.voice)) continue;
+    const v = builtInVoice('phonon', c.voice.phonon);
+    if (!v) out.push(`cast ${i}: ${c.voice.phonon} isn’t one of Phonon’s voices`);
+    else if (c.g !== 'N' && v.gender !== c.g) out.push(`cast ${i}: ${c.voice.phonon} isn’t a ${c.g === 'F' ? 'woman' : 'man'}’s voice`);
   }
   for (const [s, b, who, pov] of f.voices.narration) {
     if (!real(s, b)) out.push(`narration at ${where(s, b)}, which isn’t a paragraph`);
@@ -294,8 +296,8 @@ export interface AiVoicesResponse {
   who?: number[];
   /** From each paragraph on, who tells the story in the first person: their key, or -1 for nobody. */
   tellers?: Array<[number, number, number]>;
-  /** The voices the AI picked: [key, Piper's voice id, Kokoro's]. */
-  picks?: Array<[number, string, string]>;
+  /** The voices the AI picked: [key, Phonon's voice id]. */
+  picks?: Array<[number, string]>;
   /** Everyone's id across the series (AiCastMember.id): [key, id]. */
   ids?: Array<[number, string]>;
 }
@@ -314,9 +316,9 @@ export interface AiCastMember {
   lines: number;
   /**
    * Their voice in each model, by its id there (shared/src/voices.ts), picked by the AI, or null
-   * in a book marked before it picked voices, until the marker gives them some.
+   * in a book marked before it picked Phonon's voices, until the marker gives them some.
    */
-  voice: { piper: string; kokoro: string } | null;
+  voice: { phonon: string } | null;
 }
 
 /** Who reads whom: everyone the reader has heard from by their mark, the most to say first. */

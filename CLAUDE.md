@@ -43,7 +43,11 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - The ThinkPad's voices and panel model run in the `engine` service (ADR 0002,
   `docs/adr/0002-one-engine.md`, `server/src/engine/`). The API's scheduler hands it each job:
   reading aloud first, then panels. The server image is Debian (`node:24-trixie-slim`) for native ONNX.
-  The server voice reads Piper's voices only; Kokoro (the heavy voices) runs on devices.
+  Every voice is Phonon 31M (ADR 0005, `docs/adr/0005-phonon-voices.md`, `shared/src/speech.ts`),
+  WebAssembly on one thread, the same code on devices and in the engine; letting go of it ends its worker.
+  37 voices: the list shows 25 readers, the 12 character voices are for the AI cast. No uploads. The player sets the speed.
+  The engine runs a worker for each core but one; panels only as many as their threads fit.
+  The admin page's Infra tab shows the voice's speed there.
 - Search and screen readers: `index.html` carries the empty library's words for crawlers that run
   no script, hidden where scripts run so readers never see them flash (kept equal to `features/guide/cards.ts` by `src/findable.test.ts`), plus the
   description, canonical and link-preview tags (the wide `public/og.png`, 1200x630). `public/404.html`, `robots.txt`, `sitemap.xml`:
@@ -60,8 +64,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   Ultra (the admin picks per stage, NVIDIA only). Codex (`gpt-6.1-terra` at medium, through the
   worker's CLIProxyAPI, `ai/tools/proxy.ts`) is the backup: once every NVIDIA model is down it
   keeps the calls 10 minutes, then NVIDIA is asked again (`ai/tools/backup.ts`, `balancer.ts`,
-  `harness.ts`). Gathering a soundtrack is the one stage Codex leads, NVIDIA behind it
-  (`CODEX_STAGES`, `shared/src/admin.ts`); downloading the tracks is code. NVIDIA searches the web
+  `harness.ts`). Codex leads two stages, NVIDIA behind it: gathering a soundtrack and
+  casting the voices (`CODEX_STAGES`, `shared/src/admin.ts`), and any casting try after a wrong answer (`codexFirst`); downloading the tracks is code. NVIDIA searches the web
   through SearXNG (`SEARXNG_URL`), Codex with its own `web_search` on `/v1/responses`
   (`ai/tools/web.ts`). Plan and decisions: `docs/codex-plan.md`.
 - The server's small jobs (joining a search's copies `manga/same.ts`, checking Browse's tabs
@@ -106,7 +110,8 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
   (`openSeriesAddTo`, App.tsx: a series not in My manga goes in as Personal is ticked).
   A tick puts the books in at once, an untick takes them out. A reader's own unshared upload may go into
   a library they may change (`library_items.from_uploader`, `/v1/shared/add`). A tick goes now or shows its error; an untick fetches the library first. A Public row's book cover opens its window (`features/shared/PublicBook.tsx`: Read, Add to, In Personal), a manga its chapters; Read makes a copy here, not shared.
-- Audiobooks are made on readers' devices only. The server never makes them.
+- Audiobooks are made on readers' devices only, in Phonon (`MAKER`, `audiobook/made.ts`); old
+  Piper and Kokoro ones still play. The server never makes them.
 - Reading aloud and finding panels run on the reader's device when it can
   (`frontend/src/features/reader/able.ts`, checked as a book opens, nothing sent). Only a device too
   weak for one uses the server for it, by itself. Two switches: phones and tablets get Read on
@@ -151,14 +156,14 @@ A reading app: books, manga, voices. Free to run ($0 hosting, one domain).
 - Every feature a reader can use goes in the guide (`frontend/src/features/guide/list.ts`): a line on
   what it does and where it is. A new one gets `since` (its day), so readers from before see it as New.
 - Migrations only add (a table, a nullable column). Removals ship a release later.
+- Readers translate the app in their browser. Text in JSX sits alone in its element as one string
+  (`<span>Save</span>` beside an icon, `` {`Pages: ${n}`} ``), slots beside other things take
+  `Elements` (`lib/elements.ts`); `src/translatable.test.ts` checks it. `lib/translators.ts` keeps
+  the app up if a translator moves a node anyway, and reports each place once. Book text is `translate="no"`.
 - What's new notes (`frontend/src/features/news/notes.ts`): ask the owner for every single line
   before adding it; never decide alone. Shown once in a dialog, once only for an account, an address
   and a device (`server/src/routes/news.ts`). Notes up to `QUIET_THROUGH` show to no one.
   A note's `demo` adds See how, the start page's video for it (`guide/Demo.tsx`).
 - Never print `infra/.env` or any secret.
 - Commits: one line, `type: message`. No em dashes. No Claude attribution.
-- Readers translate the app in their browser. Text in JSX sits alone in its element as one string
-  (`<span>Save</span>` beside an icon, `` {`Pages: ${n}`} ``), slots beside other things take
-  `Elements` (`lib/elements.ts`); `src/translatable.test.ts` checks it. `lib/translators.ts` keeps
-  the app up if a translator moves a node anyway, and reports each place once. Book text is `translate="no"`.
 - Keep this file, `infra/README.md` and the ADRs in step with every change.

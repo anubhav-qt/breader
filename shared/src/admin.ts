@@ -13,8 +13,12 @@ export type MarkerTask = (typeof MARKER_TASKS)[number];
 /** An NVIDIA model by its id there: "moonshotai/kimi-k2.6". */
 const NIM_ID = /^[\w.-]+\/[\w.:-]+$/;
 
-/** The models the page offered before it listed NVIDIA's, and theirs now. */
-const OLD_FIRST: Record<string, string> = { 'kimi-k3': 'moonshotai/kimi-k2.6', nemotron: 'nvidia/nemotron-3-ultra-550b-a55b' };
+/**
+ * Which reset of the first and second models a saved pair is from. A pair saved before the latest
+ * (Super VL first, Ultra second, 2026-11-28) is dropped, so the defaults take over until the page
+ * picks again.
+ */
+const MODELS_ROUND = 2;
 
 /** Models NVIDIA has retired (they answer 410 Gone), and the one that takes each one's place. */
 const RETIRED: Record<string, string> = { 'moonshotai/kimi-k2.6': 'nvidia/nemotron-3.5-super-vl-120b-a12b' };
@@ -48,8 +52,10 @@ export const ALL_STAGES: Stage[] = [...new Set(Object.values(STAGES).flat())];
 /** Stages done with tools: NVIDIA's models with the harness's tools, Codex as the backup. */
 export const HARNESS_STAGES: readonly Stage[] = ['research', 'music.gather'];
 /**
- * Stages Codex leads, NVIDIA's models behind it when Codex can't answer: the owner's choice on
- * 2026-11-26, as Codex gathered fuller soundtracks. A stage's pick still goes ahead of it.
+ * Stages Codex leads, NVIDIA's models behind it when Codex can't answer: the owner's choice, on
+ * 2026-11-26 for the soundtrack, as Codex gathered fuller ones. Casting the voices is NVIDIA's
+ * first, Codex only after wrong answers (LEADS, ai/tools/casting.ts). A stage's pick still goes
+ * ahead of it.
  */
 export const CODEX_STAGES: readonly Stage[] = ['music.gather'];
 
@@ -80,6 +86,8 @@ export interface MarkerSettings {
   research: boolean;
   /** A failed book waits 2 minutes, doubling each time, up to this many. */
   retryCapMinutes: number;
+  /** Which reset of `first` and `second` they're from (MODELS_ROUND). */
+  modelsRound: number;
 }
 
 export const MARKER_DEFAULTS: MarkerSettings = {
@@ -90,6 +98,7 @@ export const MARKER_DEFAULTS: MarkerSettings = {
   second: 'nvidia/nemotron-3-ultra-550b-a55b',
   research: true,
   retryCapMinutes: 60,
+  modelsRound: MODELS_ROUND,
 };
 
 export interface AdminState {
@@ -198,10 +207,11 @@ export type FirstAction = z.infer<typeof FirstAction>;
 export function adminStateOf(raw: unknown): AdminState {
   const r = (raw ?? {}) as Partial<AdminState>;
   const m = { ...((r.marker ?? {}) as Partial<MarkerSettings>) };
-  if (m.first && OLD_FIRST[m.first]) {
-    m.first = OLD_FIRST[m.first];
-    m.second = Object.values(OLD_FIRST).find((x) => x !== m.first);
+  if (m.modelsRound !== MODELS_ROUND) {
+    delete m.first;
+    delete m.second;
   }
+  delete m.modelsRound;
   unretired(m);
   const parsed = MarkerPatch.safeParse(m);
   const marker: MarkerSettings = { ...MARKER_DEFAULTS, ...(parsed.success ? parsed.data : {}) };

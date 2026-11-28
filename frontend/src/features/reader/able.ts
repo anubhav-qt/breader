@@ -3,7 +3,7 @@ import { devicePace, measure, processorScore } from '../audiobook/speed';
 
 /*
  * What this device can do itself, checked as a book opens, while it loads: read aloud with
- * Normal's voices (Piper, on the processor), and find a manga's panels with the panel model.
+ * Phonon (on the processor, ADR 0005), and find a manga's panels with the panel model.
  * Whatever it can do, it does, and Breader's computer never does it for it. Only what it's too weak
  * for is done there, by itself, with no switch (but a phone has one for reading aloud: Read on
  * server, voice/prefs.ts); while Breader's computer can't (full, away, or not open to this account),
@@ -62,7 +62,7 @@ export function checkDevice(): Promise<void> {
 }
 
 /**
- * Reads aloud itself: it runs a voice engine at all, has the memory for one (about 300 MB), and
+ * Reads aloud itself: it runs a voice engine at all, has the memory for one (about 400 MB), and
  * makes sound fast enough to stay ahead, as measured making an audiobook here, or else guessed from
  * the processor's score. Until that's known, a phone is guessed able, as most are.
  */
@@ -70,7 +70,7 @@ export function voiceHere(): boolean {
   if (typeof WebAssembly !== 'object' || typeof Worker === 'undefined') return false;
   const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
   if (memory !== undefined && memory < 2) return false;
-  return devicePace('piper', 'min') >= LIVE;
+  return devicePace('phonon', 'min') >= LIVE;
 }
 
 /**

@@ -94,6 +94,14 @@ describe('the ThinkPad', () => {
     infra.servers.home = up({ engine: { up: 1, workers: 4, busy: 2, waiting: 3 } });
     expect(infraView(infra, status()).nodes.home.now).toBe('Up · 2 of 4 busy');
   });
+
+  it('shows how fast the voice reads there, once it has', () => {
+    const infra = calm();
+    infra.servers.home = up({ engine: { up: 1, workers: 4, busy: 0, waiting: 0 } });
+    expect(infraView(infra, status()).nodes.home.facts.map(([k]) => k)).not.toContain('Voice speed');
+    infra.servers.home = up({ engine: { up: 1, workers: 4, busy: 0, waiting: 0, speed: 8.46 } });
+    expect(infraView(infra, status()).nodes.home.facts).toContainEqual(['Voice speed', '8.5x speech']);
+  });
 });
 
 describe('Azure and Modal', () => {

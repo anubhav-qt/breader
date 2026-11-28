@@ -2,14 +2,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AI_LABEL } from '../../../books/ai';
-import { api } from '../../../lib/api';
 import { springs } from '../../../lib/springs';
 import { Segmented } from '../Panels';
-import { BUILT_IN, checkGpu, useGpu, type Engine, type Mode, type VoiceInfo } from '../voice/catalog';
-import { refreshVoices } from '../voice/list';
+import { ENGINE, READER_VOICES, type Mode, type VoiceInfo } from '../voice/catalog';
 import { unlockMusic } from '../music';
 import { checkDevice, useAble } from '../able';
-import { handheld, hung, mayReadOnServer, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, readsOnServer, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor, voicePrefs } from '../voice/prefs';
+import { handheld, mayReadOnServer, MUSIC_VOLUME, PACE, pairFor, pickSide, RATES, readsOnServer, setVoicePrefs, sideOf, stepMusic, stepPace, useVoicePrefs, voiceFor, voicePrefs } from '../voice/prefs';
 import { refreshSpeech, serverHas, useSpeech } from '../voice/server';
 import { missingAll, playSample, stopSample, useLoadState } from '../voice/speaker';
 import { SheetAi } from '../../ai/AiStatus';
@@ -23,24 +21,15 @@ import { CloseDots, DotIcon } from './parts';
 /*
  * The voice sheet, from the button beside play: Normal or Immersive, the voice, and the speed.
  * Immersive lights the words at a pace set here, and play adds a voice that keeps to it. The voices
- * come from two models, thirty each: Piper's, which run on any device, and Kokoro's, richer and
- * heavier, which read in Immersive on a computer. Each one has a greeting to hear before anything
- * downloads, a tap on its face. For the accounts
+ * are Phonon's 25 readers (catalog.ts), the same in both modes. Each one has a greeting to hear
+ * before anything downloads, a tap on its face. For the accounts
  * it's open to, the server can read instead (voice/server.ts). A book with background music
  * (music.ts) has it on or off here, and how loud; until its music is made, the switch looks off
  * and a tap says why, as 2 voices does.
  */
 
-/** Why Kokoro can't be picked: Normal reads only with Piper, and this browser can't run Kokoro. */
-const NO_KOKORO = {
-  normal: 'Immersive only.',
-  fallback: 'Needs a newer computer.',
-  /** A device too slow to read itself: Breader's computer reads Piper only. */
-  weak: 'Too heavy for this device.',
-};
 /** A browser that can't run any voice still has Immersive. */
 const NO_VOICES = 'This browser can’t run voices.';
-const HUNG = 'Kokoro froze this browser last time, so Piper reads.';
 
 /*
  * Two voices, character voices and the background music need the book read through first
@@ -60,10 +49,6 @@ const counts = (ready: boolean, castReady: boolean): Array<{ v: Count; label: st
   { v: 1, label: '1 voice', line: 'One for all' },
   { v: 2, label: '2 voices', muted: !ready, line: 'Hers and his' },
   { v: 'cast', label: 'Characters', muted: !castReady, line: 'One each' },
-];
-const modelsOf = (kokoro: boolean): Array<{ v: Engine; label: string; muted?: boolean; line: string }> => [
-  { v: 'piper', label: 'Piper', line: 'Clear, light' },
-  { v: 'kokoro', label: 'Kokoro', muted: !kokoro, line: 'Most natural, heavier' },
 ];
 const MODES: Array<{ v: Mode; label: string; line: string }> = [
   { v: 'normal', label: 'Normal', line: 'A voice reads aloud' },
@@ -105,19 +90,12 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   const able = useAble();
   const server = readsOnServer(speech.allowed, able.voice);
   const phone = handheld();
-  // Immersive where the GPU can't run Kokoro offers only Piper (prefs.ts, voiceFor), and so does a
-  // device too slow to read itself: Breader's computer reads only Piper's voices.
-  const gpu = useGpu();
-  const fallback = mode === 'immersive' && (gpu === false || server);
-  const voices: Mode = fallback ? 'normal' : mode;
-  const current = voiceFor(mode);
+  const current = voiceFor();
   // 2 voices: her pick and his lit in their colours.
   const paired = two === 'ready' && prefs.count[mode] === 2;
-  const pair = pairFor(mode);
+  const pair = pairFor();
   const [bytes, setBytes] = useState<number | null>(null);
   const [hearing, setHearing] = useState<string | null>(null);
-  // Kokoro tapped where it can't read: says why.
-  const [noKokoro, setNoKokoro] = useState(false);
   // The note about two voices sits in the middle of the reader, outside the drop, which clips.
   const [page, setPage] = useState<HTMLElement | null>(null);
   const onRoot = useCallback((el: HTMLDivElement | null) => { if (el) setPage(el.closest<HTMLElement>('.rd')); }, []);
@@ -125,52 +103,25 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   const [waiting, setWaiting] = useState<Soon | null>(null);
 
   // Whether the server voice is open to this account: asked on a phone, or where this device can't keep up.
-  useEffect(() => { void refreshVoices(); void checkDevice().then(() => { if (mayReadOnServer()) void refreshSpeech(); }); }, []);
-  // Whether Immersive can run here, asked before it offers a download.
-  useEffect(() => { if (mode === 'immersive') void checkGpu(); }, [mode]);
+  useEffect(() => { void checkDevice().then(() => { if (mayReadOnServer()) void refreshSpeech(); }); }, []);
   useEffect(() => stopSample, []);
   // What the picked voices still have to download, character voices' too; again once a download ends.
   useEffect(() => {
     let on = true;
     let want = [current];
     if (paired) want = [pair.F, pair.M];
-    if (paired && characters) want = [...want, ...castVoices(bookId, pair.F.engine, null).values()];
+    if (paired && characters) want = [...want, ...castVoices(bookId, ENGINE, null).values()];
     void missingAll(want).then((n) => { if (on) setBytes(n); });
     return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current.key, paired, pair.F.key, pair.M.key, load.key, server, characters, cast]);
 
-  // The model the voices come from: the voice reading's, or hers in 2 voices. The server has its own.
-  let model: Engine = current.engine;
-  if (paired) model = pair.F.engine;
-  const voicesOf = (e: Engine) => {
-    let all = BUILT_IN.normal;
-    if (e === 'kokoro') all = BUILT_IN.immersive;
-    if (server) return all.filter(serverHas);
-    return all;
-  };
-  const grid = voicesOf(model);
+  // The server's voices, where it reads.
+  let grid = READER_VOICES;
+  if (server) grid = grid.filter(serverHas);
   const pick = (v: VoiceInfo) => {
-    if (paired) pickSide(voices, v);
-    else setVoicePrefs({ voice: { ...prefs.voice, [voices]: v.key } });
-  };
-  // Another model starts on its first voice, or its first woman's for her side, and his follows.
-  // Immersive back on Piper reads with Normal's voices again, as it did before Kokoro was picked.
-  const setModel = (e: Engine) => {
-    if (e === 'kokoro' && voices !== 'immersive') {
-      setNoKokoro(true);
-      return;
-    }
-    setNoKokoro(false);
-    if (e === model) return;
-    if (e === 'piper' && voices === 'immersive') {
-      if (paired) setVoicePrefs({ pair: { ...prefs.pair, immersive: { F: '', M: '' } } });
-      else setVoicePrefs({ voice: { ...prefs.voice, immersive: '' } });
-      return;
-    }
-    const all = voicesOf(e);
-    const first = paired ? all.find((v) => sideOf(v) === 'F') : all[0];
-    if (first) pick(first);
+    if (paired) pickSide(v);
+    else setVoicePrefs({ voice: v.key });
   };
   // Another go, as the cast has: one of the model's voices, or a pair of them.
   const anyOf = (list: VoiceInfo[]) => list[Math.floor(Math.random() * list.length)];
@@ -180,9 +131,9 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   };
   const anotherPair = () => {
     const hers = grid.filter((v) => sideOf(v) === 'F' && v.key !== pair.F.key);
-    if (hers.length) pickSide(voices, anyOf(hers));
+    if (hers.length) pickSide(anyOf(hers));
     const his = grid.filter((v) => sideOf(v) === 'M' && v.key !== pair.M.key);
-    if (his.length) pickSide(voices, anyOf(his));
+    if (his.length) pickSide(anyOf(his));
   };
   // Character voices read as 2 voices does, with each line in its speaker's own voice: hers and his for anyone without one.
   const setCount = (n: Count) => {
@@ -199,27 +150,17 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
   let count: Count = 1;
   if (two === 'ready') count = prefs.count[mode];
   if (characters) count = 'cast';
-  const setMode = (m: Mode) => {
-    setNoKokoro(false);
-    setVoicePrefs({ mode: m });
-  };
+  const setMode = (m: Mode) => setVoicePrefs({ mode: m });
 
   const toggleHear = (v: VoiceInfo) => {
     if (hearing === v.key) { stopSample(); setHearing(null); return; }
-    void hear(v);
+    hear(v);
   };
 
-  const hear = async (v: VoiceInfo) => {
-    if (!v.sample) return;
+  const hear = (v: VoiceInfo) => {
     setHearing(v.key);
-    try {
-      // An uploaded voice has one sample, all three parts in a row.
-      const url = 'parts' in v.sample ? v.sample.parts.greeting : (await api.get<{ url: string }>(`/v1/voices/files/${encodeURIComponent(v.sample.fileId)}/link`)).url;
-      const audio = playSample(url);
-      audio.onended = audio.onerror = () => setHearing((k) => (k === v.key ? null : k));
-    } catch {
-      setHearing(null);
-    }
+    const audio = playSample(v.sample.parts.greeting);
+    audio.onended = audio.onerror = () => setHearing((k) => (k === v.key ? null : k));
   };
 
   const pace = mode === 'immersive' && <Pace />;
@@ -242,10 +183,6 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
     );
   }
 
-  // Why Kokoro can't be picked, when it can't.
-  let modelNote: string | null = null;
-  if (noKokoro && fallback) modelNote = server ? NO_KOKORO.weak : NO_KOKORO.fallback;
-  else if (noKokoro) modelNote = NO_KOKORO.normal;
   // A tap on a face picks that voice and plays it.
   const pickAndHear = (v: VoiceInfo) => {
     pick(v);
@@ -263,15 +200,7 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
       <Step n={1} title="Mode">
         <Segmented bare label="Mode" value={mode} onChange={setMode} options={MODES} />
       </Step>
-      <Step n={2} title="Model">
-        <Segmented bare label="Model" value={model} onChange={setModel} options={modelsOf(voices === 'immersive')} />
-        {modelNote && <p className="p-note vs-heavy">{modelNote}</p>}
-        {/* A phone picks where it reads. Anything else: this device when it keeps up, else Breader's computer (able.ts). */}
-        {phone && speech.allowed && <OnServer />}
-        {server && !phone && <p className="p-note vs-where">Breader’s computer reads this aloud, as this device is too slow to keep up.</p>}
-        {hung && mode === 'immersive' && !server && <p className="p-note vs-where vs-err">{HUNG}</p>}
-      </Step>
-      <Step n={3} title="Voices">
+      <Step n={2} title="Voices">
         <Segmented bare label="Voices" value={count} onChange={setCount} options={counts(two === 'ready', castReady)} />
         {count === 1 && (
           <OneVoice v={current} hearing={hearing === current.key} onHear={() => toggleHear(current)} onAgain={anotherVoice}>
@@ -283,18 +212,21 @@ export function VoiceSheet({ playing, onStart, onStop, canPace, two, music, onAi
             {faces}
           </TwoVoices>
         )}
-        {characters && <CastSection book={bookId} design={round.cast} playing={playing} engine={model}>{null}</CastSection>}
+        {characters && <CastSection book={bookId} design={round.cast} playing={playing} engine={ENGINE}>{null}</CastSection>}
+        {/* A phone picks where it reads. Anything else: this device when it keeps up, else Breader's computer (able.ts). */}
+        {phone && speech.allowed && <OnServer />}
+        {server && !phone && <p className="p-note vs-where">Breader’s computer reads this aloud, as this device is too slow to keep up.</p>}
       </Step>
-      <Step n={4} title={mode === 'immersive' ? 'Pace' : 'Speed'}>
+      <Step n={3} title={mode === 'immersive' ? 'Pace' : 'Speed'}>
         {mode === 'immersive' ? <Pace bare /> : <Segmented bare label="Speed" value={prefs.rate} onChange={(r) => setVoicePrefs({ rate: r })} options={RATES.map((r) => ({ v: r, label: `${r}×` }))} />}
       </Step>
-      <Step n={5} title="Music">
+      <Step n={4} title="Music">
         <Music onLocked={musicLocked} />
       </Step>
       <div className="vs-foot">
         {loading ? (
           <Progress loaded={load.loaded} total={load.total} />
-        ) : load.error && !(fallback && load.gpu) ? (
+        ) : load.error ? (
           <p className="p-note vs-err" role="alert">{load.error}</p>
         ) : null}
         <button type="button" className="vs-go" onClick={playing ? onStop : onStart}>
@@ -396,10 +328,6 @@ function Pace({ bare = false }: { bare?: boolean }) {
   );
 }
 
-/**
- * Background music: on or off, and how loud, apart from the voice. A book whose music isn't made
- * yet has the switch looking off, and a tap on it says why (onLocked), as 2 voices does.
- */
 /** A phone or tablet's switch: Breader's computer reads aloud for it, or it reads itself. */
 function OnServer() {
   const { server } = useVoicePrefs();
@@ -413,6 +341,10 @@ function OnServer() {
   );
 }
 
+/**
+ * Background music: on or off, and how loud, apart from the voice. A book whose music isn't made
+ * yet has the switch looking off, and a tap on it says why (onLocked), as 2 voices does.
+ */
 function Music({ onLocked }: { onLocked?: () => void }) {
   const { music, musicVolume } = useVoicePrefs();
   const toggle = () => {

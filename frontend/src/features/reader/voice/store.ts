@@ -18,16 +18,16 @@ export type HostedName = keyof typeof manifest.files;
 export interface Want {
   /** What progress calls it. */
   name: string;
-  /** Unpacked bytes, for progress; uploaded files guess until their download says. */
+  /** Unpacked bytes, for progress. */
   size: number;
   sha256?: string;
-  /** Cache keys, one per part. Hosted parts are also where they're fetched from. */
+  /** Cache keys, one per part, and where they're fetched from. */
   keys: string[];
-  /** Where each part is fetched from, when that isn't its key: an uploaded file's signed link. */
-  from?: string[];
 }
 
-const CACHE = 'breader-voices-v1';
+const CACHE = 'breader-voices-v2';
+/** Piper's and Kokoro's files, up to a gigabyte, from before ADR 0005: let go once. */
+const OLD_CACHE = 'breader-voices-v1';
 const PART = manifest.partBytes;
 const files = manifest.files as Record<HostedName, { url?: string; path?: string; size: number; sha256: string }>;
 
@@ -43,7 +43,15 @@ const inMemory: Box = {
   put: async (k, r) => { memory.set(k, r); },
   delete: async (k) => memory.delete(k),
 };
-const open = (): Promise<Box> => (typeof caches === 'undefined' ? Promise.resolve(inMemory) : caches.open(CACHE));
+let cleared = false;
+function open(): Promise<Box> {
+  if (typeof caches === 'undefined') return Promise.resolve(inMemory);
+  if (!cleared) {
+    cleared = true;
+    void caches.delete(OLD_CACHE).catch(() => {});
+  }
+  return caches.open(CACHE);
+}
 const verifiedKey = (sha: string) => `/voice-cache/verified/${sha}`;
 
 /** Files this page or worker has used, which room is never made by clearing out. */
@@ -70,11 +78,6 @@ export function hosted(name: HostedName): Want {
   const base = new URL(`/${f.path}`, self.location.origin).href;
   const n = Math.ceil(f.size / PART);
   return { name, size: f.size, sha256: f.sha256, keys: n === 1 ? [base] : Array.from({ length: n }, (_, i) => `${base}.${i}`) };
-}
-
-/** A file a reader uploaded. Before it's cached, `from` needs its signed link. */
-export function uploaded(fileId: string, size: number): Want {
-  return { name: fileId, size, keys: [new URL(`/voice-cache/files/${fileId}`, self.location.origin).href] };
 }
 
 export async function has(w: Want): Promise<boolean> {
@@ -121,7 +124,7 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
   let at = 0;
   const write = (b: Uint8Array) => {
     if (!whole) whole = new Uint8Array(Math.max(w.size, b.byteLength));
-    // Bigger than it said (an uploaded file's size is a guess until it's here).
+    // Bigger than it said.
     if (at + b.byteLength > whole.length) {
       const grown = new Uint8Array(Math.max(at + b.byteLength, whole.length * 1.5));
       grown.set(whole.subarray(0, at));
@@ -142,7 +145,7 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
       else write(b);
       continue;
     }
-    const res = await fetch(w.from?.[i] ?? key, { cache: 'no-store' });
+    const res = await fetch(key, { cache: 'no-store' });
     if (!res.ok) throw new Error(`Breader couldn’t download a voice file (${res.status}).`);
     const from = at;
     await drain(res, write, onBytes, signal);
@@ -159,13 +162,6 @@ export async function load(w: Want, onBytes: (n: number) => void = () => {}, sig
     await c.put(verifiedKey(w.sha256), new Response('')).catch(() => {});
   }
   return out;
-}
-
-/** Keeps a file this device already holds, one it just uploaded, so it needn't come back down. */
-export async function keep(w: Want, bytes: Uint8Array) {
-  const c = await open();
-  held.add(w.keys[0]);
-  await stash(c, w.keys[0], bytes);
 }
 
 export async function forget(w: Want) {

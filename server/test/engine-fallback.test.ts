@@ -56,12 +56,12 @@ async function start(o: { panel?: boolean } = {}) {
   if (o.panel === false) panel = null;
   const engine = makeEngineApp({
     pool,
-    size: { workers: 2, threads: 2, budgetMb: 4_000, lowMb: 500 },
+    size: { workers: 2, panelWorkers: 2, threads: 2, budgetMb: 4_000, lowMb: 500 },
     cores: 4,
     speechDir: '/nowhere',
     panel,
     token: TOKEN,
-    files: { ensure: async () => ({ engine: 'piper' as const, model: '/m/a.onnx', config: '/m/a.json' }), progress: async () => ({ loaded: 1, total: 1 }) },
+    files: { ensure: async () => ({ wasm: '/m/p.wasm', model: '/m/p.gguf', tokenizer: '/m/t.json', config: '/m/c.json', voice: '/m/v.safetensors' }), progress: async () => ({ loaded: 1, total: 1 }) },
   });
   const counted = { asked: 0 };
   const app = new Hono();
@@ -91,7 +91,7 @@ function connect(primary: string[], fallback: string[], token = TOKEN): Engine {
   return e;
 }
 
-const say = (text: string): Job => ({ kind: 'live', who: 'me', model: null, body: () => ({ ask: { type: 'say', voice: 'piper:a', text, speed: 1 } }) });
+const say = (text: string): Job => ({ kind: 'live', who: 'me', model: null, body: () => ({ ask: { type: 'say', voice: 'phonon:everly', text } }) });
 
 describe('engines on call', () => {
   it('are asked nothing while the laptop’s engine does the work', async () => {
@@ -178,7 +178,7 @@ function fake(o: { fails?: Error; up?: boolean; round?: number | null; short?: b
     panels: () => o.round ?? null,
     progress: async () => ({ loaded: o.up ? 1 : 2, total: 2 }),
     stats: () => ({
-      engines: [{ up: o.up ?? true, workers: 1, started: 0, busy: 0, heldMb: 0, budgetMb: 0, freeMb: 0, low: false, models: [] }],
+      engines: [{ up: o.up ?? true, workers: 1, started: 0, busy: 0, heldMb: 0, budgetMb: 0, freeMb: 0, low: false, speed: null, models: [] }],
       waiting: { live: 1, panel: 0 },
       done: { live: 0, panel: 0 },
     }),
@@ -207,12 +207,12 @@ describe('a job and its fallback', () => {
   it('takes the laptop’s panel round, its progress while it’s up, and counts both', async () => {
     const both = withFallback(fake({ round: 4, up: true }).e, fake({ round: 9 }).e);
     expect(both.panels()).toBe(4);
-    expect(await both.progress('piper:a')).toEqual({ loaded: 1, total: 2 });
+    expect(await both.progress('phonon:everly')).toEqual({ loaded: 1, total: 2 });
     expect(both.waiting('live')).toBe(2);
     expect(both.stats().engines.length).toBe(2);
     const down = withFallback(fake({ round: null, up: false }).e, fake({ round: 9, up: false }).e);
     expect(down.panels()).toBe(9);
-    expect(await down.progress('piper:a')).toEqual({ loaded: 2, total: 2 });
+    expect(await down.progress('phonon:everly')).toEqual({ loaded: 2, total: 2 });
   });
 
   it('is short only when both are', () => {

@@ -20,7 +20,7 @@ export interface Watch {
 
 /** What a server says of itself, in server_seen.detail. */
 export interface SeenDetail {
-  engine?: { up: number; workers: number; busy: number; waiting: number; done: number };
+  engine?: { up: number; workers: number; busy: number; waiting: number; done: number; speed?: number };
   egress?: { usedMb: number; limitMb: number };
   busy?: boolean;
   jsonOnly?: boolean;
@@ -55,6 +55,16 @@ export function watchHeader(value: string | undefined): number | null {
   return n;
 }
 
+/** The slowest engine's voice speed, as that one is the reader's worst case; null before any spoke. */
+function slowestSpeed(engines: Array<{ speed: number | null }>): number | null {
+  let slowest: number | null = null;
+  for (const e of engines) {
+    if (e.speed === null) continue;
+    if (slowest === null || e.speed < slowest) slowest = e.speed;
+  }
+  return slowest;
+}
+
 export function makeSeen(deps: SeenDeps) {
   const { env, pool } = deps;
   const startedAt = new Date();
@@ -85,6 +95,8 @@ export function makeSeen(deps: SeenDeps) {
         waiting: s.waiting.live + s.waiting.panel,
         done: s.done.live + s.done.panel,
       };
+      const speed = slowestSpeed(up);
+      if (speed !== null) out.engine.speed = speed;
     }
     if (deps.egress) out.egress = { usedMb: deps.egress.usedMb(), limitMb: deps.egress.limitMb };
     if (deps.busy?.()) out.busy = true;

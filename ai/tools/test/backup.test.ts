@@ -137,3 +137,36 @@ test('a call NVIDIA turns away goes to Codex, but opens no window', async (t) =>
   assert.equal(r.value?.reply.text, 'from codex');
   assert.equal(onBackup(Date.now()), false);
 });
+
+test('casting the voices asks Codex first, with NVIDIA well', async (t) => {
+  virtualTime(t);
+  const { first, second } = rungs();
+  answerByModel({ [first.model]: ['from nvidia'], [second.model]: ['from nvidia'], [CODEX_FIRST]: ['from codex'] });
+  const lb = new Balancer([first, second], quick);
+  const r = await run(t, lb.chat(ask, { book: 'b', cast: 'voices', try: 1 }));
+  assert.equal(r.value?.reply.text, 'from codex');
+  assert.equal(onBackup(Date.now()), false, 'it isn’t the backup taking over');
+  const other = await run(t, lb.chat(ask, { book: 'b', part: 1 }));
+  assert.equal(other.value?.reply.text, 'from nvidia', 'other calls stay NVIDIA’s');
+});
+
+test('casting the voices goes to NVIDIA when Codex fails', async (t) => {
+  virtualTime(t);
+  const { first, second } = rungs();
+  answerByModel({ [first.model]: ['from nvidia'], [second.model]: ['from nvidia'], [CODEX_FIRST]: [503] });
+  const lb = new Balancer([first, second], { ...quick, strikesToFall: 1 });
+  const r = await run(t, lb.chat(ask, { book: 'b', cast: 'voices', try: 1 }));
+  assert.equal(r.value?.reply.text, 'from nvidia');
+});
+
+test('a call marked codexFirst asks Codex first, on any stage, and opens no window', async (t) => {
+  virtualTime(t);
+  const { first, second } = rungs();
+  answerByModel({ [first.model]: ['from nvidia'], [second.model]: ['from nvidia'], [CODEX_FIRST]: ['from codex'] });
+  const lb = new Balancer([first, second], quick);
+  const r = await run(t, lb.chat(ask, { book: 'b', part: 1, codexFirst: true }));
+  assert.equal(r.value?.reply.text, 'from codex');
+  assert.equal(onBackup(Date.now()), false, 'it isn’t the backup taking over');
+  const next = await run(t, lb.chat(ask, { book: 'b', part: 2 }));
+  assert.equal(next.value?.reply.text, 'from nvidia', 'a call without it stays NVIDIA’s');
+});

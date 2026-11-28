@@ -1,96 +1,121 @@
 /*
- * The voices built into the app: thirty for each model, Piper's and Kokoro's (voice-files.json has
- * their files). The app lists them in this order (frontend voice/catalog.ts). `about` is for the AI
- * marker, which gives everyone in a book a voice of each model (ai/tools/casting.ts): how the voice
- * sounds, measured from its samples (how high, how much it rises and falls, how fast), and who it
- * suits. Kokoro's blends name the two voices they're made of.
+ * The voices built into the app: Phonon's English ones (ADR 0005; voice-files.json has their files).
+ * The app lists the readers in this order (frontend voice/catalog.ts). The characters aren't
+ * listed: the AI marker gives them to people they suit (ai/tools/casting.ts). `about` is for the
+ * marker: how the voice sounds (from gradium/phonon-voices' own words) and who it suits.
  */
 
-export type VoiceModel = 'piper' | 'kokoro';
-export const VOICE_MODELS: VoiceModel[] = ['piper', 'kokoro'];
+export type VoiceModel = 'phonon';
+export const VOICE_MODELS: VoiceModel[] = ['phonon'];
 
 export interface BuiltInVoice {
-  /** piper:kristin, kokoro:af_heart */
+  /** phonon:everly */
   key: string;
   name: string;
   gender: 'F' | 'M';
-  accent: 'US' | 'UK';
+  /** Where the catalogue says; a character's only when its description does. */
+  accent?: 'US' | 'UK';
+  /** A character voice: the marker's alone, not in the list readers pick from. */
+  character?: true;
   /** How it sounds, and who it suits. */
   about: string;
 }
 
-const piper = (id: string, name: string, gender: 'F' | 'M', accent: 'US' | 'UK', about: string): BuiltInVoice => ({ key: `piper:${id}`, name, gender, accent, about });
-const kokoro = (id: string, name: string, gender: 'F' | 'M', accent: 'US' | 'UK', about: string): BuiltInVoice => ({ key: `kokoro:${id}`, name, gender, accent, about });
+const reader = (id: string, name: string, gender: 'F' | 'M', accent: 'US' | 'UK', about: string): BuiltInVoice => ({ key: `phonon:${id}`, name, gender, accent, about });
+const character = (id: string, name: string, gender: 'F' | 'M', accent: 'US' | 'UK' | null, about: string): BuiltInVoice => {
+  const v: BuiltInVoice = { key: `phonon:${id}`, name, gender, character: true, about };
+  if (accent) v.accent = accent;
+  return v;
+};
 
 export const VOICES: BuiltInVoice[] = [
-  piper('kristin', 'Kristin', 'F', 'US', 'A low American woman, steady and even, an audiobook reader. Suits grown women: mothers, teachers, calm leads.'),
-  piper('norman', 'Norman', 'M', 'US', 'A low American man, plain-spoken and even. Suits men in their prime: fathers, soldiers, workmen.'),
-  piper('cori', 'Cori', 'F', 'UK', 'A clear, high British woman, measured and composed. Suits proper women: governesses, ladies, scholars.'),
-  piper('northern', 'Northern', 'M', 'UK', 'A deep Northern English man, flat and brisk, matter-of-fact. Suits blunt working men: farmers, sergeants, innkeepers.'),
-  piper('ljspeech', 'Linda', 'F', 'US', 'A bright American woman who reads like the news, clear and even. Suits young professional women and officials.'),
-  piper('ryan', 'Ryan', 'M', 'US', 'A light American man with plenty of rise and fall. Suits young men: students, eager heroes, friends.'),
-  piper('amy', 'Amy', 'F', 'US', 'An American woman, level and unhurried, close to deadpan. Suits cool, reserved women: clerks, detectives, the dry-witted.'),
-  piper('alan', 'Alan', 'M', 'UK', 'A very deep British man, slow and flat. Suits old or grave men: kings, elders, judges, the menacing.'),
-  piper('jenny', 'Jenny', 'F', 'UK', 'A bright British woman, quick and pleasant. Suits young women: maids, friends, cheerful heroines.'),
-  piper('john', 'John', 'M', 'US', 'A deep American man, slow and deliberate. Suits older, weighty men: mentors, captains, heads of the house.'),
-  piper('lessac', 'Lessac', 'F', 'US', 'An American woman with a wide, expressive range and a trained reader’s clarity. Suits leading women with strong feelings.'),
-  piper('bryce', 'Bryce', 'M', 'US', 'An American man in the middle register, slow and careful. Suits thoughtful or shy men: scholars, clerks, the hesitant.'),
-  piper('alba', 'Alba', 'F', 'UK', 'A bright British woman, even and gentle. Suits young women and older girls: apprentices, sisters, kind healers.'),
-  piper('joe', 'Joe', 'M', 'US', 'A deep American man with some swing to it. Suits big, hearty men: smiths, sailors, rough bosses.'),
-  piper('hfc_female', 'Hazel', 'F', 'US', 'A high, lively American woman. Suits young women and girls: teenagers, students, bubbly friends.'),
-  piper('hfc_male', 'Hector', 'M', 'US', 'A low American man, quick and animated. Suits energetic men: adventurers, rogues, fast talkers.'),
-  piper('kara', 'Kara', 'F', 'US', 'An American woman in the middle register, natural and easy. Suits everyday women: friends, shopkeepers, sisters.'),
-  piper('mike', 'Mike', 'M', 'US', 'A light American man, gentle and unhurried. Suits young or soft-spoken men: gentle sons, novices, priests.'),
-  piper('maria', 'Maria', 'F', 'US', 'The highest woman’s voice here, and very expressive. Suits girls and very young women, the excitable and dramatic.'),
-  piper('mark', 'Mark', 'M', 'US', 'A light American man, animated, with big swings of pitch. Suits young men and older boys, jesters, the excitable.'),
-  piper('rose', 'Ross', 'M', 'US', 'A low American man with a lively, rolling delivery. Suits storytellers and charmers: bards, merchants, uncles.'),
-  piper('michael_s', 'Michael', 'M', 'US', 'A deep American man, brisk and businesslike. Suits men in charge: officers, lawyers, stern fathers.'),
-  piper('owlivia', 'Olivia', 'F', 'US', 'A high American woman, gentle and unhurried. Suits kind or dreamy women: nurses, healers, romantics.'),
-  piper('james', 'James', 'M', 'US', 'An American man in the middle register, even and easy. Suits ordinary grown men: friends, clerks, soldiers.'),
-  piper('jennifer', 'Jennifer', 'F', 'US', 'A high American woman, clear and friendly. Suits young women: heroines, classmates, assistants.'),
-  piper('steve', 'Steve', 'M', 'US', 'A low American man, the slowest here, with a lot of rise and fall, like a fireside storyteller. Suits old and wise men: grandfathers, hermits, wizards.'),
-  piper('emily', 'Emily', 'F', 'UK', 'A British woman in the middle register, level and composed. Suits capable women: housekeepers, officers, nobles.'),
-  piper('paul', 'Paul', 'M', 'US', 'An American man in the middle register, calm and measured. Suits reasonable men: doctors, advisers, the dependable friend.'),
-  piper('martin', 'Martin', 'M', 'UK', 'The deepest man’s voice here, British and steady. Suits imposing men: lords, commanders, villains.'),
-  piper('progressing', 'Percy', 'M', 'US', 'A low American man, flat and dry. Suits dry or weary men: bureaucrats, cynics, old soldiers.'),
+  reader('everly', 'Everly', 'F', 'US', 'A middle-aged American woman, rounded and soft-edged, easy and relaxed. Suits calm grown women and narrators: mothers, teachers, storytellers.'),
+  reader('miles', 'Miles', 'M', 'US', 'A young American man, resonant and decisive, with a wide range. Suits leading men: heroes, soldiers, brothers.'),
+  reader('hadley', 'Hadley', 'F', 'US', 'A middle-aged American woman, settled, even and kind. Suits gentle grown women: nurses, aunts, healers.'),
+  reader('trevor', 'Trevor', 'M', 'US', 'A middle-aged American man, buoyant over a resonant low core. Suits warm older men: fathers, innkeepers, uncles.'),
+  reader('zoey', 'Zoey', 'F', 'US', 'An American woman, playful and upbeat. Suits lively young women: friends, students, chatterboxes.'),
+  reader('easton', 'Easton', 'M', 'US', 'A young American man, punchy and close, his pitch lifting across a line. Suits eager young men: rivals, squires, hotheads.'),
+  reader('juniper', 'Juniper', 'F', 'US', 'A young American woman, cheerful with real resonance, intimate when it turns quiet. Suits young heroines and sisters.'),
+  reader('micah', 'Micah', 'M', 'US', 'A young American man, buoyant and high in energy. Suits excitable young men and older boys: jesters, sidekicks.'),
+  reader('harper', 'Harper', 'F', 'US', 'An American woman, modern, confident and friendly. Suits capable women: agents, captains, colleagues.'),
+  reader('russell', 'Russell', 'M', 'US', 'An American man, high-energy and pushing. Suits driven men: coaches, sergeants, zealots.'),
+  reader('delia', 'Delia', 'F', 'US', 'A middle-aged American woman, low and grounded, quick to the point. Suits blunt or weary women: officers, matriarchs, cynics.'),
+  reader('preston', 'Preston', 'M', 'US', 'A middle-aged American man, trim and focused over a steady low core. Suits men in charge: lawyers, officials, stern fathers.'),
+  reader('maeve', 'Maeve', 'F', 'UK', 'A British woman, sparky and attentive, to the point with a smile. Suits brisk capable women: housekeepers, clerks, friends.'),
+  reader('hugh', 'Hugh', 'M', 'UK', 'A middle-aged British man, soft and close, airy, sincere. Suits gentle older men and narrators: scholars, priests, kind fathers.'),
+  reader('bryony', 'Bryony', 'F', 'UK', 'A middle-aged British woman, full and rich, relaxed and close. Suits warm grown women and narrators: mothers, landladies.'),
+  reader('edwin', 'Edwin', 'M', 'UK', 'A middle-aged British man, efficient and firm, tidy in speech. Suits proper men: butlers, stewards, magistrates.'),
+  reader('imogen', 'Imogen', 'F', 'UK', 'A British woman, bubbly and friendly, putting people at ease. Suits kind young women: maids, hostesses, best friends.'),
+  reader('alfie', 'Alfie', 'M', 'UK', 'A young British man, punchy and forward, sitting high. Suits cheeky young men: thieves, apprentices, scamps.'),
+  reader('pippa', 'Pippa', 'F', 'UK', 'A British woman, confident and upbeat. Suits bold women: adventurers, merchants, leaders.'),
+  reader('spencer', 'Spencer', 'M', 'UK', 'A middle-aged British man, light and airy, slow and patient. Suits thoughtful or shy men: tutors, clerks, monks.'),
+  reader('lottie', 'Lottie', 'F', 'UK', 'A young British woman, sparky with a wide range. Suits spirited young women: rebels, rivals, heroines.'),
+  reader('toby', 'Toby', 'M', 'UK', 'A British man, sparky and attentive. Suits helpful men: assistants, guards, companions.'),
+  reader('freya', 'Freya', 'F', 'UK', 'A young British woman, glossy and bubbly, fast. Suits girls nearly grown and chatty young women.'),
+  reader('teddy', 'Teddy', 'M', 'UK', 'A young British man, sparky and quick, with range. Suits young men and older boys: students, pages, friends.'),
+  reader('elodie-rose', 'Elodie-Rose', 'F', 'UK', 'A young British woman, sharp and enthusiastic, crisp. Suits girls and the youngest women: schoolgirls, apprentices.'),
 
-  kokoro('af_heart', 'Heart', 'F', 'US', 'Kokoro’s best voice: a bright American woman, natural and expressive. Suits the leading woman.'),
-  kokoro('am_michael', 'Michael', 'M', 'US', 'A low American man, calm and natural. Suits the leading man, steady fathers and mentors.'),
-  kokoro('bf_emma', 'Emma', 'F', 'UK', 'A British woman, crisp and level. Suits poised women: nobles, teachers, officers.'),
-  kokoro('bm_george', 'George', 'M', 'UK', 'A British man, measured and unhurried. Suits gentlemen: butlers, professors, older advisers.'),
-  kokoro('af_bella', 'Bella', 'F', 'US', 'A bright, polished American woman. Suits confident young women: heroines, princesses, rivals.'),
-  kokoro('af_nicole', 'Nicole', 'F', 'US', 'Soft and close, almost whispered, slow and level. Suits secretive, sleepy or seductive women, and inner voices.'),
-  kokoro('am_fenrir', 'Fenrir', 'M', 'US', 'An American man with a wide, energetic range. Suits bold young men: fighters, rivals, hotheads.'),
-  kokoro('af_aoede', 'Aoede', 'F', 'US', 'An American woman, quick and lively. Suits spirited women: adventurers, merchants, chatterboxes.'),
-  kokoro('am_puck', 'Puck', 'M', 'US', 'A low American man, quick and playful. Suits tricksters, rogues, cheeky friends.'),
-  kokoro('af_kore', 'Kore', 'F', 'US', 'A low American woman with a lot of expression. Suits strong grown women: warriors, queens, mothers with a temper.'),
-  kokoro('bm_fable', 'Fable', 'M', 'UK', 'A British man with a storyteller’s wide range. Suits colourful men: bards, eccentrics, villains who enjoy it.'),
-  kokoro('af_sarah', 'Sarah', 'F', 'US', 'A bright American woman, very expressive. Suits young, emotional women: heroines, best friends, girls nearly grown.'),
-  kokoro('bf_isabella', 'Isabella', 'F', 'UK', 'A high British woman, light and quick. Suits young ladies, maids, schoolgirls.'),
-  kokoro('af_alloy', 'Alloy', 'F', 'US', 'The lowest of Kokoro’s women, American, cool and even. Suits mature, self-possessed women: commanders, doctors, older sisters.'),
-  kokoro('af_nova', 'Nova', 'F', 'US', 'An American woman in the lower middle, clear and modern. Suits capable women: pilots, agents, colleagues.'),
-  kokoro('iris', 'Iris', 'F', 'US', 'Heart and Nicole blended: soft, slow and gentle. Suits tender or shy women: nurses, the grieving, quiet heroines.'),
-  kokoro('owen', 'Owen', 'M', 'US', 'Fenrir and Michael blended: a natural American man with some fire. Suits young leading men, knights, brothers.'),
-  kokoro('clara', 'Clara', 'F', 'US', 'Bella and Sarah blended: bright and expressive. Suits young heroines and lively girls.'),
-  kokoro('felix', 'Felix', 'M', 'US', 'Fenrir and Puck blended: quick, lively, a bit cocky. Suits young men and older boys: squires, thieves, rivals.'),
-  kokoro('maya', 'Maya', 'F', 'US', 'Aoede and Kore blended: an animated woman in the middle register. Suits spirited grown women: captains, innkeepers, aunts.'),
-  kokoro('miles', 'Miles', 'M', 'US', 'Michael and Puck blended: a low, easygoing American man. Suits friendly men: companions, traders, guards.'),
-  kokoro('nora', 'Nora', 'F', 'US', 'Nova and Alloy blended: a low, composed woman. Suits mature women in charge: matriarchs, officials, mentors.'),
-  kokoro('oscar', 'Oscar', 'M', 'US', 'Michael and Fable blended: a low man with a storyteller’s swing. Suits charismatic men: nobles, schemers, showmen.'),
-  kokoro('lena', 'Lena', 'F', 'US', 'Heart and Kore blended: a natural, expressive woman in the middle register. Suits grown heroines and young mothers.'),
-  kokoro('hugo', 'Hugo', 'M', 'UK', 'Fable and George blended: a British man, expressive and refined. Suits aristocrats, scholars, wry older men.'),
-  kokoro('esme', 'Esme', 'F', 'UK', 'Emma and Isabella blended: a composed British woman, crisp and level. Suits ladies, governesses, the reserved.'),
-  kokoro('rhys', 'Rhys', 'M', 'UK', 'George and Michael blended: a calm British man, unhurried. Suits steady older men: stewards, priests, fathers.'),
-  kokoro('ada', 'Ada', 'F', 'UK', 'Emma and Bella blended: a bright, poised British woman. Suits young noblewomen, students, rivals.'),
-  kokoro('jasper', 'Jasper', 'M', 'UK', 'Fable and Puck blended: a low British man, quick and playful. Suits rogues, rakes and charming liars.'),
-  kokoro('silas', 'Silas', 'M', 'UK', 'George and Fenrir blended: a British man with an edge. Suits soldiers, hunters, hard men.'),
+  character('master-aldric', 'Master Aldric', 'M', 'UK', 'An old British wizard, around eighty: rich and resonant with an aged grain, warm and kindly, deliberate. Suits wise old men: wizards, mentors, hermits.'),
+  character('fairy-godmother', 'Fairy Godmother', 'F', null, 'A kind woman in her sixties: a low, warm, velvety alto, cosy and soothing. Suits grandmothers, kind witches, old nurses.'),
+  character('the-snow-queen', 'The Snow Queen', 'F', null, 'A regal, cold queen: a cool, crystalline mezzo, precise and quietly commanding. Suits queens, cold villainesses, sorceresses.'),
+  character('fennick-the-young-elf', 'Fennick', 'M', null, 'A boy of about ten: a natural child’s voice, warm, earnest and wide-eyed. Suits boys and young children.'),
+  character('captain-silas-blackwater', 'Captain Silas', 'M', 'UK', 'An old West Country pirate, about sixty: deep, gravelly and booming, roguish. Suits pirates, sailors, old rogues.'),
+  character('sir-bramwell', 'Sir Bramwell', 'M', 'UK', 'A pompous middle-aged English knight: booming, plummy and theatrical, nervous underneath. Suits blowhards, nobles, comic knights.'),
+  character('morwenna-of-the-deep', 'Morwenna', 'F', null, 'A woman in her thirties: a low, husky alto, almost whispered, slow and teasing. Suits seductresses, sirens, dangerous women.'),
+  character('grub-the-ogre', 'Grub', 'M', null, 'A big, good-natured ogre: gruff, grainy and rumbling, slow, with warm humour. Suits giants, ogres, gentle brutes.'),
+  character('old-mortlake', 'Old Mortlake', 'M', null, 'An old gravedigger: low, raspy and half whispered, melancholic, with heavy pauses. Suits old men of ill omen: gravediggers, ghosts, hermits.'),
+  character('azgorath', 'Azgorath', 'M', null, 'An ancient demon: a cavernous, impossibly deep bass, calm and amused, with a hiss. Suits demons, dark lords, monsters that talk.'),
+  character('vyrmathrax-the-ancient', 'Vyrmathrax', 'M', null, 'An ancient dragon: very low and resonant, gravelly, slow and unimpressed. Suits dragons, ancient beings, old gods.'),
+  character('the-thing-under-the-stairs', 'The Thing', 'M', null, 'A monster in the dark: gravelly, breathy, a quiet threatening growl with a sneer. Suits creatures, horrors, the menacing unseen.'),
 ];
 
-/** A built-in voice of a model, by its id there (kristin, af_heart). */
+/** A built-in voice of a model, by its id there (everly). */
 export const builtInVoice = (model: VoiceModel, id: string) => VOICES.find((v) => v.key === `${model}:${id}`);
 
 /** A model's voices, by their id there. */
 export const voicesOf = (model: VoiceModel) => VOICES.filter((v) => v.key.startsWith(`${model}:`));
 
-/** A voice's id in its model: kristin for piper:kristin. */
+/** A voice's id in its model: everly for phonon:everly. */
 export const voiceId = (v: BuiltInVoice) => v.key.split(':')[1];
+
+/** The voices readers pick from: all but the characters. */
+export const READERS = VOICES.filter((v) => !v.character);
+
+/** A built-in voice's file in voice-files.json. */
+export const voiceFile = (v: BuiltInVoice) => `phonon-${voiceId(v)}`;
+
+/** The voices from before ADR 0005, Piper's and Kokoro's: whose voice each was, and its accent. */
+const OLD: Record<string, string> = {
+  'piper:kristin': 'FUS', 'piper:norman': 'MUS', 'piper:cori': 'FUK', 'piper:northern': 'MUK', 'piper:ljspeech': 'FUS',
+  'piper:ryan': 'MUS', 'piper:amy': 'FUS', 'piper:alan': 'MUK', 'piper:jenny': 'FUK', 'piper:john': 'MUS',
+  'piper:lessac': 'FUS', 'piper:bryce': 'MUS', 'piper:alba': 'FUK', 'piper:joe': 'MUS', 'piper:hfc_female': 'FUS',
+  'piper:hfc_male': 'MUS', 'piper:kara': 'FUS', 'piper:mike': 'MUS', 'piper:maria': 'FUS', 'piper:mark': 'MUS',
+  'piper:rose': 'MUS', 'piper:michael_s': 'MUS', 'piper:owlivia': 'FUS', 'piper:james': 'MUS', 'piper:jennifer': 'FUS',
+  'piper:steve': 'MUS', 'piper:emily': 'FUK', 'piper:paul': 'MUS', 'piper:martin': 'MUK', 'piper:progressing': 'MUS',
+  'kokoro:af_heart': 'FUS', 'kokoro:am_michael': 'MUS', 'kokoro:bf_emma': 'FUK', 'kokoro:bm_george': 'MUK',
+  'kokoro:af_bella': 'FUS', 'kokoro:af_nicole': 'FUS', 'kokoro:am_fenrir': 'MUS', 'kokoro:af_aoede': 'FUS',
+  'kokoro:am_puck': 'MUS', 'kokoro:af_kore': 'FUS', 'kokoro:bm_fable': 'MUK', 'kokoro:af_sarah': 'FUS',
+  'kokoro:bf_isabella': 'FUK', 'kokoro:af_alloy': 'FUS', 'kokoro:af_nova': 'FUS', 'kokoro:iris': 'FUS',
+  'kokoro:owen': 'MUS', 'kokoro:clara': 'FUS', 'kokoro:felix': 'MUS', 'kokoro:maya': 'FUS', 'kokoro:miles': 'MUS',
+  'kokoro:nora': 'FUS', 'kokoro:oscar': 'MUS', 'kokoro:lena': 'FUS', 'kokoro:hugo': 'MUK', 'kokoro:esme': 'FUK',
+  'kokoro:rhys': 'MUK', 'kokoro:ada': 'FUK', 'kokoro:jasper': 'MUK', 'kokoro:silas': 'MUK',
+};
+
+/** The Phonon voice each kind of old voice becomes: the first reader of that kind. */
+const NEW_FOR_OLD: Record<string, string> = {
+  FUS: 'phonon:everly',
+  MUS: 'phonon:miles',
+  FUK: 'phonon:maeve',
+  MUK: 'phonon:hugh',
+};
+
+/**
+ * The voice a pick from before ADR 0005 (piper:kristin, kokoro:af_heart) becomes. A key that is
+ * already a Phonon voice stays; anything else (an upload, a voice since gone) gives null.
+ */
+export function phononFor(key: string): string | null {
+  if (VOICES.some((v) => v.key === key)) return key;
+  const kind = OLD[key];
+  if (!kind) return null;
+  return NEW_FOR_OLD[kind];
+}

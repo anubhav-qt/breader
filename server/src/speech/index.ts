@@ -14,8 +14,8 @@ import { VOICES } from './files.ts';
  * What it says is kept on the laptop's disk, up to SPEECH_CACHE_MB, the sentences heard longest ago
  * going first, so a sentence heard again (a page read twice, a rewind, a second reader of the same
  * book) is read from disk instead of spoken again, and asked once however many want it at once.
- * A sentence is kept by a hash of its voice, speed and text, so the files say nothing of what's in
- * them by name.
+ * A sentence is kept by a hash of its voice and text, so the files say nothing of what's in them by
+ * name. It's read at its voice's own pace: the app sets the speed as it plays (ADR 0005).
  */
 
 export interface Said {
@@ -33,7 +33,7 @@ export interface Speech {
    */
   ready(voice: string, wait: number, who?: string): Promise<{ ready: boolean; loaded: number; total: number }>;
   /** A sentence read live, in `who`'s turn. */
-  say(voice: string, text: string, speed: number, who?: string): Promise<Said>;
+  say(voice: string, text: string, who?: string): Promise<Said>;
   close(): Promise<void>;
 }
 
@@ -67,7 +67,7 @@ export function makeSpeech(env: Env, engine: Engine): Speech {
     async ready(voice, wait, who = '') {
       let p = readying.get(voice);
       if (!p) {
-        p = engine.run({ kind: 'live', who, model: voiceModel(voice), body: () => ({ ask: { type: 'load', voice } }) }).then(() => undefined);
+        p = engine.run({ kind: 'live', who, model: voiceModel, body: () => ({ ask: { type: 'load', voice } }) }).then(() => undefined);
         readying.set(voice, p);
         // Done or failed, the next ask starts afresh: a let-go worker loads it again.
         p.then(() => readying.delete(voice), () => readying.delete(voice));
@@ -81,11 +81,10 @@ export function makeSpeech(env: Env, engine: Engine): Speech {
         clearTimeout(timer);
       }
     },
-    async say(voice, text, speed, who = '') {
+    async say(voice, text, who = '') {
       const kept = await said.keep(`${voice}
-${speed}
 ${text}`, async () => {
-        const r = await engine.run({ kind: 'live', who, model: voiceModel(voice), body: () => ({ ask: { type: 'say', voice, text, speed } }) });
+        const r = await engine.run({ kind: 'live', who, model: voiceModel, body: () => ({ ask: { type: 'say', voice, text } }) });
         return { data: pack({ mp3: r.bytes, samples: r.head.samples!, rate: r.head.rate! }), type: 'audio/mpeg' };
       });
       return unpack(kept.data);

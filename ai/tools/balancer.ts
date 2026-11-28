@@ -7,6 +7,7 @@ import { WORK } from './lib.ts';
 import { checkBackup, onBackup, startBackup, whenBackupEnds } from './backup.ts';
 import { CODEX_FIRST, proxy } from './proxy.ts';
 import { pickFor, stageOf } from './stages.ts';
+import { CODEX_STAGES } from '../../shared/src/admin.ts';
 
 /*
  * A small load balancer for the marking calls, after spoin's (a ladder of models, strongest first,
@@ -41,7 +42,8 @@ import { pickFor, stageOf } from './stages.ts';
  *   the stage's calls, the usual ones behind it.
  * - Codex (GPT-6.1 Terra at medium, through CLIProxyAPI) is the backup, after NVIDIA's first and
  *   second. Once it takes a call because both are cooling, it keeps the calls for 10 minutes, and
- *   then NVIDIA is tried again afresh (backup.ts).
+ *   then NVIDIA is tried again afresh (backup.ts). A call may ask for the second model or Codex
+ *   first (`lead`), as casting the voices does after wrong answers (casting.ts).
  *
  * Every call is logged to ai/work/_calls.jsonl (timings and token counts, never text), which is
  * how the numbers above get checked.
@@ -145,9 +147,21 @@ function nvidiaDown(ladder: Rung[], now: number): boolean {
 /** The ladder with Codex's rung last, when there's a proxy; first, as the one top rung, while it has the calls. */
 export function withBackup(ladder: Rung[], now: number): Rung[] {
   if (!proxy()) return ladder;
-  const codex = codexRung();
-  if (!onBackup(now)) return [...ladder, codex];
-  return [{ ...codex, primary: true }, ...ladder.map((r) => ({ ...r, primary: false }))];
+  if (!onBackup(now)) return [...ladder, codexRung()];
+  return codexAhead(ladder);
+}
+
+/** The ladder's second model at the top, alone; the first behind it, then the rest. */
+export function secondAhead(ladder: Rung[]): Rung[] {
+  if (ladder.length < 2) return ladder;
+  const [first, second, ...rest] = ladder;
+  return [{ ...second, primary: true }, { ...first, primary: false }, ...rest];
+}
+
+/** Codex at the top, the ladder's models behind it. */
+function codexAhead(ladder: Rung[]): Rung[] {
+  if (!proxy()) return ladder;
+  return [{ ...codexRung(), primary: true }, ...ladder.map((r) => ({ ...r, primary: false }))];
 }
 
 export interface Answer {
@@ -177,12 +191,15 @@ export class Balancer {
 
   /**
    * The ladder for one call: as it is now (the admin page picks the first and second models,
-   * kimi.ts), with the model the page picked for the call's stage first.
+   * kimi.ts), with the model the page picked for the call's stage first. With no pick, a stage
+   * Codex leads (CODEX_STAGES) has Codex first and NVIDIA's models behind it. A label's `lead`
+   * puts the ladder's second model ('second') or Codex ('codex') first instead (casting.ts).
    */
   private ladderFor(label: Record<string, unknown>): Rung[] {
     // A balancer on the first model alone marks again what the second did (marker.ts, top): no backup.
     const again = this.ladder === PRIMARY;
-    const pick = pickFor(stageOf(label, again));
+    const stage = stageOf(label, again);
+    const pick = pickFor(stage);
     let ladder = this.ladder;
     if (pick?.model) {
       const head: Rung = { ...nimRung(pick.model), primary: true };
@@ -191,6 +208,9 @@ export class Balancer {
       else ladder = [head, ...LADDER.filter((r) => r.model !== head.model).map((r) => ({ ...r, primary: false }))];
     }
     if (again) return ladder;
+    if (label.lead === 'codex') return codexAhead(ladder);
+    if (label.lead === 'second') return withBackup(secondAhead(ladder), Date.now());
+    if (!pick?.model && stage && CODEX_STAGES.includes(stage)) return codexAhead(ladder);
     return withBackup(ladder, Date.now());
   }
 

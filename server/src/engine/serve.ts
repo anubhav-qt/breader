@@ -6,7 +6,7 @@ import { Worker } from 'node:worker_threads';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { log } from '../log.ts';
-import { makeFiles, modelOfVoice, VOICES } from '../speech/files.ts';
+import { makeFiles, SPEECH_MODEL, VOICES } from '../speech/files.ts';
 import { frame, unframe, type Answered, type Info, type Run } from './wire.ts';
 import type { Answer, Body, Reply } from './worker.ts';
 
@@ -53,22 +53,27 @@ export function coresOf(cpuinfo?: string): number {
 
 export interface Size {
   workers: number;
+  /** How many of them may find panels at once: each runs the panel model on `threads`. */
+  panelWorkers: number;
   threads: number;
   budgetMb: number;
   lowMb: number;
 }
 
 /**
- * The pool's size: a worker for each two cores, of four threads each (measured on 8 cores, test
- * stack: a Kokoro sentence alone in 0.72 s, against 1.1 s with 3 of 2). Models held up to half
- * the memory free; short of memory under a quarter of that, or 1 GB if less.
+ * The pool's size. Phonon reads on one thread (ADR 0005), so a worker for each core but one, left
+ * for the API and the rest of the machine; how many hold a voice at once is the memory budget's
+ * call (scheduler.ts). The panel model runs on `threads` (ONNX Runtime), so panels get only the
+ * workers the cores fit. Models held up to half the memory free; short of memory under a quarter
+ * of that, or 1 GB if less.
  */
 export function sizeOf(env: Pick<EngineEnv, 'ENGINE_WORKERS' | 'ENGINE_THREADS' | 'ENGINE_MEMORY_MB' | 'ENGINE_LOW_MB'>, cores: number, freeMb: number): Size {
   const threads = env.ENGINE_THREADS ?? Math.min(4, cores);
-  const workers = env.ENGINE_WORKERS ?? Math.max(1, Math.floor(cores / 2));
+  const workers = env.ENGINE_WORKERS ?? Math.max(1, cores - 1);
+  const panelWorkers = Math.max(1, Math.floor(cores / threads));
   const budgetMb = env.ENGINE_MEMORY_MB ?? Math.max(512, Math.floor(freeMb / 2));
   const lowMb = env.ENGINE_LOW_MB ?? Math.min(1024, Math.floor(budgetMb / 4));
-  return { workers, threads, budgetMb, lowMb };
+  return { workers, panelWorkers, threads, budgetMb, lowMb };
 }
 
 /** The panel model and its round: beside the bundle in the image (Dockerfile), or in ai/panels from the source. */
@@ -84,6 +89,34 @@ export function panelModelOf(given?: string): { file: string; round: number } | 
     // Unnamed, it's still the model.
   }
   return { file, round };
+}
+
+/** How many of the latest sentences the engine's speed is from. */
+const SPEED_OF = 50;
+
+/**
+ * How fast Phonon reads here: seconds of sound made for each second taken, over the latest
+ * sentences, so the admin page shows the speed on this machine as it is now. Null before any.
+ */
+export function speedMeter(keep = SPEED_OF) {
+  const said: Array<{ soundS: number; tookS: number }> = [];
+  return {
+    add(soundS: number, tookS: number) {
+      if (!(soundS > 0) || !(tookS > 0)) return;
+      said.push({ soundS, tookS });
+      if (said.length > keep) said.shift();
+    },
+    speed(): number | null {
+      if (said.length === 0) return null;
+      let soundS = 0;
+      let tookS = 0;
+      for (const s of said) {
+        soundS += s.soundS;
+        tookS += s.tookS;
+      }
+      return soundS / tookS;
+    },
+  };
 }
 
 /** Worker threads, by slot, each started when first given a job. */
@@ -107,6 +140,16 @@ export function threadPool(threads: number, file?: URL): Pool {
     for (const p of pending.values()) if (p.w === w) return;
     leaving.delete(w);
     void w.terminate();
+  }
+
+  /** The slot's next job starts a new worker, holding nothing; this one ends once its job is done. */
+  function letGo(slot: number) {
+    const w = workers.get(slot);
+    if (!w) return;
+    workers.delete(slot);
+    log.info({ slot }, 'engine worker let go');
+    leaving.add(w);
+    endIfIdle(w);
   }
 
   function start(slot: number) {
@@ -140,6 +183,9 @@ export function threadPool(threads: number, file?: URL): Pool {
     run(slot, body, transfer, drop) {
       // Stopping: the API asks again elsewhere, or here once the engine is back.
       if (closed) return Promise.reject(Object.assign(new Error('The engine is stopping.'), { stopped: true }));
+      // Phonon's WebAssembly memory never goes back to the system while its thread lives, so letting
+      // go of it ends the worker. Anything else it held opens again in the new one when next wanted.
+      if (drop.includes(SPEECH_MODEL)) letGo(slot);
       const w = workers.get(slot) ?? start(slot);
       const id = next++;
       return new Promise<Answer>((resolve, reject) => {
@@ -154,13 +200,7 @@ export function threadPool(threads: number, file?: URL): Pool {
       });
     },
     stop(slot) {
-      const w = workers.get(slot);
-      if (!w) return;
-      workers.delete(slot);
-      log.info({ slot }, 'engine worker let go');
-      // The slot's next job starts a new worker, holding nothing, as the scheduler expects.
-      leaving.add(w);
-      endIfIdle(w);
+      letGo(slot);
     },
     /** Every worker ends once its job is done. */
     async close() {
@@ -218,6 +258,7 @@ export function makeEngineApp(d: EngineDeps) {
   const free = d.free ?? (() => process.availableMemory() / MB);
   const cut = d.cut ?? pixelsOf;
   const boot = crypto.randomUUID();
+  const meter = speedMeter();
   const token = d.token ? Buffer.from(d.token) : null;
   const app = new Hono();
 
@@ -232,7 +273,7 @@ export function makeEngineApp(d: EngineDeps) {
   });
 
   app.get('/v1/info', (c) =>
-    c.json({ boot, cores: d.cores, ...d.size, freeMb: Math.round(free()), panels: d.panel?.round ?? null } satisfies Info),
+    c.json({ boot, cores: d.cores, ...d.size, freeMb: Math.round(free()), panels: d.panel?.round ?? null, speed: meter.speed() } satisfies Info),
   );
 
   app.get('/v1/progress', async (c) => {
@@ -263,8 +304,8 @@ export function makeEngineApp(d: EngineDeps) {
       let transfer: ArrayBuffer[] = [];
       if (ask.type === 'load' || ask.type === 'say') {
         const f = await files.ensure(ask.voice);
-        const key = modelOfVoice(ask.voice);
-        body = ask.type === 'load' ? { type: 'load', key, files: f } : { type: 'say', key, files: f, text: ask.text, speed: ask.speed };
+        if (ask.type === 'load') body = { type: 'load', voice: ask.voice, files: f };
+        else body = { type: 'say', voice: ask.voice, files: f, text: ask.text };
       } else if (ask.type === 'panels') {
         if (!d.panel) return answer({ ok: false, error: 'This engine hasn’t the panel model.' });
         body = await cut(bytes, d.panel.file, d.panel.round);
@@ -273,7 +314,10 @@ export function makeEngineApp(d: EngineDeps) {
         return c.json({ error: 'No such job.' }, 400);
       }
       const r = await d.pool.run(slot, body, transfer, drop);
-      if (ask.type === 'say') return answer({ ok: true, samples: r.samples, rate: r.rate }, r.mp3);
+      if (ask.type === 'say') {
+        if (r.samples && r.rate && r.ms) meter.add(r.samples / r.rate, r.ms / 1000);
+        return answer({ ok: true, samples: r.samples, rate: r.rate }, r.mp3);
+      }
       if (ask.type === 'panels') return answer({ ok: true, panels: r.panels, sure: r.sure, w: r.w, h: r.h });
       return answer({ ok: true });
     } catch (err) {

@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 /*
  * ONNX Runtime's bundles name their WebAssembly files with new URL(…, import.meta.url), which
  * makes Vite copy them into the build: 14 and 27 MB, over Cloudflare Pages' 25 MiB file limit.
- * The speech worker hands the runtime its wasm itself (voice/tts.worker.ts), so point those URLs
+ * The panel worker hands the runtime its wasm itself (reader/panels.worker.ts), so point those URLs
  * at the CDN copy instead.
  */
 const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/'
@@ -12,10 +12,11 @@ const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/'
 /*
  * The runtime also sets aside 4 GB of memory before it loads a model, which phones refuse: iPhones
  * say "Out of memory", and Chrome on Android, 32-bit on many phones, can't find 4 GB in one piece.
- * What each engine uses, measured in Chrome with a voice loaded and its longest sentences read:
+ * What each engine used, measured in Chrome for the voices it ran before Phonon (ADR 0005); the
+ * panel model runs in the same room now:
  *
- *   CPU (Normal's voices)        about 300 MB, the same for a 78 MB upload: runs in 320 MB, not 288.
- *   WebGPU (the heavy voices)    757 MB, all of it while the 326 MB model loads: runs in 768, not 704.
+ *   CPU                          about 300 MB: runs in 320 MB, not 288.
+ *   WebGPU                       757 MB, all of it while a 326 MB model loads: runs in 768, not 704.
  *
  * So each asks for that with room to spare, and where that's refused, for just enough: the CPU
  * runtime 512 MB, then 384; the WebGPU one 1 GB, then 800 MB. It's room set aside, not memory
@@ -47,13 +48,31 @@ const ortWasm = (): Plugin => ({
   },
 })
 
+/*
+ * Phonon's runtime (phonon-tts/raw) names its 4 MB wasm the same way, for when it's started with no
+ * wasm given. Ours is always given it (shared speech.ts, the file catalog.ts hosts), so that path is
+ * never taken: it throws instead, and the file stays out of the build.
+ */
+const PHONON_URL = "new URL('phonon_tts_bg.wasm', import.meta.url)"
+
+const phononWasm = (): Plugin => ({
+  name: 'breader-phonon-wasm',
+  enforce: 'pre',
+  transform(code, id) {
+    const file = id.split('?')[0]
+    if (!/phonon-tts[\\/]wasm[\\/]phonon_tts\.js$/.test(file)) return null
+    if (!code.includes(PHONON_URL)) this.error('Phonon finds its wasm differently now: update PHONON_URL in vite.config.ts.')
+    return code.replace(PHONON_URL, `(() => { throw new Error("Phonon is started with its wasm given.") })()`)
+  },
+})
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), ortWasm()],
-  // Module workers, so the speech worker can load one engine or the other on demand.
-  worker: { format: 'es', plugins: () => [ortWasm()] },
+  plugins: [react(), ortWasm(), phononWasm()],
+  // Module workers, so the panel worker can load the runtime it needs on demand.
+  worker: { format: 'es', plugins: () => [ortWasm(), phononWasm()] },
   // Served as they are: pre-bundling moves files that find their wasm relative to themselves.
-  optimizeDeps: { exclude: ['onnxruntime-web', 'phonemizer'] },
+  optimizeDeps: { exclude: ['onnxruntime-web', 'phonon-tts'] },
   // Two pages: the app, and the admin page Cloudflare Pages serves at /admin (src/admin).
   // Fonts are never inlined, however small: index.html preloads them by name, and a face kept for
   // other letters (unicode-range) is fetched only if a page has them.

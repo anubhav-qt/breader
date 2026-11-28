@@ -7,7 +7,7 @@ import type { VoiceInfo } from './catalog';
 /*
  * The server voice: Breader's own computer reads aloud and sends each sentence's sound, for a phone
  * with Read on server on, or a device too slow to keep up itself (prefs.ts readsOnServer, able.ts,
- * server speech/), with Piper's voices only. It's open to any
+ * server speech/), with the same voices as this device's. It's open to any
  * reader signed in with a confirmed address, so whether this one may use it, and which voices it
  * has, is asked of the server when a book or the voice sheet opens on such a device, and remembered
  * for when it can't be reached.
@@ -83,9 +83,9 @@ export async function readyOnServer(v: VoiceInfo, onBytes: (loaded: number, tota
   }
 }
 
-/** A sentence's sound from the server, as the voices on this device make it. */
-export async function sayOnServer(v: VoiceInfo, text: string, speed: number) {
-  const res = await again(() => api.laptop.raw('/v1/speech/say', { voice: v.key, text, speed }, 30_000));
+/** A sentence's sound from the server, as the voices on this device make it, at the voice's own pace. */
+export async function sayOnServer(v: VoiceInfo, text: string) {
+  const res = await again(() => api.laptop.raw('/v1/speech/say', { voice: v.key, text }, 30_000));
   const rate = Number(res.headers.get('x-rate'));
   const samples = Number(res.headers.get('x-samples'));
   return { audio: await decode(await res.arrayBuffer(), rate, samples), rate };

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { serve, type ServerType } from '@hono/node-server';
 import { afterAll, describe, expect, it } from 'vitest';
 import { makeEngine, type Engine } from '../src/engine/index.ts';
-import { makeEngineApp, pixelsOf, threadPool, type Pool } from '../src/engine/serve.ts';
+import { makeEngineApp, pixelsOf, speedMeter, threadPool, type Pool } from '../src/engine/serve.ts';
 import { frame, unframe } from '../src/engine/wire.ts';
 import type { Body } from '../src/engine/worker.ts';
 import { makePanels } from '../src/panels/index.ts';
@@ -36,7 +36,8 @@ function fakePool(o: { wait?: () => Promise<void> } = {}) {
       await o.wait?.();
       switch (body.type) {
         case 'say':
-          return { mp3: mp3(body.text), samples: body.text.length * 10, rate: 24_000 };
+          // A sentence takes a millisecond for each of its letters.
+          return { mp3: mp3(body.text), samples: body.text.length * 10, rate: 24_000, ms: body.text.length };
         case 'panels':
           return { panels: Array.from(body.px, () => [[0, 0], [1, 0], [1, 1]] as Array<[number, number]>), sure: Array.from(body.px, () => 0.9), w: body.w, h: body.h };
         default:
@@ -51,8 +52,8 @@ function fakePool(o: { wait?: () => Promise<void> } = {}) {
 
 const files = {
   ensure: async (voice: string) => {
-    if (!voice.startsWith('piper:')) throw new Error(`No such voice: ${voice}`);
-    return { engine: 'piper' as const, model: `/m/${voice}.onnx`, config: `/m/${voice}.json` };
+    if (!voice.startsWith('phonon:')) throw new Error(`No such voice: ${voice}`);
+    return { wasm: '/m/phonon.wasm', model: '/m/phonon.gguf', tokenizer: '/m/tokenizer.json', config: '/m/config.json', voice: `/m/${voice}.safetensors` };
   },
   progress: async () => ({ loaded: 5, total: 10 }),
 };
@@ -78,7 +79,7 @@ async function start(o: { workers?: number; token?: string; panel?: boolean; rou
   const f = fakePool({ wait: o.wait });
   const app = makeEngineApp({
     pool: f.pool,
-    size: { workers: o.workers ?? 2, threads: 2, budgetMb: 4_000, lowMb: 500 },
+    size: { workers: o.workers ?? 2, panelWorkers: 2, threads: 2, budgetMb: 4_000, lowMb: 500 },
     cores: 4,
     speechDir: '/nowhere',
     panel: o.panel === false ? null : { file: '/m/live.onnx', round: o.round ?? 9 },
@@ -111,7 +112,7 @@ describe('an engine', () => {
     expect((await app.request('/v1/info')).status).toBe(401);
     expect((await app.request('/v1/info', { headers: { authorization: 'Bearer wrong-token-of-the-same-size' } })).status).toBe(401);
     expect((await app.request('/v1/info', { headers: { authorization: `Bearer ${TOKEN}` } })).status).toBe(200);
-    expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'load', voice: 'piper:a' } }, undefined, 'Bearer nope')).status).toBe(401);
+    expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'load', voice: 'phonon:everly' } }, undefined, 'Bearer nope')).status).toBe(401);
     // Its health is anyone's to see.
     expect((await app.request('/health')).status).toBe(200);
   });
@@ -119,35 +120,44 @@ describe('an engine', () => {
   it('says how it is', async () => {
     const { app } = await start({ free: () => 1234.4 });
     const info = (await (await app.request('/v1/info')).json()) as Record<string, unknown>;
-    expect(info).toMatchObject({ cores: 4, workers: 2, threads: 2, budgetMb: 4_000, lowMb: 500, freeMb: 1234, panels: 9 });
+    expect(info).toMatchObject({ cores: 4, workers: 2, panelWorkers: 2, threads: 2, budgetMb: 4_000, lowMb: 500, freeMb: 1234, panels: 9 });
     expect(typeof info.boot).toBe('string');
+  });
+
+  it('says how fast its voice reads, once it has read', async () => {
+    const { app } = await start();
+    const speed = async () => ((await (await app.request('/v1/info')).json()) as { speed: unknown }).speed;
+    expect(await speed()).toBeNull();
+    await runOn(app, { slot: 0, drop: [], ask: { type: 'say', voice: 'phonon:everly', text: 'Hello there.' } });
+    // 10 samples at 24,000 a second for each millisecond taken.
+    expect(await speed()).toBeCloseTo(10 / 24);
   });
 
   it('turns away a worker it hasn’t, a job it doesn’t know, and a body that isn’t one', async () => {
     const { app } = await start();
-    expect((await runOn(app, { slot: 2, drop: [], ask: { type: 'load', voice: 'piper:a' } })).status).toBe(400);
-    expect((await runOn(app, { slot: -1, drop: [], ask: { type: 'load', voice: 'piper:a' } })).status).toBe(400);
-    expect((await runOn(app, { slot: 0.5, drop: [], ask: { type: 'load', voice: 'piper:a' } })).status).toBe(400);
-    expect((await runOn(app, { slot: 0, drop: 'x', ask: { type: 'load', voice: 'piper:a' } })).status).toBe(400);
+    expect((await runOn(app, { slot: 2, drop: [], ask: { type: 'load', voice: 'phonon:everly' } })).status).toBe(400);
+    expect((await runOn(app, { slot: -1, drop: [], ask: { type: 'load', voice: 'phonon:everly' } })).status).toBe(400);
+    expect((await runOn(app, { slot: 0.5, drop: [], ask: { type: 'load', voice: 'phonon:everly' } })).status).toBe(400);
+    expect((await runOn(app, { slot: 0, drop: 'x', ask: { type: 'load', voice: 'phonon:everly' } })).status).toBe(400);
     expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'dance' } })).status).toBe(400);
     // Audiobooks are made on readers' devices: an engine makes no sound or MP3 for one.
-    expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'sound', voice: 'piper:a', text: 'Hi.', speed: 1 } })).status).toBe(400);
+    expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'sound', voice: 'phonon:everly', text: 'Hi.' } })).status).toBe(400);
     expect((await runOn(app, { slot: 0, drop: [], ask: { type: 'encode', rate: 16_000 } }, new Uint8Array(8))).status).toBe(400);
     expect((await app.request('/v1/run', { method: 'POST', body: 'no' })).status).toBe(400);
     expect((await app.request('/v1/run', { method: 'POST', body: new Uint8Array(0) })).status).toBe(400);
-    expect((await app.request('/v1/progress?voice=piper:nope')).status).toBe(400);
+    expect((await app.request('/v1/progress?voice=phonon:nope')).status).toBe(400);
   });
 
   it('answers a voice it hasn’t with the reason, not a crash', async () => {
     const { app } = await start();
-    const r = await runOn(app, { slot: 0, drop: [], ask: { type: 'say', voice: 'user:mine', text: 'Hi.', speed: 1 } });
+    const r = await runOn(app, { slot: 0, drop: [], ask: { type: 'say', voice: 'user:mine', text: 'Hi.' } });
     expect(unframe(new Uint8Array(await r.arrayBuffer())).head).toEqual({ ok: false, error: 'No such voice: user:mine' });
   });
 
-  it('names a voice’s model for its worker, and passes on what to let go of', async () => {
+  it('hands a voice and its files to its worker, and passes on what to let go of', async () => {
     const { app, seen } = await start();
-    await runOn(app, { slot: 1, drop: ['kokoro'], ask: { type: 'say', voice: 'piper:kristin', text: 'Hi.', speed: 1.5 } });
-    expect(seen[0]).toMatchObject({ slot: 1, drop: ['kokoro'], body: { type: 'say', key: 'piper:kristin', text: 'Hi.', speed: 1.5 } });
+    await runOn(app, { slot: 1, drop: ['panels'], ask: { type: 'say', voice: 'phonon:everly', text: 'Hi.' } });
+    expect(seen[0]).toMatchObject({ slot: 1, drop: ['panels'], body: { type: 'say', voice: 'phonon:everly', text: 'Hi.', files: { voice: '/m/phonon:everly.safetensors' } } });
   });
 
   it('says a page’s panels are none of its business without the model', async () => {
@@ -180,13 +190,13 @@ describe('the API and its engines', () => {
     const dir = await mkdtemp(join(tmpdir(), 'said-'));
     try {
       const speech = makeSpeech({ ...env, SPEECH_DIR: dir }, engine);
-      const said = await speech.say('piper:kristin', 'It was dark.', 1, 'me');
+      const said = await speech.say('phonon:everly', 'It was dark.', 'me');
       expect(text(said.mp3)).toBe('It was dark.');
       expect(said).toMatchObject({ samples: 120, rate: 24_000 });
       // Said once: a second time is kept.
-      await speech.say('piper:kristin', 'It was dark.', 1, 'me');
+      await speech.say('phonon:everly', 'It was dark.', 'me');
       expect(seen.filter((s) => s.body.type === 'say').length).toBe(1);
-      expect(await speech.ready('piper:kristin', 1_000, 'me')).toEqual({ ready: true, loaded: 5, total: 10 });
+      expect(await speech.ready('phonon:everly', 1_000, 'me')).toEqual({ ready: true, loaded: 5, total: 10 });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -197,7 +207,7 @@ describe('the API and its engines', () => {
     const engine = await connect([url], 'not-the-right-token-at-all');
     expect(engine.stats().engines[0].up).toBe(false);
     const speech = makeSpeech({ ...env, SPEECH_DIR: join(tmpdir(), 'never') }, engine);
-    await expect(speech.say('piper:kristin', 'Hi.', 1)).rejects.toMatchObject({ off: true });
+    await expect(speech.say('phonon:everly', 'Hi.')).rejects.toMatchObject({ off: true });
   });
 
   it('finds a page’s panels on an engine that has the model', async () => {
@@ -311,6 +321,20 @@ parentPort.on('message', ({ id, body }) => parentPort.postMessage({ id, ok: true
     }
   });
 
+  it('starts a new worker when Phonon is let go of, as its memory goes only with the thread', async () => {
+    const { pool, dir } = await slowPool();
+    try {
+      const a = await pool.run(0, job(0), [], []);
+      const same = await pool.run(0, job(0), [], ['panels']);
+      const fresh = await pool.run(0, job(0), [], ['phonon']);
+      expect(same.samples).toBe(a.samples);
+      expect(fresh.samples).not.toBe(a.samples);
+    } finally {
+      await pool.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('lets an idle worker go at once', async () => {
     const { pool, dir } = await slowPool();
     try {
@@ -323,5 +347,27 @@ parentPort.on('message', ({ id, body }) => parentPort.postMessage({ id, ok: true
       await pool.close();
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the speed meter', () => {
+  it('is seconds of sound for each second taken, over the latest sentences only', () => {
+    const m = speedMeter(2);
+    expect(m.speed()).toBeNull();
+    m.add(10, 1);
+    expect(m.speed()).toBe(10);
+    m.add(2, 1);
+    expect(m.speed()).toBe(6);
+    // The oldest goes: (2 + 4) / (1 + 2).
+    m.add(4, 2);
+    expect(m.speed()).toBe(2);
+  });
+
+  it('leaves out a sentence with no sound or no time', () => {
+    const m = speedMeter();
+    m.add(0, 1);
+    m.add(3, 0);
+    m.add(Number.NaN, 1);
+    expect(m.speed()).toBeNull();
   });
 });

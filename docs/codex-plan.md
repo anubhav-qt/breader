@@ -82,3 +82,8 @@ Status: steps 1 to 4 built on branch `feat/codex`, not shipped. Written 2026-11-
 12. Decided 2026-11-26: gathering a soundtrack asks Codex first, NVIDIA's first and second behind
     it when Codex can't answer (`CODEX_STAGES`, `routed` in `ai/tools/harness.ts`). Its web
     searches go the same way. A stage pick on the admin page still goes ahead of Codex.
+13. Decided 2026-11-28 (ADR 0005): casting the voices (`marks.voices`) asks Codex first too, NVIDIA
+    behind it, the same way (`CODEX_STAGES`; `codexAhead` in `ai/tools/balancer.ts`).
+14. Decided 2026-11-28: once a casting answer is wrong (someone left without a voice or given one
+    that doesn't suit them), the tries left ask Codex first, NVIDIA behind it, even over a stage
+    pick (`codexFirst` label, `ai/tools/casting.ts`, `balancer.ts`).

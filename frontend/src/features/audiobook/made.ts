@@ -12,7 +12,10 @@ import type { Mode } from './speed';
 
 /** Books made of words: a PDF's pages and a manga's pictures aren't read this way yet. */
 export const AUDIOBOOK_FORMATS: Format[] = ['EPUB', 'TXT', 'MD', 'Text'];
-export const ENGINES: Engine[] = ['piper', 'kokoro'];
+/** Every engine a book may have been made with, to listen to. */
+export const ENGINES: Engine[] = ['phonon', 'piper', 'kokoro'];
+/** The one that makes them now (ADR 0005). */
+export const MAKER: Engine = 'phonon';
 
 export const canAudiobook = (b: Pick<BookRecord, 'format' | 'source'>) => AUDIOBOOK_FORMATS.includes(b.format) && b.source !== 'placeholder';
 

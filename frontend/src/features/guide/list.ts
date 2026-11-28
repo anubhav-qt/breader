@@ -62,11 +62,11 @@ export const FEATURES: Feature[] = [
   // Listening
   { id: 'listen', group: 'Listening', name: 'Listen', what: 'A voice reads the page aloud, from where you pick.', where: 'Listen, at the bottom of a book', keys: ['Space', 'K'] },
   { id: 'immersive', group: 'Listening', name: 'Immersive', what: 'The page dims and the words light up at your pace, with a voice or without.', where: 'Immersive, at the bottom of a book' },
-  { id: 'voices', group: 'Listening', name: 'Voices and speed', what: 'Sixty voices, each with a hello to hear before it downloads.', where: 'The button right of Read, Listen and Immersive', keys: ['<', '>'] },
+  { id: 'voices', group: 'Listening', name: 'Voices and speed', what: '25 voices, each with a hello to hear before it downloads.', where: 'The button right of Read, Listen and Immersive', keys: ['<', '>'] },
   { id: 'speed-bar', group: 'Listening', name: 'Speed on the play row', what: 'Minus and plus, in words a minute: how fast the voice reads, or Immersive’s pace. Change it as it reads.', where: 'The right of the play row, at the bottom of a book', since: day(2026, 11, 9) },
   { id: 'sayas', group: 'Listening', name: 'Say it your way', what: 'Click a word while a voice reads, or select a few, to change how it’s said.', where: 'Any word, while a voice reads' },
-  { id: 'voice-anywhere', group: 'Listening', name: 'Any device', what: 'This device reads aloud itself. One too slow to keep up has Breader’s computer read for it, with Piper’s voices (Kokoro is too heavy for such a device).', where: 'Happens by itself', since: day(2026, 11, 9) },
-  { id: 'read-on-server', group: 'Listening', name: 'Read on server', what: 'On a phone or tablet, Breader’s computer reads aloud for it, with Piper’s voices. On to start with; turn it off and the phone reads itself.', where: 'Read aloud, under Model, on a phone', since: day(2026, 11, 9) },
+  { id: 'voice-anywhere', group: 'Listening', name: 'Any device', what: 'This device reads aloud itself. One too slow to keep up has Breader’s computer read for it, in the same voice.', where: 'Happens by itself', since: day(2026, 11, 9) },
+  { id: 'read-on-server', group: 'Listening', name: 'Read on server', what: 'On a phone or tablet, Breader’s computer reads aloud for it, in the same voice. On to start with; turn it off and the phone reads itself.', where: 'Read aloud, under Voices, on a phone', since: day(2026, 11, 9) },
   { id: 'sleep', group: 'Listening', name: 'Did you sleep?', what: 'After an hour untouched the voice fades out, then shows where you were, to go back to.', where: 'Happens by itself' },
 
   // AI reading along

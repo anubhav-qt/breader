@@ -1,27 +1,28 @@
 import { useSyncExternalStore } from 'react';
 import { store } from '../../lib/store';
 import type { BookRecord } from '../../books/types';
-import { checkGpu } from '../reader/voice/catalog';
-import { audiobookVoice, handheld, voiceByKey } from '../reader/voice/prefs';
+import { voiceByKey } from '../reader/voice/catalog';
+import { audiobookVoice } from '../reader/voice/prefs';
 import { bookVoices, releaseBookVoice, synthForBook, type Clip } from '../reader/voice/speaker';
 import { encode, releaseEncoder, tag } from './mp3';
-import { allMade, madeOf, partKey, put, type Engine, type Made } from './made';
+import { allMade, madeOf, MAKER, partKey, put, type Engine, type Made } from './made';
 import { inOrder } from './order';
 import { planOf, type Plan } from './plan';
 import { devicePace, lanesFor, modeNow, timer, type Mode } from './speed';
 
 /*
  * Audiobooks: a book read aloud once, a paragraph at a time, kept in this browser as MP3 to listen
- * to apart from the reader, and exported as one MP3 to keep for good. Made with Piper or Kokoro on
+ * to apart from the reader, and exported as one MP3 to keep for good. Made with Phonon (ADR 0005) on
  * this device only, while Breader is open, in an engine of its own, nothing sent anywhere. Reading
  * aloud in the reader never uses them: it reads live.
  *
  * What's made and how far is kept by book and engine in localStorage; the parts are in IndexedDB,
  * as `ab:<book>:<engine>:<n>`. Books started on Breader's computer, before it stopped making them,
- * carry on here from the parts already downloaded.
+ * carry on here from the parts already downloaded. Those made with Piper or Kokoro, before Phonon,
+ * are still listened to, but no more of them are made.
  */
 
-export { canAudiobook, chaptersMade, listenable, madeOf, onListenable, onMade, partKey, setAt, useAudiobook, type Engine, type Made } from './made';
+export { canAudiobook, chaptersMade, listenable, madeOf, MAKER, onListenable, onMade, partKey, setAt, useAudiobook, type Engine, type Made } from './made';
 
 /* What it's doing just now, a few words for the dialog: not kept. */
 
@@ -58,13 +59,6 @@ export function minutes(m: number) {
 }
 export const megabytes = (mb: number) => (mb < 1 ? 'under 1 MB' : mb < 1000 ? `${Math.round(mb)} MB` : `${(mb / 1000).toFixed(1)} GB`);
 
-/** Kokoro on this device needs the graphics chip, and a computer: it can hang a phone. */
-export async function kokoroHere() {
-  if (handheld()) return false;
-  if (!('gpu' in navigator)) return false;
-  return checkGpu().catch(() => false);
-}
-
 /* Making */
 
 /** On this device, one book at a time. */
@@ -87,7 +81,7 @@ export async function start(rec: BookRecord, engine: Engine) {
       await dropParts(id, engine, had.total);
       had = undefined;
     }
-    const voice = had?.voice ?? audiobookVoice(engine).key;
+    const voice = had?.voice ?? audiobookVoice().key;
     put(id, engine, {
       voice,
       total: plan.parts.length,
@@ -171,13 +165,10 @@ async function makeHere(job: Job) {
   const { id, engine, plan } = job;
   const m = madeOf(id, engine);
   if (!m || job.stop) return;
+  // Piper's and Kokoro's voices are gone (ADR 0005): what was made of them stays, but no more.
   const v = voiceByKey(m.voice);
-  if (!v) {
+  if (!v || engine !== MAKER) {
     put(id, engine, { state: 'failed', error: 'Its voice has gone. Remove it and make it again.' });
-    return;
-  }
-  if (engine === 'kokoro' && !(await kokoroHere())) {
-    put(id, engine, { state: 'failed', error: 'This device can’t run Kokoro. Remove it and make it with Piper.' });
     return;
   }
   const mode = modeNow();
@@ -185,7 +176,7 @@ async function makeHere(job: Job) {
   stage(id, engine, 'Loading the voice');
   let failure: unknown = null;
   try {
-    const lanes = await bookVoices(v, lanesFor(engine, mode), (loaded, total) => stage(id, engine, `Getting the voice ready · ${Math.round((loaded / Math.max(1, total)) * 100)}%`));
+    const lanes = await bookVoices(v, lanesFor(mode), (loaded, total) => stage(id, engine, `Getting the voice ready · ${Math.round((loaded / Math.max(1, total)) * 100)}%`));
     stage(id, engine, null);
     let next = m.done;
     const order = inOrder(m.done, (done, bytes) => {
@@ -237,7 +228,7 @@ function joined(clips: Clip[]): Clip {
     audio.set(c.audio, at);
     at += c.audio.length;
   }
-  return { audio, rate: clips[0]?.rate ?? 22_050 };
+  return { audio, rate: clips[0]?.rate ?? 24_000 };
 }
 
 /**

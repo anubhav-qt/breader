@@ -9,7 +9,7 @@ import type { VoiceFiles } from '../speech/files.ts';
 /** A job, as the API asks it of an engine. */
 export type Ask =
   | { type: 'load'; voice: string }
-  | { type: 'say'; voice: string; text: string; speed: number }
+  | { type: 'say'; voice: string; text: string }
   /** A page's panels, from its picture (the bytes). */
   | { type: 'panels' };
 
@@ -39,12 +39,16 @@ export interface Info {
   boot: string;
   cores: number;
   workers: number;
+  /** How many workers may find panels at once; left out by an engine from before, which meant all but one. */
+  panelWorkers?: number;
   threads: number;
   budgetMb: number;
   lowMb: number;
   freeMb: number;
   /** The panel model's round, or null without one. */
   panels: number | null;
+  /** Seconds of speech Phonon makes a second, over the latest sentences; null before any, left out by an engine from before. */
+  speed?: number | null;
 }
 
 export type { VoiceFiles };

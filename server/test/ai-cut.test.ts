@@ -95,7 +95,7 @@ describe('the cast', () => {
 
   it('has only who the reader has heard from, by the names they know them by', () => {
     // Through her eyes from the first paragraph, before the book names her.
-    expect(castAt([0, 0]).people).toEqual([{ key: 0, id: seriesId('anna'), name: 'the girl', g: 'F', lines: 0, voice: { piper: 'kristin', kokoro: 'af_heart' } }]);
+    expect(castAt([0, 0]).people).toEqual([{ key: 0, id: seriesId('anna'), name: 'the girl', g: 'F', lines: 0, voice: { phonon: 'everly' } }]);
     expect(cast(0, 3)).toEqual([['the girl', 'F', 1], ['the stranger', 'N', 1]]);
     expect(cast(1, 7)).toEqual([['Anna', 'F', 1], ['the stranger', 'N', 1]]);
   });
@@ -124,6 +124,14 @@ describe('the cast', () => {
       { key: 1, id: seriesId('stranger'), name: 'the stranger', g: 'M', lines: 2, voice: null },
       { key: 0, id: seriesId('anna'), name: 'Anna', g: 'F', lines: 1, voice: null },
     ]);
+  });
+
+  it('has everyone cast before Phonon without voices, and picks only Phonon’s', () => {
+    const old = aiFile();
+    old.voices.cast[0].voice = { piper: 'kristin', kokoro: 'af_heart' };
+    expect(castAt([1, 9], old).people.find((c) => c.key === 0)?.voice).toBeNull();
+    expect(castAt([1, 9], old).people.find((c) => c.key === 1)?.voice).toEqual({ phonon: 'miles' });
+    expect(voicesFor(old).picks).toEqual([[1, 'miles'], [2, 'hugh']]);
   });
 
   it('goes by the marker’s name for someone with no Revisit entry', () => {

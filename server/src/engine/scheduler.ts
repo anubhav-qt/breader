@@ -7,8 +7,9 @@
  * - Inside a kind, everyone waiting has a line, and the lines take turns, a job each.
  * - A reader's live sentences run one at a time, in order: the first then has the CPU to itself,
  *   and the next are still made well before it has been played.
- * - Live reading is kept fast. Workers on one machine slow each other (they share its memory), so
- *   panels take all but one worker, and a reader's first sentence starts at once.
+ * - Live reading is kept fast. Workers on one machine slow each other (they share its memory and
+ *   cores), so panels take only the workers their threads fit (`panelWorkers`), never the last
+ *   one, and a reader's first sentence starts at once.
  * - Each worker holds the models its jobs needed. A job goes to a free worker that holds its model,
  *   else to one with room to load it (letting go of what it used longest ago), else it waits. What's
  *   held on each engine stays under that engine's memory budget.
@@ -53,11 +54,15 @@ export interface Runner {
 /** An engine as it says it is. */
 export interface Host {
   workers: number;
+  /** How many workers panels may use at once (the panel model's threads fit the cores so). */
+  panelWorkers?: number;
   budgetMb: number;
   lowMb: number;
   freeMb: number;
   /** Changes when it starts again, its workers then holding nothing. */
   boot: string;
+  /** Seconds of speech made a second, lately; null or left out before any. */
+  speed?: number | null;
 }
 
 export interface Options {
@@ -74,7 +79,7 @@ export interface Options {
 }
 
 export interface Stats {
-  engines: Array<{ up: boolean; workers: number; started: number; busy: number; heldMb: number; budgetMb: number; freeMb: number; low: boolean; models: string[][] }>;
+  engines: Array<{ up: boolean; workers: number; started: number; busy: number; heldMb: number; budgetMb: number; freeMb: number; low: boolean; speed: number | null; models: string[][] }>;
   waiting: Record<Kind, number>;
   /** Jobs done since start, by kind. */
   done: Record<Kind, number>;
@@ -226,11 +231,13 @@ export class Scheduler {
 
   /**
    * How many workers of engine `e` panels may use just now. One worker is all it has, so it's
-   * shared; else one is left for live reading.
+   * shared; else as many as the engine says, and always one left for live reading.
    */
   private room(e: Engine): number {
     const n = e.slots.length;
-    return n <= 1 ? n : n - 1;
+    if (n <= 1) return n;
+    const most = e.info?.panelWorkers ?? n - 1;
+    return Math.min(most, n - 1);
   }
 
   /**
@@ -403,6 +410,7 @@ export class Scheduler {
         budgetMb: e.info?.budgetMb ?? 0,
         freeMb: Math.round(e.info?.freeMb ?? 0),
         low: e.low,
+        speed: e.info?.speed ?? null,
         models: e.slots.map((s) => [...s.held.keys()]),
       })),
       waiting: { live: this.waiting('live'), panel: this.waiting('panel') },

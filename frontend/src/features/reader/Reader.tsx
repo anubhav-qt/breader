@@ -25,7 +25,6 @@ import { unlockMusic, useMusic } from './music';
 import { overlaps, usePacing, type Spot } from './pacing';
 import { PdfView } from './PdfView';
 import { castInSeries } from './voice/cast';
-import { refreshVoices } from './voice/list';
 import { useServerSeat } from './serverPanels';
 import { checkDevice } from './able';
 import { refreshSpeech } from './voice/server';
@@ -132,12 +131,10 @@ export function Reader({ record, title, color, book, initial, latest, closing = 
   const pacing = usePacing(view, immersive && !closing, loc);
   // Background music while the voice reads or the light moves, on a book that has it (music.ts).
   useMusic(view, record.id, aiStatus, !closing, narration, pacing);
-  // What this device can do itself, checked while the book loads (able.ts). Voices readers uploaded,
-  // so the one picked last time is known; and, on a phone or where this device can't keep up,
-  // whether the server reads for this account.
+  // What this device can do itself, checked while the book loads (able.ts); and, on a phone or where
+  // this device can't keep up, whether the server reads for this account.
   useEffect(() => {
     void checkDevice().then(() => { if (canNarrate && !pictures && mayReadOnServer()) void refreshSpeech(); });
-    if (canNarrate && !pictures) void refreshVoices();
   }, [pictures]);
   // A seat at the server's panel model in the Panels layout of a manga from Japan, where this device
   // can't find panels itself (serverPanels.ts).

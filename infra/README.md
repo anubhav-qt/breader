@@ -125,7 +125,7 @@ instead of sending them.
   `https://api.breader.example` on the laptop, `https://fb.breader.example` on Render.
 
 **The server voice.** The laptop can read aloud for devices too slow for a voice of their own,
-with the app's Normal voices (Piper; 2 voices too), sending each sentence as
+in the app's own voices (Phonon, ADR 0005), sending each sentence as
 MP3 (about 22 MB an hour). There's no switch: the app checks the device as a book opens
 (`frontend/src/features/reader/able.ts`: under 2 GB, no workers, or making sound under 1.5 times
 faster than it's said) and only such a device reads on the server; the check stays on the device.
@@ -133,13 +133,13 @@ It's open to any reader signed in with a confirmed address (laptop only; Render 
 speak); a slow device that isn't signed in reads itself as best it can. Each login has its own line
 at the engine, so one reader can't hold up the rest, and past 24 sentences waiting it answers busy.
 Such a device reads only on the laptop, never itself mid-book (it couldn't keep up, and hasn't the
-voice): busy, the app asks again for up to a minute; away or off, reading stops and says so. The
-heavy voices (Kokoro) are too much for the laptop and for such a device, so the app doesn't offer
-them there. Each voice downloads into the `voices` volume the
-first time it's asked for, about 64 MB. The voices run in the engine (below). A sentence takes
-about 0.1 s on the engine, and a reader's first one starts at once: one worker is always left for
+voice): busy, the app asks again for up to a minute; away or off, reading stops and says so.
+Phonon downloads into the `voices` volume the first time it's asked for, about 70 MB, and each
+voice after it a few KB. The voices run in the engine (below), on one thread a worker, about 8
+times faster than it's said (an M-series Mac; the ThinkPad not measured yet). A sentence takes
+about half a second on the engine, and a reader's first one starts at once: one worker is always left for
 reading aloud.
-Each sentence's sound is kept in the `voices` volume, by a hash of its voice, speed and text, up to
+Each sentence's sound is kept in the `voices` volume, by a hash of its voice and text (read at 1x; the app sets the speed), up to
 `SPEECH_CACHE_MB` (4096 by default), the ones used longest ago going first: a book read again, or
 on another phone, is spoken once. The sound is kept, though no text is.
 
@@ -152,8 +152,10 @@ still in `voices/books/`; nothing reads it now, and it can be deleted.
 the `engine` service, the same image run as `node dist/engine/main.js`, reached only by the API
 at `ENGINE_URLS` (`http://engine:8790`). The API's scheduler hands it each job: reading aloud
 first, then panels, everyone taking turns. It sizes itself from the machine: a
-worker for each two cores, of four threads each (4 of 4 on the ThinkPad), each holding the models
-its jobs need, up to half the memory free at start. Its own settings, in `infra/.env`:
+worker for each core but one, as Phonon reads on one thread (7 on the ThinkPad), each holding the
+models its jobs need, up to half the memory free at start; panels use only as many at once as
+their four threads fit the cores (2 on the ThinkPad). The admin page's Infra tab shows the voice's
+speed there, over its latest 50 sentences. Its own settings, in `infra/.env`:
 `ENGINE_WORKERS`, `ENGINE_THREADS` (threads a worker), `ENGINE_MEMORY_MB` (what its models may
 hold), `ENGINE_LOW_MB` (short of memory below this: it then starts only live reading; 1 GB or a
 quarter of that). Panels leave one worker of each engine for reading aloud. `/health` says how busy it is;

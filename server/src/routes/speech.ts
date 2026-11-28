@@ -25,7 +25,7 @@ export function speechRoutes(deps: Deps) {
   const gate = async (c: Context<AppEnv>, voice: string) => {
     if (!speech) throw new ApiError(503, 'speech_off', 'The server voice isn’t reading aloud just now, so this device reads instead.');
     if (!(await allowed(c))) throw new ApiError(403, 'speech_not_allowed', 'Sign in, with your address confirmed, for the server voice.');
-    if (!speech.voices.includes(voice)) throw new ApiError(400, 'speech_voice', 'The server doesn’t have that voice. Pick a Normal one; heavy voices and voices people uploaded read on their own devices.');
+    if (!speech.voices.includes(voice)) throw new ApiError(400, 'speech_voice', 'The server doesn’t have that voice. Pick another one.');
     return speech;
   };
 
@@ -49,11 +49,12 @@ export function speechRoutes(deps: Deps) {
 
   // A sentence every few seconds, two ahead, and 2 voices cuts them shorter.
   r.post('/speech/say', async (c) => {
-    const { voice, text, speed } = parse(SpeechRequest, await readJson(c));
+    // An app from before ADR 0005 still sends a speed: it's read at 1x, the app sets the speed as it plays.
+    const { voice, text } = parse(SpeechRequest, await readJson(c));
     const s = await gate(c, voice);
     let said;
     try {
-      said = await s.say(voice, text, speed, who(c));
+      said = await s.say(voice, text, who(c));
     } catch (err) {
       if ((err as { busy?: boolean }).busy) throw new ApiError(503, 'speech_busy', 'The server voice is busy. Try again in a moment.');
       log.warn({ err, voice }, 'server voice couldn’t say a sentence');

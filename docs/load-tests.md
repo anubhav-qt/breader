@@ -120,8 +120,8 @@ production. It runs at once:
   (each passage's first sentence), each sentence, stalls (playing waits for the next).
 - Audiobooks were part of this until 2026-11-09, when they moved to readers' devices only; the
   numbers below with audiobooks are from before.
-- The server voice reads Piper's voices only since 2026-11-09 (Kokoro runs on devices); the runs
-  below with Kokoro are from before. `--voice` is `piper:kristin` now.
+- The server voice reads Phonon's voices only since 2026-11-28 (ADR 0005); the runs below with
+  Piper or Kokoro are from before. `--voice` is `phonon:everly` now.
 - `--panels N` readers having a chapter of Yotsuba to!'s panels found, a page every `--page-ms`.
   Clear `page_panels` first: pages found before are kept.
 - Every second it reads `/health`: the most workers busy and jobs waiting.
@@ -140,6 +140,24 @@ How to run it:
 
 Stop a run by removing its container (`docker rm -f`), not only the shell that started it: a
 `docker run` left behind keeps loading the engine, and spoils the next run's numbers.
+
+### Phonon (2026-11-28)
+
+The dev stack on the owner's Mac (Docker: 10 cores, 8 GB), `--voice phonon:everly`, 2 minutes a
+run, from the host (`--base http://localhost:8787`). No stall and no failed sentence in any run.
+
+| Workers | Live readers | First sound p50 / p95 | A sentence p95 | Most busy |
+| --- | --- | --- | --- | --- |
+| 5 (old sizing) | 1 | 0.9 s | | 1 |
+| 5 (old sizing) | 10 | p95 3.6 s | | 5 |
+| 5 (old sizing) | 20 | p95 9.7 s | | 5 |
+| 9 (a core each but one) | 10 | 1.4 / 4.0 s | 3.3 s | 6 |
+| 9 (a core each but one) | 20 | 1.6 / 2.8 s | 4.5 s | 6 |
+
+- Only 6 of 9 busy: the memory budget (half the memory free, 2.7 GB here) holds 6 Phonons at
+  400 MB each (`models.ts`; about 360 to 390 MB measured). The ThinkPad has more memory free.
+- Voice speed under that load, as the Infra tab shows it: 6.3x faster than speech (9.1x alone).
+- Not checked yet: the ThinkPad itself.
 
 ### Results (2026-11-08)
 

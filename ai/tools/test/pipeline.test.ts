@@ -22,10 +22,14 @@ process.env.AI_OUT = join(work, 'out');
 const { Balancer } = await import('../balancer.ts');
 const { castPass } = await import('../cast.ts');
 const { addSeriesVoices, seriesVoices, voiceProblems, withRandomVoices } = await import('../casting.ts');
+type Voices = import('../casting.ts').Voices;
+const { builtInVoice } = await import('../../../shared/src/voices.ts');
+/** Someone's Phonon voice's id, or '' for none. */
+const phonon = (v: AiFile['voices']['cast'][number]['voice']) => (v && 'phonon' in v ? v.phonon : '');
 const { startBook } = await import('../fetch.ts');
 const { checkFile } = await import('../import.ts');
 const { castByFile, castOf, LADDER, PRIMARY } = await import('../kimi.ts');
-const { bookDir, OUT, readJson } = await import('../lib.ts');
+const { bookDir, OUT, readJson, WORK } = await import('../lib.ts');
 const { markBook } = await import('../mark.ts');
 const { bySeries, matchCast, needs, voicesThrough, withNotes } = await import('../marker.ts');
 const { writeNotes } = await import('../notes.ts');
@@ -67,11 +71,12 @@ about masked-knight 1:1 | A knight who hides behind a mask.
 about ines 1:3 | Marlo’s sister, who rode in as the masked knight.`;
 
 // The first answer gives the masked knight, a man until the reveal, a woman's voice: asked again, just for him.
-const VOICES = `voice elena lessac af_heart
-voice marlo ryan am_michael
-voice masked-knight kristin bm_george
-voice ines alba bf_isabella`;
-const KNIGHT = 'voice masked-knight alan bm_george';
+const VOICES = `voice elena everly
+voice marlo miles
+voice masked-knight hadley
+voice ines maeve`;
+// A character voice is one to pick too.
+const KNIGHT = 'voice masked-knight sir-bramwell';
 
 const unexpected: string[] = [];
 answerWith((_model, user) => {
@@ -80,8 +85,8 @@ answerWith((_model, user) => {
   if (user.includes('# Your task: the entries')) return ROSTER;
   if (user.includes('# Your task: part 1')) return PART;
   if (user.includes('# Your task: read them as a reader would')) return 'none';
-  if (user.includes('# What was wrong with the last answer\n\n- masked-knight: piper’s kristin isn’t a man’s voice')) return KNIGHT;
-  if (user.includes('# Who needs voices')) return VOICES;
+  if (user.includes('# What was wrong with the last answer\n\n- masked-knight: hadley isn’t a man’s voice')) return KNIGHT;
+  if (user.includes('# Who needs a voice')) return VOICES;
   unexpected.push(user.slice(-300));
   return 400;
 });
@@ -125,10 +130,17 @@ test('then marked and packed into a file the server takes', async () => {
   assert.deepEqual(checkFile(`${sha256}.json`, f).problems, []);
   assert.equal(f.by, 'nemotron-3.5-super-vl-120b-a12b parts 1; cast by nemotron-3.5-super-vl-120b-a12b');
   assert.equal(f.voices.spans.length, 9);
-  const voiced = f.voices.cast.filter((p) => p.voice).map((p) => `${p.id} ${p.voice!.piper} ${p.voice!.kokoro}`);
-  assert.deepEqual(voiced, ['elena lessac af_heart', 'marlo ryan am_michael', 'masked-knight alan bm_george', 'ines alba bf_isabella']);
+  const voiced = f.voices.cast.filter((p) => p.voice).map((p) => `${p.id} ${phonon(p.voice)}`);
+  assert.deepEqual(voiced, ['elena everly', 'marlo miles', 'masked-knight sir-bramwell', 'ines maeve']);
   assert.deepEqual(f.revisit, { people: [], places: [], terms: [] });
   assert.equal(needs(b, new Map([[sha256, { made: f.made, by: f.by, notes: 0 }]])), 'notes');
+});
+
+test('a wrong answer sends the next try at the voices to Codex first', () => {
+  const lines = readFileSync(join(WORK, '_calls.jsonl'), 'utf8').trim().split('\n');
+  const voices = lines.map((l) => JSON.parse(l)).filter((c) => c.book === b.key && c.cast === 'voices');
+  const tries = voices.map((c) => `${c.try} ${c.codexFirst === true}`);
+  assert.deepEqual(tries, ['1 false', '2 true']);
 });
 
 test('then notes, merged into the server’s file with anyone they added to the cast', async () => {
@@ -155,29 +167,41 @@ test('a book marked before there were voices gets them at random, a woman’s fo
   assert.deepEqual(checkFile(`${sha256}.json`, file).problems, []);
   const voiced = file.voices.cast.filter((p) => p.voice);
   assert.deepEqual(voiced.map((p) => p.id), ['elena', 'marlo', 'masked-knight', 'ines'], 'the generic speakers get none');
-  assert.equal(new Set(voiced.map((p) => p.voice!.piper)).size, 4, 'no one shares a voice while there are others');
+  assert.equal(new Set(voiced.map((p) => phonon(p.voice))).size, 4, 'no one shares a voice while there are others');
+  assert.ok(voiced.every((p) => !builtInVoice('phonon', phonon(p.voice))?.character), 'never a character voice at random');
   assert.equal(withRandomVoices(file).given, 0, 'and anyone with voices keeps them');
+});
+
+test('voices from before Phonon are left as they are, at random and through a series', () => {
+  const row = readJson<AiFile>(outFile);
+  const old: AiFile = { ...row, voices: { ...row.voices, cast: row.voices.cast.map((p) => (p.voice ? { ...p, voice: { piper: 'lessac', kokoro: 'af_heart' } } : p)) } };
+  const { file, given } = withRandomVoices(old);
+  assert.equal(given, 0);
+  assert.deepEqual(file.voices.cast, old.voices.cast);
+  const earlier = new Map<string, Voices>();
+  addSeriesVoices(earlier, old.voices.cast);
+  assert.equal(earlier.size, 0, 'they aren’t the series’ voices either');
 });
 
 test('the next volume reads everyone in the voices they have in the one before, where those still suit them', () => {
   const row = readJson<AiFile>(outFile);
-  const earlier = new Map<string, { piper: string; kokoro: string }>();
+  const earlier = new Map<string, Voices>();
   addSeriesVoices(earlier, row.voices.cast);
   assert.deepEqual([...earlier.keys()], ['elena', 'marlo', 'masked-knight', 'ines'], 'never the generic speakers');
 
   // Elena with voices of her own at random, Marlo a woman from the start, and someone new.
   const next: AiFile['voices']['cast'] = row.voices.cast.map((p) => {
-    if (p.id === 'elena') return { ...p, voice: { piper: 'kristin', kokoro: 'af_bella' } };
+    if (p.id === 'elena') return { ...p, voice: { phonon: 'zoey' } };
     if (p.id === 'marlo') return { id: p.id, name: p.name, g: 'F' };
     return p;
   });
   next.push({ id: 'tobin', name: 'Tobin', g: 'M' });
   const { cast, changed } = seriesVoices(next, earlier);
   assert.equal(changed, 3);
-  assert.deepEqual(cast.find((p) => p.id === 'elena')?.voice, { piper: 'lessac', kokoro: 'af_heart' });
+  assert.deepEqual(cast.find((p) => p.id === 'elena')?.voice, { phonon: 'everly' });
   const marlo = cast.find((p) => p.id === 'marlo')!;
   assert.notDeepEqual(marlo.voice, earlier.get('marlo'), 'a man’s voices don’t read her');
-  assert.deepEqual(voiceProblems({ gender: 'F' }, marlo.voice!), []);
+  assert.deepEqual(voiceProblems({ gender: 'F' }, { phonon: phonon(marlo.voice) }), []);
   assert.ok(cast.find((p) => p.id === 'tobin')?.voice, 'someone new gets voices at random');
   assert.equal(seriesVoices(cast, earlier).changed, 0, 'and once they match, nothing changes');
 });
@@ -210,7 +234,7 @@ test('the marker reads everyone through a series in their first volume’s voice
   const two: AiFile = {
     ...one,
     sha256: 'f'.repeat(64),
-    voices: { ...one.voices, cast: one.voices.cast.map((p) => (p.id === 'elena' ? { ...p, voice: { piper: 'kristin', kokoro: 'af_bella' } } : p)) },
+    voices: { ...one.voices, cast: one.voices.cast.map((p) => (p.id === 'elena' ? { ...p, voice: { phonon: 'zoey' } } : p)) },
   };
   const files = new Map([[one.sha256, one], [two.sha256, two]]);
   const vol = (f: AiFile, i: number): QueueBook => ({ ...b, sha256: f.sha256, key: `lantern-${i}`, title: `Lantern ${i}`, series: 'The Lantern', seriesIndex: i });
@@ -220,7 +244,7 @@ test('the marker reads everyone through a series in their first volume’s voice
 
   assert.equal(await voicesThrough(fakeServer(files), series.get('series:the lantern')!), true);
   const after = files.get(two.sha256)!;
-  assert.deepEqual(after.voices.cast.find((p) => p.id === 'elena')?.voice, { piper: 'lessac', kokoro: 'af_heart' });
+  assert.deepEqual(after.voices.cast.find((p) => p.id === 'elena')?.voice, { phonon: 'everly' });
   assert.notEqual(after.made, two.made, 'a new time, so the app fetches the file again');
   assert.equal(files.get(one.sha256), one, 'the first volume stays as it was');
   assert.deepEqual(readJson<AiFile>(join(OUT, `${two.sha256}.json`)), after, 'and ai/out has it too');
@@ -237,7 +261,7 @@ test('a book marked somewhere else gets its cast from the server’s file', asyn
   matchCast(book, other);
   assert.deepEqual(castOf(book).people.map((p) => p.id), other.voices.cast.map((p) => p.id));
   assert.deepEqual(castOf(book).people.find((p) => p.id === 'masked-knight')?.changes, [{ at: '1:3', gender: 'F', why: 'As marked.' }]);
-  assert.deepEqual(castOf(book).people.find((p) => p.id === 'elena')?.voice, { piper: 'lessac', kokoro: 'af_heart' }, 'with their voices');
+  assert.deepEqual(castOf(book).people.find((p) => p.id === 'elena')?.voice, { phonon: 'everly' }, 'with their voices');
 });
 
 test('no call went unanswered, and none came twice', () => {

@@ -528,9 +528,10 @@ function useAudiobookScene({ narrow }: { narrow: boolean }) {
             <div className="modal ab is-centered">
               <div className="modal-head"><h2 className="modal-title">Audiobook</h2><button type="button" className="modal-close"><IconClose /></button></div>
               <div className="ab-make">
-                <Step n={1} title="Voice">
-                  <Choice on name="Piper" aside="Amy" line="Clear, quick to make · 120 MB" onPick={noop} />
-                  <Choice name="Kokoro" aside="Heart" line="Most natural, slow to make · 120 MB" onPick={noop} />
+                <p className="ab-now"><b>Everly</b><span> · 120 MB</span></p>
+                <Step n={1} title="Speed">
+                  <Choice on name="Maximum" line="~29 min · uses the whole computer" onPick={noop} />
+                  <Choice name="Minimal" line="~1½ h · leaves room for other apps" onPick={noop} />
                 </Step>
                 <div className="ab-actions"><button type="button" className="btn btn-primary ab-go is-wide">Download as audiobook</button></div>
               </div>

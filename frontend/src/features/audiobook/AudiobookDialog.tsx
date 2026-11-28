@@ -1,29 +1,29 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { BookRecord } from '../../books/types';
 import { saveFile } from '../../books/exportManga';
 import { Modal } from '../../components/Modal';
 import { Choice, Step } from '../../components/Steps';
 import { DotIcon } from '../reader/chrome/parts';
 import { BACK, ON, PAUSE, PLAY } from '../reader/chrome/icons';
-import { audiobookVoice, handheld, voiceByKey } from '../reader/voice/prefs';
+import { voiceByKey } from '../reader/voice/catalog';
+import { audiobookVoice, handheld } from '../reader/voice/prefs';
 import { measure, setMode, useSpeed, type Mode } from './speed';
 import {
-  chaptersMade, exportMp3, kokoroHere, lengthOf, listenable, megabytes, minutes, pause, remove, sizeOf, start,
+  chaptersMade, exportMp3, lengthOf, listenable, MAKER, megabytes, minutes, pause, remove, sizeOf, start,
   timeToMake, useAudiobook, useStage, type Engine, type Made,
 } from './audiobooks';
 import { ENGINES } from './made';
 import { useAudiobookKeys } from './keys';
 import * as player from './player';
-
 import type { Elements } from '../../lib/elements';
+
 /*
- * A book's audiobook dialog, opened from its card's button (Audiobook.tsx). Not made yet, it asks
- * which voice and how fast to make it on this device; while it's made, how far it's got, and once
+ * A book's audiobook dialog, opened from its card's button (Audiobook.tsx). Not made yet, it shows
+ * the voice it's made in and asks how fast to make it on this device; while it's made, how far it's got, and once
  * its first chapter is made, it plays what's made while the rest is.
  */
 
-const NAME: Record<Engine, string> = { piper: 'Piper', kokoro: 'Kokoro' };
-const QUALITY: Record<Engine, string> = { piper: 'Clear, quick to make', kokoro: 'Most natural, slow to make' };
+const NAME: Record<Engine, string> = { phonon: 'Phonon', piper: 'Piper', kokoro: 'Kokoro' };
 
 type Book = BookRecord;
 
@@ -67,6 +67,7 @@ export function AudiobookDialog({ book, listen: listenIn, onClose }: { book: Boo
   if (view.kind === 'player' && !listenable(ab?.[view.engine])) view = { kind: 'progress', engine: view.engine };
   const back = hear.length ? () => setView({ kind: 'player', engine: hear[0] }) : undefined;
   const carryOn = (engine: Engine) => () => setView({ kind: 'make', engine });
+  const toOther = (engine: Engine) => setView(ab?.[engine] ? { kind: 'progress', engine } : { kind: 'make', engine });
 
   return (
     <Modal title="Audiobook" onClose={onClose} width={520} className="ab is-centered">
@@ -86,6 +87,7 @@ export function AudiobookDialog({ book, listen: listenIn, onClose }: { book: Boo
             lead={listenable(ab![view.engine]) && <button type="button" className="btn btn-primary is-wide" onClick={() => setView({ kind: 'player', engine: (view as { engine: Engine }).engine })}>{ab![view.engine]!.state === 'ready' ? 'Listen' : 'Play what’s made'}</button>}
           >
             {!listenable(ab![view.engine]) && back && <button type="button" className="btn btn-ghost" onClick={back}>Back</button>}
+            <AddMaker engine={view.engine} ab={ab!} onOther={toOther} />
           </Making>
         </div>
       )}
@@ -96,7 +98,7 @@ export function AudiobookDialog({ book, listen: listenIn, onClose }: { book: Boo
           ab={ab!}
           hear={hear}
           onEngine={(engine) => setView({ kind: 'player', engine })}
-          onOther={(engine) => setView(ab?.[engine] ? { kind: 'progress', engine } : { kind: 'make', engine })}
+          onOther={toOther}
           onCarryOn={carryOn(view.engine)}
         />
       )}
@@ -106,35 +108,27 @@ export function AudiobookDialog({ book, listen: listenIn, onClose }: { book: Boo
 
 function MakeView({ book, fixed, ab, onStarted, onBack }: {
   book: Book;
-  /** Carrying on with this one, or making the other one. */
+  /** Carrying on with this one. */
   fixed?: Engine;
   ab: Partial<Record<Engine, Made>> | undefined;
   onStarted: (e: Engine) => void;
   onBack?: () => void;
 }) {
-  const free = ENGINES.filter((e) => !ab?.[e]);
-  const [engine, setEngine] = useState<Engine>(fixed ?? free[0] ?? 'piper');
-  const [kokoro, setKokoro] = useState<boolean | null>(null);
+  const engine = fixed ?? MAKER;
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const stage = useStage(book.id, engine);
   const { mode } = useSpeed();
-  useEffect(() => { void kokoroHere().then(setKokoro); void measure(); }, []);
-  // Kokoro can't run here: Piper is picked instead, unless it's made already or being carried on.
-  useEffect(() => {
-    if (kokoro === false && engine === 'kokoro' && !fixed && !ab?.piper) setEngine('piper');
-  }, [kokoro, engine, fixed, ab]);
+  useEffect(() => { void measure(); }, []);
 
   const m = ab?.[engine];
   const words = m?.words ?? book.words ?? 0;
   const left = m ? 1 - m.done / m.total : 1;
-  const voice = m ? voiceByKey(m.voice) : audiobookVoice(engine);
-  const cant = (e: Engine) => e === 'kokoro' && kokoro === false;
+  const voice = m ? voiceByKey(m.voice) : audiobookVoice();
   const est = (md: Mode) => `~${minutes(timeToMake(words * left, engine, md))}`;
   const phone = handheld();
 
   const go = async () => {
-    if (cant(engine)) return;
     setStarting(true);
     setError(null);
     try {
@@ -150,33 +144,17 @@ function MakeView({ book, fixed, ab, onStarted, onBack }: {
   return (
     <div className="ab-make">
       {m ? (
-        <p className="ab-now"><b>{NAME[engine]}</b><span>{` · ${voice?.name ?? ''} · carries on from ${Math.round((1 - left) * 100)}%`}</span></p>
+        <p className="ab-now"><b>{voice?.name ?? 'Its voice'}</b><span>{` · carries on from ${Math.round((1 - left) * 100)}%`}</span></p>
       ) : (
-        <Step n={1} title="Voice">
-          {ENGINES.map((e) => (
-            <Choice
-              key={e}
-              on={engine === e && !cant(e)}
-              off={!!ab?.[e] || cant(e)}
-              name={NAME[e]}
-              aside={ab?.[e] ? 'Made' : audiobookVoice(e).name}
-              line={cant(e) && !ab?.[e] ? 'Needs a computer with a graphics chip' : `${QUALITY[e]} · ${megabytes(sizeOf(words))}`}
-              onPick={() => setEngine(e)}
-            />
-          ))}
-        </Step>
+        <p className="ab-now"><b>{voice?.name}</b><span>{` · ${megabytes(sizeOf(words))}`}</span></p>
       )}
-      {cant(engine) ? (
-        <p className="ab-error" role="alert">This device can’t run Kokoro. Remove it and make it with Piper.</p>
-      ) : (
-        <Step n={m ? 1 : 2} title="Speed">
-          <Choice on={mode === 'max'} name="Maximum" line={`${est('max')} · uses the whole ${phone ? 'phone' : 'computer'}`} onPick={() => setMode('max')} />
-          <Choice on={mode === 'min'} name="Minimal" line={`${est('min')} · leaves room for other apps`} onPick={() => setMode('min')} />
-        </Step>
-      )}
+      <Step n={1} title="Speed">
+        <Choice on={mode === 'max'} name="Maximum" line={`${est('max')} · uses the whole ${phone ? 'phone' : 'computer'}`} onPick={() => setMode('max')} />
+        <Choice on={mode === 'min'} name="Minimal" line={`${est('min')} · leaves room for other apps`} onPick={() => setMode('min')} />
+      </Step>
       {error && <p className="ab-error" role="alert">{error}</p>}
       <div className="ab-actions">
-        <button type="button" className="btn btn-primary ab-go is-wide" disabled={cant(engine) || starting} onClick={() => void go()}>
+        <button type="button" className="btn btn-primary ab-go is-wide" disabled={starting} onClick={() => void go()}>
           {starting ? (stage ?? 'Starting…') : m ? 'Carry on' : 'Download as audiobook'}
         </button>
         {onBack && <button type="button" className="btn btn-ghost" onClick={onBack}>Back</button>}
@@ -205,6 +183,13 @@ function Making({ book, engine, m, first, onCarryOn, lead, children }: {
   useSpeed();
   const togo = (parts: number) => `~${minutes(timeToMake((m.words * Math.max(0, parts)) / m.total, engine, m.mode))}`;
   const firstEnd = m.chapters[1]?.from ?? m.total;
+  // Piper's and Kokoro's voices are gone (ADR 0005): one of theirs plays, but is never made further.
+  let step: ReactNode = null;
+  if (m.state === 'making') {
+    step = <button type="button" className="btn btn-quiet" onClick={() => void pause(book.id, engine)}>Pause</button>;
+  } else if (m.state !== 'ready' && engine === MAKER) {
+    step = <button type="button" className="btn btn-primary" onClick={onCarryOn}>Carry on</button>;
+  }
   let line: string;
   if (m.state === 'making') {
     if (stage) line = stage;
@@ -226,14 +211,21 @@ function Making({ book, engine, m, first, onCarryOn, lead, children }: {
       <p className={`ab-line${m.state === 'failed' ? ' is-bad' : ''}`}>{line}</p>
       <div className="ab-actions">
         {lead}
-        {m.state === 'making'
-          ? <button type="button" className="btn btn-quiet" onClick={() => void pause(book.id, engine)}>Pause</button>
-          : m.state !== 'ready' && <button type="button" className="btn btn-primary" onClick={onCarryOn}>Carry on</button>}
+        {step}
         {children}
         <RemoveButton id={book.id} engine={engine} />
       </div>
     </div>
   );
+}
+
+/** One made with Piper or Kokoro: making it again with Phonon, or how far that's got. */
+function AddMaker({ engine, ab, onOther }: { engine: Engine; ab: Partial<Record<Engine, Made>>; onOther: (e: Engine) => void }) {
+  const made = ab[MAKER];
+  if (engine === MAKER || made?.state === 'ready') return null;
+  let label = `Add ${NAME[MAKER]}`;
+  if (made) label = `${NAME[MAKER]} ${Math.round((made.done / made.total) * 100)}%`;
+  return <button type="button" className="btn btn-ghost" onClick={() => onOther(MAKER)}>{label}</button>;
 }
 
 function PlayerView({ book, engine, ab, hear, onEngine, onOther, onCarryOn }: {
@@ -260,15 +252,8 @@ function PlayerView({ book, engine, ab, hear, onEngine, onOther, onCarryOn }: {
   const ready = m.state === 'ready';
   const chapter = [...m.chapters].reverse().find((c) => c.from <= at);
   const left = lengthOf(m.words) * (1 - at / m.total);
-  const other = ENGINES.find((e) => e !== engine)!;
-  const o = ab[other];
   const end = Math.max(1, m.total - 1);
-  // Making it in the other voice too, or how far that's got.
-  const otherButton = o?.state !== 'ready' && (
-    <button type="button" className="btn btn-ghost" onClick={() => onOther(other)}>
-      {o ? `${NAME[other]} ${Math.round((o.done / o.total) * 100)}%` : `Add ${NAME[other]}`}
-    </button>
-  );
+  const otherButton = <AddMaker engine={engine} ab={ab} onOther={onOther} />;
 
   const save = async () => {
     setError(null);

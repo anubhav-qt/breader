@@ -34,8 +34,8 @@ function fakeRunner() {
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
-const KOKORO: Model = { key: 'kokoro', mb: 750 };
-const PIPER: Model = { key: 'piper:a', mb: 250 };
+const BIG: Model = { key: 'big', mb: 750 };
+const SMALL: Model = { key: 'small', mb: 250 };
 const PANELS: Model = { key: 'panels', mb: 500 };
 
 function host(workers: number, more: Partial<Host> = {}): Host {
@@ -150,33 +150,45 @@ describe('the engine’s scheduler', () => {
     expect(await next(lone.ran)).toEqual(['p1']);
   });
 
+  it('gives panels only the workers the engine says their threads fit', async () => {
+    const { ran, job } = setup({ hosts: [host(7, { panelWorkers: 2 })] });
+    for (const n of [1, 2, 3]) void job('panel', `p${n}`, { who: `r${n}` });
+    for (const n of [1, 2, 3, 4, 5]) void job('live', `a${n}`, { who: `a${n}` });
+    await tick();
+    // Two panels, and every reader at once on the workers left.
+    expect(ran.map((r) => r.name).sort()).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'p1', 'p2']);
+    ran.find((r) => r.name === 'p1')!.finish();
+    await tick();
+    expect(ran.at(-1)!.name).toBe('p3');
+  });
+
   it('puts other work on the workers that read live longest ago', async () => {
     let now = 1_000;
     const { ran, job } = setup({ hosts: [host(3)], now: () => now, liveHoldMs: 60_000 });
     void job('panel', 'panel', { model: PANELS });
-    void job('live', 'live', { model: KOKORO });
+    void job('live', 'live', { model: BIG });
     await tick();
     const liveSlot = ran[1].slot;
     now += 10;
     ran[1].finish();
     ran[0].finish();
     await tick();
-    void job('panel', 'p1', { model: PIPER, who: 'x' });
-    void job('panel', 'p2', { model: PIPER, who: 'y' });
+    void job('panel', 'p1', { model: SMALL, who: 'x' });
+    void job('panel', 'p2', { model: SMALL, who: 'y' });
     await tick();
     expect(ran.slice(2).map((r) => r.slot)).not.toContain(liveSlot);
   });
 
   it('sends a job to the worker already holding its model', async () => {
     const { ran, job } = setup({ hosts: [host(3)] });
-    void job('live', 'k1', { model: KOKORO, who: 'a' });
-    void job('live', 'p1', { model: PIPER, who: 'b' });
+    void job('live', 'k1', { model: BIG, who: 'a' });
+    void job('live', 'p1', { model: SMALL, who: 'b' });
     await tick();
     const kSlot = ran[0].slot;
     ran[0].finish();
     ran[1].finish();
     await tick();
-    void job('panel', 'k2', { model: KOKORO });
+    void job('panel', 'k2', { model: BIG });
     await tick();
     expect(ran[2].slot).toBe(kSlot);
   });
@@ -184,15 +196,15 @@ describe('the engine’s scheduler', () => {
   it('keeps the models held under the budget, letting go of the one used longest ago', async () => {
     let now = 0;
     const { ran, job, s } = setup({ hosts: [host(2, { budgetMb: 1_100 })], now: () => now });
-    void job('live', 'k', { model: KOKORO });
+    void job('live', 'k', { model: BIG });
     await tick();
     now = 10;
     ran[0].finish();
     await tick();
     now = 20;
-    void job('live', 'p', { model: PIPER });
+    void job('live', 'p', { model: SMALL });
     await tick();
-    // Kokoro and Piper fit (1000 of 1100). Panels don't, until Kokoro goes.
+    // The big and small models fit (1000 of 1100). Panels don't, until the big one goes.
     now = 30;
     ran[1].finish();
     await tick();
@@ -200,15 +212,15 @@ describe('the engine’s scheduler', () => {
     await tick();
     const last = ran.at(-1)!;
     expect(last.name).toBe('panels');
-    expect(last.drop).toEqual(['kokoro']);
+    expect(last.drop).toEqual(['big']);
     expect(s.stats().engines[0].heldMb).toBeLessThanOrEqual(1_100);
   });
 
   it('waits when no free worker has room, rather than going over', async () => {
     const { ran, job, s } = setup({ hosts: [host(2, { budgetMb: 1_000 })] });
-    void job('live', 'k', { model: KOKORO });
+    void job('live', 'k', { model: BIG });
     await tick();
-    // Kokoro's worker is busy; the other has nothing to let go of, and panels would make 1250.
+    // The big model's worker is busy; the other has nothing to let go of, and panels would make 1250.
     void job('panel', 'panels', { model: PANELS });
     await tick();
     expect(ran.map((r) => r.name)).toEqual(['k']);
@@ -216,12 +228,12 @@ describe('the engine’s scheduler', () => {
     ran[0].finish();
     await tick();
     expect(ran.at(-1)!.name).toBe('panels');
-    expect(ran.at(-1)!.drop).toEqual(['kokoro']);
+    expect(ran.at(-1)!.drop).toEqual(['big']);
   });
 
   it('runs a model bigger than the budget on its own', async () => {
     const { ran, job } = setup({ hosts: [host(1, { budgetMb: 300 })] });
-    void job('live', 'k', { model: KOKORO });
+    void job('live', 'k', { model: BIG });
     await tick();
     expect(ran.map((r) => r.name)).toEqual(['k']);
   });
@@ -311,16 +323,16 @@ describe('the engine’s scheduler', () => {
 
   it('forgets what a worker held when it stops, or its engine starts again', async () => {
     const { ran, job, s } = setup({ hosts: [host(1)] });
-    void job('live', 'k', { model: KOKORO });
+    void job('live', 'k', { model: BIG });
     await tick();
     ran[0].fail(Object.assign(new Error('gone'), { stopped: true }));
     await tick();
     expect(s.stats().engines[0].models).toEqual([[]]);
-    void job('live', 'k2', { model: KOKORO });
+    void job('live', 'k2', { model: BIG });
     await tick();
     ran[1].finish();
     await tick();
-    expect(s.stats().engines[0].models).toEqual([['kokoro']]);
+    expect(s.stats().engines[0].models).toEqual([['big']]);
     s.host(0, host(1, { boot: 'two' }));
     expect(s.stats().engines[0].models).toEqual([[]]);
   });
@@ -343,8 +355,8 @@ describe('the engine’s scheduler', () => {
 
   it('shares work across engines, each to its own budget', async () => {
     const { ran, job, s } = setup({ hosts: [host(1, { budgetMb: 800 }), host(1, { budgetMb: 800 })] });
-    void job('panel', 'one', { model: KOKORO, who: 'a' });
-    void job('panel', 'two', { model: KOKORO, who: 'b' });
+    void job('panel', 'one', { model: BIG, who: 'a' });
+    void job('panel', 'two', { model: BIG, who: 'b' });
     await tick();
     expect(ran.map((r) => r.host).sort()).toEqual([0, 1]);
     expect(s.stats().engines.map((e) => e.heldMb)).toEqual([750, 750]);
@@ -371,10 +383,11 @@ describe('the engine’s size', () => {
   });
 
   it('gives a worker of four threads for each two cores, and half the memory', () => {
-    expect(sizeOf({}, 8, 16_000)).toEqual({ workers: 4, threads: 4, budgetMb: 8_000, lowMb: 1_024 });
-    expect(sizeOf({}, 2, 2_000)).toEqual({ workers: 1, threads: 2, budgetMb: 1_000, lowMb: 250 });
-    expect(sizeOf({}, 1, 2_000)).toMatchObject({ workers: 1, threads: 1 });
-    expect(sizeOf({ ENGINE_WORKERS: 5, ENGINE_THREADS: 1, ENGINE_MEMORY_MB: 3_000, ENGINE_LOW_MB: 10 }, 8, 16_000)).toEqual({ workers: 5, threads: 1, budgetMb: 3_000, lowMb: 10 });
+    // A worker a core but one, as Phonon reads on one thread; panels only on the cores their threads fit.
+    expect(sizeOf({}, 8, 16_000)).toEqual({ workers: 7, panelWorkers: 2, threads: 4, budgetMb: 8_000, lowMb: 1_024 });
+    expect(sizeOf({}, 2, 2_000)).toEqual({ workers: 1, panelWorkers: 1, threads: 2, budgetMb: 1_000, lowMb: 250 });
+    expect(sizeOf({}, 1, 2_000)).toMatchObject({ workers: 1, panelWorkers: 1, threads: 1 });
+    expect(sizeOf({ ENGINE_WORKERS: 5, ENGINE_THREADS: 1, ENGINE_MEMORY_MB: 3_000, ENGINE_LOW_MB: 10 }, 8, 16_000)).toEqual({ workers: 5, panelWorkers: 8, threads: 1, budgetMb: 3_000, lowMb: 10 });
   });
 });
 

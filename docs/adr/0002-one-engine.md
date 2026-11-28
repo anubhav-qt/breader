@@ -104,6 +104,9 @@ What this says, simply:
    (the API warns when they are still set). Workers start when work comes and stop after 10 quiet
    minutes. 4 of 4 beat the planned 3 of 2 on both counts (below), though it gives each core two
    threads: the models wait on memory more than on the processor.
+   Since ADR 0005 (2026-11-28) every voice is Phonon, on one thread: a worker for each core but
+   one (7 on the 5800U), and panels, on `ENGINE_THREADS` threads, use at most as many workers at
+   once as those threads fit the cores (`panelWorkers`, 2 there).
 
 5. **Three kinds of work, most urgent first:** live reading, panels, audiobooks. A job in hand is
    never stopped halfway, and its worker never ends mid-job: native ONNX Runtime then aborts the

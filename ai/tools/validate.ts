@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { builtInVoice, VOICE_MODELS } from '../../shared/src/voices.ts';
+import { builtInVoice } from '../../shared/src/voices.ts';
 import { readMarks, type Marks } from './marks.ts';
 import { wrongTags, type Tagged } from './tags.ts';
 import { blockAt, bookDir, cmp, marksFiles, parsePos, posText, readJson, type Book, type Gender, type Pos } from './lib.ts';
@@ -31,8 +31,14 @@ export const CastSchema = z.strictObject({
       changes: z.array(z.strictObject({ at: At, gender: G, why: z.string().min(1) })).optional(),
       /** The name the book uses from each paragraph on: where they first appear, then each reveal (a surname, a title, a true identity). */
       names: z.array(z.strictObject({ at: At, name: z.string().min(1) })).optional(),
-      /** Who reads them in each model, by the voice's id there (casting.ts). */
-      voice: z.strictObject({ piper: z.string(), kokoro: z.string() }).optional(),
+      /**
+       * Who reads them, by the voice's id in Phonon (casting.ts). Piper's and Kokoro's from before
+       * ADR 0005 are kept until the book is cast again.
+       */
+      voice: z.union([
+        z.strictObject({ phonon: z.string() }),
+        z.strictObject({ piper: z.string(), kokoro: z.string() }),
+      ]).optional(),
     }),
   ),
 });
@@ -158,12 +164,10 @@ export function validate(book: Book, final: boolean): Checked {
       if (seen.has(p.id)) errors.push(`cast.json: "${p.id}" is listed twice`);
       seen.add(p.id);
       if (!p.generic && !p.evidence?.trim()) errors.push(`cast.json: "${p.id}" needs evidence for their gender (a paragraph id, or a source)`);
-      if (p.voice) {
-        for (const model of VOICE_MODELS) {
-          const v = builtInVoice(model, p.voice[model]);
-          if (!v) errors.push(`cast.json: "${p.id}" has ${p.voice[model]}, which isn’t one of ${model}’s voices`);
-          else if (p.gender !== 'N' && v.gender !== p.gender) errors.push(`cast.json: "${p.id}" has ${model}’s ${v.name}, who doesn’t sound like a ${p.gender === 'F' ? 'woman' : 'man'}`);
-        }
+      if (p.voice && 'phonon' in p.voice) {
+        const v = builtInVoice('phonon', p.voice.phonon);
+        if (!v) errors.push(`cast.json: "${p.id}" has ${p.voice.phonon}, which isn’t one of the voices`);
+        else if (p.gender !== 'N' && v.gender !== p.gender) errors.push(`cast.json: "${p.id}" has ${v.name}, who doesn’t sound like a ${p.gender === 'F' ? 'woman' : 'man'}`);
       }
       let last: Pos = [0, 0];
       for (const c of p.changes ?? []) {

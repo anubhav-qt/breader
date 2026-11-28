@@ -15,7 +15,8 @@ export interface ServerSeen {
   heardAt: string;
   /** When it started, while it's up. */
   startedAt?: string;
-  engine?: { up: number; workers: number; busy: number; waiting: number };
+  /** speed: seconds of speech the voice makes a second, lately, on the slowest engine. */
+  engine?: { up: number; workers: number; busy: number; waiting: number; speed?: number };
   egress?: { usedMb: number; limitMb: number };
 }
 

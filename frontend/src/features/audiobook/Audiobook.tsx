@@ -6,7 +6,7 @@ import { Toast, type ToastMessage } from '../../components/Toast';
 import { IconDownload, IconSpeaker } from '../../components/icons';
 import { DotIcon } from '../reader/chrome/parts';
 import { PAUSE, PLAY } from '../reader/chrome/icons';
-import { anyMaking, canAudiobook, ENGINES, listenable, onListenable, useAudiobook, type Engine, type Made } from './made';
+import { anyMaking, canAudiobook, ENGINES, listenable, madeOf, onListenable, onMade, useAudiobook, type Engine, type Made } from './made';
 import { useAudiobookKeys } from './keys';
 import * as player from './player';
 import './audiobook.css';
@@ -44,18 +44,26 @@ const useOpened = () => useSyncExternalStore((f) => { subs.add(f); return () => 
  */
 export function AudiobookHost() {
   const o = useOpened();
-  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [note, setNote] = useState<{ message: ToastMessage; id: string; engine: Engine } | null>(null);
   // Books being made when the page closed carry on being made: only then does the making load now.
   useEffect(() => { if (anyMaking()) void import('./audiobooks').then((m) => m.wake()); }, []);
   useEffect(() => onListenable((id, engine, m, whole) => {
     const book = m.book as Book | undefined;
     if (!book || opened?.book.id === id) return;
     const title = book.title || 'Your audiobook';
-    setToast({
+    const message: ToastMessage = {
       id: Date.now(),
       text: whole ? `${title}: the audiobook is made.` : `${title}: chapter 1 is ready. The rest keeps coming.`,
       action: { label: 'Listen', run: () => openAudiobook(book, engine) },
       stay: true,
+    };
+    setNote({ message, id, engine });
+  }), []);
+  // Removed since: its note goes too, as there's nothing left to listen to.
+  useEffect(() => onMade(() => {
+    setNote((n) => {
+      if (n && !madeOf(n.id, n.engine)) return null;
+      return n;
     });
   }), []);
   return createPortal(
@@ -63,7 +71,7 @@ export function AudiobookHost() {
       <Suspense fallback={null}>
         <AnimatePresence>{o && <AudiobookDialog key={o.book.id} book={o.book} listen={o.listen} onClose={closeAudiobook} />}</AnimatePresence>
       </Suspense>
-      <Toast toast={toast} onDone={(id) => setToast((t) => (t?.id === id ? null : t))} className="ab-toast" />
+      <Toast toast={note?.message ?? null} onDone={(id) => setNote((n) => (n?.message.id === id ? null : n))} className="ab-toast" />
     </>,
     document.body,
   );

@@ -3,8 +3,7 @@ import type { Loc, ViewHandle } from './FlowView';
 import { lookAt, lookFor, stopLook } from './look';
 import { unlockMusic } from './music';
 import { checkDevice, useAble } from './able';
-import { checkGpu, type Mode, type VoiceInfo } from './voice/catalog';
-import { heardWords } from './voice/list';
+import { ENGINE, type VoiceInfo } from './voice/catalog';
 import { askFirst, onServer, pairFor, rateOf, readsOnServer, useVoicePrefs, voiceFor, voicePrefs } from './voice/prefs';
 import type { SleepWatch } from './sleep';
 import { respell, type Swap } from './voice/sayas';
@@ -89,7 +88,7 @@ export const canNarrate = typeof window !== 'undefined' && typeof Audio !== 'und
 
 /* Sentences */
 
-/** Long sentences wait longer for their sound, and Kokoro reads at most 510 sounds at once. */
+/** Long sentences wait longer for their sound, so a long one is cut at a comma or so. */
 const LONGEST = 220;
 const ABBREV = /(?:^|[\s"“‘([])(?:mr|mrs|ms|dr|st|jr|sr|vs|etc|e\.g|i\.e|no|p|pp|vol|ch|fig)\.$/i;
 /**
@@ -217,8 +216,8 @@ const AHEAD = 900;
 const centred = () => voicePrefs().mode === 'immersive';
 
 /** 2 voices' pair, hers first. */
-const both = (m: Mode) => {
-  const p = pairFor(m);
+const both = () => {
+  const p = pairFor();
   return [p.F, p.M];
 };
 
@@ -351,16 +350,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       if (voiceOf(s) !== cast.get(s.who)) return null;
       return colors.get(s.who) ?? null;
     };
-    /**
-     * Character voices kept loaded beside hers and his, the last used first: only a couple on this
-     * device's processor, where each Piper voice is a model of its own and a phone's memory runs out.
-     */
-    let recent: string[] = [];
-    const keepFor = (v: VoiceInfo) => {
-      recent = [v.key, ...recent.filter((k) => k !== v.key)];
-      if (v.engine === 'piper' && !onServer()) recent = recent.slice(0, 2);
-      return [...keys(), ...recent];
-    };
+    /** How fast it plays: sound is made at the voice's own pace. */
     let rate = 1;
     /** Sound for sentences made ahead, by where they start, until they're said. */
     let clips = new Map<string, Promise<Clip>>();
@@ -369,7 +359,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
       let c = clips.get(k);
       if (!c) {
         const v = voiceOf(s);
-        c = synth(v, respell(s.text).said, rate, keepFor(v));
+        c = synth(v, respell(s.text).said);
         c.catch(() => {});
         clips.set(k, c);
       }
@@ -424,9 +414,6 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     while (live()) {
       // A new voice or speed reads from here on.
       const p = voicePrefs();
-      // Immersive reads with Normal's voices where the GPU can't run its own.
-      if (p.mode === 'immersive') await checkGpu();
-      if (!live()) return;
       // 1 voice or 2, or a new pick for no point of view: cut again from the sentence it's on.
       const now = shapeNow();
       if (now !== shape) {
@@ -437,40 +424,38 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         clips = new Map();
         if (!live()) return;
       }
-      const want = shape === '1' ? [voiceFor(p.mode)] : both(p.mode);
+      const want = shape === '1' ? [voiceFor()] : both();
       const wantKeys = want.map((v) => v.key).join('|');
       const wantWhere = onServer() ? 'server' : 'here';
-      if (wantKeys !== keys().join('|') || wantWhere !== where || rateOf(p) !== rate) {
+      rate = rateOf(p);
+      if (wantKeys !== keys().join('|') || wantWhere !== where) {
         clips = new Map();
-        rate = rateOf(p);
-        if (wantKeys !== keys().join('|') || wantWhere !== where) {
-          where = wantWhere;
-          const first = !voices.length;
-          voices = [];
-          const bytes = await missingAll(want);
-          if (!first && bytes > 0 && askFirst()) { openSheet(); break; }
-          try {
-            for (const v of want) await prepare(v, want.map((w) => w.key));
-          } catch {
-            if (!live()) return;
-            // Two wouldn't start (a phone short of memory, most likely): one voice, and the sheet says so.
-            if (want.length > 1) { pairFailed = true; continue; }
-            openSheet();
-            break;
-          }
+        where = wantWhere;
+        const first = !voices.length;
+        voices = [];
+        const bytes = await missingAll(want);
+        if (!first && bytes > 0 && askFirst()) { openSheet(); break; }
+        try {
+          for (const v of want) await prepare(v);
+        } catch {
           if (!live()) return;
-          voices = want;
-          if (pairFailed && !toldPair) {
-            toldPair = true;
-            failed('2 voices couldn’t start on this device just now, so this reads in one voice.');
-          }
+          // Two wouldn't start (a phone short of memory, most likely): one voice, and the sheet says so.
+          if (want.length > 1) { pairFailed = true; continue; }
+          openSheet();
+          break;
+        }
+        if (!live()) return;
+        voices = want;
+        if (pairFailed && !toldPair) {
+          toldPair = true;
+          failed('2 voices couldn’t start on this device just now, so this reads in one voice.');
         }
       }
       // Character voices as the sheet has them now: a pick or a reshuffle makes what's ahead again.
       let castNext = new Map<number, VoiceInfo>();
       colors = new Map();
       if (shape.startsWith('cast') && marks.current && voices.length) {
-        castNext = castVoices(book, voices[0].engine, marks.current);
+        castNext = castVoices(book, ENGINE, marks.current);
         colors = castColors(book);
       }
       const castNextKeys = [...castNext].map(([k, v]) => `${k}=${v.key}`).join(',');
@@ -537,7 +522,7 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
           return;
         }
         const marks = wordMarks(s.text, respell(s.text).swaps);
-        const now = play(clip, volume);
+        const now = play(clip, volume, rate);
         player.current = now;
         let shown = -2;
         let catching = false;
@@ -616,9 +601,6 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
         }
       } else {
         failures = 0;
-        // Past a hundred words in someone else's voice, the reader keeps it.
-        const said = voiceOf(s);
-        if (said?.upload && !said.upload.mine) heardWords(said.upload.id, wordsIn(s.text));
       }
       // Said: its sound goes, or an hour of listening keeps an hour of it, about 300 MB.
       clips.delete(keyOf(s));
@@ -669,11 +651,10 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
     unlockMusic();
     // Whether this device keeps up itself, or Breader's computer reads (able.ts): known by now, mostly.
     await checkDevice();
-    if (p.mode === 'immersive') await checkGpu();
-    let want = [voiceFor(p.mode)];
-    if (marks.current && p.count[p.mode] === 2) want = both(p.mode);
+    let want = [voiceFor()];
+    if (marks.current && p.count[p.mode] === 2) want = both();
     // Character voices: those of everyone met so far too. Anyone further on downloads when they first speak.
-    if (marks.current && p.count[p.mode] === 2 && castNow().on) want = [...want, ...castVoices(book, want[0].engine, null).values()];
+    if (marks.current && p.count[p.mode] === 2 && castNow().on) want = [...want, ...castVoices(book, ENGINE, null).values()];
     const bytes = await missingAll(want);
     if (bytes > 0 && !agreed && askFirst()) { openSheet(); return false; }
     actions.current.start(from);
@@ -719,11 +700,11 @@ export function useNarration(view: RefObject<ViewHandle | null>, active: boolean
   const speech = useSpeech();
   const able = useAble();
   const server = readsOnServer(speech.allowed, able.voice);
-  const picked = voiceFor(prefs.mode).key;
+  const picked = voiceFor().key;
   const speed = rateOf(prefs);
   // 2 voices: on or off, the pair, and who reads with no point of view, as the loop sees them.
   const twoOn = !!two && prefs.count[prefs.mode] === 2;
-  const pair = twoOn ? both(prefs.mode).map((v) => v.key).join('|') : '';
+  const pair = twoOn ? both().map((v) => v.key).join('|') : '';
   // Character voices: on or off, and the book's picks and reshuffles.
   const castState = useCast();
   const castPicks = castSig(castState, book);

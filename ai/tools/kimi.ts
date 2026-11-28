@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MARKER_DEFAULTS } from '../../shared/src/admin.ts';
-import { builtInVoice, VOICE_MODELS } from '../../shared/src/voices.ts';
+import { builtInVoice } from '../../shared/src/voices.ts';
 import type { Rung } from './balancer.ts';
 import { bookDir, cmp, parsePos, partName, posText, readJson, writeJson, type Book, type Gender } from './lib.ts';
 import type { Cast } from './validate.ts';
@@ -173,6 +173,13 @@ export interface Merged {
   same: Map<string, string>;
 }
 
+/** Whether someone's voice is one of Phonon's that sounds like this gender. */
+function soundsLike(voice: Cast['people'][number]['voice'], gender: 'F' | 'M'): boolean {
+  if (!voice || !('phonon' in voice)) return false;
+  const v = builtInVoice('phonon', voice.phonon);
+  return v?.gender === gender;
+}
+
 /**
  * A model's cast, change and name lines, into cast.json. Parts marked at once each meet a new
  * person on their own, so one can come back under several ids (Devils had Marya Timofeyevna under
@@ -207,7 +214,7 @@ export function mergeCast(book: Book, lines: string[], by: string): Merged {
         had.gender = gender;
         if (evidence) had.evidence = evidence;
         // Voices an earlier volume picked while they were neither may not fit now: they're picked again.
-        if (had.voice && VOICE_MODELS.some((model) => builtInVoice(model, had.voice![model])?.gender !== gender)) delete had.voice;
+        if (had.voice && !soundsLike(had.voice, gender)) delete had.voice;
       } else if (had.gender !== gender) {
         notes.push(`${had.id} kept ${had.gender} (the model said ${gender})`);
       }

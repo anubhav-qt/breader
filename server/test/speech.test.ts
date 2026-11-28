@@ -16,13 +16,13 @@ const OPEN = address('open');
 const UNCONFIRMED = address('unconfirmed');
 
 /** A voice that says what it was asked, as "MP3". */
-const heard: Array<{ voice: string; text: string; speed: number }> = [];
+const heard: Array<{ voice: string; text: string }> = [];
 const fake: Speech = {
-  voices: ['piper:kristin', 'piper:norman'],
+  voices: ['phonon:everly', 'phonon:miles'],
   ready: async () => ({ ready: true, loaded: 10, total: 10 }),
-  say: async (voice, text, speed) => {
-    heard.push({ voice, text, speed });
-    return { mp3: new TextEncoder().encode(`mp3:${text}`), samples: 22050, rate: 22050 };
+  say: async (voice, text) => {
+    heard.push({ voice, text });
+    return { mp3: new TextEncoder().encode(`mp3:${text}`), samples: 24000, rate: 24000 };
   },
   close: async () => {},
 };
@@ -37,7 +37,7 @@ async function loggedIn(email: string, confirmed: boolean, to = app) {
   return b;
 }
 
-const say = { voice: 'piper:kristin', text: 'It was the best of times.', speed: 1.25 };
+const say = { voice: 'phonon:everly', text: 'It was the best of times.' };
 
 describe('the server voice', () => {
   it('is closed without a login', async () => {
@@ -52,7 +52,7 @@ describe('the server voice', () => {
     const b = await loggedIn(UNCONFIRMED, false);
     expect((await b.get('/v1/speech')).body.allowed).toBe(false);
     expect((await b.post('/v1/speech/say', say)).status).toBe(403);
-    expect((await b.post('/v1/speech/ready', { voice: 'piper:kristin' })).status).toBe(403);
+    expect((await b.post('/v1/speech/ready', { voice: 'phonon:everly' })).status).toBe(403);
     // Confirmed, it counts at once: a no isn't kept.
     await primary.db.update(users).set({ emailVerified: true }).where(eq(users.email, UNCONFIRMED));
     expect((await b.get('/v1/speech')).body.allowed).toBe(true);
@@ -61,15 +61,22 @@ describe('the server voice', () => {
   it('reads aloud for any confirmed account, on no list', async () => {
     const b = await loggedIn(OPEN, true);
     expect((await b.get('/v1/speech')).body).toEqual({ allowed: true, voices: fake.voices });
-    expect((await b.post('/v1/speech/ready', { voice: 'piper:kristin' })).body).toEqual({ ready: true, loaded: 10, total: 10 });
+    expect((await b.post('/v1/speech/ready', { voice: 'phonon:everly' })).body).toEqual({ ready: true, loaded: 10, total: 10 });
 
     const r = await b.post('/v1/speech/say', say);
     expect(r.status).toBe(200);
     expect(r.headers.get('content-type')).toBe('audio/mpeg');
-    expect(r.headers.get('x-samples')).toBe('22050');
-    expect(r.headers.get('x-rate')).toBe('22050');
+    expect(r.headers.get('x-samples')).toBe('24000');
+    expect(r.headers.get('x-rate')).toBe('24000');
     expect(r.headers.get('cache-control')).toContain('no-store');
     expect(r.body).toBe(`mp3:${say.text}`);
+    expect(heard.at(-1)).toEqual(say);
+  });
+
+  it('reads at its own pace for an app from before Phonon, which sends a speed', async () => {
+    const b = await loggedIn(OPEN.replace('open-', 'open3-'), true);
+    const r = await b.post('/v1/speech/say', { ...say, speed: 1.25 });
+    expect(r.status).toBe(200);
     expect(heard.at(-1)).toEqual(say);
   });
 
@@ -99,8 +106,9 @@ describe('the server voice', () => {
 });
 
 describe('the server’s voices', () => {
-  it('are the app’s thirty Piper voices: no Kokoro ones (devices only), and no uploads', () => {
-    expect([...VOICES].sort()).toEqual(BUILT_IN.filter((v) => v.key.startsWith('piper:')).map((v) => v.key).sort());
-    expect(VOICES.some((v) => v.startsWith('kokoro:'))).toBe(false);
+  it('are the app’s own, readers and characters alike, and no uploads', () => {
+    expect([...VOICES].sort()).toEqual(BUILT_IN.map((v) => v.key).sort());
+    expect(VOICES.length).toBe(37);
+    expect(VOICES.every((v) => v.startsWith('phonon:'))).toBe(true);
   });
 });

@@ -58,7 +58,7 @@ export function marksOf(r: AiVoicesResponse): Marks {
   const narration = r.narration.slice().sort(byPlace);
   const tellers = (r.tellers ?? []).slice().sort(byPlace);
   const picks = new Map<number, Record<Engine, string>>();
-  for (const [key, piper, kokoro] of r.picks ?? []) picks.set(key, { piper, kokoro });
+  for (const [key, phonon] of r.picks ?? []) picks.set(key, { phonon });
   const ids = new Map<number, string>(r.ids ?? []);
   return {
     made: r.made,

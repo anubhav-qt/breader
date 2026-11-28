@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 vi.mock('../able', () => ({ voiceHere: () => true }));
-vi.mock('./list', () => ({ listedVoices: () => [] }));
 vi.mock('./server', () => ({ serverHas: () => true, speechAllowed: () => true }));
 
 // The tests run in Node: this device's storage, kept in a map.

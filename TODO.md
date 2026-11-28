@@ -50,14 +50,18 @@
 ## Comments (removed 2026-11-09)
 - [ ] Next release: drop the `comments` and `commenters` tables (a migration), take them out of `FED_TABLES` and `server/src/db/schema.ts`. Nothing reads or writes them since the comments feature went.
 
+## Phonon, the one voice (ADR 0005)
+- [ ] Next release: remove the voice upload routes (`server/src/routes/voices.ts`, `routes/files.ts`'s voice kind, `sync/apply.ts`'s voice checks), `ListedVoice`/`VoiceEngine` and `KOKORO_PACK_BYTES` in `shared`, and later the old voice columns.
+- [ ] Phonon's speed on the ThinkPad (x86) and on a real phone, against the 8.5x measured on the Mac (`PER_POINT`, `features/audiobook/speed.ts`).
+- [ ] Hindi and other languages: Phonon has none; a second model picked by the book's language.
+
 ## Audiobooks
 - [ ] Delete `voices/books/` on the ThinkPad: audiobooks are made on devices now, and nothing reads it.
 - [ ] Next release: remove the `/v1/audiobooks` stub (`server/src/routes/audiobooks.ts`) and its test, once apps from before it are gone.
 - [ ] PDFs: read their pages' words into an audiobook as well.
 - [ ] Chapters in the exported MP3 (ID3 CHAP frames), so players can jump between them. Issue #7.
 - [ ] Initials split a sentence: "by O. Henry" is said as "by O." and "Henry", with a pause between (`sentencesIn`, reading aloud too). Issue #3.
-- [ ] Kokoro on this device tops out near 6x on the graphics chip (`features/audiobook/speed.ts`). Several sentences in one run would need a Kokoro export that masks padding; this one doesn't.
-- [ ] On a real phone: Maximum's three Piper engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
+- [ ] On a real phone: Maximum's three Phonon engines (heat, memory, a locked screen), and the speed check's guess against what it measures.
 - [x] One shared engine on the ThinkPad that hands out its CPU and memory to all its work: reading aloud live and the panel model (ADR 0002, `server/src/engine/`).
 - [x] Audiobooks made on devices only, never on the ThinkPad.
 - [ ] After the engine's first release (96185ba, 2026-11-08), on the ThinkPad: `compose ps` shows engine healthy; `compose logs engine api` has no "terminate called" and no "engine down"; total and free memory (`free -m`); the budget, workers and threads at "engine listening". Seen from outside so far: engine up, 4 workers, budget 5553 MB, about 10.5 GB free.
@@ -65,9 +69,9 @@
 - [ ] A smaller server image: Debian's `ffmpeg` brings a graphics stack (LLVM, Mesa, about 400 MB) Breader never uses. A static ffmpeg would take the image from 1.55 GB to about 1.2 GB. Issue #8.
 
 ## Engine load tests (at the end of the day's work, with the typechecks and tests)
-- [ ] `infra/load/voices.mjs` on the ThinkPad itself (Piper only now): how many slow devices reading at once before a sentence waits, and its memory, to check the default budget (half the memory free) and 4 workers of 4.
+- [ ] `infra/load/voices.mjs` on the ThinkPad itself (Phonon only now, ADR 0005): how many slow devices reading at once before a sentence waits, and its memory, to check the default budget (half the memory free) and 4 workers of 4.
 - [ ] Live readers and panels together (`--live N --panels M`): is one worker kept for reading aloud enough, and how often is a reader told it's busy (24 waiting) and kept waiting?
-- [ ] Fewer threads, more workers, for Piper only (a sentence gains little past 4 threads): try 8 workers of 2 threads against 4 of 4 on the ThinkPad.
+- [ ] More workers for Phonon (it reads on one thread a worker, ADR 0005): try a worker a core against one for two cores on the ThinkPad, with its memory (about 400 MB a worker).
 
 ## Testing on real phones
 - [ ] The device check (`features/reader/able.ts`) on real slow phones: is 1.5x for reading aloud, and a score of 0.5 for panels without a graphics chip, where they should be? Measured only on fast devices so far.

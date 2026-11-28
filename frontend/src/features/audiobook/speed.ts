@@ -6,16 +6,12 @@ import { handheld } from '../../lib/handheld';
 /*
  * How fast this device makes an audiobook, and how much of it to use.
  *
- *   Maximum  several voice engines at once, each making its own paragraph. Piper runs on the
- *            processor, so it gets about one engine for every two of its threads, and grows almost
- *            evenly with them: 7.6, 14.5, 25 and 40 times faster than listening with 1, 2, 4 and 6
- *            on an 8-core Ryzen 7 9800X3D. Kokoro runs on the graphics chip, which is the limit: 5.1,
- *            5.6 and 6.3 times with 1, 2 and 3, so it gets two, and no more of the chip's memory.
+ *   Maximum  several voice engines at once, each making its own paragraph. Phonon (ADR 0005) runs
+ *            on the processor, so it gets about one engine for every two or three of its threads.
  *   Minimal  one engine, a sentence at a time, leaving the rest of the device to everything else.
  *
  * More threads in one engine would need a cross-origin isolated page, which breaks covers and
- * logins; several engines get the same out of the processor without it. Kokoro isn't run on
- * several sentences at once: this model pads the shorter ones, which changes how they sound.
+ * logins; several engines get the same out of the processor without it.
  *
  * How long it'll take is guessed from a short check of the processor, done once, when the
  * download dialog first opens; once a book has been made here, from how fast that went.
@@ -58,31 +54,30 @@ export function device(): Device {
 }
 
 /**
- * Engines to run at once. A Piper engine holds about 300 MB, so there's one for every 1.5 GB;
+ * Engines to run at once. A Phonon engine holds about 380 MB, so there's one for every 1.5 GB;
  * a phone gets three at most, to stay cool and keep its other apps.
  */
-export function lanesFor(engine: Engine, mode: Mode, d: Device = device()) {
+export function lanesFor(mode: Mode, d: Device = device()) {
   if (mode === 'min') return 1;
-  if (engine === 'kokoro') return d.handheld ? 1 : 2;
   const byCores = Math.round(d.cores * 0.4);
   const byMemory = Math.floor(d.memory / 1.5);
   return Math.max(1, Math.min(byCores, byMemory, d.handheld ? 3 : 6));
 }
 
-/** One Piper engine's minutes of sound a minute, for each point of the processor's score. */
-const PIPER_PER_POINT = 6;
+/**
+ * One Phonon engine's minutes of sound a minute, for each point of the processor's score: 4 engines
+ * made 25.8 minutes a minute on an M-series Mac that scores 1.43 (2026-11-28).
+ */
+const PER_POINT = 5;
 /** Engines after the first add a little less each: 2 make 1.9 times as much, 6 make 5.3. */
 const SPREAD = 0.88;
-/** Kokoro on a computer's graphics chip, with one engine and two, until one is measured here. */
-const KOKORO: Record<Mode, number> = { min: 5, max: 5.6 };
 
 /** Minutes of sound this device makes in a minute: measured if a book was made here, else guessed. */
 export function devicePace(engine: Engine, mode: Mode, k: Kept = kept, d: Device = device()) {
   const measured = k.pace[`${engine}:${mode}`];
   if (measured) return measured;
-  if (engine === 'kokoro') return KOKORO[mode];
-  const one = (k.score ?? (d.handheld ? 0.4 : 1)) * PIPER_PER_POINT;
-  const n = lanesFor(engine, mode, d);
+  const one = (k.score ?? (d.handheld ? 0.4 : 1)) * PER_POINT;
+  const n = lanesFor(mode, d);
   return one * (n === 1 ? 1 : n * SPREAD);
 }
 
@@ -91,6 +86,12 @@ export function learn(engine: Engine, mode: Mode, pace: number) {
   if (!Number.isFinite(pace) || pace <= 0) return;
   save({ pace: { ...kept.pace, [`${engine}:${mode}`]: Math.round(pace * 100) / 100 } });
 }
+
+/**
+ * Seconds of sound to have before a pace is kept: five minutes, so the engines still loading as
+ * the first paragraph comes in don't make it look half as fast as it is (2026-11-28).
+ */
+const JUDGE_BY = 300;
 
 let checking: Promise<void> | null = null;
 
@@ -114,8 +115,8 @@ export function measure() {
 
 /**
  * Times a book being made here, from its first paragraph made, and keeps its pace for the next
- * guess once there's half a minute of sound to judge by, every few seconds after. Told the
- * seconds of sound each paragraph made.
+ * guess once there's JUDGE_BY of sound to judge by, every few seconds after. Told the seconds of
+ * sound each paragraph made.
  */
 export function timer(engine: Engine, mode: Mode, now: () => number = () => performance.now()) {
   let start: number | null = null;
@@ -125,7 +126,7 @@ export function timer(engine: Engine, mode: Mode, now: () => number = () => perf
     const t = now();
     if (start === null) { start = t; return; }
     sound += seconds;
-    if (sound < 30 || t - kept < 5000) return;
+    if (sound < JUDGE_BY || t - kept < 5000) return;
     kept = t;
     learn(engine, mode, sound / ((t - start) / 1000));
   };

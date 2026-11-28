@@ -1,5 +1,5 @@
 {
-  "$comment": "Files reading aloud needs. `from` files are fetched at build time (frontend/scripts/voices.mjs) into frontend/public/, and by the laptop's server for its own voice (server/src/speech/files.ts), split into parts under Cloudflare Pages' 25 MiB limit; `url` files come straight from their CDN. Sizes are unpacked bytes; `transfer` is what a compressed download weighs. `speakers` are Normal voices that are one speaker of a model of several (`id` is its speaker id in it); `mixes` are heavy voices that average two Kokoro packs (`of`), `british` saying which way they read words.",
+  "$comment": "Files reading aloud needs (ADR 0005). `from` files are fetched at build time (frontend/scripts/voices.mjs) into frontend/public/, and by the laptop's server for its own voice (server/src/speech/files.ts), split into parts under Cloudflare Pages' 25 MiB limit; `url` files come straight from their CDN. Sizes are unpacked bytes; `transfer` is what a compressed download weighs. Phonon 31M en (gradium/phonon-31m-en, Apache-2.0) and its English voices (gradium/phonon-voices, Apache-2.0), at the commits `phonon-tts` 0.7.1 was built against; the runtime is phonon-tts's plain WebAssembly build (MIT OR Apache-2.0). `ort-cpu` and `ort-gpu` are onnxruntime-web’s runtimes, for the panel model (reader/panels.worker.ts).",
   "partBytes": 25165824,
   "files": {
     "ort-cpu": {
@@ -14,470 +14,251 @@
       "sha256": "39f9f0894d478800487ed9f7dbe92618498db320cf55c8e3d89adff8dce658da",
       "transfer": 5528011
     },
-    "kokoro": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/onnx/model.onnx",
-      "path": "tts/kokoro-v1.0-fp32.8fbea51e.onnx",
-      "size": 325532232,
-      "sha256": "8fbea51ea711f2af382e88c833d9e288c6dc82ce5e98421ea61c058ce21a34cb"
-    },
-    "kokoro-af_heart": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_heart.bin",
-      "path": "tts/kokoro-af_heart.d583ccff.bin",
-      "size": 522240,
-      "sha256": "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"
-    },
-    "kokoro-am_michael": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/am_michael.bin",
-      "path": "tts/kokoro-am_michael.1d1f21dd.bin",
-      "size": 522240,
-      "sha256": "1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1"
-    },
-    "kokoro-bf_emma": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bf_emma.bin",
-      "path": "tts/kokoro-bf_emma.669fe064.bin",
-      "size": 522240,
-      "sha256": "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73"
-    },
-    "kokoro-bm_george": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bm_george.bin",
-      "path": "tts/kokoro-bm_george.c4b235a4.bin",
-      "size": 522240,
-      "sha256": "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc"
-    },
-    "kokoro-af_bella": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_bella.bin",
-      "path": "tts/kokoro-af_bella.f69d8362.bin",
-      "size": 522240,
-      "sha256": "f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b"
-    },
-    "piper-kristin": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/kristin/medium/en_US-kristin-medium.onnx",
-      "path": "tts/en_US-kristin-medium.5849957f.onnx",
-      "size": 63531379,
-      "sha256": "5849957f929cbf720c258f8458692d6103fff2f0e3d3b19c8259474bb06a18d4"
-    },
-    "piper-kristin-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/kristin/medium/en_US-kristin-medium.onnx.json",
-      "path": "tts/en_US-kristin-medium.5681426d.json",
-      "size": 4968,
-      "sha256": "5681426d4aead22195de70531eeeeddb46493cfaffc5764b2ea3db73428b651c"
-    },
-    "piper-norman": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/norman/medium/en_US-norman-medium.onnx",
-      "path": "tts/en_US-norman-medium.b9739443.onnx",
-      "size": 63531379,
-      "sha256": "b9739443232a80a59c7d18810dd856899bf16a7964725f5ab81ea49b1351cb71"
-    },
-    "piper-norman-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/norman/medium/en_US-norman-medium.onnx.json",
-      "path": "tts/en_US-norman-medium.6c2db7f5.json",
-      "size": 4968,
-      "sha256": "6c2db7f558a4a8deb9fe822583c1c5105f6c4e834dd0f9de8ad17a888ee9fe1d"
-    },
-    "piper-cori": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/cori/medium/en_GB-cori-medium.onnx",
-      "path": "tts/en_GB-cori-medium.1899f98e.onnx",
-      "size": 63531379,
-      "sha256": "1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d"
-    },
-    "piper-cori-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/cori/medium/en_GB-cori-medium.onnx.json",
-      "path": "tts/en_GB-cori-medium.e262c16d.json",
-      "size": 4966,
-      "sha256": "e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36"
-    },
-    "piper-northern": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx",
-      "path": "tts/en_GB-northern_english_male-medium.57a219ae.onnx",
-      "size": 63201294,
-      "sha256": "57a219ae8e638873db7d18893304be5069c42868f392bb95c3ff17f0690d0689"
-    },
-    "piper-northern-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json",
-      "path": "tts/en_GB-northern_english_male-medium.69557ed3.json",
-      "size": 4847,
-      "sha256": "69557ed3d974463453e9b0c09dd99a7ed0e52b8b87b64b357dbeeb2540a97d47"
-    },
-    "piper-ljspeech": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx",
-      "path": "tts/en_US-ljspeech-medium.6f52a751.onnx",
-      "size": 63531379,
-      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22"
-    },
-    "piper-ljspeech-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json",
-      "path": "tts/en_US-ljspeech-medium.141d612c.json",
-      "size": 4972,
-      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
-    },
-    "piper-john": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/john/medium/en_US-john-medium.onnx",
-      "path": "tts/en_US-john-medium.789c6c87.onnx",
-      "size": 63531379,
-      "sha256": "789c6c875726e627ddee93d51d8727859abe9c091c3d141591f4b83c2072e988"
-    },
-    "piper-john-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/john/medium/en_US-john-medium.onnx.json",
-      "path": "tts/en_US-john-medium.af60f177.json",
-      "size": 4965,
-      "sha256": "af60f177b6b550f3d7a302720c0fb89e7f94a82b5dca464775ef63b1c69ba09a"
-    },
-    "piper-bryce": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/bryce/medium/en_US-bryce-medium.onnx",
-      "path": "tts/en_US-bryce-medium.dc9caa6c.onnx",
-      "size": 63531379,
-      "sha256": "dc9caa6c313199ffb5ac698b6e542fa6cba388aeaf2731e25262e33b9810aef1"
-    },
-    "piper-bryce-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/bryce/medium/en_US-bryce-medium.onnx.json",
-      "path": "tts/en_US-bryce-medium.7ceb1bc4.json",
-      "size": 4966,
-      "sha256": "7ceb1bc4af6d4e41b6d1edbb86c67e91e01eaa71f66db4cd0ae92ac704d415be"
-    },
-    "piper-jenny": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx",
-      "path": "tts/en_GB-jenny_dioco-medium.469c630d.onnx",
-      "size": 63201294,
-      "sha256": "469c630d209e139dd392a66bf4abde4ab86390a0269c1e47b4e5d7ce81526b01"
-    },
-    "piper-jenny-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx.json",
-      "path": "tts/en_GB-jenny_dioco-medium.a9a7a93a.json",
-      "size": 4895,
-      "sha256": "a9a7a93a317c9a3cb6563e37eb057df9ef09c06188a8a4341b0fcb58cba54dd4"
-    },
-    "piper-lessac": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
-      "path": "tts/en_US-lessac-medium.5efe09e6.onnx",
-      "size": 63201294,
-      "sha256": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f"
-    },
-    "piper-lessac-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
-      "path": "tts/en_US-lessac-medium.efe19c41.json",
-      "size": 4885,
-      "sha256": "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0"
-    },
-    "piper-ryan": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ryan/medium/en_US-ryan-medium.onnx",
-      "path": "tts/en_US-ryan-medium.abf4c274.onnx",
-      "size": 63201294,
-      "sha256": "abf4c274862564ed647ba0d2c47f8ee7c9b717d27bdad9219100eb310db4047a"
-    },
-    "piper-ryan-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json",
-      "path": "tts/en_US-ryan-medium.44034c05.json",
-      "size": 4883,
-      "sha256": "44034c056cb15681b2ad494307c7f3f2e4499d1253c700c711fa0a4607ffe78d"
-    },
-    "piper-amy": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/amy/medium/en_US-amy-medium.onnx",
-      "path": "tts/en_US-amy-medium.b3a6e47b.onnx",
-      "size": 63201294,
-      "sha256": "b3a6e47b57b8c7fbe6a0ce2518161a50f59a9cdd8a50835c02cb02bdd6206c18"
-    },
-    "piper-amy-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
-      "path": "tts/en_US-amy-medium.95a23eb4.json",
-      "size": 4882,
-      "sha256": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77"
-    },
-    "piper-alan": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alan/medium/en_GB-alan-medium.onnx",
-      "path": "tts/en_GB-alan-medium.0a309668.onnx",
-      "size": 63201294,
-      "sha256": "0a309668932205e762801f1efc2736cd4b0120329622adf62be09e56339d3330"
-    },
-    "piper-alan-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json",
-      "path": "tts/en_GB-alan-medium.c0f0d124.json",
-      "size": 4888,
-      "sha256": "c0f0d124e5895c00e7c03b35dcc8287f319a6998a365b182deb5c8e752ee8c1e"
-    },
-    "piper-alba": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alba/medium/en_GB-alba-medium.onnx",
-      "path": "tts/en_GB-alba-medium.401369c4.onnx",
-      "size": 63201294,
-      "sha256": "401369c4a81d09fdd86c32c5c864440811dbdcc66466cde2d64f7133a66ad03b"
-    },
-    "piper-alba-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_GB/alba/medium/en_GB-alba-medium.onnx.json",
-      "path": "tts/en_GB-alba-medium.aa965a2f.json",
-      "size": 4888,
-      "sha256": "aa965a2f02ecced632c2694e1fc72bbff6d65f265fab567ca945918c73dd89f4"
-    },
-    "piper-hfc_female": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx",
-      "path": "tts/en_US-hfc_female-medium.914c4737.onnx",
-      "size": 63201294,
-      "sha256": "914c473788fc1fa8b63ace1cdcdb44588f4ae523d3ab37df1536616835a140b7"
-    },
-    "piper-hfc_female-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx.json",
-      "path": "tts/en_US-hfc_female-medium.03f1fa06.json",
-      "size": 5033,
-      "sha256": "03f1fa0622b80463283592d97aca9f6e89aec345a5c56b7257723e0093c58b6c"
-    },
-    "piper-hfc_male": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx",
-      "path": "tts/en_US-hfc_male-medium.d11e403a.onnx",
-      "size": 63201294,
-      "sha256": "d11e403a02bdf5a670c877b3dc56e0e1c8cece6fb30289586314dffdc0a78cb0"
-    },
-    "piper-hfc_male-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx.json",
-      "path": "tts/en_US-hfc_male-medium.f6684742.json",
-      "size": 5033,
-      "sha256": "f66847424aed0bf99ecbb5d7cfde47c0a906f426a0daf7c46f305e7d21afd886"
-    },
-    "piper-joe": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/joe/medium/en_US-joe-medium.onnx",
-      "path": "tts/en_US-joe-medium.58afce03.onnx",
-      "size": 63201294,
-      "sha256": "58afce0321b8d9c46d7cdf9c16500cc55a793b4220212dba6b70fb788b3baf06"
-    },
-    "piper-joe-config": {
-      "from": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/joe/medium/en_US-joe-medium.onnx.json",
-      "path": "tts/en_US-joe-medium.3d6d5410.json",
-      "size": 4794,
-      "sha256": "3d6d5410b3795cb1950595247ef8f06190719e6fdbfa3a2356d8ec368e1aad33"
-    },
-    "piper-manyvoice": {
-      "from": "https://huggingface.co/agentvibes/piper-custom-voices/resolve/aca138594af5ccd37d79fde299991576a2aaab5f/16Speakers.onnx",
-      "path": "tts/16Speakers.3cc7b8f5.onnx",
-      "size": 77100103,
-      "sha256": "3cc7b8f55b82146c09265e909beaa539254a882b9a6ac915792cbfc7d41ba235"
-    },
-    "piper-manyvoice-config": {
-      "from": "https://huggingface.co/agentvibes/piper-custom-voices/resolve/aca138594af5ccd37d79fde299991576a2aaab5f/16Speakers.onnx.json",
-      "path": "tts/16Speakers.1dae6569.json",
-      "size": 7528,
-      "sha256": "1dae6569843412ace557acdc2f2136405219ab75219efb3ddf882af2055a4c1c"
-    },
-    "kokoro-af_nicole": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_nicole.bin",
-      "path": "tts/kokoro-af_nicole.cd2191ab.bin",
-      "size": 522240,
-      "sha256": "cd2191ab31b914ed7b318416b0e4440fdf392ddad9106a060819aa600a64f59a"
-    },
-    "kokoro-af_aoede": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_aoede.bin",
-      "path": "tts/kokoro-af_aoede.4a004c33.bin",
-      "size": 522240,
-      "sha256": "4a004c33430762e2461eedb2013fad808ef4ab3121f5300f554476caf58d8361"
-    },
-    "kokoro-af_kore": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_kore.bin",
-      "path": "tts/kokoro-af_kore.9be5221b.bin",
-      "size": 522240,
-      "sha256": "9be5221b6a941c04b561959b8ff0b06e809444dcc4ab7e75a7b23606f691819e"
-    },
-    "kokoro-af_sarah": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_sarah.bin",
-      "path": "tts/kokoro-af_sarah.4409fbc1.bin",
-      "size": 522240,
-      "sha256": "4409fbc125afabacc615d94db5398d847006a737b0247d6892b7a9a0007a2f0a"
-    },
-    "kokoro-am_fenrir": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/am_fenrir.bin",
-      "path": "tts/kokoro-am_fenrir.c27989f7.bin",
-      "size": 522240,
-      "sha256": "c27989f741f7ee34d273a39d8a595cc0837d35f5ced9a29b7cc162614616df43"
-    },
-    "kokoro-am_puck": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/am_puck.bin",
-      "path": "tts/kokoro-am_puck.fcf73c98.bin",
-      "size": 522240,
-      "sha256": "fcf73c989033e9233e0b98713eca600c8c74dcc1614b37009d5450ff4a2274a0"
-    },
-    "kokoro-af_alloy": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_alloy.bin",
-      "path": "tts/kokoro-af_alloy.c4a6b876.bin",
-      "size": 522240,
-      "sha256": "c4a6b876047fd7fb472edf4ebd63cfac7c3b958a7cae7c106e8f038ca6308c45"
-    },
-    "kokoro-af_nova": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/af_nova.bin",
-      "path": "tts/kokoro-af_nova.18778272.bin",
-      "size": 522240,
-      "sha256": "18778272caa0d0eebaea251c35fd635f038434f9eee5e691d02a174bd328414f"
-    },
-    "kokoro-bf_isabella": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bf_isabella.bin",
-      "path": "tts/kokoro-bf_isabella.3754352c.bin",
-      "size": 522240,
-      "sha256": "3754352c4aaa46d17f27654ab7518d65b62ad6163a0f55a5f4330c2da2c4e94f"
-    },
-    "kokoro-bm_fable": {
-      "from": "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/1939ad2a8e416c0acfeecc08a694d14ef25f2231/voices/bm_fable.bin",
-      "path": "tts/kokoro-bm_fable.f8890831.bin",
-      "size": 522240,
-      "sha256": "f889083196807b4adb15e9204252165f503b8d33d3982e681c52443c49d798f1"
-    }
-  },
-  "speakers": {
-    "kara": {
-      "model": "manyvoice",
-      "id": 1
-    },
-    "maria": {
-      "model": "manyvoice",
-      "id": 3
-    },
-    "mike": {
-      "model": "manyvoice",
-      "id": 4
-    },
-    "mark": {
-      "model": "manyvoice",
-      "id": 5
-    },
-    "michael_s": {
-      "model": "manyvoice",
-      "id": 6
-    },
-    "james": {
-      "model": "manyvoice",
-      "id": 7
-    },
-    "rose": {
-      "model": "manyvoice",
-      "id": 8
-    },
-    "progressing": {
-      "model": "manyvoice",
-      "id": 9
-    },
-    "steve": {
-      "model": "manyvoice",
-      "id": 10
-    },
-    "owlivia": {
-      "model": "manyvoice",
-      "id": 11
-    },
-    "paul": {
-      "model": "manyvoice",
-      "id": 12
-    },
-    "jennifer": {
-      "model": "manyvoice",
-      "id": 13
-    },
-    "emily": {
-      "model": "manyvoice",
-      "id": 14
-    },
-    "martin": {
-      "model": "manyvoice",
-      "id": 15
-    }
-  },
-  "mixes": {
-    "iris": {
-      "of": [
-        "af_heart",
-        "af_nicole"
-      ],
-      "british": false
-    },
-    "clara": {
-      "of": [
-        "af_bella",
-        "af_sarah"
-      ],
-      "british": false
-    },
-    "maya": {
-      "of": [
-        "af_aoede",
-        "af_kore"
-      ],
-      "british": false
-    },
-    "nora": {
-      "of": [
-        "af_nova",
-        "af_alloy"
-      ],
-      "british": false
-    },
-    "lena": {
-      "of": [
-        "af_heart",
-        "af_kore"
-      ],
-      "british": false
-    },
-    "esme": {
-      "of": [
-        "bf_emma",
-        "bf_isabella"
-      ],
-      "british": true
-    },
-    "ada": {
-      "of": [
-        "bf_emma",
-        "af_bella"
-      ],
-      "british": true
-    },
-    "owen": {
-      "of": [
-        "am_fenrir",
-        "am_michael"
-      ],
-      "british": false
-    },
-    "felix": {
-      "of": [
-        "am_fenrir",
-        "am_puck"
-      ],
-      "british": false
-    },
-    "miles": {
-      "of": [
-        "am_michael",
-        "am_puck"
-      ],
-      "british": false
-    },
-    "oscar": {
-      "of": [
-        "am_michael",
-        "bm_fable"
-      ],
-      "british": false
-    },
-    "hugo": {
-      "of": [
-        "bm_fable",
-        "bm_george"
-      ],
-      "british": true
-    },
-    "rhys": {
-      "of": [
-        "bm_george",
-        "am_michael"
-      ],
-      "british": true
-    },
-    "jasper": {
-      "of": [
-        "bm_fable",
-        "am_puck"
-      ],
-      "british": true
-    },
-    "silas": {
-      "of": [
-        "bm_george",
-        "am_fenrir"
-      ],
-      "british": true
+    "phonon-wasm": {
+      "url": "https://cdn.jsdelivr.net/npm/phonon-tts@0.7.1/wasm/phonon_tts_bg.wasm",
+      "size": 3980653,
+      "sha256": "9b84c449dc4bf6d22598079d8fb95e7d5658d2ba0f477d92363b9885782af46f",
+      "transfer": 1304425
+    },
+    "phonon": {
+      "from": "https://huggingface.co/gradium/phonon-31m-en/resolve/92741c5b07d085ff840e26fea8ce43110b87852f/model.q8.gguf",
+      "path": "tts/phonon-31m-en.q8.a7d9aad2.gguf",
+      "size": 64512352,
+      "sha256": "a7d9aad2cd6dc66473f24a08bc6d2939030ef4d751ef82349361fbef3272dbae"
+    },
+    "phonon-tokenizer": {
+      "from": "https://huggingface.co/gradium/phonon-31m-en/resolve/92741c5b07d085ff840e26fea8ce43110b87852f/tokenizer.json",
+      "path": "tts/phonon-31m-en.tokenizer.691a0006.json",
+      "size": 277967,
+      "sha256": "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936"
+    },
+    "phonon-config": {
+      "from": "https://huggingface.co/gradium/phonon-31m-en/resolve/92741c5b07d085ff840e26fea8ce43110b87852f/config.json",
+      "path": "tts/phonon-31m-en.config.b5d0f883.json",
+      "size": 4634,
+      "sha256": "b5d0f88353638370d94035b7d73d7d6577c0554d78f8d7ecfd40490aae39ae85"
+    },
+    "phonon-zoey": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/NbpkqMVS3CJeq2j8.safetensors",
+      "path": "tts/phonon-voices/zoey.97c7f8c2.safetensors",
+      "size": 256136,
+      "sha256": "97c7f8c253413574406ab80dd23f49c3ebb2517163b00a9bf86b9c4cf43e7e23"
+    },
+    "phonon-juniper": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/NIWIOv5vTi5eRMj8.safetensors",
+      "path": "tts/phonon-voices/juniper.444378eb.safetensors",
+      "size": 256136,
+      "sha256": "444378eb06b7c492b86e8fc7d13e4db1a3c0cf3e68891a960bf6f0a41a13ef35"
+    },
+    "phonon-everly": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/vjFyp2BcCyTlUmYb.safetensors",
+      "path": "tts/phonon-voices/everly.958ea94d.safetensors",
+      "size": 256136,
+      "sha256": "958ea94da14f46dd48c7f64adac11ed2ad2aa45f7ccd165dfebab5272664402e"
+    },
+    "phonon-harper": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/4SZHfMpw-p46Ywgs.safetensors",
+      "path": "tts/phonon-voices/harper.6b3da6e2.safetensors",
+      "size": 256136,
+      "sha256": "6b3da6e2d796a20c51af892c482bd6509fb88267a221aff83c870843dee2a123"
+    },
+    "phonon-hadley": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/bXwrkHhURL1VFJdG.safetensors",
+      "path": "tts/phonon-voices/hadley.a879938a.safetensors",
+      "size": 256136,
+      "sha256": "a879938aa9a2df0a8220bdadef88137929f71e887bd91e7db205bd5fa11661d2"
+    },
+    "phonon-delia": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/nGzMHMPAWGaJFHOo.safetensors",
+      "path": "tts/phonon-voices/delia.a0c3dcb9.safetensors",
+      "size": 256136,
+      "sha256": "a0c3dcb91b2247eca56536be9ae8e8becc1c807b1136c5fe101552d6a155b24a"
+    },
+    "phonon-easton": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/LMDIYE0Oa377Qh6Z.safetensors",
+      "path": "tts/phonon-voices/easton.45c58267.safetensors",
+      "size": 256136,
+      "sha256": "45c582673cb20edb04ddcca2b5a8865ddfb0a82599efadb269021e87d20fbdd4"
+    },
+    "phonon-micah": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/40QrMVgAxFiUnP9f.safetensors",
+      "path": "tts/phonon-voices/micah.0de1098d.safetensors",
+      "size": 256136,
+      "sha256": "0de1098d1051686a138d068e83ff09deb5053328bc74ec9541a1fdb90bfc24da"
+    },
+    "phonon-trevor": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/0zLApsZfVLLNaEGl.safetensors",
+      "path": "tts/phonon-voices/trevor.dc1341c8.safetensors",
+      "size": 256136,
+      "sha256": "dc1341c8937af5534e6bbcc5c0fc5e7c10312229b59061228074f93683fe2261"
+    },
+    "phonon-russell": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/_6Aslh2DxfmnRLmP.safetensors",
+      "path": "tts/phonon-voices/russell.beae9e40.safetensors",
+      "size": 256136,
+      "sha256": "beae9e4030efce0a935fcb0f807dc0784d598bcaa87ad4aacb047436b1eaa411"
+    },
+    "phonon-preston": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/qIxlZ7Ei8KvWlyQH.safetensors",
+      "path": "tts/phonon-voices/preston.6e04b84d.safetensors",
+      "size": 256136,
+      "sha256": "6e04b84d3ae8751b22bca0a4f63936f9cb648f4f2182b2d0788071ea1c0b68a1"
+    },
+    "phonon-miles": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/d9XCyhjo4JhkHF1d.safetensors",
+      "path": "tts/phonon-voices/miles.eab20e4f.safetensors",
+      "size": 256136,
+      "sha256": "eab20e4f159b48cfbc01b1885804e24f681f80e7a64f909182763a4e3361bee8"
+    },
+    "phonon-maeve": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/6PWnV0Nq4wu7RVBT.safetensors",
+      "path": "tts/phonon-voices/maeve.56494ee6.safetensors",
+      "size": 256136,
+      "sha256": "56494ee67d533ad227ff0dfd0b1c13ff5aa91f1ad6e596e66c2986ba3005e844"
+    },
+    "phonon-freya": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/GgfEkEJtxZR7gnpy.safetensors",
+      "path": "tts/phonon-voices/freya.eb3cd474.safetensors",
+      "size": 256136,
+      "sha256": "eb3cd47418349e618408c16bea7153988b3ad04b41a6033039dd474a9a4dcd23"
+    },
+    "phonon-pippa": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/uem82D50GRv2Dwma.safetensors",
+      "path": "tts/phonon-voices/pippa.d41a8f01.safetensors",
+      "size": 256136,
+      "sha256": "d41a8f01d6e33450f1ce062d332914da10beee99e585dab531750706f187c48a"
+    },
+    "phonon-elodie-rose": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/y9bQqIDnyxwqK01t.safetensors",
+      "path": "tts/phonon-voices/elodie-rose.21eade9d.safetensors",
+      "size": 256136,
+      "sha256": "21eade9d83b2e66b9364e1b6cd999a3a6704c000a71f27f34e05ace5cdfd58bb"
+    },
+    "phonon-imogen": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/gDT1nz7Ie36ZhL-C.safetensors",
+      "path": "tts/phonon-voices/imogen.1980ab3c.safetensors",
+      "size": 256136,
+      "sha256": "1980ab3c35fa98a25b5f3b5e643fd852e14ca8a12a4a26b06aaf1abf2a8c68b1"
+    },
+    "phonon-lottie": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/m9MxpY6IUGXtWp76.safetensors",
+      "path": "tts/phonon-voices/lottie.a906ebf1.safetensors",
+      "size": 256136,
+      "sha256": "a906ebf17e43fded12b3d6bd077abb2df33bc86eff51c1beeb82e5d416527db3"
+    },
+    "phonon-alfie": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/X6NceqF285Gr04gb.safetensors",
+      "path": "tts/phonon-voices/alfie.4de75497.safetensors",
+      "size": 256136,
+      "sha256": "4de75497fff3030168e8aa6dca23ffeb332b1bc8c25d0bf3507ceadac953ae9c"
+    },
+    "phonon-hugh": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/YyKcxPG7iIgS3jsK.safetensors",
+      "path": "tts/phonon-voices/hugh.3169d74b.safetensors",
+      "size": 256136,
+      "sha256": "3169d74b47a54d1eb15e4c243f56393abe9fe90c7e1c308ecf96ee67618b152a"
+    },
+    "phonon-edwin": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/zUCxzrOrugTSis03.safetensors",
+      "path": "tts/phonon-voices/edwin.ff1d0735.safetensors",
+      "size": 256136,
+      "sha256": "ff1d0735b8b45710462b1d1f846da040f970c6eb62c7c2f36dbfb8e5bde74f1e"
+    },
+    "phonon-spencer": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/JOW0vchyswkQUMDS.safetensors",
+      "path": "tts/phonon-voices/spencer.cc9ac110.safetensors",
+      "size": 256136,
+      "sha256": "cc9ac1107b0ffce282374a19beb7bfa95847724e6b7afbac991b4ae4277d5e6d"
+    },
+    "phonon-toby": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/dME3IWyZBvmh1n1q.safetensors",
+      "path": "tts/phonon-voices/toby.09ab315c.safetensors",
+      "size": 256136,
+      "sha256": "09ab315c7f4b72b4d71e66cb756184cedfb1f14d222d096e115bf95bfe7b29dc"
+    },
+    "phonon-teddy": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/Zn7g6NxLqXlJb7Qi.safetensors",
+      "path": "tts/phonon-voices/teddy.baea0ea9.safetensors",
+      "size": 256136,
+      "sha256": "baea0ea9506f3237a5ebfc61afb7c72dbd189c5603b199ef42fbb00dbda379e0"
+    },
+    "phonon-bryony": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/gfP44RlHwr2kEwk7.safetensors",
+      "path": "tts/phonon-voices/bryony.bcc207a7.safetensors",
+      "size": 256136,
+      "sha256": "bcc207a73b7885e45b49ab633d3377a10158292e3a7cef9cd6764ad107f1cb9b"
+    },
+    "phonon-captain-silas-blackwater": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/xPDpsV3F592srkjA.safetensors",
+      "path": "tts/phonon-voices/captain-silas-blackwater.a09f615b.safetensors",
+      "size": 256136,
+      "sha256": "a09f615b0084980ebc4076d71550bf73ccd8d4df076bbbee4a9beb523a1379d9"
+    },
+    "phonon-morwenna-of-the-deep": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/nOykTmcH9ydsGGIc.safetensors",
+      "path": "tts/phonon-voices/morwenna-of-the-deep.2ff2db91.safetensors",
+      "size": 256136,
+      "sha256": "2ff2db91e70648623df8d42c0dcd7c336b2f14cb4362d602a20f292a4d862154"
+    },
+    "phonon-old-mortlake": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/lX3LavMNdlIbgEHH.safetensors",
+      "path": "tts/phonon-voices/old-mortlake.d3f94292.safetensors",
+      "size": 256136,
+      "sha256": "d3f9429205e5906dcd3c78edaf7c9d5148c7e389e34c82c86f72f154adb5d923"
+    },
+    "phonon-azgorath": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/dGyGDKo2osj7h3s7.safetensors",
+      "path": "tts/phonon-voices/azgorath.83900e02.safetensors",
+      "size": 256136,
+      "sha256": "83900e020c14946426614c6553c5a138ba6277e1aaa69832223bd0f0f8b73893"
+    },
+    "phonon-fennick-the-young-elf": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/cXoIXJ2llS8S0WOW.safetensors",
+      "path": "tts/phonon-voices/fennick-the-young-elf.a05944e4.safetensors",
+      "size": 256136,
+      "sha256": "a05944e4c69d61d10d66f689175ba0b081930df2d77b22f04d00ac40d3d69ecb"
+    },
+    "phonon-the-thing-under-the-stairs": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/GXaSqMEmOg12OIYb.safetensors",
+      "path": "tts/phonon-voices/the-thing-under-the-stairs.bfa37bac.safetensors",
+      "size": 256136,
+      "sha256": "bfa37bac98aefbb9de80f792c47d01a0f9e3b94e73776169040c249c8b722759"
+    },
+    "phonon-vyrmathrax-the-ancient": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/xO8xQo3BrB8FuI6J.safetensors",
+      "path": "tts/phonon-voices/vyrmathrax-the-ancient.63ab4b15.safetensors",
+      "size": 256136,
+      "sha256": "63ab4b15427844a804480a1603774262e8903dee33cb279e2749860dbfaedd10"
+    },
+    "phonon-grub-the-ogre": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/cYtsRSxV5q9IMehn.safetensors",
+      "path": "tts/phonon-voices/grub-the-ogre.b30fa847.safetensors",
+      "size": 256136,
+      "sha256": "b30fa847686ec1eb6be8c5bea4b6a5c5076ea66c3ff053cf98210a155d8aad1e"
+    },
+    "phonon-master-aldric": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/gSgG5Tor0GPEnqzC.safetensors",
+      "path": "tts/phonon-voices/master-aldric.a83430cc.safetensors",
+      "size": 256136,
+      "sha256": "a83430cc022b85c83753f859f9e44f406651646dab994fced8ef7a9a88005971"
+    },
+    "phonon-the-snow-queen": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/NIWoEurJHMJjyUTe.safetensors",
+      "path": "tts/phonon-voices/the-snow-queen.bc8a8fcb.safetensors",
+      "size": 256136,
+      "sha256": "bc8a8fcb95bb4f32d2d4376aa69d81b186b3ba2f8e9b6cb6a403b2b194590e85"
+    },
+    "phonon-sir-bramwell": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/y2eiKxtQo2B67deU.safetensors",
+      "path": "tts/phonon-voices/sir-bramwell.b3cea678.safetensors",
+      "size": 256136,
+      "sha256": "b3cea6789aeb58822af16ba08c4e5105d7febb840dcb67b47f426c19d1a8f209"
+    },
+    "phonon-fairy-godmother": {
+      "from": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7/voices/QXNr0SvkukLB4wPq.safetensors",
+      "path": "tts/phonon-voices/fairy-godmother.f390c09f.safetensors",
+      "size": 256136,
+      "sha256": "f390c09f5e279c0f2171995a534b92f5ca5c83443906879da68fc27445f89d89"
     }
   }
 }

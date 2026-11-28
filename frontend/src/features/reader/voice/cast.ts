@@ -4,16 +4,16 @@ import type { BookColor } from '../../../data/colors';
 import { readLocal, writeLocal } from '../../../lib/store';
 import { keptCast, loadCast } from '../ai';
 import { readSetting, TWO_COLORS } from '../settings';
-import { BUILT_IN, type Engine, type SamplePart, type VoiceInfo } from './catalog';
+import { BUILT_IN, ENGINE, type Engine, type SamplePart, type VoiceInfo } from './catalog';
 import { playSample } from './speaker';
 import type { Marks, Two } from './two';
 
 /*
- * Character voices: every person in a book read by a voice of their own, from the thirty of the
- * model picked (catalog.ts). There are no children's or old voices, so a woman, a girl or an old
- * woman has a woman's voice, and a man, a boy or an old man a man's. The marker gives everyone a
- * voice of each model (ai/tools/casting.ts) and marks each line with who says it, so a book can
- * hand every name its own voice.
+ * Character voices: every person in a book read by a voice of their own, from Phonon's 37: the
+ * 25 readers and the 12 character voices (a wizard, an ogre, a boy…; catalog.ts). A woman or a
+ * girl has a woman's voice, and a man or a boy a man's. The marker gives everyone a voice
+ * (ai/tools/casting.ts) and marks each line with who says it, so a book can hand every name its
+ * own voice.
  *
  * The server says who's in the book as far as the reader has read (server/src/lib/ai.ts castFor):
  * nobody they haven't heard from yet, by the names they know them by.
@@ -35,8 +35,7 @@ export const KIND_PLURAL: Record<Kind, string> = { F: 'Women', M: 'Men', N: 'Oth
 
 /** A model's voices for people of a kind. */
 export function voicesOf(kind: Kind, engine: Engine): VoiceInfo[] {
-  let all = BUILT_IN.normal;
-  if (engine === 'kokoro') all = BUILT_IN.immersive;
+  const all = BUILT_IN.filter((v) => v.engine === engine);
   if (kind === 'N') return all;
   return all.filter((v) => v.gender === kind);
 }
@@ -51,7 +50,7 @@ export interface Character {
   /** How many lines they've said so far, which decides who gets the first pick of voices. */
   lines: number;
   /** The voice the AI picked for them in each model, by its id there; null until it has. */
-  voice: Record<Engine, string> | null;
+  voice: Partial<Record<Engine, string>> | null;
 }
 
 /** How many of the people with most to say get a colour of their own, unless one is picked for someone else. */
@@ -177,7 +176,7 @@ export function castSig(s: CastState, book: string) {
   return JSON.stringify([s.on, s.picks[scope] ?? {}, s.dealt[scope] ?? {}]);
 }
 
-/** The model a voice is of, by its key ("kokoro:af_heart"). */
+/** The model a voice is of, by its key ("phonon:everly"). */
 function voiceEngine(voice: string) {
   return voice.split(':')[0] as Engine;
 }
@@ -286,11 +285,10 @@ export function reshuffle(book: string, people: Character[]) {
   const dealt: Record<string, Record<Engine, string>> = {};
   const handed: Record<Kind, number> = { F: 0, M: 0, N: 0 };
   for (const c of people) {
-    const piper = voicesOf(c.kind, 'piper');
-    const kokoro = voicesOf(c.kind, 'kokoro');
+    const fit = voicesOf(c.kind, ENGINE);
     const at = handed[c.kind] + seed;
     handed[c.kind] += 1;
-    dealt[c.id] = { piper: piper[at % piper.length].key, kokoro: kokoro[at % kokoro.length].key };
+    dealt[c.id] = { [ENGINE]: fit[at % fit.length].key };
   }
   set({ ...state, picks: { ...state.picks, [scope]: {} }, dealt: { ...state.dealt, [scope]: dealt }, seeds: { ...state.seeds, [scope]: seed } });
 }
@@ -399,7 +397,6 @@ export function castVoices(book: string, engine: Engine, marks: Pick<Marks, 'pic
 
 /** A voice's sample, one part of it. */
 export function hearVoice(voice: VoiceInfo, part: SamplePart = 'greeting') {
-  if (!voice.sample || !('parts' in voice.sample)) return null;
   return playSample(voice.sample.parts[part]);
 }
 

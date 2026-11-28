@@ -292,9 +292,9 @@ function Card({ at, area, onDone }: { at: Picked; area: RefObject<HTMLDivElement
     setHearing('making');
     try {
       const p = voicePrefs();
-      const clip = await synth(voiceFor(p.mode), words, rateOf(p));
+      const clip = await synth(voiceFor(), words);
       if (g !== s.gen) return;
-      const now = play(clip);
+      const now = play(clip, 1, rateOf(p));
       s.player = now;
       setHearing('playing');
       await now.done;

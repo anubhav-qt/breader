@@ -133,7 +133,7 @@ function engineAt(urls: string[], token: string | undefined, onCall: boolean, ti
   async function ask(h: number, waitMs?: number) {
     try {
       const info = await runner.info(h, waitMs);
-      if (!up[h]) log.info({ engine: urls[h], workers: info.workers, threads: info.threads, budgetMb: info.budgetMb, panels: info.panels }, 'engine up');
+      if (!up[h]) log.info({ engine: urls[h], workers: info.workers, panelWorkers: info.panelWorkers, threads: info.threads, budgetMb: info.budgetMb, panels: info.panels }, 'engine up');
       up[h] = true;
       rounds[h] = info.panels;
       s.host(h, info);

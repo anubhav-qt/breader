@@ -203,6 +203,7 @@ function homeView(s: ServerSeen | null, status: Status): NodeView {
   if (s.engine) {
     facts.push(['Engines', `${s.engine.up} up, ${s.engine.workers} workers`]);
     facts.push(['Voices and panels', `${s.engine.busy} working, ${s.engine.waiting} waiting`]);
+    if (s.engine.speed !== undefined) facts.push(['Voice speed', `${s.engine.speed.toFixed(1)}x speech`]);
   }
   if (s.state === 'down') return { state: 'down', now: `Away for ${span(secondsSince(s.heardAt))}`, bad: true, facts };
   let now = REACH_WORDS[s.state];

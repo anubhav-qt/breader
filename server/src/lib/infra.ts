@@ -109,7 +109,10 @@ function serverFrom(row: SeenRow | undefined, slot: Slot, azureWanted: boolean, 
   if (row.detail.busy) out.state = 'busy';
   out.startedAt = row.startedAt.toISOString();
   const e = row.detail.engine;
-  if (e && slot === 'home') out.engine = { up: e.up, workers: e.workers, busy: e.busy, waiting: e.waiting };
+  if (e && slot === 'home') {
+    out.engine = { up: e.up, workers: e.workers, busy: e.busy, waiting: e.waiting };
+    if (e.speed !== undefined) out.engine.speed = e.speed;
+  }
   if (row.detail.egress) out.egress = row.detail.egress;
   return out;
 }

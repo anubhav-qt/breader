@@ -75,6 +75,11 @@ describe('how a server is', () => {
     });
   });
 
+  it('passes on the voice speed, once an engine has spoken', () => {
+    const engine = { up: 1, workers: 4, busy: 0, waiting: 0, done: 9, speed: 8.4 };
+    expect(infraOf([homeRow(10, { engine })]).servers.home?.engine?.speed).toBe(8.4);
+  });
+
   it('is busy while it says so, and keeps its egress', () => {
     const egress = { usedMb: 742, limitMb: 800 };
     const gcp = infraOf([gcpRow(10, { busy: true, egress })]).servers.gcp;
@@ -192,6 +197,13 @@ describe('saying and reading back, in Supabase', () => {
   beforeEach(clean);
   afterAll(clean);
 
+  /** Engines up, two workers each, with these voice speeds. */
+  const engineStats = (speeds: Array<number | null>) => ({
+    engines: speeds.map((speed) => ({ up: true, workers: 2, started: 0, busy: 0, heldMb: 0, budgetMb: 0, freeMb: 0, low: false, speed, models: [] })),
+    waiting: { live: 0, panel: 0 },
+    done: { live: 0, panel: 0 },
+  });
+
   const seenAs = (machine: string, more: Record<string, unknown> = {}) =>
     makeSeen({ env: { MACHINE: machine, ROLE: 'fallback', RELEASE: 'rel1234', JSON_ONLY: false, COPY_URL: undefined, COPY_NAME: undefined, SEEN_EVERY_S: 30, ...more }, pool: primary.pool });
 
@@ -201,6 +213,7 @@ describe('saying and reading back, in Supabase', () => {
       pool: primary.pool,
       mirror: {},
       busy: () => true,
+      engine: { stats: () => engineStats([9.1, null, 6.2]) },
     });
     const gcp = seenAs(MACHINES[1], { JSON_ONLY: true, COPY_URL: 'postgres://x@h/db', COPY_NAME: COPY, SEEN_EVERY_S: 120 });
     gcp.heardWatcher(3);
@@ -210,6 +223,8 @@ describe('saying and reading back, in Supabase', () => {
 
     const infra = await readInfra(primary.pool, MACHINES[0], null);
     expect(infra.servers.home).toMatchObject({ state: 'busy', release: 'rel1234' });
+    // The slowest engine that has spoken: the one a reader may get.
+    expect(infra.servers.home?.engine).toEqual({ up: 3, workers: 6, busy: 0, waiting: 0, speed: 6.2 });
     expect(infra.servers.gcp).toMatchObject({ state: 'up', release: 'rel1234' });
     expect(infra.watcher?.missed).toBe(3);
     const { rows } = await primary.pool.query<{ detail: SeenDetail }>('SELECT detail FROM server_seen WHERE machine = $1', [MACHINES[1]]);
